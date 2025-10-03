@@ -46,12 +46,10 @@ struct HealthResponse {
 }
 
 async fn check_database_health_async(pool: web::Data<DatabasePool>) -> Result<(), diesel::result::Error> {
-    let pool = pool.clone(); // Clone to move into the blocking task
     tokio::task::spawn_blocking(move || check_database_health(pool)).await.unwrap()
 }
 
 async fn check_cache_health_async(redis_pool: web::Data<RedisPool>) -> Result<(), r2d2::Error> {
-    let redis_pool = redis_pool.clone(); // Clone to move into the blocking task
     tokio::task::spawn_blocking(move || check_cache_health(&redis_pool)).await.unwrap()
 }
 
@@ -60,7 +58,7 @@ async fn health(pool: web::Data<DatabasePool>, redis_pool: web::Data<RedisPool>)
     info!("Health check requested");
 
     // Check database with timeout
-    let db_status = match timeout(Duration::from_secs(5), check_database_health_async(pool.clone())).await {
+    let db_status = match timeout(Duration::from_secs(5), check_database_health_async(pool)).await {
         Ok(Ok(())) => Status::Healthy,
         Ok(Err(e)) => {
             error!("Database health check failed: {}", e);
@@ -73,7 +71,7 @@ async fn health(pool: web::Data<DatabasePool>, redis_pool: web::Data<RedisPool>)
     };
 
     // Check cache with timeout
-    let cache_status = match timeout(Duration::from_secs(3), check_cache_health_async(redis_pool.clone())).await {
+    let cache_status = match timeout(Duration::from_secs(3), check_cache_health_async(redis_pool)).await {
         Ok(Ok(())) => Status::Healthy,
         Ok(Err(e)) => {
             error!("Cache health check failed: {}", e);
