@@ -21,11 +21,7 @@ pub struct UserToken {
     pub login_session: String,
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct TokenBodyResponse {
-    pub token: String,
-    pub token_type: String,
-}
+
 
 impl UserToken {
     pub fn generate_token(login: &LoginInfoDTO) -> String {
@@ -37,7 +33,7 @@ impl UserToken {
 
         debug!("Token Max Age: {}", max_age);
 
-        let now = Utc::now().timestamp_nanos() / 1_000_000_000; // nanosecond -> second
+        let now = Utc::now().timestamp(); // in seconds
         let payload = UserToken {
             iat: now,
             exp: now + max_age,

@@ -8,6 +8,8 @@ pub fn config_services(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/api")
             .service(ping_controller::ping)
+            .service(health_controller::health)
+            .service(health_controller::logs)
             .service(
                 web::scope("/auth")
                     .service(

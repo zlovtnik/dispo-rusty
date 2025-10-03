@@ -5,7 +5,6 @@ pub struct PersonFilter {
     pub name: Option<String>,
     pub gender: Option<String>,
     pub age: Option<i32>,
-    pub address: Option<String>,
     pub phone: Option<String>,
     pub email: Option<String>,
     pub sort_by: Option<String>,

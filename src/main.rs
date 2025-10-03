@@ -28,9 +28,11 @@ async fn main() -> io::Result<()> {
     let app_port = env::var("APP_PORT").expect("APP_PORT not found.");
     let app_url = format!("{}:{}", &app_host, &app_port);
     let db_url = env::var("DATABASE_URL").expect("DATABASE_URL not found.");
+    let redis_url = env::var("REDIS_URL").expect("REDIS_URL not found.");
 
     let pool = config::db::init_db_pool(&db_url);
     config::db::run_migration(&mut pool.get().unwrap());
+    let redis_client = config::cache::init_redis_client(&redis_url);
 
     HttpServer::new(move || {
         App::new()
@@ -45,6 +47,7 @@ async fn main() -> io::Result<()> {
                     .max_age(3600),
             )
             .app_data(web::Data::new(pool.clone()))
+            .app_data(web::Data::new(redis_client.clone()))
             .wrap(actix_web::middleware::Logger::default())
             .wrap(crate::middleware::auth_middleware::Authentication) // Comment this line if you want to integrate with yew-address-book-frontend
             .wrap_fn(|req, srv| srv.call(req).map(|res| res))
