@@ -2,7 +2,7 @@ use r2d2;
 use r2d2_redis::RedisConnectionManager;
 
 pub type Pool = r2d2::Pool<RedisConnectionManager>;
-pub type CacheConnection = r2d2::PooledConnection<RedisConnectionManager>;
+
 
 pub fn init_redis_client(url: &str) -> Pool {
     use log::info;
@@ -26,8 +26,4 @@ fn mask_redis_url(input: &str) -> String {
     } else {
         input.to_string()
     }
-}
-
-pub fn get_redis_connection(pool: &Pool) -> Result<CacheConnection, r2d2::Error> {
-    pool.get()
 }
