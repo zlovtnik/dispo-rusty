@@ -9,7 +9,6 @@ use crate::{
     models::{login_history::LoginHistory, user_token::UserToken},
     schema::users::{self, dsl::*},
 };
-
 #[derive(Identifiable, Queryable, Serialize, Deserialize)]
 pub struct User {
     pub id: i32,

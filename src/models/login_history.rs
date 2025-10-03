@@ -15,7 +15,6 @@ pub struct LoginHistory {
     pub user_id: i32,
     pub login_timestamp: NaiveDateTime,
 }
-
 #[derive(Insertable)]
 #[diesel(table_name = login_history)]
 pub struct LoginHistoryInsertableDTO {

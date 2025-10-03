@@ -10,7 +10,6 @@ use crate::{
         response::Page,
     },
 };
-
 pub fn find_all(pool: &web::Data<Pool>) -> Result<Vec<Person>, ServiceError> {
     match Person::find_all(&mut pool.get().unwrap()) {
         Ok(person) => Ok(person),
