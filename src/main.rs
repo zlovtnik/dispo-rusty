@@ -18,7 +18,6 @@ mod models;
 mod schema;
 mod services;
 mod utils;
-
 #[actix_rt::main]
 async fn main() -> io::Result<()> {
     dotenv::dotenv().expect("Failed to read .env file");

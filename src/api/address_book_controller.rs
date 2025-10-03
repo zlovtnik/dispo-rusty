@@ -7,7 +7,6 @@ use crate::{
     models::{filters::PersonFilter, person::PersonDTO, response::ResponseBody},
     services::address_book_service,
 };
-
 // GET api/address-book
 pub async fn find_all(pool: web::Data<Pool>) -> Result<HttpResponse, ServiceError> {
     match address_book_service::find_all(&pool) {

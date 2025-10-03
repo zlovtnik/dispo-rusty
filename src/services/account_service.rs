@@ -12,7 +12,6 @@ use crate::{
     },
     utils::token_utils,
 };
-
 #[derive(Serialize, Deserialize)]
 pub struct TokenBodyResponse {
     pub token: String,

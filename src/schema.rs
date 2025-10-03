@@ -7,7 +7,6 @@ table! {
         login_timestamp -> Timestamp,
     }
 }
-
 table! {
     people (id) {
         id -> Int4,

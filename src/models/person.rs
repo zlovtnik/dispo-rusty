@@ -66,7 +66,6 @@ impl Person {
         if let Some(i) = filter.phone {
             query = query.filter(phone.like(format!("%{}%", i)));
         }
-
         query
             .paginate(
                 filter

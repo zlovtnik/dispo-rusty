@@ -4,7 +4,6 @@ use actix_web::{get, HttpResponse};
 async fn ping() -> HttpResponse {
     HttpResponse::Ok().body("pong!".to_string())
 }
-
 #[cfg(test)]
 mod tests {
     use actix_cors::Cors;

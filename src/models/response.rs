@@ -23,7 +23,6 @@ pub struct Page<T> {
     pub page_size: i64,
     pub total_elements: i64,
 }
-
 impl<T> Page<T> {
     pub fn new(
         message: &str,

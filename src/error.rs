@@ -20,7 +20,6 @@ pub enum ServiceError {
     #[display(fmt = "{error_message}")]
     NotFound { error_message: String },
 }
-
 impl error::ResponseError for ServiceError {
     fn status_code(&self) -> StatusCode {
         match *self {
