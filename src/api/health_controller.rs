@@ -2,7 +2,8 @@ use actix_web::{get, HttpResponse, web};
 use serde::Serialize;
 
 use crate::config::db::Pool as DatabasePool;
-use crate::config::cache::{self, CacheConnection, Pool as RedisPool};
+use crate::config::cache::Pool as RedisPool;
+
 use diesel::prelude::*;
 use log::{error, info};
 use actix_web::web::Bytes;
@@ -19,6 +20,8 @@ struct HealthStatus {
     application: String,
     cache: String,
 }
+
+
 
 #[derive(Serialize)]
 struct HealthResponse {
@@ -37,8 +40,8 @@ async fn health(pool: web::Data<DatabasePool>, redis_pool: web::Data<RedisPool>)
     // Check database
     match check_database_health(pool) {
         Ok(_) => {},
-        Err(_) => {
-            error!("Database health check failed");
+        Err(e) => {
+            error!("Database health check failed: {}", e);
             db_status = "unhealthy".to_string();
         },
     }
@@ -46,8 +49,8 @@ async fn health(pool: web::Data<DatabasePool>, redis_pool: web::Data<RedisPool>)
     // Check cache
     match check_cache_health(&redis_pool) {
         Ok(_) => {},
-        Err(_) => {
-            error!("Cache health check failed");
+        Err(e) => {
+            error!("Cache health check failed: {}", e);
             cache_status = "unhealthy".to_string();
         },
     }
@@ -84,9 +87,8 @@ fn check_database_health(pool: web::Data<DatabasePool>) -> Result<(), diesel::re
     }
 }
 
-fn check_cache_health(redis_pool: &RedisPool) -> Result<(), redis::RedisError> {
-    let mut conn = redis_pool.get().map_err(|e| redis::RedisError::from((redis::ErrorKind::Timeout, "Pool get failed", e.to_string())))?;
-    redis::cmd("PING").query(&mut *conn)?;
+fn check_cache_health(redis_pool: &RedisPool) -> Result<(), r2d2::Error> {
+    redis_pool.get()?;
     Ok(())
 }
 

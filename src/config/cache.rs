@@ -1,5 +1,5 @@
 use r2d2;
-use redis::r2d2::RedisConnectionManager;
+use r2d2_redis::RedisConnectionManager;
 
 pub type Pool = r2d2::Pool<RedisConnectionManager>;
 pub type CacheConnection = r2d2::PooledConnection<RedisConnectionManager>;
