@@ -1,9 +1,8 @@
 use actix_web::{get, HttpResponse, web};
-use redis::Client as RedisClient;
 use serde::Serialize;
 
-use crate::config::db::Pool;
-use crate::config::cache::get_redis_connection;
+use crate::config::db::Pool as DatabasePool;
+use crate::config::cache::{self, CacheConnection, Pool as RedisPool};
 use diesel::prelude::*;
 use log::{error, info};
 use actix_web::web::Bytes;
@@ -29,7 +28,7 @@ struct HealthResponse {
 }
 
 #[get("/health")]
-async fn health(pool: web::Data<Pool>, redis_client: web::Data<RedisClient>) -> HttpResponse {
+async fn health(pool: web::Data<DatabasePool>, redis_pool: web::Data<RedisPool>) -> HttpResponse {
     info!("Health check requested");
     let mut db_status = "healthy".to_string();
     let mut cache_status = "healthy".to_string();
@@ -45,7 +44,7 @@ async fn health(pool: web::Data<Pool>, redis_client: web::Data<RedisClient>) -> 
     }
 
     // Check cache
-    match check_cache_health(&redis_client) {
+    match check_cache_health(&redis_pool) {
         Ok(_) => {},
         Err(_) => {
             error!("Cache health check failed");
@@ -72,7 +71,7 @@ async fn health(pool: web::Data<Pool>, redis_client: web::Data<RedisClient>) -> 
     HttpResponse::Ok().json(response)
 }
 
-fn check_database_health(pool: web::Data<Pool>) -> Result<(), diesel::result::Error> {
+fn check_database_health(pool: web::Data<DatabasePool>) -> Result<(), diesel::result::Error> {
     match pool.get() {
         Ok(mut conn) => {
             diesel::sql_query("SELECT 1").execute(&mut conn)?;
@@ -85,9 +84,9 @@ fn check_database_health(pool: web::Data<Pool>) -> Result<(), diesel::result::Er
     }
 }
 
-fn check_cache_health(redis_client: &RedisClient) -> Result<(), redis::RedisError> {
-    let mut conn = get_redis_connection(redis_client)?;
-    redis::cmd("PING").query::<()>(&mut conn)?;
+fn check_cache_health(redis_pool: &RedisPool) -> Result<(), redis::RedisError> {
+    let mut conn = redis_pool.get().map_err(|e| redis::RedisError::from((redis::ErrorKind::Timeout, "Pool get failed", e.to_string())))?;
+    redis::cmd("PING").query(&mut *conn)?;
     Ok(())
 }
 
@@ -229,6 +228,11 @@ mod tests {
 
     use crate::config;
     use crate::App;
+    use std::env;
+    use tempfile::NamedTempFile;
+    use tokio::io::AsyncWriteExt;
+    use tokio::time::{timeout, Duration};
+    use futures::StreamExt;
 
     #[actix_web::test]
     async fn test_health_ok() {
@@ -278,11 +282,20 @@ mod tests {
 
     #[actix_web::test]
     async fn test_logs_ok() {
+        // Create a temporary log file
+        let temp_file = NamedTempFile::new().unwrap();
+        let log_path = temp_file.path().to_str().unwrap().to_string();
+        temp_file.close().unwrap(); // Close to allow the handler to open it
+
+        // Set environment variables
+        env::set_var("ENABLE_LOG_STREAM", "true");
+        env::set_var("LOG_FILE", &log_path);
+
         // initialize testcontainers for Postgres and Redis
         let docker = clients::Cli::default();
         let postgres = docker.run(Postgres::default());
         let redis = docker.run(Redis::default());
-        
+
         // set up the database pool and run migrations
         let pool = config::db::init_db_pool(
             format!(
@@ -292,7 +305,7 @@ mod tests {
             .as_str(),
         );
         config::db::run_migration(&mut pool.get().unwrap());
-        
+
         // set up the Redis client
         let redis_client = config::cache::init_redis_client(
             format!(
@@ -322,5 +335,124 @@ mod tests {
         let resp = test::call_service(&app, req).await;
 
         assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(resp.headers().get("content-type").unwrap(), "text/event-stream");
+
+        // Consume the body with timeout to verify SSE frames or keep-alive messages
+        let mut body = resp.into_body();
+        let sse_frame_received = timeout(Duration::from_secs(32), async {
+            while let Some(Ok(bytes)) = body.next().await {
+                let s = String::from_utf8_lossy(&bytes);
+                if s.starts_with("data:") {
+                    return true;
+                }
+            }
+            false
+        }).await.unwrap_or(false);
+
+        assert!(sse_frame_received, "No SSE frame received within timeout");
+    }
+
+    #[actix_web::test]
+    async fn test_logs_disabled() {
+        // Clear environment variables
+        env::remove_var("ENABLE_LOG_STREAM");
+        env::remove_var("LOG_FILE");
+
+        // initialize testcontainers for Postgres and Redis
+        let docker = clients::Cli::default();
+        let postgres = docker.run(Postgres::default());
+        let redis = docker.run(Redis::default());
+
+        // set up the database pool and run migrations
+        let pool = config::db::init_db_pool(
+            format!(
+                "postgres://postgres:postgres@127.0.0.1:{}/postgres",
+                postgres.get_host_port_ipv4(5432)
+            )
+            .as_str(),
+        );
+        config::db::run_migration(&mut pool.get().unwrap());
+
+        // set up the Redis client
+        let redis_client = config::cache::init_redis_client(
+            format!(
+                "redis://127.0.0.1:{}",
+                redis.get_host_port_ipv4(6379)
+            )
+            .as_str(),
+        );
+
+        let app = test::init_service(
+            App::new()
+                .wrap(
+                    Cors::default()
+                        .send_wildcard()
+                        .allowed_methods(vec!["GET", "POST", "PUT", "DELETE"])
+                        .allowed_header(actix_web::http::header::CONTENT_TYPE)
+                        .max_age(3600),
+                )
+                .app_data(Data::new(pool))
+                .app_data(Data::new(redis_client))
+                .wrap(crate::middleware::auth_middleware::Authentication)
+                .configure(config::app::config_services),
+        )
+        .await;
+
+        let req = test::TestRequest::get().uri("/api/logs").to_request();
+        let resp = test::call_service(&app, req).await;
+
+        assert_eq!(resp.status(), StatusCode::METHOD_NOT_ALLOWED);
+    }
+
+    #[actix_web::test]
+    async fn test_logs_file_not_found() {
+        // Set environment variables
+        env::set_var("ENABLE_LOG_STREAM", "true");
+        env::set_var("LOG_FILE", "/nonexistent/path/log.txt");
+
+        // initialize testcontainers for Postgres and Redis
+        let docker = clients::Cli::default();
+        let postgres = docker.run(Postgres::default());
+        let redis = docker.run(Redis::default());
+
+        // set up the database pool and run migrations
+        let pool = config::db::init_db_pool(
+            format!(
+                "postgres://postgres:postgres@127.0.0.1:{}/postgres",
+                postgres.get_host_port_ipv4(5432)
+            )
+            .as_str(),
+        );
+        config::db::run_migration(&mut pool.get().unwrap());
+
+        // set up the Redis client
+        let redis_client = config::cache::init_redis_client(
+            format!(
+                "redis://127.0.0.1:{}",
+                redis.get_host_port_ipv4(6379)
+            )
+            .as_str(),
+        );
+
+        let app = test::init_service(
+            App::new()
+                .wrap(
+                    Cors::default()
+                        .send_wildcard()
+                        .allowed_methods(vec!["GET", "POST", "PUT", "DELETE"])
+                        .allowed_header(actix_web::http::header::CONTENT_TYPE)
+                        .max_age(3600),
+                )
+                .app_data(Data::new(pool))
+                .app_data(Data::new(redis_client))
+                .wrap(crate::middleware::auth_middleware::Authentication)
+                .configure(config::app::config_services),
+        )
+        .await;
+
+        let req = test::TestRequest::get().uri("/api/logs").to_request();
+        let resp = test::call_service(&app, req).await;
+
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
     }
 }

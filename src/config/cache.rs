@@ -1,15 +1,19 @@
-use redis::Client as RedisClient;
-use redis::Connection;
+use r2d2;
+use redis::r2d2::RedisConnectionManager;
 
-pub type CacheConnection = Connection;
+pub type Pool = r2d2::Pool<RedisConnectionManager>;
+pub type CacheConnection = r2d2::PooledConnection<RedisConnectionManager>;
 
-pub fn init_redis_client(url: &str) -> RedisClient {
+pub fn init_redis_client(url: &str) -> Pool {
     use log::info;
     info!("Initializing Redis client...");
-    match RedisClient::open(url) {
-        Ok(client) => client,
-        Err(e) => panic!("Failed to create Redis client for {}: {}", mask_redis_url(url), e),
-    }
+    let masked_url = mask_redis_url(url);
+    let manager = RedisConnectionManager::new(url).unwrap_or_else(|e| {
+        panic!("Failed to create Redis connection manager for {}: {}", masked_url, e);
+    });
+    r2d2::Pool::builder().build(manager).unwrap_or_else(|e| {
+        panic!("Failed to create Redis pool for {}: {}", masked_url, e);
+    })
 }
 
 fn mask_redis_url(input: &str) -> String {
@@ -24,6 +28,6 @@ fn mask_redis_url(input: &str) -> String {
     }
 }
 
-pub fn get_redis_connection(client: &RedisClient) -> Result<CacheConnection, redis::RedisError> {
-    client.get_connection()
+pub fn get_redis_connection(pool: &Pool) -> Result<CacheConnection, r2d2::Error> {
+    pool.get()
 }
