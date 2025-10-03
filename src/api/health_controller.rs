@@ -1,11 +1,13 @@
 use actix_web::{get, HttpResponse, web};
 use serde::Serialize;
+use tokio::time::{timeout, Duration};
 
 use crate::config::db::Pool as DatabasePool;
 use crate::config::cache::Pool as RedisPool;
 
 use diesel::prelude::*;
 use log::{error, info};
+use chrono::{Utc};
 use actix_web::web::Bytes;
 use std::io::Error as IoError;
 use std::path::Path;
@@ -14,59 +16,86 @@ use tokio::sync::mpsc;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, SeekFrom};
 use tokio_stream::wrappers::ReceiverStream;
 
+#[derive(Serialize, Clone)]
+enum Status {
+    #[serde(rename = "healthy")]
+    Healthy,
+    #[serde(rename = "unhealthy")]
+    Unhealthy,
+}
+
+impl Status {
+    fn is_healthy(&self) -> bool {
+        matches!(self, Status::Healthy)
+    }
+}
+
 #[derive(Serialize)]
 struct HealthStatus {
-    database: String,
-    application: String,
-    cache: String,
+    database: Status,
+    cache: Status,
 }
 
 
 
 #[derive(Serialize)]
 struct HealthResponse {
-    status: String,
+    status: Status,
     timestamp: String,
     components: HealthStatus,
+}
+
+async fn check_database_health_async(pool: web::Data<DatabasePool>) -> Result<(), diesel::result::Error> {
+    let pool = pool.clone(); // Clone to move into the blocking task
+    tokio::task::spawn_blocking(move || check_database_health(pool)).await.unwrap()
+}
+
+async fn check_cache_health_async(redis_pool: web::Data<RedisPool>) -> Result<(), r2d2::Error> {
+    let redis_pool = redis_pool.clone(); // Clone to move into the blocking task
+    tokio::task::spawn_blocking(move || check_cache_health(&redis_pool)).await.unwrap()
 }
 
 #[get("/health")]
 async fn health(pool: web::Data<DatabasePool>, redis_pool: web::Data<RedisPool>) -> HttpResponse {
     info!("Health check requested");
-    let mut db_status = "healthy".to_string();
-    let mut cache_status = "healthy".to_string();
-    let application_status = "healthy".to_string();
 
-    // Check database
-    match check_database_health(pool) {
-        Ok(_) => {},
-        Err(e) => {
+    // Check database with timeout
+    let db_status = match timeout(Duration::from_secs(5), check_database_health_async(pool.clone())).await {
+        Ok(Ok(())) => Status::Healthy,
+        Ok(Err(e)) => {
             error!("Database health check failed: {}", e);
-            db_status = "unhealthy".to_string();
+            Status::Unhealthy
         },
-    }
+        Err(_) => {
+            error!("Database health check timeout");
+            Status::Unhealthy
+        },
+    };
 
-    // Check cache
-    match check_cache_health(&redis_pool) {
-        Ok(_) => {},
-        Err(e) => {
+    // Check cache with timeout
+    let cache_status = match timeout(Duration::from_secs(3), check_cache_health_async(redis_pool.clone())).await {
+        Ok(Ok(())) => Status::Healthy,
+        Ok(Err(e)) => {
             error!("Cache health check failed: {}", e);
-            cache_status = "unhealthy".to_string();
+            Status::Unhealthy
         },
-    }
+        Err(_) => {
+            error!("Cache health check timeout");
+            Status::Unhealthy
+        },
+    };
 
-    let overall_status = if db_status == "healthy" && cache_status == "healthy" {
-        "healthy"
+    let overall_status = if db_status.is_healthy() && cache_status.is_healthy() {
+        Status::Healthy
     } else {
-        "unhealthy"
+        Status::Unhealthy
     };
 
     let response = HealthResponse {
-        status: overall_status.to_string(),
-        timestamp: chrono::Utc::now().to_rfc3339(),
+        status: overall_status,
+        timestamp: Utc::now().to_rfc3339(),
         components: HealthStatus {
             database: db_status,
-            application: application_status,
             cache: cache_status,
         },
     };
@@ -95,7 +124,7 @@ fn check_cache_health(redis_pool: &RedisPool) -> Result<(), r2d2::Error> {
 #[get("/logs")]
 async fn logs() -> HttpResponse {
     // Check if log streaming is enabled
-    if !matches!(std::env::var("ENABLE_LOG_STREAM"), Ok(val) if val == "true") {
+    if !std::env::var("ENABLE_LOG_STREAM").map(|v| v == "true").unwrap_or(false) {
         return HttpResponse::MethodNotAllowed().body("Log streaming disabled");
     }
 

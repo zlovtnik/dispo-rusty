@@ -5,6 +5,7 @@ use crate::api::*;
 
 pub fn config_services(cfg: &mut web::ServiceConfig) {
     info!("Configuring routes...");
+    cfg.service(health_controller::health);
     cfg.service(
         web::scope("/api")
             .service(ping_controller::ping)
