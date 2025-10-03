@@ -2,7 +2,8 @@
 # This will make CodeRabbit provide more thorough and strict code reviews
 
 # Set the review style to 'assertive' for more detailed feedback
-assertive: true
+reviews:
+  profile: assertive
 
 # Additional settings can be added here to customize the review process
 # For example:

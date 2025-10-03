@@ -10,7 +10,6 @@ use crate::{
     },
     services::account_service,
 };
-
 // POST api/auth/signup
 pub async fn signup(
     user_dto: web::Json<UserDTO>,
