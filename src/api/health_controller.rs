@@ -6,7 +6,8 @@ use crate::config::db::Pool as DatabasePool;
 use crate::config::cache::Pool as RedisPool;
 
 use diesel::prelude::*;
-use log::{error, info};
+use redis;
+use log::{error, info, warn};
 use chrono::{Utc};
 use actix_web::web::Bytes;
 use std::io::Error as IoError;
@@ -45,11 +46,11 @@ struct HealthResponse {
     components: HealthStatus,
 }
 
-async fn check_database_health_async(pool: web::Data<DatabasePool>) -> Result<(), diesel::result::Error> {
-    tokio::task::spawn_blocking(move || check_database_health(pool)).await.unwrap()
+async fn check_database_health_async(pool: web::Data<DatabasePool>) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
+    tokio::task::spawn_blocking(move || check_database_health(pool)).await.unwrap().map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync + 'static>)
 }
 
-async fn check_cache_health_async(redis_pool: web::Data<RedisPool>) -> Result<(), r2d2::Error> {
+async fn check_cache_health_async(redis_pool: web::Data<RedisPool>) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
     tokio::task::spawn_blocking(move || check_cache_health(&redis_pool)).await.unwrap()
 }
 
@@ -114,8 +115,9 @@ fn check_database_health(pool: web::Data<DatabasePool>) -> Result<(), diesel::re
     }
 }
 
-fn check_cache_health(redis_pool: &RedisPool) -> Result<(), r2d2::Error> {
-    redis_pool.get()?;
+fn check_cache_health(redis_pool: &RedisPool) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
+    let mut conn = redis_pool.get().map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync + 'static>)?;
+    redis::cmd("PING").query(&mut conn).map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync + 'static>)?;
     Ok(())
 }
 
@@ -149,7 +151,9 @@ async fn logs() -> HttpResponse {
         let watcher_result = RecommendedWatcher::new(
             move |_res: Result<notify::Event, notify::Error>| {
                 // Send notification on any file change
-                let _ = watch_tx.try_send(());
+                if let Err(err) = watch_tx.try_send(()) {
+                    warn!("Failed to notify watcher channel: {}", err);
+                }
             },
             Config::default()
         );
