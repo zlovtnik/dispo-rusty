@@ -2,7 +2,7 @@ use actix_web::{get, HttpResponse};
 
 #[get("/ping")]
 async fn ping() -> HttpResponse {
-    HttpResponse::Ok().body("pong!".to_string())
+    HttpResponse::Ok().json(serde_json::json!({"message": "pong"}))
 }
 #[cfg(test)]
 mod tests {

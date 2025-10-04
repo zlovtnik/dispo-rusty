@@ -127,10 +127,9 @@ import AddressBook from '../components/AddressBook.astro';
       try {
         await logout();
       } catch (error) {
-        console.error('Logout request failed:', error);
+        UIManager.showAlert(`Logout request failed: ${(error as Error).message || String(error)}`, 'error');
       } finally {
         AuthManager.clearAuth();
-        UIManager.showAlert('Logged out successfully!', 'success');
         updateUI();
         UIManager.clearContactsList();
       }
@@ -142,10 +141,16 @@ import AddressBook from '../components/AddressBook.astro';
 
       try {
         const formData = getFormData(form);
+        const age = parseInt(formData.age as string);
+        if (Number.isNaN(age) || age < 0) {
+          UIManager.showAlert('Please enter a valid age (must be a positive number).', 'error');
+          return;
+        }
+
         const contactData: ContactData = {
           name: formData.name as string,
-          gender_key: formData.gender_key as string,
-          age: parseInt(formData.age as string),
+          gender: formData.gender as string,
+          age: age,
           address: formData.address as string,
           phone: formData.phone as string,
           email: formData.email as string
@@ -195,19 +200,27 @@ import AddressBook from '../components/AddressBook.astro';
         addressItem.appendChild(nameHeader);
 
         const detailsPara = document.createElement('p');
-        detailsPara.innerHTML = `<strong>Age:</strong> ${contact.age} | <strong>Gender:</strong> ${contact.gender_key}`;
+        detailsPara.innerHTML = '<strong>Age:</strong> <span class="age"></span> | <strong>Gender:</strong> <span class="gender"></span>';
+        detailsPara.querySelector('.age')!.textContent = contact.age.toString();
+        detailsPara.querySelector('.gender')!.textContent = contact.gender;
         addressItem.appendChild(detailsPara);
 
         const addressPara = document.createElement('p');
-        addressPara.innerHTML = `<strong>Address:</strong> ${contact.address}`;
+        addressPara.innerHTML = '<strong>Address:</strong> ';
+        const addressText = document.createTextNode(contact.address);
+        addressPara.appendChild(addressText);
         addressItem.appendChild(addressPara);
 
         const phonePara = document.createElement('p');
-        phonePara.innerHTML = `<strong>Phone:</strong> ${contact.phone}`;
+        phonePara.innerHTML = '<strong>Phone:</strong> ';
+        const phoneText = document.createTextNode(contact.phone);
+        phonePara.appendChild(phoneText);
         addressItem.appendChild(phonePara);
 
         const emailPara = document.createElement('p');
-        emailPara.innerHTML = `<strong>Email:</strong> ${contact.email}`;
+        emailPara.innerHTML = '<strong>Email:</strong> ';
+        const emailText = document.createTextNode(contact.email);
+        emailPara.appendChild(emailText);
         addressItem.appendChild(emailPara);
 
         const actionsDiv = document.createElement('div');
@@ -225,7 +238,7 @@ import AddressBook from '../components/AddressBook.astro';
     }
 
     async function handleDeleteContact(contactId: number) {
-      if (!confirmDelete()) {
+      if (!(await confirmDelete())) {
         return;
       }
 
