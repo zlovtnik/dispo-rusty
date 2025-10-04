@@ -22,7 +22,7 @@ mod services;
 mod utils;
 #[actix_rt::main]
 async fn main() -> io::Result<()> {
-    dotenv::dotenv().map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, format!("Failed to read .env file: {}", e)))?;
+    dotenv::dotenv().map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("Failed to read .env file: {}", e)))?;
     env::set_var("RUST_LOG", "actix_web=debug");
 
     if let Ok(log_file_path) = env::var("LOG_FILE") {

@@ -220,7 +220,27 @@ export async function confirmDelete(): Promise<boolean> {
         }
       });
 
-      dialog.showModal();
+      try {
+        dialog.showModal();
+      } catch (error) {
+        console.error('Failed to show modal dialog:', error);
+        // Clean up: remove dialog and event listeners
+        confirmBtn.removeEventListener('click', handleConfirm);
+        cancelBtn.removeEventListener('click', handleCancel);
+        dialog.removeEventListener('keydown', handleEscape);
+        dialog.removeEventListener('close', () => {
+          if (previousFocus && 'focus' in previousFocus) {
+            previousFocus.focus();
+          }
+        });
+        document.body.removeChild(dialog);
+        // Restore focus
+        if (previousFocus && 'focus' in previousFocus) {
+          previousFocus.focus();
+        }
+        resolve(false);
+        return;
+      }
     });
   } else {
     // Fallback to native confirm for unsupported environments

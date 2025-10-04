@@ -1,5 +1,7 @@
 // API utility functions for backend communication
 
+import { AuthManager } from './auth';
+
 export const API_BASE_URL = import.meta.env.PUBLIC_API_BASE_URL || 'http://localhost:8000/api';
 
 export interface LoginData {
@@ -56,8 +58,8 @@ export async function makeRequest(endpoint: string, options: RequestInit & { tim
   const config: RequestInit = {
     headers: {
       'Content-Type': 'application/json',
-      ...otherOptions.headers
-    },
+      ...(otherOptions.headers as Record<string, string>),
+    } as HeadersInit,
     ...otherOptions
   };
 
@@ -66,10 +68,11 @@ export async function makeRequest(endpoint: string, options: RequestInit & { tim
     ? localStorage.getItem('auth_token')
     : null;
   if (authToken) {
-    config.headers = {
-      ...config.headers,
+    const headers = {
+      ...(config.headers as Record<string, string>),
       'Authorization': `Bearer ${authToken}`
     };
+    config.headers = headers as HeadersInit;
   }
 
   const controller = new AbortController();
@@ -118,11 +121,8 @@ export async function makeRequest(endpoint: string, options: RequestInit & { tim
 
 export async function testBackendConnectivity(): Promise<boolean> {
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
-    const response = await fetch(`${API_BASE_URL}/ping`, { signal: controller.signal });
-    clearTimeout(timeoutId);
-    return response.ok;
+    await makeRequest('/ping', { timeout: 5000 });
+    return true;
   } catch (error) {
     console.error('Backend connectivity test failed:', error);
     return false;
@@ -161,6 +161,7 @@ export async function logout(): Promise<void> {
   await makeRequest('/auth/logout', {
     method: 'POST'
   });
+  AuthManager.clearAuth();
 }
 
 export async function addContact(contactData: ContactData): Promise<void> {

@@ -214,14 +214,16 @@ async fn logs() -> HttpResponse {
                 // Process complete lines
                 while let Some(pos) = pending_data.iter().position(|&b| b == b'\n') {
                     let line_bytes = pending_data.drain(..=pos).collect::<Vec<_>>();
-                    if let Ok(line) = String::from_utf8(line_bytes) {
-                        let trimmed = line.trim_end_matches('\n').trim_end_matches('\r');
-                        if !trimmed.is_empty() {
-                            if tx.send(Ok(Bytes::from(format!("data: {}\n\n", trimmed)))).await.is_err() {
-                                return;
+                        if let Ok(line) = String::from_utf8(line_bytes) {
+                            let trimmed = line.trim_end_matches('\n').trim_end_matches('\r');
+                            if !trimmed.is_empty() {
+                                // Channel saturation is expected under high load, reducing log noise
+                                if tx.send(Ok(Bytes::from(format!("data: {}\n\n", trimmed)))).await.is_err() {
+                                    debug!("failed to send log line '{}' to watcher channel", trimmed);
+                                    return;
+                                }
                             }
                         }
-                    }
                 }
             }
 
