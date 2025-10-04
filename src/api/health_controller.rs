@@ -7,12 +7,12 @@ use crate::config::cache::Pool as RedisPool;
 
 use diesel::prelude::*;
 use redis;
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 use chrono::{Utc};
 use actix_web::web::Bytes;
 use std::io::Error as IoError;
 use std::path::Path;
-use notify::{RecommendedWatcher, Config, RecursiveMode, Watcher};
+
 use tokio::sync::mpsc;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, SeekFrom};
 use tokio_stream::wrappers::ReceiverStream;
@@ -144,35 +144,6 @@ async fn logs() -> HttpResponse {
     tokio::spawn(async move {
         let path = Path::new(&log_file_clone);
 
-        // Channel to receive watch events
-        let (watch_tx, mut watch_rx) = mpsc::channel::<()>(1);
-
-        // Create file watcher
-        let watcher_result = RecommendedWatcher::new(
-            move |_res: Result<notify::Event, notify::Error>| {
-                // Send notification on any file change
-                if let Err(err) = watch_tx.try_send(()) {
-                    warn!("Failed to notify watcher channel: {}", err);
-                }
-            },
-            Config::default()
-        );
-
-        let mut watcher = match watcher_result {
-            Ok(w) => w,
-            Err(e) => {
-                error!("Failed to create file watcher: {}", e);
-                let _ = tx.send(Err(IoError::new(std::io::ErrorKind::Other, e.to_string()))).await;
-                return;
-            }
-        };
-
-        if let Err(e) = watcher.watch(path, RecursiveMode::NonRecursive) {
-            error!("Failed to watch log file: {}", e);
-            let _ = tx.send(Err(IoError::new(std::io::ErrorKind::Other, e.to_string()))).await;
-            return;
-        }
-
         // Open log file and seek to end
         let mut file = match tokio::fs::File::open(&path).await {
             Ok(f) => f,
@@ -189,52 +160,76 @@ async fn logs() -> HttpResponse {
             return;
         }
 
-        let mut buffer = [0u8; 2048];
+        let mut buffer = [0u8; 8192];
         let mut pending_data = Vec::new();
 
+        // Send initial message
+        if tx.send(Ok(Bytes::from("data: Log streaming started for ".to_string() + &log_file + "\n\n"))).await.is_err() {
+            return;
+        }
+
+        let mut keep_alive_count = 0;
+
         loop {
-            tokio::select! {
-                _ = watch_rx.recv() => {
-                    // File changed, try to read new data
-                    match file.read(&mut buffer).await {
-                        Ok(0) => {
-                            // EOF reached, possibly file was truncated or rotated
-                            // Try to reopen file
-                            if let Ok(new_file) = tokio::fs::File::open(&path).await {
-                                file = new_file;
-                                if file.seek(SeekFrom::End(0)).await.is_err() {
-                                    break;
-                                }
-                            }
+            // Sleep for 10 seconds
+            tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+
+            // Check if file has grown
+            let metadata = match file.metadata().await {
+                Ok(m) => m,
+                Err(e) => {
+                    error!("Error getting file metadata: {}", e);
+                    continue;
+                }
+            };
+
+            let current_pos = match file.seek(SeekFrom::Current(0)).await {
+                Ok(p) => p,
+                Err(e) => {
+                    error!("Error getting current position: {}", e);
+                    continue;
+                }
+            };
+
+            if metadata.len() > current_pos {
+                let to_read = (metadata.len() - current_pos) as usize;
+                if to_read <= buffer.len() {
+                    match file.read(&mut buffer[..to_read]).await {
+                        Ok(n) if n == to_read => {
+                            pending_data.extend_from_slice(&buffer[..n]);
+                        }
+                        _ => {
+                            error!("Failed to read expected data");
                             continue;
                         }
-                        Ok(n) => {
-                            pending_data.extend_from_slice(&buffer[..n]);
-                            // Process complete lines
-                            while let Some(pos) = pending_data.iter().position(|&b| b == b'\n') {
-                                let line_bytes = pending_data.drain(..=pos).collect::<Vec<_>>();
-                                if let Ok(line) = String::from_utf8(line_bytes) {
-                                    let trimmed = line.trim_end_matches('\n').trim_end_matches('\r');
-                                    if !trimmed.is_empty() {
-                                        if tx.send(Ok(Bytes::from(format!("data: {}\n\n", trimmed)))).await.is_err() {
-                                            return;
-                                        }
-                                    }
-                                }
+                    }
+                } else {
+                    // File grew too much, skip or handle
+                    if file.seek(SeekFrom::End(0)).await.is_ok() {
+                        pending_data.clear(); // Reset to end
+                    }
+                    continue;
+                }
+
+                // Process complete lines
+                while let Some(pos) = pending_data.iter().position(|&b| b == b'\n') {
+                    let line_bytes = pending_data.drain(..=pos).collect::<Vec<_>>();
+                    if let Ok(line) = String::from_utf8(line_bytes) {
+                        let trimmed = line.trim_end_matches('\n').trim_end_matches('\r');
+                        if !trimmed.is_empty() {
+                            if tx.send(Ok(Bytes::from(format!("data: {}\n\n", trimmed)))).await.is_err() {
+                                return;
                             }
-                        }
-                        Err(e) => {
-                            error!("Error reading log file: {}", e);
-                            let _ = tx.send(Err(e)).await;
-                            return;
                         }
                     }
                 }
-                _ = tokio::time::sleep(tokio::time::Duration::from_secs(30)) => {
-                    // Send keep-alive every 30 seconds
-                    if tx.send(Ok(Bytes::from("data: \n\n"))).await.is_err() {
-                        return;
-                    }
+            }
+
+            keep_alive_count += 1;
+            if keep_alive_count >= 3 {  // Every 30 seconds
+                keep_alive_count = 0;
+                if tx.send(Ok(Bytes::from("data: \n\n"))).await.is_err() {
+                    return;
                 }
             }
         }

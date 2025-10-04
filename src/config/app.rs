@@ -1,7 +1,7 @@
 use actix_web::web;
-use chrono;
 use log::info;
 use std::sync::Once;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::api::*;
 
@@ -9,7 +9,8 @@ static LOG_ONCE: Once = Once::new();
 
 pub fn config_services(cfg: &mut web::ServiceConfig) {
     LOG_ONCE.call_once(|| {
-        info!("Starting route configuration at {}", chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC"));
+        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
+        info!("Starting route configuration at {}", timestamp);
         info!("Configuring routes...");
 
         info!("Route Configuration Summary:");
@@ -27,7 +28,8 @@ pub fn config_services(cfg: &mut web::ServiceConfig) {
         info!("  - PUT /api/address-book/{{id}} -> address_book_controller::update (update contact)");
         info!("  - DELETE /api/address-book/{{id}} -> address_book_controller::delete (delete contact)");
         info!("  - GET /api/address-book/filter -> address_book_controller::filter (filter contacts)");
-        info!("Route configuration completed successfully at {}", chrono::Utc::now().format("%H:%M:%S UTC"));
+        let end_timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
+        info!("Route configuration completed successfully at {}", end_timestamp);
     });
 
     // Root level routes

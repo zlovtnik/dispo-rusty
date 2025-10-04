@@ -1,7 +1,8 @@
 #![allow(unused_must_use)]
 
 use std::default::Default;
-use std::{env, io};
+use std::{env, io, fs::OpenOptions};
+use std::io::LineWriter;
 
 use actix_cors::Cors;
 use actix_web::dev::Service;
@@ -22,7 +23,19 @@ mod utils;
 async fn main() -> io::Result<()> {
     dotenv::dotenv().expect("Failed to read .env file");
     env::set_var("RUST_LOG", "actix_web=debug");
-    env_logger::init();
+
+    if let Ok(log_file) = env::var("LOG_FILE") {
+        let log_file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&log_file)
+            .expect("Failed to open log file");
+        env_logger::Builder::from_default_env()
+            .target(env_logger::Target::Pipe(Box::new(LineWriter::new(log_file))))
+            .init();
+    } else {
+        env_logger::init();
+    }
 
     let app_host = env::var("APP_HOST").expect("APP_HOST not found.");
     let app_port = env::var("APP_PORT").expect("APP_PORT not found.");
