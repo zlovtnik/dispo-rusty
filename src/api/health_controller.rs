@@ -1,72 +1,100 @@
 use actix_web::{get, HttpResponse, web};
 use serde::Serialize;
+use tokio::time::{timeout, Duration};
 
 use crate::config::db::Pool as DatabasePool;
 use crate::config::cache::Pool as RedisPool;
 
 use diesel::prelude::*;
-use log::{error, info};
+use redis;
+use log::{debug, error, info, warn};
+use chrono::{Utc};
 use actix_web::web::Bytes;
 use std::io::Error as IoError;
 use std::path::Path;
-use notify::{RecommendedWatcher, Config, RecursiveMode, Watcher};
+
 use tokio::sync::mpsc;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, SeekFrom};
 use tokio_stream::wrappers::ReceiverStream;
 
+#[derive(Serialize, Clone)]
+enum Status {
+    #[serde(rename = "healthy")]
+    Healthy,
+    #[serde(rename = "unhealthy")]
+    Unhealthy,
+}
+
+impl Status {
+    fn is_healthy(&self) -> bool {
+        matches!(self, Status::Healthy)
+    }
+}
+
 #[derive(Serialize)]
 struct HealthStatus {
-    database: String,
-    application: String,
-    cache: String,
+    database: Status,
+    cache: Status,
 }
 
 
 
 #[derive(Serialize)]
 struct HealthResponse {
-    status: String,
+    status: Status,
     timestamp: String,
     components: HealthStatus,
+}
+
+async fn check_database_health_async(pool: web::Data<DatabasePool>) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
+    tokio::task::spawn_blocking(move || check_database_health(pool)).await.unwrap().map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync + 'static>)
+}
+
+async fn check_cache_health_async(redis_pool: web::Data<RedisPool>) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
+    tokio::task::spawn_blocking(move || check_cache_health(&redis_pool)).await.unwrap()
 }
 
 #[get("/health")]
 async fn health(pool: web::Data<DatabasePool>, redis_pool: web::Data<RedisPool>) -> HttpResponse {
     info!("Health check requested");
-    let mut db_status = "healthy".to_string();
-    let mut cache_status = "healthy".to_string();
-    let application_status = "healthy".to_string();
 
-    // Check database
-    match check_database_health(pool) {
-        Ok(_) => {},
-        Err(e) => {
+    // Check database with timeout
+    let db_status = match timeout(Duration::from_secs(5), check_database_health_async(pool)).await {
+        Ok(Ok(())) => Status::Healthy,
+        Ok(Err(e)) => {
             error!("Database health check failed: {}", e);
-            db_status = "unhealthy".to_string();
+            Status::Unhealthy
         },
-    }
+        Err(_) => {
+            error!("Database health check timeout");
+            Status::Unhealthy
+        },
+    };
 
-    // Check cache
-    match check_cache_health(&redis_pool) {
-        Ok(_) => {},
-        Err(e) => {
+    // Check cache with timeout
+    let cache_status = match timeout(Duration::from_secs(3), check_cache_health_async(redis_pool)).await {
+        Ok(Ok(())) => Status::Healthy,
+        Ok(Err(e)) => {
             error!("Cache health check failed: {}", e);
-            cache_status = "unhealthy".to_string();
+            Status::Unhealthy
         },
-    }
+        Err(_) => {
+            error!("Cache health check timeout");
+            Status::Unhealthy
+        },
+    };
 
-    let overall_status = if db_status == "healthy" && cache_status == "healthy" {
-        "healthy"
+    let overall_status = if db_status.is_healthy() && cache_status.is_healthy() {
+        Status::Healthy
     } else {
-        "unhealthy"
+        Status::Unhealthy
     };
 
     let response = HealthResponse {
-        status: overall_status.to_string(),
-        timestamp: chrono::Utc::now().to_rfc3339(),
+        status: overall_status,
+        timestamp: Utc::now().to_rfc3339(),
         components: HealthStatus {
             database: db_status,
-            application: application_status,
             cache: cache_status,
         },
     };
@@ -87,15 +115,16 @@ fn check_database_health(pool: web::Data<DatabasePool>) -> Result<(), diesel::re
     }
 }
 
-fn check_cache_health(redis_pool: &RedisPool) -> Result<(), r2d2::Error> {
-    redis_pool.get()?;
+fn check_cache_health(redis_pool: &RedisPool) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
+    let mut conn = redis_pool.get().map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync + 'static>)?;
+    redis::cmd("PING").query(&mut conn).map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync + 'static>)?;
     Ok(())
 }
 
 #[get("/logs")]
 async fn logs() -> HttpResponse {
     // Check if log streaming is enabled
-    if !matches!(std::env::var("ENABLE_LOG_STREAM"), Ok(val) if val == "true") {
+    if !std::env::var("ENABLE_LOG_STREAM").map(|v| v == "true").unwrap_or(false) {
         return HttpResponse::MethodNotAllowed().body("Log streaming disabled");
     }
 
@@ -115,33 +144,6 @@ async fn logs() -> HttpResponse {
     tokio::spawn(async move {
         let path = Path::new(&log_file_clone);
 
-        // Channel to receive watch events
-        let (watch_tx, mut watch_rx) = mpsc::channel::<()>(1);
-
-        // Create file watcher
-        let watcher_result = RecommendedWatcher::new(
-            move |_res: Result<notify::Event, notify::Error>| {
-                // Send notification on any file change
-                let _ = watch_tx.try_send(());
-            },
-            Config::default()
-        );
-
-        let mut watcher = match watcher_result {
-            Ok(w) => w,
-            Err(e) => {
-                error!("Failed to create file watcher: {}", e);
-                let _ = tx.send(Err(IoError::new(std::io::ErrorKind::Other, e.to_string()))).await;
-                return;
-            }
-        };
-
-        if let Err(e) = watcher.watch(path, RecursiveMode::NonRecursive) {
-            error!("Failed to watch log file: {}", e);
-            let _ = tx.send(Err(IoError::new(std::io::ErrorKind::Other, e.to_string()))).await;
-            return;
-        }
-
         // Open log file and seek to end
         let mut file = match tokio::fs::File::open(&path).await {
             Ok(f) => f,
@@ -158,52 +160,76 @@ async fn logs() -> HttpResponse {
             return;
         }
 
-        let mut buffer = [0u8; 2048];
+        let mut buffer = [0u8; 8192];
         let mut pending_data = Vec::new();
 
+        // Send initial message
+        if tx.send(Ok(Bytes::from("data: Log streaming started for ".to_string() + &log_file + "\n\n"))).await.is_err() {
+            return;
+        }
+
+        let mut keep_alive_count = 0;
+
         loop {
-            tokio::select! {
-                _ = watch_rx.recv() => {
-                    // File changed, try to read new data
-                    match file.read(&mut buffer).await {
-                        Ok(0) => {
-                            // EOF reached, possibly file was truncated or rotated
-                            // Try to reopen file
-                            if let Ok(new_file) = tokio::fs::File::open(&path).await {
-                                file = new_file;
-                                if file.seek(SeekFrom::End(0)).await.is_err() {
-                                    break;
-                                }
-                            }
+            // Sleep for 10 seconds
+            tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+
+            // Check if file has grown
+            let metadata = match file.metadata().await {
+                Ok(m) => m,
+                Err(e) => {
+                    error!("Error getting file metadata: {}", e);
+                    continue;
+                }
+            };
+
+            let current_pos = match file.seek(SeekFrom::Current(0)).await {
+                Ok(p) => p,
+                Err(e) => {
+                    error!("Error getting current position: {}", e);
+                    continue;
+                }
+            };
+
+            if metadata.len() > current_pos {
+                let to_read = (metadata.len() - current_pos) as usize;
+                if to_read <= buffer.len() {
+                    match file.read(&mut buffer[..to_read]).await {
+                        Ok(n) if n == to_read => {
+                            pending_data.extend_from_slice(&buffer[..n]);
+                        }
+                        _ => {
+                            error!("Failed to read expected data");
                             continue;
                         }
-                        Ok(n) => {
-                            pending_data.extend_from_slice(&buffer[..n]);
-                            // Process complete lines
-                            while let Some(pos) = pending_data.iter().position(|&b| b == b'\n') {
-                                let line_bytes = pending_data.drain(..=pos).collect::<Vec<_>>();
-                                if let Ok(line) = String::from_utf8(line_bytes) {
-                                    let trimmed = line.trim_end_matches('\n').trim_end_matches('\r');
-                                    if !trimmed.is_empty() {
-                                        if tx.send(Ok(Bytes::from(format!("data: {}\n\n", trimmed)))).await.is_err() {
-                                            return;
-                                        }
-                                    }
-                                }
+                    }
+                } else {
+                    // File grew too much, skip or handle
+                    if file.seek(SeekFrom::End(0)).await.is_ok() {
+                        pending_data.clear(); // Reset to end
+                    }
+                    continue;
+                }
+
+                // Process complete lines
+                while let Some(pos) = pending_data.iter().position(|&b| b == b'\n') {
+                    let line_bytes = pending_data.drain(..=pos).collect::<Vec<_>>();
+                    if let Ok(line) = String::from_utf8(line_bytes) {
+                        let trimmed = line.trim_end_matches('\n').trim_end_matches('\r');
+                        if !trimmed.is_empty() {
+                            if tx.send(Ok(Bytes::from(format!("data: {}\n\n", trimmed)))).await.is_err() {
+                                return;
                             }
-                        }
-                        Err(e) => {
-                            error!("Error reading log file: {}", e);
-                            let _ = tx.send(Err(e)).await;
-                            return;
                         }
                     }
                 }
-                _ = tokio::time::sleep(tokio::time::Duration::from_secs(30)) => {
-                    // Send keep-alive every 30 seconds
-                    if tx.send(Ok(Bytes::from("data: \n\n"))).await.is_err() {
-                        return;
-                    }
+            }
+
+            keep_alive_count += 1;
+            if keep_alive_count >= 3 {  // Every 30 seconds
+                keep_alive_count = 0;
+                if tx.send(Ok(Bytes::from("data: \n\n"))).await.is_err() {
+                    return;
                 }
             }
         }
@@ -234,7 +260,8 @@ mod tests {
     use tempfile::NamedTempFile;
     use tokio::io::AsyncWriteExt;
     use tokio::time::{timeout, Duration};
-    use futures::StreamExt;
+    use tokio_stream::StreamExt;
+    use actix_web::web::Bytes;
 
     #[actix_web::test]
     async fn test_health_ok() {
@@ -339,17 +366,18 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::OK);
         assert_eq!(resp.headers().get("content-type").unwrap(), "text/event-stream");
 
-        // Consume the body with timeout to verify SSE frames or keep-alive messages
-        let mut body = resp.into_body();
-        let sse_frame_received = timeout(Duration::from_secs(32), async {
-            while let Some(Ok(bytes)) = body.next().await {
-                let s = String::from_utf8_lossy(&bytes);
-                if s.starts_with("data:") {
-                    return true;
+        // Consume the body to verify SSE frames or keep-alive messages
+        let sse_frame_received = timeout(Duration::from_secs(35), async {
+            let mut body = resp.into_body();
+            let pinned_body = std::pin::pin!(&mut body);
+            while let Some(chunk_result) = pinned_body.next().await {
+                let chunk = chunk_result.unwrap();
+                if String::from_utf8_lossy(&chunk).starts_with("data:") {
+                    return Ok(true);
                 }
             }
-            false
-        }).await.unwrap_or(false);
+            Ok(false)
+        }).await.unwrap_or(Ok(false)).unwrap();
 
         assert!(sse_frame_received, "No SSE frame received within timeout");
     }

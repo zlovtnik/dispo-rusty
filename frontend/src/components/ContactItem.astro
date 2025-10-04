@@ -1,0 +1,28 @@
+---
+export interface Props {
+  contact: {
+    id: number;
+    name: string;
+    gender_key: string;
+    age: number;
+    address: string;
+    phone: string;
+    email: string;
+  };
+}
+
+const { contact } = Astro.props;
+---
+
+<div class="address-item">
+  <h4>{contact.name}</h4>
+  <p><strong>Age:</strong> {contact.age} | <strong>Gender:</strong> {contact.gender_key}</p>
+  <p><strong>Address:</strong> {contact.address}</p>
+  <p><strong>Phone:</strong> {contact.phone}</p>
+  <p><strong>Email:</strong> {contact.email}</p>
+  <div class="actions">
+    <button class="btn btn-danger delete-contact-btn" data-contact-id={contact.id.toString()}>
+      Delete
+    </button>
+  </div>
+</div>
