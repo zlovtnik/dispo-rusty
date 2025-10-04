@@ -1,30 +1,14 @@
 {
-  "name": "bun-rest-api-with-jwt",
-  "version": "0.1.0",
-  "description": "REST API with JWT authentication built with Bun and TypeScript",
-  "main": "src/index.ts",
+  "name": "frontend-astro",
+  "type": "module",
+  "version": "0.0.1",
   "scripts": {
-    "dev": "bun run --watch --port 3000 src/index.ts",
-    "start": "bun run src/index.ts",
-    "build": "bun build src/index.ts --outdir ./dist --target bun"
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro"
   },
   "dependencies": {
-    
-  },
-  "devDependencies": {
-    "bun-types": "latest",
-    "typescript": "^5.2.2"
-  },
-  "keywords": [
-    "bun",
-    "typescript",
-    "rest-api",
-    "jwt",
-    "authentication",
-    "prisma",
-    "postgresql",
-    "redis"
-  ],
-  "author": "Converted from Rust actix-web",
-  "license": "MIT"
+    "astro": "^5.14.1"
+  }
 }
