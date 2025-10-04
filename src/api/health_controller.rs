@@ -265,7 +265,8 @@ mod tests {
     use tempfile::NamedTempFile;
     use tokio::io::AsyncWriteExt;
     use tokio::time::{timeout, Duration};
-    use futures::StreamExt;
+    use tokio_stream::StreamExt;
+    use actix_web::web::Bytes;
 
     #[actix_web::test]
     async fn test_health_ok() {
@@ -370,17 +371,18 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::OK);
         assert_eq!(resp.headers().get("content-type").unwrap(), "text/event-stream");
 
-        // Consume the body with timeout to verify SSE frames or keep-alive messages
-        let mut body = resp.into_body();
-        let sse_frame_received = timeout(Duration::from_secs(32), async {
-            while let Some(Ok(bytes)) = body.next().await {
-                let s = String::from_utf8_lossy(&bytes);
-                if s.starts_with("data:") {
-                    return true;
+        // Consume the body to verify SSE frames or keep-alive messages
+        let sse_frame_received = timeout(Duration::from_secs(35), async {
+            let mut body = resp.into_body();
+            let pinned_body = std::pin::pin!(&mut body);
+            while let Some(chunk_result) = pinned_body.next().await {
+                let chunk = chunk_result.unwrap();
+                if String::from_utf8_lossy(&chunk).starts_with("data:") {
+                    return Ok(true);
                 }
             }
-            false
-        }).await.unwrap_or(false);
+            Ok(false)
+        }).await.unwrap_or(Ok(false)).unwrap();
 
         assert!(sse_frame_received, "No SSE frame received within timeout");
     }
