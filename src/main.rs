@@ -3,6 +3,7 @@
 use std::default::Default;
 use std::{env, io, fs::OpenOptions};
 use std::io::LineWriter;
+use std::path::Path;
 
 use actix_cors::Cors;
 use actix_web::dev::Service;
@@ -21,15 +22,18 @@ mod services;
 mod utils;
 #[actix_rt::main]
 async fn main() -> io::Result<()> {
-    dotenv::dotenv().expect("Failed to read .env file");
+    dotenv::dotenv().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to read .env file: {}", e)))?;
     env::set_var("RUST_LOG", "actix_web=debug");
 
-    if let Ok(log_file) = env::var("LOG_FILE") {
+    if let Ok(log_file_path) = env::var("LOG_FILE") {
+        let path = Path::new(&log_file_path);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
         let log_file = OpenOptions::new()
             .create(true)
             .append(true)
-            .open(&log_file)
-            .expect("Failed to open log file");
+            .open(&log_file_path)?;
         env_logger::Builder::from_default_env()
             .target(env_logger::Target::Pipe(Box::new(LineWriter::new(log_file))))
             .init();
@@ -37,11 +41,11 @@ async fn main() -> io::Result<()> {
         env_logger::init();
     }
 
-    let app_host = env::var("APP_HOST").expect("APP_HOST not found.");
-    let app_port = env::var("APP_PORT").expect("APP_PORT not found.");
+    let app_host = env::var("APP_HOST").map_err(|e| std::io::Error::new(std::io::ErrorKind::NotFound, format!("APP_HOST not found: {}", e)))?;
+    let app_port = env::var("APP_PORT").map_err(|e| std::io::Error::new(std::io::ErrorKind::NotFound, format!("APP_PORT not found: {}", e)))?;
     let app_url = format!("{}:{}", &app_host, &app_port);
-    let db_url = env::var("DATABASE_URL").expect("DATABASE_URL not found.");
-    let redis_url = env::var("REDIS_URL").expect("REDIS_URL not found.");
+    let db_url = env::var("DATABASE_URL").map_err(|e| std::io::Error::new(std::io::ErrorKind::NotFound, format!("DATABASE_URL not found: {}", e)))?;
+    let redis_url = env::var("REDIS_URL").map_err(|e| std::io::Error::new(std::io::ErrorKind::NotFound, format!("REDIS_URL not found: {}", e)))?;
 
     let pool = config::db::init_db_pool(&db_url);
     config::db::run_migration(&mut pool.get().unwrap());
