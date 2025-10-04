@@ -1,53 +1,22 @@
-# build stage
-FROM rust:slim as build
-
-# install libpq, libsqlite and create new empty binary project
-RUN apt-get update; \
-    apt-get install --no-install-recommends -y libpq-dev libsqlite3-dev; \
-    rm -rf /var/lib/apt/lists/*; \
-    USER=root cargo new --bin app
-WORKDIR /app
-
-# copy manifests
-COPY ./Cargo.toml ./Cargo.toml
-
-# build this project to cache dependencies
-RUN cargo build; \
-    rm src/*.rs
-
-# copy project source and necessary files
-COPY ./src ./src
-COPY ./migrations ./migrations
-COPY ./diesel.toml .
-
-# add .env and secret.key for Docker env
-RUN touch .env; \
-    mv src/secret.key.sample src/secret.key
-
-# rebuild app with project source
-RUN rm ./target/debug/deps/actix_web_rest_api_with_jwt*; \
-    cargo build --release
-
-# deploy stage
-FROM debian:buster-slim
+# development stage with Bun
+FROM oven/bun:1
 
 # create app directory
-RUN mkdir app
 WORKDIR /app
 
-# install libpq and libsqlite
-RUN apt-get update; \
-    apt-get install --no-install-recommends -y libpq5 libsqlite3-0; \
-    rm -rf /var/lib/apt/lists/*
+# copy frontend files
+COPY frontend/package.json frontend/bun.lockb* ./
+RUN bun install
 
-# copy binary and configuration files
-COPY --from=build /app/target/release/actix-web-rest-api-with-jwt .
-COPY --from=build /app/.env .
-COPY --from=build /app/diesel.toml .
-COPY ./wait-for-it.sh .
+# copy frontend source code and configuration
+COPY frontend/ .
+COPY .env ./
+
+# generate Prisma client
+RUN bunx prisma generate
 
 # expose port
 EXPOSE 8000
 
-# run the binary
-CMD ["/app/actix-web-rest-api-with-jwt"]
+# run the application in development mode
+CMD ["bun", "run", "dev"]

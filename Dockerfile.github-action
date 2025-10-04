@@ -1,24 +1,40 @@
 # NOTE: This Dockerfile is only used for GitHub Actions. For local development, please use 'Dockerfile.local'
-# base image
-FROM debian:buster-slim
+# base image with Bun
+FROM oven/bun:1 as base
 
 # create app directory
-RUN mkdir app
 WORKDIR /app
 
-# install libpq
-RUN apt-get update; \
-    apt-get install --no-install-recommends -y libpq5 libsqlite3-0; \
-    rm -rf /var/lib/apt/lists/*
+# install dependencies
+COPY frontend/package.json frontend/bun.lockb* ./
+RUN bun install --frozen-lockfile
 
-# copy binary and configuration files
-COPY ./actix-web-rest-api-with-jwt .
-COPY ./diesel.toml .
-COPY ./.env .
-COPY ./wait-for-it.sh .
+# copy frontend source code and env
+COPY frontend/ .
+COPY .env ./
+
+# generate Prisma client
+RUN bunx prisma generate
+
+# build application
+RUN bun run build
+
+# production stage
+FROM oven/bun:1-slim as production
+
+# create app directory
+WORKDIR /app
+
+# copy built application and dependencies
+COPY --from=base /app/dist ./dist
+COPY --from=base /app/node_modules ./node_modules
+COPY --from=base /app/package.json ./
+COPY --from=base /app/prisma ./prisma
+COPY ./.env* ./
+COPY ./wait-for-it.sh ./
 
 # expose port
 EXPOSE 8000
 
-# run the binary
-CMD ["/app/actix-web-rest-api-with-jwt"]
+# run the application
+CMD ["bun", "run", "start"]

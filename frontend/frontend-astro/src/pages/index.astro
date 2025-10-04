@@ -1,0 +1,616 @@
+---
+---
+
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Address Book - Frontend Client</title>
+		<meta name="generator" content={Astro.generator} />
+		<style>
+			* {
+				margin: 0;
+				padding: 0;
+				box-sizing: border-box;
+			}
+
+			body {
+				font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+				background-color: #f5f5f5;
+				color: #333;
+			}
+
+			.container {
+				max-width: 800px;
+				margin: 0 auto;
+				padding: 20px;
+			}
+
+			.header {
+				background: white;
+				padding: 20px;
+				border-radius: 8px;
+				margin-bottom: 20px;
+				box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+			}
+
+			.nav {
+				display: flex;
+				gap: 15px;
+				margin-top: 15px;
+			}
+
+			.nav button {
+				padding: 10px 20px;
+				background: #007bff;
+				color: white;
+				border: none;
+				border-radius: 5px;
+				cursor: pointer;
+				transition: background 0.2s;
+			}
+
+			.nav button:hover {
+				background: #0056b3;
+			}
+
+			.nav button.active {
+				background: #28a745;
+			}
+
+			.content {
+				background: white;
+				padding: 20px;
+				border-radius: 8px;
+				box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+			}
+
+			.hidden {
+				display: none;
+			}
+
+			.form-group {
+				margin-bottom: 15px;
+			}
+
+			.form-group label {
+				display: block;
+				margin-bottom: 5px;
+				font-weight: 500;
+			}
+
+			.form-group input {
+				width: 100%;
+				padding: 10px;
+				border: 1px solid #ddd;
+				border-radius: 5px;
+				font-size: 14px;
+			}
+
+			.btn {
+				padding: 12px 24px;
+				background: #007bff;
+				color: white;
+				border: none;
+				border-radius: 5px;
+				cursor: pointer;
+				font-size: 14px;
+				margin-right: 10px;
+			}
+
+			.btn:hover {
+				background: #0056b3;
+			}
+
+			.btn-danger {
+				background: #dc3545;
+			}
+
+			.btn-danger:hover {
+				background: #c82333;
+			}
+
+			.alert {
+				padding: 15px;
+				margin-bottom: 15px;
+				border-radius: 5px;
+			}
+
+			.alert-success {
+				background: #d4edda;
+				border: 1px solid #c3e6cb;
+				color: #155724;
+			}
+
+			.alert-error {
+				background: #f8d7da;
+				border: 1px solid #f5c6cb;
+				color: #721c24;
+			}
+
+			.user-info {
+				background: #e9ecef;
+				padding: 15px;
+				border-radius: 5px;
+				margin-bottom: 20px;
+			}
+
+			.address-list {
+				margin-top: 20px;
+			}
+
+			.address-item {
+				background: #f8f9fa;
+				padding: 15px;
+				border-radius: 5px;
+				margin-bottom: 10px;
+				border: 1px solid #dee2e6;
+			}
+
+			.address-item h4 {
+				margin-bottom: 5px;
+				color: #495057;
+			}
+
+			.address-item p {
+				margin: 2px 0;
+				color: #6c757d;
+			}
+
+			.address-item .actions {
+				margin-top: 10px;
+			}
+
+			.address-item .actions button {
+				font-size: 12px;
+				padding: 6px 12px;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="container">
+			<div class="header">
+				<h1>Address Book Application</h1>
+				<p>Frontend client connecting to Rust backend API on port 8000</p>
+				<div class="nav">
+					<button id="loginBtn" class="nav-btn active">Login</button>
+					<button id="signupBtn" class="nav-btn">Signup</button>
+					<button id="addressBookBtn" class="nav-btn hidden">Address Book</button>
+					<button id="logoutBtn" class="nav-btn hidden">Logout</button>
+				</div>
+			</div>
+
+			<div class="content">
+				<div id="alertContainer"></div>
+
+				<!-- Login Form -->
+				<div id="loginSection">
+					<h2>Login</h2>
+					<form id="loginForm">
+						<div class="form-group">
+							<label for="loginUsername">Username or Email:</label>
+							<input type="text" id="loginUsername" name="username_or_email" required>
+						</div>
+						<div class="form-group">
+							<label for="loginPassword">Password:</label>
+							<input type="password" id="loginPassword" name="password" required>
+						</div>
+						<button type="submit" class="btn">Login</button>
+					</form>
+				</div>
+
+				<!-- Signup Form -->
+				<div id="signupSection" class="hidden">
+					<h2>Sign Up</h2>
+					<form id="signupForm">
+						<div class="form-group">
+							<label for="signupUsername">Username:</label>
+							<input type="text" id="signupUsername" name="username" required>
+						</div>
+						<div class="form-group">
+							<label for="signupEmail">Email:</label>
+							<input type="email" id="signupEmail" name="email" required>
+						</div>
+						<div class="form-group">
+							<label for="signupPassword">Password:</label>
+							<input type="password" id="signupPassword" name="password" required>
+						</div>
+						<button type="submit" class="btn">Sign Up</button>
+					</form>
+				</div>
+
+				<!-- Address Book Section -->
+				<div id="addressBookSection" class="hidden">
+					<div id="userInfo" class="user-info hidden">
+						<h3>Welcome, <span id="currentUsername"></span>!</h3>
+						<p>You are now logged in and can manage your address book.</p>
+					</div>
+
+					<h2>Address Book</h2>
+
+					<!-- Add New Contact Form -->
+					<div id="addContactSection">
+						<h3>Add New Contact</h3>
+						<form id="addContactForm">
+							<div class="form-group">
+								<label for="contactName">Name:</label>
+								<input type="text" id="contactName" name="name" required>
+							</div>
+							<div class="form-group">
+								<label for="contactGenderKey">Gender (M/F):</label>
+								<input type="text" id="contactGenderKey" name="gender_key" maxlength="1" required>
+							</div>
+							<div class="form-group">
+								<label for="contactAge">Age:</label>
+								<input type="number" id="contactAge" name="age" min="0" required>
+							</div>
+							<div class="form-group">
+								<label for="contactAddress">Address:</label>
+								<input type="text" id="contactAddress" name="address" required>
+							</div>
+							<div class="form-group">
+								<label for="contactPhone">Phone:</label>
+								<input type="tel" id="contactPhone" name="phone" required>
+							</div>
+							<div class="form-group">
+								<label for="contactEmail">Email:</label>
+								<input type="email" id="contactEmail" name="email" required>
+							</div>
+							<button type="submit" class="btn">Add Contact</button>
+						</form>
+					</div>
+
+					<!-- Contact List -->
+					<div class="address-list">
+						<h3>Your Contacts</h3>
+						<button id="loadContactsBtn" class="btn">Load Contacts</button>
+						<div id="contactsList"></div>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<script define:vars={{ apiBaseUrl: 'http://localhost:8000/api' }}>
+			// Frontend JavaScript client for Address Book API
+			// Makes HTTP requests to backend on localhost:8000
+
+			const API_BASE_URL = apiBaseUrl;
+			let authToken = localStorage.getItem('auth_token');
+			let currentUser = localStorage.getItem('current_user');
+
+			// DOM elements
+			let alertContainer, loginSection, signupSection, addressBookSection;
+			let loginForm, signupForm, addContactForm;
+			let userInfo, currentUsername, contactsList;
+			let loginBtn, signupBtn, addressBookBtn, logoutBtn, loadContactsBtn;
+
+			// Initialize when DOM is loaded
+			document.addEventListener('DOMContentLoaded', function() {
+				initializeElements();
+				setupEventListeners();
+				updateUI();
+
+				// Test backend connectivity
+				testBackendConnectivity();
+			});
+
+			function initializeElements() {
+				// Get all DOM elements
+				alertContainer = document.getElementById('alertContainer');
+				loginSection = document.getElementById('loginSection');
+				signupSection = document.getElementById('signupSection');
+				addressBookSection = document.getElementById('addressBookSection');
+
+				loginForm = document.getElementById('loginForm');
+				signupForm = document.getElementById('signupForm');
+				addContactForm = document.getElementById('addContactForm');
+
+				userInfo = document.getElementById('userInfo');
+				currentUsername = document.getElementById('currentUsername');
+				contactsList = document.getElementById('contactsList');
+
+				loginBtn = document.getElementById('loginBtn');
+				signupBtn = document.getElementById('signupBtn');
+				addressBookBtn = document.getElementById('addressBookBtn');
+				logoutBtn = document.getElementById('logoutBtn');
+				loadContactsBtn = document.getElementById('loadContactsBtn');
+			}
+
+			function setupEventListeners() {
+				// Navigation buttons
+				loginBtn.addEventListener('click', () => showSection('login'));
+				signupBtn.addEventListener('click', () => showSection('signup'));
+				addressBookBtn.addEventListener('click', () => showSection('addressBook'));
+				logoutBtn.addEventListener('click', logout);
+
+				// Forms
+				loginForm.addEventListener('submit', handleLogin);
+				signupForm.addEventListener('submit', handleSignup);
+				addContactForm.addEventListener('submit', handleAddContact);
+
+				// Load contacts button
+				loadContactsBtn.addEventListener('click', loadContacts);
+			}
+
+			function updateUI() {
+				if (authToken && currentUser) {
+					// User is logged in
+					showLoggedInState();
+				} else {
+					// User is not logged in
+					showLoggedOutState();
+				}
+			}
+
+			function showLoggedInState() {
+				loginBtn.classList.add('hidden');
+				signupBtn.classList.add('hidden');
+				addressBookBtn.classList.remove('hidden');
+				logoutBtn.classList.remove('hidden');
+
+				currentUsername.textContent = currentUser;
+				showSection('addressBook');
+			}
+
+			function showLoggedOutState() {
+				loginBtn.classList.remove('hidden');
+				signupBtn.classList.remove('hidden');
+				addressBookBtn.classList.add('hidden');
+				logoutBtn.classList.add('hidden');
+
+				showSection('login');
+			}
+
+			function showSection(section) {
+				// Hide all sections
+				loginSection.classList.add('hidden');
+				signupSection.classList.add('hidden');
+				addressBookSection.classList.add('hidden');
+
+				// Remove active class from all nav buttons
+				document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+
+				// Show selected section and activate button
+				switch (section) {
+					case 'login':
+						loginSection.classList.remove('hidden');
+						loginBtn.classList.add('active');
+						break;
+					case 'signup':
+						signupSection.classList.remove('hidden');
+						signupBtn.classList.add('active');
+						break;
+					case 'addressBook':
+						addressBookSection.classList.remove('hidden');
+						addressBookBtn.classList.add('active');
+						userInfo.classList.remove('hidden');
+						break;
+				}
+			}
+
+			function showAlert(message, type = 'success') {
+				const alertDiv = document.createElement('div');
+				alertDiv.className = `alert alert-${type}`;
+				alertDiv.textContent = message;
+
+				alertContainer.innerHTML = '';
+				alertContainer.appendChild(alertDiv);
+
+				// Auto-hide alert after 5 seconds
+				setTimeout(() => {
+					alertContainer.innerHTML = '';
+				}, 5000);
+			}
+
+			async function testBackendConnectivity() {
+				try {
+					const response = await fetch(`${API_BASE_URL}/ping`);
+					if (!response.ok) {
+						console.warn('Backend connectivity test failed');
+						showAlert('Warning: Cannot connect to backend server on port 8000', 'error');
+					} else {
+						console.log('Backend connectivity test successful');
+					}
+				} catch (error) {
+					console.error('Backend connectivity test failed:', error);
+					showAlert('Warning: Cannot connect to backend server on port 8000. Make sure the Rust backend is running.', 'error');
+				}
+			}
+
+			async function makeRequest(endpoint, options = {}) {
+				const url = `${API_BASE_URL}${endpoint}`;
+				const config = {
+					headers: {
+						'Content-Type': 'application/json',
+						...options.headers
+					},
+					...options
+				};
+
+				// Add auth token if available
+				if (authToken) {
+					config.headers['Authorization'] = `Bearer ${authToken}`;
+				}
+
+				try {
+					console.log(`Making ${config.method || 'GET'} request to: ${url}`);
+					const response = await fetch(url, config);
+					const data = await response.json();
+
+					if (!response.ok) {
+						throw new Error(data.error_message || data.message || 'Request failed');
+					}
+
+					return data;
+				} catch (error) {
+					console.error('Request failed:', error);
+					throw error;
+				}
+			}
+
+			async function handleLogin(event) {
+				event.preventDefault();
+
+				const formData = new FormData(event.target);
+				const loginData = {
+					username_or_email: formData.get('username_or_email'),
+					password: formData.get('password')
+				};
+
+				try {
+					const response = await makeRequest('/auth/login', {
+						method: 'POST',
+						body: JSON.stringify(loginData)
+					});
+
+					if (response.data && response.data.token) {
+						authToken = response.data.token;
+						currentUser = response.data.user.username;
+
+						localStorage.setItem('auth_token', authToken);
+						localStorage.setItem('current_user', currentUser);
+
+						showAlert('Login successful!', 'success');
+						updateUI();
+
+						// Reset form
+						event.target.reset();
+					} else {
+						throw new Error('Invalid response format');
+					}
+				} catch (error) {
+					showAlert(`Login failed: ${error.message}`, 'error');
+				}
+			}
+
+			async function handleSignup(event) {
+				event.preventDefault();
+
+				const formData = new FormData(event.target);
+				const signupData = {
+					username: formData.get('username'),
+					email: formData.get('email'),
+					password: formData.get('password')
+				};
+
+				try {
+					const response = await makeRequest('/auth/signup', {
+						method: 'POST',
+						body: JSON.stringify(signupData)
+					});
+
+					showAlert('Signup successful! Please login.', 'success');
+					showSection('login');
+
+					// Reset form
+					event.target.reset();
+				} catch (error) {
+					showAlert(`Signup failed: ${error.message}`, 'error');
+				}
+			}
+
+			async function logout() {
+				try {
+					await makeRequest('/auth/logout', {
+						method: 'POST'
+					});
+				} catch (error) {
+					console.error('Logout request failed:', error);
+				} finally {
+					// Clear local storage regardless of API response
+					authToken = null;
+					currentUser = null;
+					localStorage.removeItem('auth_token');
+					localStorage.removeItem('current_user');
+
+					showAlert('Logged out successfully!', 'success');
+					updateUI();
+
+					// Clear contacts list
+					contactsList.innerHTML = '';
+				}
+			}
+
+			async function handleAddContact(event) {
+				event.preventDefault();
+
+				const formData = new FormData(event.target);
+				const contactData = {
+					name: formData.get('name'),
+					gender_key: formData.get('gender_key'),
+					age: parseInt(formData.get('age')),
+					address: formData.get('address'),
+					phone: formData.get('phone'),
+					email: formData.get('email')
+				};
+
+				try {
+					const response = await makeRequest('/address-book', {
+						method: 'POST',
+						body: JSON.stringify(contactData)
+					});
+
+					showAlert('Contact added successfully!', 'success');
+					event.target.reset();
+
+					// Reload contacts
+					loadContacts();
+				} catch (error) {
+					showAlert(`Failed to add contact: ${error.message}`, 'error');
+				}
+			}
+
+			async function loadContacts() {
+				try {
+					const response = await makeRequest('/address-book');
+
+					if (response.data && Array.isArray(response.data)) {
+						displayContacts(response.data);
+					} else {
+						contactsList.innerHTML = '<p>No contacts found.</p>';
+					}
+				} catch (error) {
+					showAlert(`Failed to load contacts: ${error.message}`, 'error');
+					contactsList.innerHTML = '<p>Failed to load contacts.</p>';
+				}
+			}
+
+			function displayContacts(contacts) {
+				if (contacts.length === 0) {
+					contactsList.innerHTML = '<p>No contacts found. Add your first contact above!</p>';
+					return;
+				}
+
+				contactsList.innerHTML = contacts.map(contact => `
+					<div class="address-item">
+						<h4>${contact.name}</h4>
+						<p><strong>Age:</strong> ${contact.age} | <strong>Gender:</strong> ${contact.gender_key}</p>
+						<p><strong>Address:</strong> ${contact.address}</p>
+						<p><strong>Phone:</strong> ${contact.phone}</p>
+						<p><strong>Email:</strong> ${contact.email}</p>
+						<div class="actions">
+							<button class="btn btn-danger" onclick="deleteContact(${contact.id})">Delete</button>
+						</div>
+					</div>
+				`).join('');
+			}
+
+			async function deleteContact(contactId) {
+				if (!confirm('Are you sure you want to delete this contact?')) {
+					return;
+				}
+
+				try {
+					await makeRequest(`/address-book/${contactId}`, {
+						method: 'DELETE'
+					});
+
+					showAlert('Contact deleted successfully!', 'success');
+					loadContacts();
+				} catch (error) {
+					showAlert(`Failed to delete contact: ${error.message}`, 'error');
+				}
+			}
+		</script>
+	</body>
+</html>

@@ -1,0 +1,30 @@
+{
+  "name": "bun-rest-api-with-jwt",
+  "version": "0.1.0",
+  "description": "REST API with JWT authentication built with Bun and TypeScript",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "bun run --watch --port 3000 src/index.ts",
+    "start": "bun run src/index.ts",
+    "build": "bun build src/index.ts --outdir ./dist --target bun"
+  },
+  "dependencies": {
+    
+  },
+  "devDependencies": {
+    "bun-types": "latest",
+    "typescript": "^5.2.2"
+  },
+  "keywords": [
+    "bun",
+    "typescript",
+    "rest-api",
+    "jwt",
+    "authentication",
+    "prisma",
+    "postgresql",
+    "redis"
+  ],
+  "author": "Converted from Rust actix-web",
+  "license": "MIT"
+}
