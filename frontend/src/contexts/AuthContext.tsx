@@ -1,31 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { authService } from '../services/api';
-import type { AuthResponse } from '../types/auth';
+import type { AuthResponse, User, Tenant, LoginCredentials, TenantSettings } from '../types/auth';
 import type { ApiResponseWrapper } from '../services/api';
-
-// Types
-export interface User {
-  id: string;
-  email: string;
-  username: string;
-  firstName?: string;
-  lastName?: string;
-  roles: string[];
-}
-
-export interface TenantSettings {
-  theme: string;
-  features: string[];
-  [key: string]: unknown;
-}
-
-export interface Tenant {
-  id: string;
-  name: string;
-  domain?: string;
-  settings: TenantSettings;
-}
 
 export interface AuthContextType {
   user: User | null;
@@ -39,13 +16,6 @@ export interface AuthContextType {
   // - Real authentication endpoints integration with existing Actix Web backend
   // - JWT token storage and automatic Authorization header inclusion
   // - Robust error handling with proper logout on auth failures
-}
-
-export interface LoginCredentials {
-  usernameOrEmail: string;
-  password: string;
-  tenantId: string;
-  rememberMe?: boolean;
 }
 
 interface JwtPayload {
@@ -329,6 +299,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
 
       // Create user object from token payload (remove synthetic fallbacks)
+      const now = new Date().toISOString();
       const user: User = {
         id: tokenPayload.user,
         email: credentials.usernameOrEmail,
@@ -336,6 +307,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         firstName: tokenPayload.user.charAt(0).toUpperCase() + tokenPayload.user.slice(1),
         lastName: 'User',
         roles: ['user'], // Default role
+        tenantId: tokenPayload.tenant_id,
+        createdAt: now,
+        updatedAt: now,
       };
 
       // Create tenant object
@@ -347,9 +321,26 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         name: `Tenant ${tokenPayload.tenant_id}`,
         domain: `${tokenPayload.tenant_id}.demo.com`,
         settings: {
-          theme: 'default',
+          theme: 'natural',
+          language: 'en',
+          timezone: 'UTC',
+          dateFormat: 'MM/DD/YYYY',
           features: ['dashboard', 'address-book'],
-        } as TenantSettings,
+          branding: {
+            primaryColor: '#2d9d5a',
+            secondaryColor: '#e29e26',
+            accentColor: '#22c55e',
+          },
+        },
+        subscription: {
+          plan: 'basic',
+          status: 'active',
+          limits: {
+            users: 10,
+            contacts: 500,
+            storage: 1024,
+          },
+        },
       };
 
       // Set state
