@@ -47,15 +47,30 @@ export interface LoginCredentials {
   rememberMe?: boolean;
 }
 
+interface JwtPayload {
+  user: string;
+  tenant_id: string;
+  exp: number;
+  iat?: number;
+  [key: string]: unknown;
+}
+
 // JWT decoding utility
-const decodeJwtPayload = (token: string): any => {
+const decodeJwtPayload = (token: string): JwtPayload | null => {
   try {
     const parts = token.split('.');
     if (parts.length !== 3 || !parts[1]) {
       throw new Error('Invalid JWT format');
     }
     const decoded = atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'));
-    return JSON.parse(decoded);
+    const payload = JSON.parse(decoded) as JwtPayload;
+
+    // Validate required fields
+    if (!payload.user || !payload.tenant_id || typeof payload.exp !== 'number') {
+      throw new Error('Invalid JWT payload structure');
+    }
+
+    return payload;
   } catch (error) {
     console.error('Failed to decode JWT:', error);
     return null;
@@ -75,6 +90,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const isMountedRef = React.useRef(true);
 
   // In a multi-tenant system, authentication requires both user and tenant
   const isAuthenticated = !!user && !!tenant;
@@ -107,20 +123,69 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
                 // Decode the new token to get fresh user/tenant info
                 const newPayload = decodeJwtPayload(newToken);
-                if (newPayload) {
-                  // Create user object from new token payload
-                  const refreshedUser = JSON.parse(storedUser);
-                  const refreshedTenant = JSON.parse(storedTenant);
+                if (newPayload && typeof newPayload === 'object') {
+                  // Since newPayload is already validated in decodeJwtPayload, we can trust it has the required fields
+                  // but double-check for runtime safety
+                  if (!newPayload.user?.trim() || !newPayload.tenant_id?.trim()) {
+                    console.log('JWT payload validation failed: missing or invalid user/tenant_id in refreshed token');
+                    localStorage.removeItem('auth_token');
+                    localStorage.removeItem('user');
+                    localStorage.removeItem('tenant');
+                    return;
+                  }
 
-                  // Update stored data if needed (in case username or tenant changed)
-                  refreshedUser.username = newPayload.user;
-                  refreshedTenant.id = newPayload.tenant_id;
+                  let refreshedUser: User | null = null;
+                  let refreshedTenant: Tenant | null = null;
 
-                  localStorage.setItem('user', JSON.stringify(refreshedUser));
-                  localStorage.setItem('tenant', JSON.stringify(refreshedTenant));
+                  try {
+                    const parsedUser = JSON.parse(storedUser);
+                    if (parsedUser && typeof parsedUser === 'object' &&
+                        typeof parsedUser.id === 'string' && parsedUser.id.trim() !== '' &&
+                        typeof parsedUser.email === 'string' && parsedUser.email.trim() !== '' &&
+                        typeof parsedUser.username === 'string' && parsedUser.username.trim() !== '' &&
+                        Array.isArray(parsedUser.roles) && parsedUser.roles.every((role: any) => typeof role === 'string')) {
+                      refreshedUser = parsedUser;
+                    }
+                  } catch (parseError) {
+                    console.log('Failed to parse stored user data:', parseError);
+                  }
 
-                  setUser(refreshedUser);
-                  setTenant(refreshedTenant);
+                  try {
+                    const parsedTenant = JSON.parse(storedTenant);
+                    if (parsedTenant && typeof parsedTenant === 'object' &&
+                        typeof parsedTenant.id === 'string' && parsedTenant.id.trim() !== '' &&
+                        typeof parsedTenant.name === 'string' && parsedTenant.name.trim() !== '' &&
+                        typeof parsedTenant.settings === 'object' && parsedTenant.settings !== null) {
+                      refreshedTenant = parsedTenant;
+                    }
+                  } catch (parseError) {
+                    console.log('Failed to parse stored tenant data:', parseError);
+                  }
+
+                  // Only update if all validations passed
+                  if (refreshedUser && refreshedTenant) {
+                    // Update stored data if needed (in case username or tenant changed)
+                    refreshedUser.username = newPayload.user;
+                    refreshedTenant.id = newPayload.tenant_id;
+
+                    localStorage.setItem('user', JSON.stringify(refreshedUser));
+                    localStorage.setItem('tenant', JSON.stringify(refreshedTenant));
+
+                    if (isMountedRef.current) {
+                      setUser(refreshedUser);
+                      setTenant(refreshedTenant);
+                    }
+                  } else {
+                    console.log('Stored user/tenant data validation failed after token refresh');
+                    localStorage.removeItem('auth_token');
+                    localStorage.removeItem('user');
+                    localStorage.removeItem('tenant');
+                  }
+                } else {
+                  console.log('Failed to decode refreshed JWT token');
+                  localStorage.removeItem('auth_token');
+                  localStorage.removeItem('user');
+                  localStorage.removeItem('tenant');
                 }
               }
             } catch (refreshError) {
@@ -131,6 +196,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             }
             return;
           }
+        }
 
           // Validate stored user and tenant data structure
           const parsedUser = JSON.parse(storedUser) as User;
@@ -160,8 +226,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             const tokenTenantId = tokenPayload.tenant_id;
 
             if (parsedUser.username === tokenUsername && parsedTenant.id === tokenTenantId) {
-              setUser(parsedUser);
-              setTenant(parsedTenant);
+              if (isMountedRef.current) {
+                setUser(parsedUser);
+                setTenant(parsedTenant);
+              }
             } else {
               console.warn('Token payload mismatch with stored data, clearing authentication');
               localStorage.removeItem('auth_token');
@@ -183,11 +251,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         localStorage.removeItem('tenant');
         console.error('Authentication initialization failed:', error);
       } finally {
-        setIsLoading(false);
+        if (isMountedRef.current) {
+          setIsLoading(false);
+        }
       }
     };
 
     initAuth();
+
+    return () => {
+      isMountedRef.current = false;
+    };
   }, []);
 
   const login = async (credentials: LoginCredentials): Promise<void> => {

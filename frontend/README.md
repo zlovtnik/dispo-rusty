@@ -5,7 +5,7 @@ A modern TypeScript/Bun/React frontend application for the Actix Web REST API ba
 ## 🚀 Technology Stack
 
 - **Runtime**: Bun 1.0+ (Fast JavaScript runtime)
-- **Language**: TypeScript 5.8+ (First-class citizen)
+- **Language**: TypeScript 5.9+ (First-class citizen)
 - **Framework**: React 18.3.1+ (Concurrent features)
 - **Routing**: React Router 6.x
 - **Forms**: React Hook Form 7.x
@@ -65,8 +65,10 @@ bun run test:watch
 Create a `.env` file in the frontend directory:
 
 ```env
-API_URL=http://localhost:8080/api
+VITE_API_URL=http://localhost:8080/api
 ```
+
+Note: Vite only exposes environment variables that start with `VITE_` to the client-side code at runtime.
 
 ### TypeScript Configuration
 

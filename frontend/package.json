@@ -4,8 +4,8 @@
   "description": "TypeScript/Bun/React frontend for Actix Web REST API with JWT authentication and multi-tenant support",
   "scripts": {
     "dev": "vite",
-    "build": "bun build src/main.tsx --outdir dist --minify",
-    "preview": "bun run dist/main.js",
+    "build": "vite build",
+    "preview": "vite preview",
     "test": "bun test --coverage",
     "test:watch": "bun test --watch",
     "test:ui": "bun test --dom"

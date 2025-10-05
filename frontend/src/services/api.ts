@@ -74,7 +74,20 @@ export interface IHttpClient {
 }
 
 // Base API configuration
-const API_BASE_URL = ((import.meta as any).env?.API_URL as string) || 'http://localhost:8080/api';
+const API_BASE_URL = (() => {
+  const url = import.meta.env.VITE_API_URL as string;
+  if (url) {
+    return url;
+  }
+
+  // Only allow localhost fallback in development
+  if (import.meta.env.MODE === 'development') {
+    return 'http://localhost:8080/api';
+  }
+
+  // In production, throw an error if API URL is missing
+  throw new Error('VITE_API_URL environment variable is required in production');
+})();
 
 // Default configuration
 const DEFAULT_CONFIG: HttpClientConfig = {
@@ -104,6 +117,23 @@ class HttpClient implements IHttpClient {
       failureCount: 0,
       lastFailureTime: 0,
     };
+  }
+
+  private safeGet(key: string): string | null {
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  }
+
+  private safeGetJsonId(key: string): string | null {
+    try {
+      const stored = localStorage.getItem(key);
+      return stored ? JSON.parse(stored).id : null;
+    } catch {
+      return null;
+    }
   }
 
   private sleep(delay: number): Promise<void> {
@@ -162,23 +192,10 @@ class HttpClient implements IHttpClient {
 
   private buildHeaders(options: RequestInit): Headers {
     // Add tenant header if available from localStorage
-    const tenantId = (() => {
-      try {
-        const storedTenant = localStorage.getItem('tenant');
-        return storedTenant ? JSON.parse(storedTenant).id : null;
-      } catch {
-        return null;
-      }
-    })();
+    const tenantId = this.safeGetJsonId('tenant');
 
     // Add authorization header if token exists
-    const authToken = (() => {
-      try {
-        return localStorage.getItem('auth_token');
-      } catch {
-        return null;
-      }
-    })();
+    const authToken = this.safeGet('auth_token');
 
     const headers = new Headers({
       'Content-Type': 'application/json',

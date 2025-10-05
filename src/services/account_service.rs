@@ -19,7 +19,10 @@ pub struct TokenBodyResponse {
 }
 
 pub fn signup(user: UserDTO, pool: &Pool) -> Result<String, ServiceError> {
-    match User::signup(user, &mut pool.get().unwrap()) {
+    let mut conn = pool.get().map_err(|e| ServiceError::InternalServerError {
+        error_message: format!("Failed to get database connection: {}", e),
+    })?;
+    match User::signup(user, &mut conn) {
         Ok(message) => Ok(message),
         Err(message) => Err(ServiceError::BadRequest {
             error_message: message,
@@ -28,7 +31,10 @@ pub fn signup(user: UserDTO, pool: &Pool) -> Result<String, ServiceError> {
 }
 
 pub fn login(login: LoginDTO, pool: &Pool) -> Result<TokenBodyResponse, ServiceError> {
-    match User::login(login, &mut pool.get().unwrap()) {
+    let mut conn = pool.get().map_err(|e| ServiceError::InternalServerError {
+        error_message: format!("Failed to get database connection: {}", e),
+    })?;
+    match User::login(login, &mut conn) {
         Some(logged_user) => {
             match serde_json::from_value(
                 json!({ "token": UserToken::generate_token(&logged_user), "token_type": "bearer" }),
@@ -59,8 +65,11 @@ pub fn logout(authen_header: &HeaderValue, pool: &Pool) -> Result<(), ServiceErr
             let token = authen_str[6..authen_str.len()].trim();
             if let Ok(token_data) = token_utils::decode_token(token.to_string()) {
                 if let Ok(username) = token_utils::verify_token(&token_data, pool) {
-                    if let Ok(user) = User::find_user_by_username(&username, &mut pool.get().unwrap()) {
-                        User::logout(user.id, &mut pool.get().unwrap());
+                    let mut conn = pool.get().map_err(|e| ServiceError::InternalServerError {
+                        error_message: format!("Failed to get database connection: {}", e),
+                    })?;
+                    if let Ok(user) = User::find_user_by_username(&username, &mut conn) {
+                        User::logout(user.id, &mut conn);
                         return Ok(());
                     }
                 }

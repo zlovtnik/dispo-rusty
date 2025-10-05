@@ -64,8 +64,57 @@ async fn check_cache_health_async(redis_pool: web::Data<RedisPool>) -> Result<()
 }
 
 #[get("/health")]
-async fn health(pool: web::Data<DatabasePool>, redis_pool: web::Data<RedisPool>, manager: Option<web::Data<TenantPoolManager>>, main_conn: web::Data<DatabasePool>) -> HttpResponse {
+async fn health(pool: web::Data<DatabasePool>, redis_pool: web::Data<RedisPool>) -> HttpResponse {
     info!("Health check requested");
+
+    // Check database with timeout
+    let db_status = match timeout(Duration::from_secs(5), check_database_health_async(pool)).await {
+        Ok(Ok(())) => Status::Healthy,
+        Ok(Err(e)) => {
+            error!("Database health check failed: {}", e);
+            Status::Unhealthy
+        },
+        Err(_) => {
+            error!("Database health check timeout");
+            Status::Unhealthy
+        },
+    };
+
+    // Check cache with timeout
+    let cache_status = match timeout(Duration::from_secs(3), check_cache_health_async(redis_pool)).await {
+        Ok(Ok(())) => Status::Healthy,
+        Ok(Err(e)) => {
+            error!("Cache health check failed: {}", e);
+            Status::Unhealthy
+        },
+        Err(_) => {
+            error!("Cache health check timeout");
+            Status::Unhealthy
+        },
+    };
+
+    let overall_status = if db_status.is_healthy() && cache_status.is_healthy() {
+        Status::Healthy
+    } else {
+        Status::Unhealthy
+    };
+
+    let response = HealthResponse {
+        status: overall_status,
+        timestamp: Utc::now().to_rfc3339(),
+        components: HealthStatus {
+            database: db_status,
+            cache: cache_status,
+        },
+        tenants: None,
+    };
+
+    HttpResponse::Ok().json(response)
+}
+
+#[get("/health/detailed")]
+async fn health_detailed(pool: web::Data<DatabasePool>, redis_pool: web::Data<RedisPool>, manager: Option<web::Data<TenantPoolManager>>, main_conn: web::Data<DatabasePool>) -> HttpResponse {
+    info!("Detailed health check requested");
 
     // Check database with timeout
     let db_status = match timeout(Duration::from_secs(5), check_database_health_async(pool)).await {

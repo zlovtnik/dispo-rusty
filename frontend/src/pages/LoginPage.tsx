@@ -40,7 +40,7 @@ export const LoginPage: React.FC = () => {
       await login(credentials);
       navigate(from, { replace: true });
     } catch (error) {
-      console.error('Login or navigation error:', error);
+      console.log('Login error occurred');
       setSubmitError(error instanceof Error ? error.message : 'Login failed');
     } finally {
       setIsSubmitting(false);

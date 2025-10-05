@@ -157,4 +157,12 @@ impl User {
             false
         }
     }
+
+    pub fn count_all(conn: &mut Connection) -> QueryResult<i64> {
+        users.count().get_result(conn)
+    }
+
+    pub fn count_logged_in(conn: &mut Connection) -> QueryResult<i64> {
+        users.filter(login_session.is_not_null().and(login_session.ne(""))).count().get_result(conn)
+    }
 }
