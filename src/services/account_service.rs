@@ -19,10 +19,7 @@ pub struct TokenBodyResponse {
 }
 
 pub fn signup(user: UserDTO, pool: &Pool) -> Result<String, ServiceError> {
-    let mut conn = pool.get().map_err(|e| ServiceError::InternalServerError {
-        error_message: format!("Failed to get database connection: {}", e),
-    })?;
-    match User::signup(user, &mut conn) {
+    match User::signup(user, &mut pool.get().unwrap()) {
         Ok(message) => Ok(message),
         Err(message) => Err(ServiceError::BadRequest {
             error_message: message,
@@ -31,10 +28,7 @@ pub fn signup(user: UserDTO, pool: &Pool) -> Result<String, ServiceError> {
 }
 
 pub fn login(login: LoginDTO, pool: &Pool) -> Result<TokenBodyResponse, ServiceError> {
-    let mut conn = pool.get().map_err(|e| ServiceError::InternalServerError {
-        error_message: format!("Failed to get database connection: {}", e),
-    })?;
-    match User::login(login, &mut conn) {
+    match User::login(login, &mut pool.get().unwrap()) {
         Some(logged_user) => {
             match serde_json::from_value(
                 json!({ "token": UserToken::generate_token(&logged_user), "token_type": "bearer" }),
@@ -59,17 +53,30 @@ pub fn login(login: LoginDTO, pool: &Pool) -> Result<TokenBodyResponse, ServiceE
     }
 }
 
+/// Logs out the user associated with the provided Authorization header.
+///
+/// Attempts to validate and decode a Bearer token from the header, verify the token against the database, and clear the user's login session. On success, the user's session is invalidated and the function returns `Ok(())`.
+///
+/// # Returns
+///
+/// `Ok(())` on successful logout; `Err(ServiceError::InternalServerError)` if the authorization header is missing/invalid or token processing fails.
+///
+/// # Examples
+///
+/// ```
+/// use actix_web::http::HeaderValue;
+/// // `pool` is a database pool previously created in your application context.
+/// let header = HeaderValue::from_str("Bearer <token>").unwrap();
+/// let _ = logout(&header, &pool);
+/// ```
 pub fn logout(authen_header: &HeaderValue, pool: &Pool) -> Result<(), ServiceError> {
     if let Ok(authen_str) = authen_header.to_str() {
         if token_utils::is_auth_header_valid(authen_header) {
             let token = authen_str[6..authen_str.len()].trim();
             if let Ok(token_data) = token_utils::decode_token(token.to_string()) {
                 if let Ok(username) = token_utils::verify_token(&token_data, pool) {
-                    let mut conn = pool.get().map_err(|e| ServiceError::InternalServerError {
-                        error_message: format!("Failed to get database connection: {}", e),
-                    })?;
-                    if let Ok(user) = User::find_user_by_username(&username, &mut conn) {
-                        User::logout(user.id, &mut conn);
+                    if let Ok(user) = User::find_user_by_username(&username, &mut pool.get().unwrap()) {
+                        User::logout(user.id, &mut pool.get().unwrap());
                         return Ok(());
                     }
                 }
@@ -82,6 +89,27 @@ pub fn logout(authen_header: &HeaderValue, pool: &Pool) -> Result<(), ServiceErr
     })
 }
 
+/// Refreshes an authentication bearer token extracted from the given Authorization header.
+///
+/// Validates and decodes the provided token, verifies the associated login session, retrieves
+/// the corresponding login information, and returns a new bearer token wrapped in a
+/// `TokenBodyResponse`. If validation fails at any point, returns an appropriate `ServiceError`.
+///
+/// # Returns
+///
+/// `TokenBodyResponse` with a new bearer token on success; a `ServiceError` describing the failure otherwise.
+///
+/// # Examples
+///
+/// ```
+/// use actix_web::http::header::HeaderValue;
+///
+/// // `pool` should be a valid database pool obtained from your application context.
+/// let pool = /* obtain Pool */ unimplemented!();
+/// let auth = HeaderValue::from_static("Bearer <existing_token>");
+/// let result = crate::services::account_service::refresh(&auth, &pool);
+/// // On valid token this yields Ok(TokenBodyResponse { token, token_type: "bearer".into() })
+/// ```
 pub fn refresh(authen_header: &HeaderValue, pool: &Pool) -> Result<TokenBodyResponse, ServiceError> {
     if let Ok(authen_str) = authen_header.to_str() {
         if token_utils::is_auth_header_valid(authen_header) {
@@ -119,6 +147,20 @@ pub fn refresh(authen_header: &HeaderValue, pool: &Pool) -> Result<TokenBodyResp
     })
 }
 
+/// Retrieves the login information associated with the bearer token in the provided Authorization header.
+///
+/// Attempts to validate and decode the Authorization header and returns the corresponding `LoginInfoDTO` for the token if successful.
+///
+/// # Examples
+///
+/// ```
+/// // `header` and `pool` must be a valid Authorization header and database pool:
+/// // let res = me(&header, &pool);
+/// ```
+///
+/// # Returns
+///
+/// `Ok(LoginInfoDTO)` with the login information for the token, `Err(ServiceError::InternalServerError)` if the token cannot be processed.
 pub fn me(authen_header: &HeaderValue, pool: &Pool) -> Result<LoginInfoDTO, ServiceError> {
     if let Ok(authen_str) = authen_header.to_str() {
         if token_utils::is_auth_header_valid(authen_header) {

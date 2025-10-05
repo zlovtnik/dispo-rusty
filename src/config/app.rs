@@ -7,6 +7,18 @@ use crate::api::*;
 
 static LOG_ONCE: Once = Once::new();
 
+/// Register application HTTP routes on the given Actix-web ServiceConfig and emit a one-time log summary of available routes.
+///
+/// This configures root and `/api` scoped routes (including `/api/auth`, `/api/address-book`, and `/api/admin/tenant`) and logs a timestamped summary the first time it is called.
+///
+/// # Examples
+///
+/// ```
+/// use actix_web::{App, test};
+///
+/// // Initialize an Actix test service that applies the route configuration.
+/// let app = test::init_service(App::new().configure(crate::config_services));
+/// ```
 pub fn config_services(cfg: &mut web::ServiceConfig) {
     LOG_ONCE.call_once(|| {
         let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
@@ -17,7 +29,6 @@ pub fn config_services(cfg: &mut web::ServiceConfig) {
         info!("  - GET /health -> health_controller::health");
         info!("  - GET /api/ping -> ping_controller::ping");
         info!("  - GET /api/health -> health_controller::health");
-        info!("  - GET /api/health/detailed -> health_controller::health_detailed");
         info!("  - GET /api/logs -> health_controller::logs");
         info!("  - POST /api/auth/signup -> account_controller::signup");
         info!("  - POST /api/auth/login -> account_controller::login");
@@ -47,11 +58,24 @@ pub fn config_services(cfg: &mut web::ServiceConfig) {
     );
 }
 
+/// Registers API endpoints and mounts their sub-scopes on the given service configuration.
+///
+/// Adds standalone handlers under `/api` (ping, health, logs) and mounts the following sub-scopes:
+/// `/auth`, `/address-book`, and `/admin`, each configured by their respective configurators.
+///
+/// # Examples
+///
+/// ```
+/// use actix_web::web;
+///
+/// // Typically used when building the app routes:
+/// // App::new().service(web::scope("/api").configure(configure_api_routes));
+/// web::scope("/api").configure(configure_api_routes);
+/// ```
 fn configure_api_routes(cfg: &mut web::ServiceConfig) {
     // Standalone routes in /api
     cfg.service(ping_controller::ping);
     cfg.service(health_controller::health);
-    cfg.service(health_controller::health_detailed);
     cfg.service(health_controller::logs);
 
     // Auth scope routes
@@ -73,6 +97,23 @@ fn configure_api_routes(cfg: &mut web::ServiceConfig) {
     );
 }
 
+/// Registers authentication routes on the provided service configuration.
+///
+/// Adds the following endpoints under the current scope:
+/// - `POST /signup` -> `account_controller::signup`
+/// - `POST /login` -> `account_controller::login`
+/// - `POST /logout` -> `account_controller::logout`
+/// - `POST /refresh` -> `account_controller::refresh`
+/// - `GET  /me` -> `account_controller::me`
+///
+/// # Examples
+///
+/// ```
+/// use actix_web::web;
+///
+/// // Mount under an `/auth` scope:
+/// // web::scope("/auth").configure(configure_auth_routes);
+/// ```
 fn configure_auth_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::resource("/signup").route(web::post().to(account_controller::signup)),
@@ -91,6 +132,49 @@ fn configure_auth_routes(cfg: &mut web::ServiceConfig) {
     );
 }
 
+/// Registers address-book HTTP endpoints on the given service configuration.
+
+///
+
+/// The following routes are added to the current scope:
+
+/// - GET  ""           -> `address_book_controller::find_all`
+
+/// - POST ""           -> `address_book_controller::insert`
+
+/// - GET  "/{id}"      -> `address_book_controller::find_by_id`
+
+/// - PUT  "/{id}"      -> `address_book_controller::update`
+
+/// - DELETE "/{id}"    -> `address_book_controller::delete`
+
+/// - GET  "/filter"    -> `address_book_controller::filter`
+
+///
+
+/// # Examples
+
+///
+
+/// ```rust
+
+/// use actix_web::web;
+
+///
+
+/// // Mounts the address-book routes at "/api/address-book"
+
+/// let cfg = &mut web::ServiceConfig::new();
+
+/// // In actual server setup you'd call:
+
+/// // cfg.service(web::scope("/api").service(web::scope("/address-book").configure(configure_address_book_routes)));
+
+/// // Here we demonstrate the configure call directly:
+
+/// configure_address_book_routes(cfg);
+
+/// ```
 fn configure_address_book_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::resource("")
@@ -109,6 +193,21 @@ fn configure_address_book_routes(cfg: &mut web::ServiceConfig) {
     );
 }
 
+/// Adds the tenant-related admin route scope to the provided service configuration.
+///
+/// This configures a nested "/tenant" scope and delegates its route registrations to
+/// `configure_tenant_admin_routes`, intended to be mounted under an admin scope (e.g. "/admin").
+///
+/// # Examples
+///
+/// ```
+/// use actix_web::web;
+///
+/// // inside app configuration:
+/// // web::scope("/admin").configure(configure_admin_routes);
+/// let cfg = &mut web::ServiceConfig::new();
+/// configure_admin_routes(cfg);
+/// ```
 fn configure_admin_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/tenant")
@@ -116,6 +215,21 @@ fn configure_admin_routes(cfg: &mut web::ServiceConfig) {
     );
 }
 
+/// Register tenant-admin HTTP routes on the provided Actix `ServiceConfig`.
+///
+/// This function adds three GET endpoints under the current scope:
+/// - `GET /stats` -> `tenant_controller::get_system_stats`
+/// - `GET /health` -> `tenant_controller::get_tenant_health`
+/// - `GET /status` -> `tenant_controller::get_tenant_status`
+///
+/// # Examples
+///
+/// ```
+/// use actix_web::{web, App};
+///
+/// // Mount under a scope (e.g., "/api/admin/tenant") to expose the tenant admin routes
+/// let app = App::new().service(web::scope("/api/admin/tenant").configure(configure_tenant_admin_routes));
+/// ```
 fn configure_tenant_admin_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::resource("/stats").route(web::get().to(tenant_controller::get_system_stats)),

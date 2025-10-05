@@ -74,6 +74,21 @@ pub fn init_redis_client(url: &str) -> Pool {
     })
 }
 
+/// Masks credentials in a Redis URL by replacing the password portion with `<redacted>`.
+///
+/// If the input contains a username:password segment before the `@` (i.e., a colon `:` followed by an `@` later),
+/// the substring between the last `:` before the `@` and the `@` is replaced with `:<redacted>`.
+/// If no such pattern is found, the input string is returned unchanged.
+///
+/// # Examples
+///
+/// ```
+/// let s = "redis://user:secret@localhost:6379/0";
+/// assert_eq!(mask_redis_url(s), "redis://user:<redacted>@localhost:6379/0");
+///
+/// let no_creds = "redis://localhost:6379/0";
+/// assert_eq!(mask_redis_url(no_creds), no_creds);
+/// ```
 fn mask_redis_url(input: &str) -> String {
     if let Some(at_pos) = input.find('@') {
         if let Some(colon_pos) = input[..at_pos].rfind(':') {

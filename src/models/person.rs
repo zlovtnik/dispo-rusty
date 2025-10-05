@@ -47,20 +47,27 @@ impl Person {
         people.find(i).get_result::<Person>(conn)
     }
 
-    /// Returns a paginated page of people matching the provided filter criteria.
+    /// Fetches a paginated page of people that match the provided filter criteria.
     ///
-    /// Applies any of the following filters when present on `PersonFilter`:
+    /// Applies the following optional filters from `PersonFilter`:
     /// - `age`: exact match.
     /// - `email`, `name`, `phone`: case-sensitive partial match using SQL `LIKE` with surrounding `%` wildcards.
-    /// - `gender`: accepts the strings `"male"` or `"female"` (case-insensitive) and maps them to the stored boolean value.
+    /// - `gender`: accepts `"male"` or `"female"` (case-insensitive) and maps to the stored boolean value (`male` -> `true`, `female` -> `false`).
     ///
     /// Pagination uses `filter.cursor` as the page cursor (defaults to `0`) and `filter.page_size` as items per page (defaults to `crate::constants::DEFAULT_PER_PAGE`).
     ///
     /// # Examples
     ///
     /// ```
-    /// // Construct a filter to find people with "example" in their email and use a DB connection.
-    /// let filter = PersonFilter { email: Some("example".into()), age: None, gender: None, name: None, phone: None, cursor: None, page_size: None };
+    /// let filter = PersonFilter {
+    ///     email: Some("example".into()),
+    ///     age: None,
+    ///     gender: None,
+    ///     name: None,
+    ///     phone: None,
+    ///     cursor: None,
+    ///     page_size: None,
+    /// };
     /// let mut conn: Connection = /* obtain connection */;
     /// let page = Person::filter(filter, &mut conn).expect("query failed");
     /// assert!(page.items.len() <= crate::constants::DEFAULT_PER_PAGE);
@@ -144,6 +151,20 @@ impl Person {
             .execute(conn)
     }
 
+    /// Deletes the person with the given id from the database.
+    ///
+    /// Returns the number of rows affected on success.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use crate::database::Connection;
+    /// # use crate::models::Person;
+    /// # fn get_conn() -> Connection { unimplemented!() }
+    /// let mut conn = get_conn();
+    /// let deleted = Person::delete(1, &mut conn).expect("delete failed");
+    /// assert!(deleted <= 1);
+    /// ```
     pub fn delete(i: i32, conn: &mut Connection) -> QueryResult<usize> {
         diesel::delete(people.find(i)).execute(conn)
     }

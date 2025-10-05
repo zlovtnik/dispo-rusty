@@ -55,66 +55,72 @@ struct TenantHealth {
     status: Status,
 }
 
+/// Performs a database connectivity check using the provided connection pool.
+///
+/// # Returns
+///
+/// `Ok(())` if the database responds to a simple health query, `Err` containing a boxed error otherwise.
+///
+/// # Examples
+///
+/// ```
+/// # use actix_web::web;
+/// # use std::sync::Arc;
+/// # async fn example(pool: web::Data<crate::DatabasePool>) {
+/// let res = crate::check_database_health_async(pool).await;
+/// assert!(res.is_ok() || res.is_err()); // demonstrates awaiting the health check
+/// # }
+/// ```
 async fn check_database_health_async(pool: web::Data<DatabasePool>) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
     tokio::task::spawn_blocking(move || check_database_health(pool)).await.unwrap().map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync + 'static>)
 }
 
+/// Performs a cache health check using the provided Redis pool by running the synchronous check in a blocking task.
+///
+/// # Examples
+///
+/// ```no_run
+/// # use actix_web::web;
+/// # async fn example(redis_pool: web::Data<crate::RedisPool>) {
+/// let res = crate::check_cache_health_async(redis_pool).await;
+/// match res {
+///     Ok(()) => println!("Cache healthy"),
+///     Err(e) => eprintln!("Cache unhealthy: {}", e),
+/// }
+/// # }
+/// ```
+///
+/// # Returns
+///
+/// `Ok(())` if the cache check succeeded, `Err(...)` if the check failed or the blocking task could not complete.
 async fn check_cache_health_async(redis_pool: web::Data<RedisPool>) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
     tokio::task::spawn_blocking(move || check_cache_health(&redis_pool)).await.unwrap()
 }
 
+/// Performs a full application health check and returns a JSON response summarizing overall and per-component status.
+///
+/// Checks the main database and Redis cache with timeouts, and optionally evaluates each tenant's database pool when a
+/// TenantPoolManager is provided. The overall status is `Healthy` only if the database, cache, and all reported tenants
+/// are healthy; otherwise it is `Unhealthy`.
+///
+/// The JSON response contains:
+/// - `status`: overall `Status`
+/// - `timestamp`: RFC3339 timestamp of the check
+/// - `components`: `HealthStatus` with `database` and `cache` fields
+/// - `tenants`: optional list of `TenantHealth` entries when tenant checks were attempted and returned data
+///
+/// # Examples
+///
+/// ```no_run
+/// use actix_web::{App, test};
+///
+/// // In real usage the app should register required Data (DatabasePool, RedisPool, etc.)
+/// let app = test::init_service(App::new().service(crate::health));
+/// // A request to `/health` will return a JSON health summary when the required app data is configured.
+/// ```
 #[get("/health")]
-async fn health(pool: web::Data<DatabasePool>, redis_pool: web::Data<RedisPool>) -> HttpResponse {
+async fn health(pool: web::Data<DatabasePool>, redis_pool: web::Data<RedisPool>, manager: Option<web::Data<TenantPoolManager>>, main_conn: web::Data<DatabasePool>) -> HttpResponse {
     info!("Health check requested");
-
-    // Check database with timeout
-    let db_status = match timeout(Duration::from_secs(5), check_database_health_async(pool)).await {
-        Ok(Ok(())) => Status::Healthy,
-        Ok(Err(e)) => {
-            error!("Database health check failed: {}", e);
-            Status::Unhealthy
-        },
-        Err(_) => {
-            error!("Database health check timeout");
-            Status::Unhealthy
-        },
-    };
-
-    // Check cache with timeout
-    let cache_status = match timeout(Duration::from_secs(3), check_cache_health_async(redis_pool)).await {
-        Ok(Ok(())) => Status::Healthy,
-        Ok(Err(e)) => {
-            error!("Cache health check failed: {}", e);
-            Status::Unhealthy
-        },
-        Err(_) => {
-            error!("Cache health check timeout");
-            Status::Unhealthy
-        },
-    };
-
-    let overall_status = if db_status.is_healthy() && cache_status.is_healthy() {
-        Status::Healthy
-    } else {
-        Status::Unhealthy
-    };
-
-    let response = HealthResponse {
-        status: overall_status,
-        timestamp: Utc::now().to_rfc3339(),
-        components: HealthStatus {
-            database: db_status,
-            cache: cache_status,
-        },
-        tenants: None,
-    };
-
-    HttpResponse::Ok().json(response)
-}
-
-#[get("/health/detailed")]
-async fn health_detailed(pool: web::Data<DatabasePool>, redis_pool: web::Data<RedisPool>, manager: Option<web::Data<TenantPoolManager>>, main_conn: web::Data<DatabasePool>) -> HttpResponse {
-    info!("Detailed health check requested");
 
     // Check database with timeout
     let db_status = match timeout(Duration::from_secs(5), check_database_health_async(pool)).await {

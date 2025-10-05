@@ -73,6 +73,32 @@ where
         }
     }
 
+    /// Load a page of items from the wrapped query using cursor-based pagination.
+    ///
+    /// The returned `Page` contains the loaded records, the `current_cursor` (the cursor value
+    /// passed into the paginator), the `per_page` limit used, no total count, and a `next_cursor`
+    /// derived from the `id` of the last record in the returned page (or `None` if no records).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use diesel::prelude::*;
+    /// # use diesel_demo::{PgConnection, HasId, Page};
+    /// # // assume `MyModel` implements `HasId` and the necessary Diesel traits
+    /// # fn example(mut conn: PgConnection) -> diesel::QueryResult<()> {
+    /// let cursor = 0;
+    /// let page: Page<MyModel> = my_table::table
+    ///     .into_boxed()
+    ///     .paginate(my_table::id, cursor)
+    ///     .per_page(25)
+    ///     .load_items(&mut conn)?;
+    ///
+    /// // `page.records` holds the items, `page.next_cursor` is the id of the last item if any
+    /// if let Some(next) = page.next_cursor {
+    ///     assert!(next >= cursor);
+    /// }
+    /// # Ok(()) }
+    /// ```
     pub fn load_items<'a, U>(self, conn: &mut PgConnection) -> QueryResult<Page<U>>
     where
         Self: LoadQuery<'a, PgConnection, U>,

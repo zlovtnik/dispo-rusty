@@ -53,6 +53,28 @@ pub async fn login(
 }
 
 // POST api/auth/logout
+/// Logs out the authenticated user by invalidating their session/token and returns a logout confirmation response.
+///
+/// Returns an `HttpResponse` with status 200 and a logout success message when the request contains a valid
+/// `Authorization` header and a `Pool` in request extensions; returns a `ServiceError::BadRequest` if the
+/// authorization header is missing, or `ServiceError::InternalServerError` if the pool is not found.
+///
+/// # Examples
+///
+/// ```
+/// use actix_web::test::TestRequest;
+/// use actix_web::http::header;
+/// # use crate::api::account_controller::logout;
+/// # use crate::errors::ServiceError;
+///
+/// // Example: request missing Authorization header yields a BadRequest error.
+/// let req = TestRequest::default().to_http_request();
+/// let res = actix_rt::System::new().block_on(async { logout(req).await }).unwrap_err();
+/// match res {
+///     ServiceError::BadRequest { .. } => {},
+///     _ => panic!("expected BadRequest"),
+/// }
+/// ```
 pub async fn logout(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
     if let Some(authen_header) = req.headers().get(constants::AUTHORIZATION) {
         if let Some(pool) = req.extensions().get::<Pool>() {
@@ -73,6 +95,27 @@ pub async fn logout(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
     }
 }
 
+/// Refreshes an authentication token using the request's `Authorization` header and tenant DB pool.
+///
+/// Expects an `Authorization` header and a `Pool` stored in the request extensions. On success returns an HTTP 200 response containing updated login information; if the header or pool is missing, returns a corresponding service error.
+///
+/// # Arguments
+///
+/// * `req` - HTTP request that must include an `Authorization` header and a `Pool` in its extensions.
+///
+/// # Returns
+///
+/// `Ok(HttpResponse)` with a `ResponseBody` containing updated login information on success, `Err(ServiceError)` otherwise.
+///
+/// # Examples
+///
+/// ```
+/// use actix_web::test::TestRequest;
+///
+/// // Build a request with an Authorization header (pool must be inserted into extensions in real usage)
+/// let req = TestRequest::with_header("Authorization", "Bearer token").to_http_request();
+/// // let resp = actix_web::rt::System::new().block_on(refresh(req));
+/// ```
 pub async fn refresh(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
     if let Some(authen_header) = req.headers().get(constants::AUTHORIZATION) {
         if let Some(pool) = req.extensions().get::<Pool>() {
@@ -93,6 +136,25 @@ pub async fn refresh(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
 }
 
 // GET api/auth/me
+/// Fetches the authenticated user's information.
+///
+/// On success returns an HTTP 200 JSON response whose body is a `ResponseBody` with `constants::MESSAGE_OK` and the authenticated user's login information. If the Authorization header is missing the function returns `ServiceError::BadRequest` with a token-missing message; if the request extensions do not contain a `Pool` it returns `ServiceError::InternalServerError`; other errors from `account_service::me` are propagated.
+///
+/// # Examples
+///
+/// ```no_run
+/// use actix_web::{HttpRequest, http::header, test::TestRequest};
+///
+/// # async fn example() {
+/// // Construct a request with an Authorization header and a Pool in extensions, then call `me`.
+/// let req = TestRequest::default()
+///     .insert_header((header::AUTHORIZATION, "Bearer token"))
+///     // .app_data(pool) or .insert_extension(pool) should be done here in a real test
+///     .to_http_request();
+///
+/// let _ = crate::api::account_controller::me(req).await;
+/// # }
+/// ```
 pub async fn me(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
     if let Some(authen_header) = req.headers().get(constants::AUTHORIZATION) {
         if let Some(pool) = req.extensions().get::<Pool>() {

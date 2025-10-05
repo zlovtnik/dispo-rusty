@@ -36,7 +36,27 @@ struct TenantHealth {
     error_message: Option<String>,
 }
 
-/// Get system-wide statistics and tenant status (admin only)
+/// Collects system-wide metrics and per-tenant connection status for the admin dashboard.
+///
+/// The response includes total tenant and user counts, the number of tenants with a healthy
+/// database connection, and a list of per-tenant status entries containing tenant id, name,
+/// and `"active"` or `"inactive"` status. Database or pool acquisition failures are reported
+/// as `ServiceError::InternalServerError`.
+///
+/// # Returns
+///
+/// An `HttpResponse` with a JSON-encoded `SystemStats` payload on success.
+///
+/// # Examples
+///
+/// ```
+/// # use actix_web::HttpResponse;
+/// # async fn example_call(pool: actix_web::web::Data<crate::DatabasePool>, manager: actix_web::web::Data<crate::TenantPoolManager>) -> Result<(), crate::ServiceError> {
+/// let resp: HttpResponse = crate::api::tenant_controller::get_system_stats(pool, manager).await?;
+/// // `resp` contains a JSON body matching `SystemStats`
+/// # Ok(())
+/// # }
+/// ```
 pub async fn get_system_stats(
     pool: web::Data<DatabasePool>,
     manager: web::Data<TenantPoolManager>,
@@ -97,7 +117,31 @@ pub async fn get_system_stats(
     Ok(HttpResponse::Ok().json(stats))
 }
 
-/// Get detailed health status of all tenants (admin only)
+/// Retrieve per-tenant health checks including each tenant's id, name, boolean status, and optional error message.
+///
+/// Each entry represents the result of a health probe against a tenant's database pool: `status` is `true` when a simple `SELECT 1` succeeds using the tenant's connection pool, otherwise `false` and `error_message` contains the observed failure reason.
+///
+/// # Examples
+///
+/// ```
+/// use serde_json::json;
+/// use crate::api::tenant_controller::TenantHealth;
+///
+/// let th = TenantHealth {
+///     tenant_id: "tenant_123".to_string(),
+///     name: "Tenant A".to_string(),
+///     status: false,
+///     error_message: Some("No connection pool configured".to_string()),
+/// };
+///
+/// let serialized = serde_json::to_value(&th).unwrap();
+/// assert_eq!(serialized, json!({
+///     "tenant_id": "tenant_123",
+///     "name": "Tenant A",
+///     "status": false,
+///     "error_message": "No connection pool configured"
+/// }));
+/// ```
 pub async fn get_tenant_health(
     pool: web::Data<DatabasePool>,
     manager: web::Data<TenantPoolManager>,
@@ -141,7 +185,22 @@ pub async fn get_tenant_health(
     Ok(HttpResponse::Ok().json(tenant_health_status))
 }
 
-/// Get overview of tenant connections (active/inactive) (admin only)
+/// Provides a mapping of tenant IDs to whether each tenant currently has an active database connection.
+///
+/// # Returns
+///
+/// A JSON object where keys are tenant IDs and values are `true` if a connection to that tenant's pool could be acquired, `false` otherwise.
+///
+/// # Examples
+///
+/// ```
+/// // Example response body:
+/// // {"tenant_1": true, "tenant_2": false}
+/// let json = r#"{"tenant_1": true, "tenant_2": false}"#;
+/// let map: std::collections::HashMap<String, bool> = serde_json::from_str(json).unwrap();
+/// assert_eq!(map.get("tenant_1"), Some(&true));
+/// assert_eq!(map.get("tenant_2"), Some(&false));
+/// ```
 pub async fn get_tenant_status(
     pool: web::Data<DatabasePool>,
     manager: web::Data<TenantPoolManager>,
@@ -168,4 +227,50 @@ pub async fn get_tenant_status(
     Ok(HttpResponse::Ok().json(status_map))
 }
 
-use crate::models::user::User;
+// Implement User model extensions needed for stats
+impl User {
+    /// Count all users in the database.
+    ///
+    /// Performs a SQL `COUNT(*)` on the `users` table and returns the total number of user records.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use crate::models::User;
+    /// use diesel::pg::PgConnection;
+    ///
+    /// // `conn` is a mutable Postgres connection
+    /// let mut conn: PgConnection = /* obtain connection */;
+    /// let total = User::count_all(&mut conn).expect("failed to count users");
+    /// assert!(total >= 0);
+    /// ```
+    pub fn count_all(conn: &mut PgConnection) -> QueryResult<i64> {
+        use crate::schema::users::dsl::*;
+        users.count().get_result(conn)
+    }
+
+    /// Counts users who currently have a non-empty login session.
+    ///
+    /// Counts rows in the `users` table where `login_session` is neither `NULL` nor an empty string.
+    ///
+    /// # Parameters
+    ///
+    /// - `conn`: a Postgres connection used to execute the query.
+    ///
+    /// # Returns
+    ///
+    /// `QueryResult<i64>` containing the number of users whose `login_session` is neither `NULL` nor empty.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // Obtain a PgConnection (helper not shown).
+    /// let mut conn = establish_test_connection();
+    /// let count = crate::models::user::User::count_logged_in(&mut conn).unwrap();
+    /// assert!(count >= 0);
+    /// ```
+    pub fn count_logged_in(conn: &mut PgConnection) -> QueryResult<i64> {
+        use crate::schema::users::dsl::*;
+        users.filter(login_session.is_not_null().and(login_session.ne(""))).count().get_result(conn)
+    }
+}
