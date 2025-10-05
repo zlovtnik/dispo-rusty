@@ -7,7 +7,7 @@ use crate::config::cache::Pool as RedisPool;
 
 use diesel::prelude::*;
 use redis;
-use log::{debug, error, info, warn};
+use log::{debug, error, info};
 use chrono::{Utc};
 use actix_web::web::Bytes;
 use std::io::Error as IoError;
@@ -121,6 +121,32 @@ fn check_cache_health(redis_pool: &RedisPool) -> Result<(), Box<dyn std::error::
     Ok(())
 }
 
+/// Streams server logs over Server-Sent Events (SSE) when log streaming is enabled.
+///
+/// When enabled via the `ENABLE_LOG_STREAM` environment variable and a valid log file
+/// exists at `LOG_FILE` (defaults to `/var/log/app.log`), this handler returns an
+/// `HttpResponse` that streams new log lines as SSE `data:` frames. If streaming is
+/// disabled, the handler responds with `405 MethodNotAllowed`. If the configured log
+/// file does not exist, the handler responds with `404 NotFound`.
+///
+/// # Examples
+///
+/// ```
+/// use actix_web::{App, test};
+/// use std::env;
+/// use std::fs;
+///
+/// # async fn run_example() {
+/// env::set_var("ENABLE_LOG_STREAM", "true");
+/// env::set_var("LOG_FILE", "/tmp/app.log");
+/// let _ = fs::write("/tmp/app.log", ""); // ensure file exists
+///
+/// let app = test::init_service(App::new().service(crate::logs)).await;
+/// let req = test::TestRequest::get().uri("/logs").to_request();
+/// let resp = test::call_service(&app, req).await;
+/// assert!(resp.status().is_success() || resp.status() == actix_web::http::StatusCode::OK);
+/// # }
+/// ```
 #[get("/logs")]
 async fn logs() -> HttpResponse {
     // Check if log streaming is enabled
@@ -156,7 +182,7 @@ async fn logs() -> HttpResponse {
 
         if let Err(e) = file.seek(SeekFrom::End(0)).await {
             error!("Failed to seek to end of log file: {}", e);
-            let _ = tx.send(Err(IoError::new(std::io::ErrorKind::Other, e.to_string()))).await;
+            let _ = tx.send(Err(IoError::other(e.to_string()))).await;
             return;
         }
 
@@ -260,16 +286,24 @@ mod tests {
     use crate::App;
     use std::env;
     use tempfile::NamedTempFile;
-    use tokio::io::AsyncWriteExt;
     use tokio::time::{timeout, Duration};
-    use tokio_stream::StreamExt;
-    use actix_web::web::Bytes;
 
+    /// Verifies that the /api/health endpoint returns HTTP 200 when PostgreSQL and Redis are available.
+    ///
+    /// Spawns PostgreSQL and Redis test containers, initializes the database and cache clients, mounts the application,
+    /// and asserts the health endpoint responds with status 200.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// // Run the integration test with:
+    /// // cargo test --test integration_tests -- --nocapture
+    /// ```
     #[actix_web::test]
     async fn test_health_ok() {
         let docker = clients::Cli::default();
         let postgres = docker.run(Postgres::default());
-        let redis = docker.run(Redis::default());
+        let redis = docker.run(Redis);
 
         let pool = config::db::init_db_pool(
             format!(
@@ -311,8 +345,26 @@ mod tests {
         // You can parse the JSON and check fields
     }
 
+    /// Verifies that the `/api/logs` endpoint streams Server-Sent Events (SSE) when log streaming is enabled.
+    ///
+    /// This integration test enables log streaming via environment variables, creates a temporary log file,
+    /// starts PostgreSQL and Redis test containers, initializes the application, and asserts that:
+    /// - the endpoint responds with HTTP 200,
+    /// - the `Content-Type` header is `text/event-stream`,
+    /// - at least one SSE frame (a body starting with `data:`) is received within 35 seconds.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // The test performs an end-to-end request against the initialized Actix app:
+    /// // 1. Enable log streaming and point LOG_FILE to a temp file.
+    /// // 2. Start required test containers and initialize DB/Redis clients.
+    /// // 3. Call GET /api/logs and assert SSE response and an initial `data:` frame.
+    /// ```
     #[actix_web::test]
     async fn test_logs_ok() {
+        use actix_web::body::to_bytes;
+        
         // Create a temporary log file
         let temp_file = NamedTempFile::new().unwrap();
         let log_path = temp_file.path().to_str().unwrap().to_string();
@@ -325,7 +377,7 @@ mod tests {
         // initialize testcontainers for Postgres and Redis
         let docker = clients::Cli::default();
         let postgres = docker.run(Postgres::default());
-        let redis = docker.run(Redis::default());
+        let redis = docker.run(Redis);
 
         // set up the database pool and run migrations
         let pool = config::db::init_db_pool(
@@ -370,15 +422,10 @@ mod tests {
 
         // Consume the body to verify SSE frames or keep-alive messages
         let sse_frame_received = timeout(Duration::from_secs(35), async {
-            let mut body = resp.into_body();
-            let pinned_body = std::pin::pin!(&mut body);
-            while let Some(chunk_result) = pinned_body.next().await {
-                let chunk = chunk_result.unwrap();
-                if String::from_utf8_lossy(&chunk).starts_with("data:") {
-                    return Ok(true);
-                }
-            }
-            Ok(false)
+            let body = resp.into_body();
+            let bytes = to_bytes(body).await.unwrap();
+            let body_str = String::from_utf8_lossy(&bytes);
+            Ok::<bool, ()>(body_str.starts_with("data:"))
         }).await.unwrap_or(Ok(false)).unwrap();
 
         assert!(sse_frame_received, "No SSE frame received within timeout");
@@ -393,7 +440,7 @@ mod tests {
         // initialize testcontainers for Postgres and Redis
         let docker = clients::Cli::default();
         let postgres = docker.run(Postgres::default());
-        let redis = docker.run(Redis::default());
+        let redis = docker.run(Redis);
 
         // set up the database pool and run migrations
         let pool = config::db::init_db_pool(
@@ -445,7 +492,7 @@ mod tests {
         // initialize testcontainers for Postgres and Redis
         let docker = clients::Cli::default();
         let postgres = docker.run(Postgres::default());
-        let redis = docker.run(Redis::default());
+        let redis = docker.run(Redis);
 
         // set up the database pool and run migrations
         let pool = config::db::init_db_pool(

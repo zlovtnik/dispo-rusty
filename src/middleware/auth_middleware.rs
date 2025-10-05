@@ -12,7 +12,7 @@ use actix_web::HttpMessage;
 use futures::future::{ok, LocalBoxFuture, Ready};
 use log::{error, info};
 
-use crate::config::db::{TenantPoolManager, Pool};
+use crate::config::db::TenantPoolManager;
 use crate::constants;
 use crate::models::response::ResponseBody;
 use crate::utils::token_utils;

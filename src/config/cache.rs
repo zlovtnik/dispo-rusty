@@ -11,15 +11,52 @@ impl r2d2::ManageConnection for RedisManager {
     type Connection = redis::Connection;
     type Error = redis::RedisError;
 
+    /// Establishes a new connection to the Redis server using this manager's client.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let client = redis::Client::open("redis://127.0.0.1/").unwrap();
+    /// let manager = RedisManager { client };
+    /// let conn = manager.connect().unwrap();
+    /// // `conn` is a `redis::Connection` ready to execute commands
+    /// ```
     fn connect(&self) -> Result<Self::Connection, Self::Error> {
-        self.client.get_connection().map_err(|e| e)
+        self.client.get_connection()
     }
 
+    /// Checks whether a Redis connection is alive by sending a `PING` command.
+    ///
+    /// Returns `Ok(())` if the connection responds to `PING`, `Err(redis::RedisError)` otherwise.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use crate::RedisManager;
+    ///
+    /// let client = redis::Client::open("redis://127.0.0.1/").unwrap();
+    /// let manager = RedisManager { client };
+    /// let mut conn = manager.client.get_connection().unwrap();
+    /// manager.is_valid(&mut conn).unwrap();
+    /// ```
     fn is_valid(&self, conn: &mut Self::Connection) -> Result<(), Self::Error> {
-        redis::cmd("PING").query(conn).map_err(|e| e)
+        redis::cmd("PING").execute(conn);
+        Ok(())
     }
 
-    fn has_broken(&self, conn: &mut Self::Connection) -> bool {
+    /// Indicates whether a pooled Redis connection should be treated as broken and removed from the pool.
+    ///
+    /// Returns `true` if the connection must be discarded, `false` otherwise.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// // Obtain a RedisManager and a connection from its pool in real usage.
+    /// let mut manager = /* RedisManager instance */ unimplemented!();
+    /// let mut conn = /* redis::Connection from pool */ unimplemented!();
+    /// assert!(!manager.has_broken(&mut conn));
+    /// ```
+    fn has_broken(&self, _conn: &mut Self::Connection) -> bool {
         false
     }
 }

@@ -13,76 +13,114 @@ use crate::constants::MESSAGE_OK;
 
 use super::response::Page;
 
-pub trait SortingAndPaging: Sized {
-    fn paginate(self, page: i64) -> SortedAndPaginated<Self>;
+// Trait to extract id from model types
+pub trait HasId {
+    fn id(&self) -> i32;
 }
 
-impl<T> SortingAndPaging for T {
-    fn paginate(self, page: i64) -> SortedAndPaginated<Self> {
+pub trait SortingAndPaging: Sized {
+    fn paginate<Col>(self, cursor_column: Col, cursor: i32) -> SortedAndPaginated<Self, Col>
+    where
+        Col: diesel::Expression + QueryFragment<Pg> + Copy + QueryId,
+        Col::SqlType: diesel::sql_types::SingleValue; // Reject composite keys at compile time
+}
+
+impl<T> SortingAndPaging for T
+where
+    T: QueryId,
+{
+    fn paginate<Col>(self, cursor_column: Col, cursor: i32) -> SortedAndPaginated<Self, Col>
+    where
+        Col: diesel::Expression + QueryFragment<Pg> + Copy + QueryId,
+        Col::SqlType: diesel::sql_types::SingleValue, // Reject composite keys at compile time
+    {
         SortedAndPaginated {
             query: self,
-            sort_by: crate::constants::EMPTY_STR.to_string(),
-            sort_direction: crate::constants::EMPTY_STR.to_string(),
+            cursor_column,
+            cursor,
             per_page: crate::constants::DEFAULT_PER_PAGE,
-            page,
-            offset: (page - 1) * crate::constants::DEFAULT_PER_PAGE,
         }
     }
 }
 
-#[derive(Debug, Clone, QueryId)]
-pub struct SortedAndPaginated<T> {
+#[derive(Debug, Clone)]
+pub struct SortedAndPaginated<T, Col> {
     query: T,
-    sort_by: String,
-    sort_direction: String,
-    page: i64,
+    cursor_column: Col,
+    cursor: i32,
     per_page: i64,
-    offset: i64,
 }
 
-impl<T> SortedAndPaginated<T> {
-    pub fn per_page(self, per_page: i64) -> Self {
-        SortedAndPaginated { per_page, offset: (self.page - 1) * per_page, ..self }
-    }
+impl<T, Col> QueryId for SortedAndPaginated<T, Col>
+where
+    T: QueryId,
+    Col: QueryId,
+{
+    type QueryId = (T::QueryId, Col::QueryId, i64);
+    const HAS_STATIC_QUERY_ID: bool = T::HAS_STATIC_QUERY_ID && Col::HAS_STATIC_QUERY_ID;
+}
 
-    pub fn sort(self, sort_by: String, sort_direction: String) -> Self {
+impl<T, Col> SortedAndPaginated<T, Col>
+where
+    Col: diesel::Expression + QueryFragment<Pg> + Copy,
+    i32: diesel::serialize::ToSql<Col::SqlType, Pg>,
+{
+    pub fn per_page(self, per_page: i64) -> Self {
         SortedAndPaginated {
-            sort_by,
-            sort_direction,
+            per_page,
             ..self
         }
     }
 
-    pub fn load_and_count_items<'a, U>(self, conn: &mut PgConnection) -> QueryResult<Page<U>>
+    pub fn load_items<'a, U>(self, conn: &mut PgConnection) -> QueryResult<Page<U>>
     where
-        Self: LoadQuery<'a, PgConnection, (U, i64)>,
+        Self: LoadQuery<'a, PgConnection, U>,
+        U: HasId, // Required to extract id from model instances
     {
-        let page = self.page;
+        let cursor = self.cursor;
         let per_page = self.per_page;
-        let results = self.load::<(U, i64)>(conn)?;
-        let total = results.get(0).map(|x| x.1).unwrap_or(0);
-        let records = results.into_iter().map(|x| x.0).collect();
-        Ok(Page::new(MESSAGE_OK, records, page, per_page, total))
+        let records = self.load::<U>(conn)?;
+        let current_cursor = cursor; // Already i32
+
+        // Calculate next_cursor from last record's id instead of cursor + per_page
+        let next_cursor = records.last().map(|record| record.id());
+
+        Ok(Page::new(
+            MESSAGE_OK,
+            records,
+            current_cursor,
+            per_page,
+            None, // No count by default for performance
+            next_cursor,
+        ))
     }
 }
 
-impl<T: Query> Query for SortedAndPaginated<T> {
-    type SqlType = (T::SqlType, BigInt);
+impl<T: Query, Col> Query for SortedAndPaginated<T, Col> {
+    type SqlType = T::SqlType;
 }
 
-impl<T> RunQueryDsl<PgConnection> for SortedAndPaginated<T> {}
+impl<T, Col> RunQueryDsl<PgConnection> for SortedAndPaginated<T, Col> {}
 
-impl<T> QueryFragment<Pg> for SortedAndPaginated<T>
+impl<T, Col> QueryFragment<Pg> for SortedAndPaginated<T, Col>
 where
     T: QueryFragment<Pg>,
+    Col: QueryFragment<Pg> + Copy + diesel::Expression,
+    Col::SqlType: diesel::sql_types::SingleValue,
+    i32: diesel::serialize::ToSql<Col::SqlType, Pg>,
+    Pg: diesel::sql_types::HasSqlType<Col::SqlType>,
 {
     fn walk_ast<'b>(&'b self, mut out: AstPass<'_, 'b, Pg>) -> QueryResult<()> {
-        out.push_sql("SELECT *, COUNT(*) OVER () FROM (");
+        out.push_sql("SELECT * FROM (");
         self.query.walk_ast(out.reborrow())?;
-        out.push_sql(") t LIMIT ");
+        out.push_sql(") t WHERE ");
+        self.cursor_column.walk_ast(out.reborrow())?;
+        out.push_sql(" > ");
+        out.push_bind_param::<Col::SqlType, _>(&self.cursor)?;
+        out.push_sql(" ORDER BY ");
+        self.cursor_column.walk_ast(out.reborrow())?;
+        out.push_sql(" LIMIT ");
         out.push_bind_param::<BigInt, _>(&self.per_page)?;
-        out.push_sql(" OFFSET ");
-        out.push_bind_param::<BigInt, _>(&self.offset)?;
         Ok(())
     }
 }

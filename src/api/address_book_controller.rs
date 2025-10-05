@@ -100,6 +100,21 @@ mod tests {
     pub type Connection = PgConnection;
     pub type Pool = r2d2::Pool<ConnectionManager<Connection>>;
 
+    /// Signs up a test admin user and performs a login, returning the authentication token on success.
+    ///
+    /// # Returns
+    /// `Ok(token)` containing the JWT when signup and login succeed, `Err(String)` with a debug-formatted error message otherwise.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use actix_web::web;
+    /// # use crate::tests::Pool;
+    /// # async fn example(pool: &web::Data<Pool>) {
+    /// let token = signup_and_login(pool).await.unwrap();
+    /// println!("{}", token);
+    /// # }
+    /// ```
     async fn signup_and_login(pool: &web::Data<Pool>) -> Result<String, String> {
         let user_dto = UserDTO {
             email: "admin@example.com".to_string(),
@@ -112,6 +127,7 @@ mod tests {
                 let login_dto = LoginDTO {
                     username_or_email: "admin".to_string(),
                     password: "123456".to_string(),
+                    tenant_id: "tenant1".to_string(),
                 };
                 match account_service::login(login_dto, pool) {
                     Ok(token_res) => Ok(token_res.token),

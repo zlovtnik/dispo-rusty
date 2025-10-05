@@ -44,3 +44,13 @@ features = ["v4"]
 [dev-dependencies]
 testcontainers = "0.14.0"
 tempfile = "3.8"
+
+[profile.release]
+opt-level = 3           # Maximum optimization
+lto = "fat"            # Link-time optimization across all crates
+codegen-units = 1      # Single codegen unit = better optimization
+strip = true           # Strip symbols
+panic = "abort"        # Smaller binary, faster panics
+
+[profile.release.package."*"]
+opt-level = 3
