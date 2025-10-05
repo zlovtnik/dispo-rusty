@@ -117,7 +117,7 @@ fn check_database_health(pool: web::Data<DatabasePool>) -> Result<(), diesel::re
 
 fn check_cache_health(redis_pool: &RedisPool) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
     let mut conn = redis_pool.get().map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync + 'static>)?;
-    redis::cmd("PING").query(&mut conn).map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync + 'static>)?;
+    redis::cmd("PING").query::<()>(&mut conn).map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync + 'static>)?;
     Ok(())
 }
 

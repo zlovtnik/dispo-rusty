@@ -45,13 +45,21 @@
 	font-weight: 500;
 }
 
-.form-group input {
+.form-group input,
+.form-group select {
 	width: 100%;
 	padding: 10px;
 	border: 1px solid var(--color-text);
 	border-radius: 5px;
 	font-size: 14px;
 	box-sizing: border-box;
+}
+
+.form-help {
+	display: block;
+	margin-top: 5px;
+	font-size: 12px;
+	color: var(--color-secondary-green);
 }
 
 /* Button styles */

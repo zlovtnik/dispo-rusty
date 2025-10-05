@@ -53,7 +53,9 @@ async fn main() -> io::Result<()> {
 
     let manager = config::db::TenantPoolManager::new(main_pool.clone());
     // Hardcode a tenant for demonstration, in production load from DB
-    manager.add_tenant_pool("tenant1".to_string(), main_pool.clone());
+    manager
+        .add_tenant_pool("tenant1".to_string(), main_pool.clone())
+        .expect("Failed to add tenant pool");
 
     HttpServer::new(move || {
         App::new()
@@ -69,6 +71,7 @@ async fn main() -> io::Result<()> {
                     .max_age(3600),
             )
             .app_data(web::Data::new(manager.clone()))
+            .app_data(web::Data::new(main_pool.clone()))
             .app_data(web::Data::new(redis_client.clone()))
             .wrap(actix_web::middleware::Logger::default())
             .wrap(crate::middleware::auth_middleware::Authentication) // Comment this line if you want to integrate with yew-address-book-frontend

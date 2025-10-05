@@ -34,6 +34,8 @@ table! {
         id -> Varchar,
         name -> Varchar,
         db_url -> Text,
+        created_at -> Timestamptz,
+        updated_at -> Timestamptz,
     }
 }
 
