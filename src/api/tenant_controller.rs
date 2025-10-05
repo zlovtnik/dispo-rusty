@@ -50,15 +50,15 @@ pub async fn get_tenant_stats(
     })?;
 
     // Get all tenants
-    let tenants = Tenant::list_all(&mut *conn).map_err(|e| ServiceError::InternalServerError {
+    let tenants = Tenant::list_all(&mut conn).map_err(|e| ServiceError::InternalServerError {
         error_message: format!("Failed to fetch tenants: {}", e),
     })?;
 
     // Get total users and logged in count (global, since no tenant_id in users)
-    let total_users = User::count_all(&mut *conn).map_err(|e| ServiceError::InternalServerError {
+    let total_users = User::count_all(&mut conn).map_err(|e| ServiceError::InternalServerError {
         error_message: format!("Failed to count users: {}", e),
     })?;
-    let logged_in_users = User::count_logged_in(&mut *conn).map_err(|e| ServiceError::InternalServerError {
+    let logged_in_users = User::count_logged_in(&mut conn).map_err(|e| ServiceError::InternalServerError {
         error_message: format!("Failed to count logged in users: {}", e),
     })?;
 
@@ -112,7 +112,7 @@ pub async fn get_tenant_health(
         error_message: format!("Failed to get db connection: {}", e),
     })?;
 
-    let tenants = Tenant::list_all(&mut *conn).map_err(|e| ServiceError::InternalServerError {
+    let tenants = Tenant::list_all(&mut conn).map_err(|e| ServiceError::InternalServerError {
         error_message: format!("Failed to fetch tenants: {}", e),
     })?;
     let mut tenant_health_status = Vec::new();
@@ -156,7 +156,7 @@ pub async fn get_tenant_status(
         error_message: format!("Failed to get db connection: {}", e),
     })?;
 
-    let tenants = Tenant::list_all(&mut *conn).map_err(|e| ServiceError::InternalServerError {
+    let tenants = Tenant::list_all(&mut conn).map_err(|e| ServiceError::InternalServerError {
         error_message: format!("Failed to fetch tenants: {}", e),
     })?;
     let mut status_map = HashMap::new();

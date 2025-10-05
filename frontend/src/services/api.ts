@@ -15,7 +15,7 @@ export interface ApiError {
 }
 
 // Base API configuration
-const API_BASE_URL = import.meta.env?.VITE_API_URL || 'http://localhost:8080/api';
+const API_BASE_URL = (Bun?.env?.API_URL as string) || 'http://localhost:8080/api';
 
 // HTTP Client class
 class HttpClient {
@@ -33,8 +33,14 @@ class HttpClient {
 
     // Add authentication headers if token exists
     const token = localStorage.getItem('token');
-    const tenantId = localStorage.getItem('tenant') ?
-      JSON.parse(localStorage.getItem('tenant')!).id : null;
+    const tenantId = (() => {
+      try {
+        const storedTenant = localStorage.getItem('tenant');
+        return storedTenant ? JSON.parse(storedTenant).id : null;
+      } catch {
+        return null;
+      }
+    })();
 
     const headers = new Headers({
       'Content-Type': 'application/json',

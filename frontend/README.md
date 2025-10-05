@@ -65,7 +65,7 @@ bun run test:watch
 Create a `.env` file in the frontend directory:
 
 ```env
-VITE_API_URL=http://localhost:8080/api
+API_URL=http://localhost:8080/api
 ```
 
 ### TypeScript Configuration

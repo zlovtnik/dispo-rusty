@@ -11,11 +11,17 @@ export interface User {
   roles: string[];
 }
 
+export interface TenantSettings {
+  theme: string;
+  features: string[];
+  [key: string]: unknown;
+}
+
 export interface Tenant {
   id: string;
   name: string;
   domain?: string;
-  settings: Record<string, any>;
+  settings: TenantSettings;
 }
 
 export interface AuthContextType {
@@ -60,11 +66,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         const storedToken = localStorage.getItem('token');
 
         if (storedUser && storedTenant && storedToken) {
-          setUser(JSON.parse(storedUser));
-          setTenant(JSON.parse(storedTenant));
-          setToken(storedToken);
+          const parsedUser = JSON.parse(storedUser) as User;
+          const parsedTenant = JSON.parse(storedTenant) as Tenant;
+          const parsedToken = storedToken as string;
+
+          // Validate shape
+          if (parsedUser.id && parsedUser.email && parsedTenant.id && parsedTenant.name && parsedToken) {
+            setUser(parsedUser);
+            setTenant(parsedTenant);
+            setToken(parsedToken);
+          }
         }
       } catch (error) {
+        // Invalid data, remove corrupt keys
+        localStorage.removeItem('user');
+        localStorage.removeItem('tenant');
+        localStorage.removeItem('token');
         console.error('Error initializing auth state:', error);
       } finally {
         setIsLoading(false);
@@ -97,7 +114,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         settings: {
           theme: 'default',
           features: ['dashboard', 'address-book'],
-        },
+        } as TenantSettings,
       };
 
       const mockToken = `demo_token_${Date.now()}`;
@@ -112,7 +129,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       localStorage.setItem('tenant', JSON.stringify(mockTenant));
       localStorage.setItem('token', mockToken);
 
-      console.log('Demo login successful:', { user: mockUser, tenant: mockTenant });
+      // Login successful
     } catch (error) {
       throw new Error('Login failed');
     } finally {
