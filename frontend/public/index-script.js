@@ -1,17 +1,27 @@
 // API utility functions for backend communication
 
-const API_BASE_URL = 'http://localhost:8000/api'; // Use hard-coded for client
+const API_BASE_URL = window.PUBLIC_API_BASE_URL || window.location.origin + '/api';
 
 function decodeJwtPayload(token) {
   try {
     const payload = token.split('.')[1];
     const decoded = atob(payload);
-    return JSON.parse(decoded);
+    const parsedPayload = JSON.parse(decoded);
+
+    // Check expiry claim (exp is seconds since epoch)
+    const nowSeconds = Date.now() / 1000;
+    if (parsedPayload.exp !== undefined && parsedPayload.exp <= nowSeconds) {
+      console.error('JWT token has expired');
+      return null;
+    }
+
+    return parsedPayload;
   } catch (error) {
     console.error('Failed to decode JWT:', error);
     return null;
   }
 }
+// Note: Signature/issuer/audience checks must occur on the backend
 
 async function makeRequest(endpoint, options = {}) {
   const url = `${API_BASE_URL}${endpoint}`;
@@ -24,10 +34,29 @@ async function makeRequest(endpoint, options = {}) {
     ...otherOptions
   };
 
-  // Add auth token if available
+  // Add auth token if available and valid
   const authToken = localStorage.getItem('auth_token');
   if (authToken) {
-    config.headers['Authorization'] = `Bearer ${authToken}`;
+    try {
+      // Decode and validate token
+      const decodedPayload = decodeJwtPayload(authToken);
+      if (decodedPayload && decodedPayload.exp) {
+        // Valid token, attach header
+        config.headers['Authorization'] = `Bearer ${authToken}`;
+      } else {
+        // Invalid/expired token, remove from localStorage
+        console.warn('Invalid or expired token found in localStorage, removing');
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('current_user');
+        // Could trigger reauth flow here if needed
+      }
+    } catch (error) {
+      // Malformed token, remove from localStorage
+      console.error('Malformed token in localStorage:', error);
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('current_user');
+      // Could trigger reauth flow here if needed
+    }
   }
 
   const controller = new AbortController();
@@ -50,13 +79,39 @@ async function makeRequest(endpoint, options = {}) {
     }
 
     if (!response.ok) {
-      let errorMessage;
+      // Log full response for debugging
+      console.error('Backend error response:', {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries()),
+        data: data
+      });
+
+      // Sanitize error message for user display
+      const sanitizeMessage = (msg) => {
+        if (!msg || typeof msg !== 'string') return 'An error occurred';
+        // Trim to avoid overly long messages
+        const trimmed = msg.slice(0, 100);
+        // Strip sensitive patterns
+        const cleaned = trimmed.replace(/stack\s*trace|trace\b|sql\b|path\b/gi, '[REDACTED]');
+        // If it's still dangerous, return generic
+        if (trimmed.includes('password') || trimmed.includes('token')) {
+          return 'An error occurred';
+        }
+        return cleaned;
+      };
+
+      let sanitizedMessage = `HTTP ${response.status}: ${response.statusText}`;
       if (data && typeof data === 'object') {
-        errorMessage = data.error_message || data.message || data.error || `HTTP ${response.status}: ${response.statusText}`;
-      } else {
-        errorMessage = String(data || `HTTP ${response.status}: ${response.statusText}`);
+        const rawMessage = data.error_message || data.message || data.error;
+        if (rawMessage) {
+          sanitizedMessage = sanitizeMessage(rawMessage);
+        }
+      } else if (data) {
+        sanitizedMessage = sanitizeMessage(String(data));
       }
-      throw new Error(errorMessage);
+
+      throw new Error(sanitizedMessage);
     }
 
     return data;
@@ -87,19 +142,35 @@ async function apiLogin(loginData) {
     body: JSON.stringify(loginData)
   });
 
-  if (response.data && response.data.token) {
-    const decodedPayload = decodeJwtPayload(response.data.token);
-    const username = decodedPayload?.user || 'unknown';
-    return {
-      token: response.data.token,
-      user: {
-        username,
-        email: undefined // Backend doesn't provide email in response
-      }
-    };
-  } else {
-    throw new Error('Invalid response format');
+  if (!response) {
+    throw new Error('Missing response');
   }
+
+  if (!response.data) {
+    throw new Error('Missing data in response');
+  }
+
+  if (!response.data.token || typeof response.data.token !== 'string' || response.data.token.trim() === '') {
+    throw new Error('Missing or invalid token');
+  }
+
+  const decodedPayload = decodeJwtPayload(response.data.token);
+  if (!decodedPayload) {
+    throw new Error('Invalid token');
+  }
+
+  if (!decodedPayload.user) {
+    throw new Error('Unexpected response shape - missing user info');
+  }
+
+  const username = decodedPayload.user;
+  return {
+    token: response.data.token,
+    user: {
+      username,
+      email: undefined // Backend doesn't provide email in response
+    }
+  };
 }
 
 async function signup(signupData) {
@@ -113,7 +184,6 @@ async function logout() {
   await makeRequest('/auth/logout', {
     method: 'POST'
   });
-  AuthManager.clearAuth();
 }
 
 async function addContact(contactData) {
@@ -189,9 +259,17 @@ class AuthManager {
 // Common utility functions
 
 class UIManager {
+  static activeAlertTimeout = null;
+
   static showAlert(message, type = 'success') {
     const alertContainer = document.getElementById('alertContainer');
     if (!alertContainer) return () => {}; // No-op cleanup if container doesn't exist
+
+    // Clear any existing timeout
+    if (UIManager.activeAlertTimeout !== null) {
+      clearTimeout(UIManager.activeAlertTimeout);
+      UIManager.activeAlertTimeout = null;
+    }
 
     const alertDiv = document.createElement('div');
     alertDiv.className = `alert alert-${type}`;
@@ -201,13 +279,17 @@ class UIManager {
     alertContainer.appendChild(alertDiv);
 
     // Auto-hide alert after 5 seconds
-    const timeoutId = setTimeout(() => {
+    UIManager.activeAlertTimeout = setTimeout(() => {
       alertContainer.innerHTML = '';
+      UIManager.activeAlertTimeout = null; // Clear reference after timeout
     }, 5000);
 
     // Return cleanup function to cancel the timeout
     return () => {
-      clearTimeout(timeoutId);
+      if (UIManager.activeAlertTimeout !== null) {
+        clearTimeout(UIManager.activeAlertTimeout);
+        UIManager.activeAlertTimeout = null;
+      }
     };
   }
 
@@ -313,9 +395,98 @@ function resetForm(formElement) {
   formElement.reset();
 }
 
+function isStrongPassword(password) {
+  // Configurable rules: min 8 chars, uppercase, lowercase, digit, special char
+  if (password.length < 8) return false;
+  if (!/[A-Z]/.test(password)) return false;
+  if (!/[a-z]/.test(password)) return false;
+  if (!/\d/.test(password)) return false;
+  if (!/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password)) return false;
+  return true;
+}
+
 async function confirmDelete() {
-  // Fallback to native confirm for simplicity
-  return confirm('Are you sure you want to delete this contact?');
+  return new Promise((resolve) => {
+    const dialog = document.createElement('dialog');
+    dialog.setAttribute('aria-labelledby', 'confirmDeleteTitle');
+    dialog.setAttribute('aria-describedby', 'confirmDeleteMessage');
+    dialog.className = 'confirm-delete-dialog';
+    dialog.innerHTML = `
+      <div class="dialog-header">
+        <h2 id="confirmDeleteTitle">Confirm Delete</h2>
+      </div>
+      <div class="dialog-body">
+        <p id="confirmDeleteMessage">Are you sure you want to delete this contact?</p>
+      </div>
+      <div class="dialog-footer">
+        <button type="button" class="btn btn-secondary cancel-btn" autofocus>Cancel</button>
+        <button type="button" class="btn btn-danger confirm-btn">Delete</button>
+      </div>
+    `;
+
+    document.body.appendChild(dialog);
+
+    function handleCancel() {
+      dialog.close();
+      document.body.removeChild(dialog);
+      resolve(false);
+    }
+
+    function handleConfirm() {
+      dialog.close();
+      document.body.removeChild(dialog);
+      resolve(true);
+    }
+
+    // Button event listeners
+    const cancelBtn = dialog.querySelector('.cancel-btn');
+    const confirmBtn = dialog.querySelector('.confirm-btn');
+    cancelBtn.addEventListener('click', handleCancel);
+    confirmBtn.addEventListener('click', handleConfirm);
+
+    // ESC key handling
+    dialog.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        handleCancel();
+      }
+    });
+
+    // Click outside dialog handling (overlay)
+    dialog.addEventListener('click', (event) => {
+      if (event.target === dialog) {
+        handleCancel();
+      }
+    });
+
+    // Prevent closing via default methods
+    dialog.addEventListener('cancel', (event) => {
+      event.preventDefault();
+      handleCancel();
+    });
+
+    dialog.showModal();
+    // Focus management: autofocus on cancel button
+  });
+}
+
+// Helper function to test backend connectivity with retry logic
+async function testBackendConnectivityWithRetries() {
+  const maxRetries = 3;
+  const delays = [500, 1000, 2000]; // ms
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const isConnected = await testBackendConnectivity();
+      if (isConnected) return; // Success
+    } catch (error) {
+      // Ignore and retry
+    }
+    if (attempt < maxRetries - 1) {
+      await new Promise(resolve => setTimeout(resolve, delays[attempt]));
+    }
+  }
+  throw new Error('All retry attempts failed');
 }
 
 // Initialize when DOM is loaded
@@ -323,11 +494,10 @@ document.addEventListener('DOMContentLoaded', async function() {
   setupEventListeners();
   updateUI();
 
-  // Test backend connectivity
-  const isConnected = await testBackendConnectivity();
-  if (!isConnected) {
+  // Test backend connectivity with retries (runs asynchronously)
+  testBackendConnectivityWithRetries().catch(() => {
     UIManager.showAlert('Warning: Cannot connect to backend server on port 8000. Make sure the Rust backend is running.', 'error');
-  }
+  });
 });
 
 function setupEventListeners() {
@@ -410,6 +580,12 @@ async function handleSignup(event) {
       return;
     }
 
+    // Validate password strength
+    if (!isStrongPassword(formData.password)) {
+      UIManager.showAlert('Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one digit, and one special character.', 'error');
+      return;
+    }
+
     const signupData = {
       username: formData.username,
       email: formData.email,
@@ -428,12 +604,11 @@ async function handleSignup(event) {
 async function handleLogout() {
   try {
     await logout();
-  } catch (error) {
-    UIManager.showAlert('Logout request failed: ' + (error.message || String(error)), 'error');
-  } finally {
     AuthManager.clearAuth();
     updateUI();
     UIManager.clearContactsList();
+  } catch (error) {
+    UIManager.showAlert('Logout request failed: ' + (error.message || String(error)), 'error');
   }
 }
 
@@ -444,8 +619,8 @@ async function handleAddContact(event) {
   try {
     const formData = getFormData(form);
     const age = parseInt(formData.age);
-    if (Number.isNaN(age) || age < 0) {
-      UIManager.showAlert('Please enter a valid age (must be a positive number).', 'error');
+    if (Number.isNaN(age) || age <= 0 || !Number.isInteger(+formData.age)) {
+      UIManager.showAlert('Please enter a valid age (must be a positive integer greater than zero).', 'error');
       return;
     }
 
@@ -502,11 +677,15 @@ function displayContacts(contacts) {
     addressItem.appendChild(nameHeader);
 
     const detailsPara = document.createElement('p');
-    detailsPara.innerHTML = '<strong>Age:</strong> <span class="age"></span> | <strong>Gender:</strong> <span class="gender"></span>';
-    const ageSpan = detailsPara.querySelector('.age');
-    if (ageSpan) ageSpan.textContent = contact.age.toString();
-    const genderSpan = detailsPara.querySelector('.gender');
-    if (genderSpan) genderSpan.textContent = contact.gender;
+    const ageStrong = document.createElement('strong');
+    ageStrong.textContent = 'Age: ';
+    detailsPara.appendChild(ageStrong);
+    detailsPara.appendChild(document.createTextNode(contact.age.toString()));
+    detailsPara.appendChild(document.createTextNode(' | '));
+    const genderStrong = document.createElement('strong');
+    genderStrong.textContent = 'Gender: ';
+    detailsPara.appendChild(genderStrong);
+    detailsPara.appendChild(document.createTextNode(contact.gender));
     addressItem.appendChild(detailsPara);
 
     const addressPara = document.createElement('p');
