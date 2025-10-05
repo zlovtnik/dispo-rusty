@@ -1,126 +1,182 @@
 import React from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Link } from 'react-router-dom';
+import {
+  Card,
+  Row,
+  Col,
+  Statistic,
+  Alert,
+  List,
+  Avatar,
+  Space,
+  Button,
+  Tag,
+  Divider,
+} from 'antd';
+import {
+  ContactsOutlined,
+  HeartOutlined,
+  BarsOutlined,
+  CheckCircleOutlined,
+  DesktopOutlined,
+  ApiOutlined,
+  CodeOutlined,
+  ThunderboltOutlined,
+} from '@ant-design/icons';
 
 export const DashboardPage: React.FC = () => {
   const { user, tenant } = useAuth();
 
+  const recentActivities = [
+    {
+      title: 'Application started',
+      description: 'Multi-tenant React frontend with Bun',
+      time: 'Just now',
+    },
+    {
+      title: 'Authentication successful',
+      description: 'JWT token validated for tenant access',
+      time: 'Just now',
+    },
+    {
+      title: 'Dashboard loaded',
+      description: 'Application ready for use',
+      time: 'Just now',
+    },
+  ];
+
+  const technologies = [
+    {
+      name: 'TypeScript',
+      version: '5.9+',
+      icon: <DesktopOutlined />,
+      color: 'blue',
+    },
+    {
+      name: 'Bun',
+      version: '1.0+',
+      icon: <ThunderboltOutlined />,
+      color: 'gold',
+    },
+    {
+      name: 'React',
+      version: '18.3.1',
+      icon: <CodeOutlined />,
+      color: 'blue',
+    },
+    {
+      name: 'Actix Web',
+      version: 'Backend',
+      icon: <ApiOutlined />,
+      color: 'orange',
+    },
+  ];
+
   return (
-    <div className="space-y-8">
+    <Space direction="vertical" size="large" style={{ width: '100%' }}>
       {/* Welcome Section */}
-      <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg p-8 text-white">
-        <h1 className="text-3xl font-bold mb-2">Welcome back, {user?.firstName || user?.username}!</h1>
-        <p className="text-blue-100">
-          You're logged in to tenant <strong>{tenant?.name}</strong> ({tenant?.id})
-        </p>
-      </div>
+      <Alert
+        message={`Welcome back, ${user?.firstName || user?.username}!`}
+        description={`You're logged in to tenant ${tenant?.name} (${tenant?.id})`}
+        type="success"
+        showIcon
+        closable={false}
+      />
 
       {/* Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="card">
-          <div className="card-body">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Address Book</h3>
-            <p className="text-gray-600 mb-4">Manage your contacts and addresses</p>
-            <Link to="/address-book" className="btn btn-primary w-full">
-              View Address Book
-            </Link>
-          </div>
-        </div>
-
-        <div className="card">
-          <div className="card-body">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">System Health</h3>
-            <p className="text-gray-600 mb-4">Check API and system status</p>
-            <div className="flex items-center space-x-2">
-              <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-              <span className="text-sm text-gray-600">All systems operational</span>
+      <Row gutter={[16, 16]}>
+        <Col xs={24} md={8}>
+          <Card
+            hoverable
+            actions={[
+              <Link to="/address-book" key="view">
+                <Button type="primary" block>
+                  View Address Book
+                </Button>
+              </Link>,
+            ]}
+          >
+            <Card.Meta
+              avatar={<ContactsOutlined style={{ fontSize: 24 }} />}
+              title="Address Book"
+              description="Manage your contacts and addresses"
+            />
+          </Card>
+        </Col>
+        <Col xs={24} md={8}>
+          <Card hoverable>
+            <Card.Meta
+              avatar={<HeartOutlined style={{ fontSize: 24, color: 'green' }} />}
+              title="System Health"
+              description="Check API and system status"
+            />
+            <Divider />
+            <Space>
+              <CheckCircleOutlined style={{ color: 'green' }} />
+              <span>All systems operational</span>
+            </Space>
+          </Card>
+        </Col>
+        <Col xs={24} md={8}>
+          <Card hoverable>
+            <Card.Meta
+              avatar={<HeartOutlined style={{ fontSize: 24 }} />}
+              title="User Profile"
+              description="Manage your account settings"
+            />
+            <Divider />
+            <div style={{ fontSize: '12px' }}>
+              <div><strong>Email:</strong> {user?.email}</div>
+              <div><strong>Username:</strong> {user?.username}</div>
+              <div><strong>Roles:</strong> {user?.roles?.join(', ') || 'None'}</div>
             </div>
-          </div>
-        </div>
-
-        <div className="card">
-          <div className="card-body">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">User Profile</h3>
-            <p className="text-gray-600 mb-4">Manage your account settings</p>
-            <div className="text-sm text-gray-600">
-              <div>Email: {user?.email}</div>
-              <div>Username: {user?.username}</div>
-              <div>Roles: {user?.roles?.join(', ') || 'None'}</div>
-            </div>
-          </div>
-        </div>
-      </div>
+          </Card>
+        </Col>
+      </Row>
 
       {/* Recent Activity */}
-      <div className="card">
-        <div className="card-header">
-          <h3 className="text-lg font-semibold text-gray-900">Recent Activity</h3>
-        </div>
-        <div className="card-body">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between py-2 border-b border-gray-200 last:border-b-0">
-              <div>
-                <p className="text-sm font-medium text-gray-900">Application started</p>
-                <p className="text-xs text-gray-500">Multi-tenant React frontend with Bun</p>
-              </div>
-              <span className="text-xs text-gray-500">Just now</span>
-            </div>
-            <div className="flex items-center justify-between py-2 border-b border-gray-200 last:border-b-0">
-              <div>
-                <p className="text-sm font-medium text-gray-900">Authentication successful</p>
-                <p className="text-xs text-gray-500">JWT token validated for tenant access</p>
-              </div>
-              <span className="text-xs text-gray-500">Just now</span>
-            </div>
-            <div className="flex items-center justify-between py-2 border-b border-gray-200 last:border-b-0">
-              <div>
-                <p className="text-sm font-medium text-gray-900">Dashboard loaded</p>
-                <p className="text-xs text-gray-500">Application ready for use</p>
-              </div>
-              <span className="text-xs text-gray-500">Just now</span>
-            </div>
-          </div>
-        </div>
-      </div>
+      <Card
+        title={<><BarsOutlined style={{ marginRight: 8 }} />Recent Activity</>}
+        hoverable
+      >
+        <List
+          dataSource={recentActivities}
+          renderItem={(item) => (
+            <List.Item>
+              <List.Item.Meta
+                title={item.title}
+                description={item.description}
+              />
+              <Tag>{item.time}</Tag>
+            </List.Item>
+          )}
+        />
+      </Card>
 
-      {/* Technology Stack Info */}
-      <div className="card">
-        <div className="card-header">
-          <h3 className="text-lg font-semibold text-gray-900">Technology Stack</h3>
-        </div>
-        <div className="card-body">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="text-center">
-              <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-2">
-                <span className="text-blue-600 font-bold text-sm">TS</span>
-              </div>
-              <p className="text-sm font-medium">TypeScript</p>
-              <p className="text-xs text-gray-500">5.9+</p>
-            </div>
-            <div className="text-center">
-              <div className="w-8 h-8 bg-yellow-100 rounded-lg flex items-center justify-center mx-auto mb-2">
-                <span className="text-yellow-600 font-bold text-lg">⚡</span>
-              </div>
-              <p className="text-sm font-medium">Bun</p>
-              <p className="text-xs text-gray-500">1.0+</p>
-            </div>
-            <div className="text-center">
-              <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-2">
-                <span className="text-blue-600 font-bold text-sm">R</span>
-              </div>
-              <p className="text-sm font-medium">React</p>
-              <p className="text-xs text-gray-500">18.3.1</p>
-            </div>
-            <div className="text-center">
-              <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center mx-auto mb-2">
-                <span className="text-orange-600 font-bold text-lg">🚀</span>
-              </div>
-              <p className="text-sm font-medium">Actix Web</p>
-              <p className="text-xs text-gray-500">Backend</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+      {/* Technology Stack */}
+      <Card
+        title={<>Technology Stack</>}
+        hoverable
+      >
+        <Row gutter={[16, 16]}>
+          {technologies.map((tech) => (
+            <Col xs={12} sm={6} key={tech.name}>
+              <Card size="small" style={{ textAlign: 'center' }}>
+                <Avatar
+                  size="large"
+                  icon={tech.icon}
+                  style={{ backgroundColor: tech.color === 'blue' ? '#1890ff' : tech.color === 'gold' ? '#faad14' : '#fa8c16' }}
+                />
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ fontWeight: 'medium' }}>{tech.name}</div>
+                  <div style={{ fontSize: '12px', color: '#666' }}>{tech.version}</div>
+                </div>
+              </Card>
+            </Col>
+          ))}
+        </Row>
+      </Card>
+    </Space>
   );
 };

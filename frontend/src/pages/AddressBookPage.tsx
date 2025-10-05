@@ -2,30 +2,73 @@ import React, { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { ConfirmationModal } from '@/components/ConfirmationModal';
 import type { Contact } from '@/types/contact';
+import {
+  Button,
+  Input,
+  Card,
+  Table,
+  Modal,
+  Form,
+  Alert,
+  Space,
+  Typography,
+  Divider,
+  message,
+} from 'antd';
+import {
+  PlusOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  SearchOutlined,
+} from '@ant-design/icons';
 
 export const AddressBookPage: React.FC = () => {
   const { tenant } = useAuth();
   const [contacts, setContacts] = useState<Contact[]>([
-    // Mock data for demonstration
+    // Mock data for demonstration - using full Contact structure
     {
       id: '1',
-      name: 'John Doe',
+      tenantId: 'tenant1',
+      firstName: 'John',
+      lastName: 'Doe',
+      fullName: 'John Doe',
       email: 'john@example.com',
       phone: '+1-555-0123',
-      address: '123 Main St, Anytown, USA',
-      tenantId: 'tenant1',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      address: {
+        street1: '123 Main St',
+        street2: '',
+        city: 'Anytown',
+        state: 'CA',
+        zipCode: '12345',
+        country: 'USA',
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      createdBy: 'system',
+      updatedBy: 'system',
+      isActive: true,
     },
     {
       id: '2',
-      name: 'Jane Smith',
+      tenantId: 'tenant1',
+      firstName: 'Jane',
+      lastName: 'Smith',
+      fullName: 'Jane Smith',
       email: 'jane@example.com',
       phone: '+1-555-0456',
-      address: '456 Oak Ave, Somewhere, USA',
-      tenantId: 'tenant1',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      address: {
+        street1: '456 Oak Ave',
+        street2: '',
+        city: 'Somewhere',
+        state: 'CA',
+        zipCode: '67890',
+        country: 'USA',
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      createdBy: 'system',
+      updatedBy: 'system',
+      isActive: true,
     },
   ]);
 
@@ -33,77 +76,42 @@ export const AddressBookPage: React.FC = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [deleteContactId, setDeleteContactId] = useState<string | null>(null);
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    address: '',
-  });
-  const [formError, setFormError] = useState<string>('');
-  const [successMessage, setSuccessMessage] = useState<string>('');
+  const [form] = Form.useForm();
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Validate form data
-  const validateForm = () => {
-    const trimmedName = formData.name.trim();
-    const trimmedEmail = formData.email.trim();
-    const trimmedPhone = formData.phone.trim();
-
-    if (!trimmedName) {
-      return 'Name is required';
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (trimmedEmail && !emailRegex.test(trimmedEmail)) {
-      return 'Please enter a valid email address';
-    }
-
-
-    const phoneRegex = /^\+?[1-9]\d{0,15}$/;
-    if (trimmedPhone && !phoneRegex.test(trimmedPhone.replace(/[\s\-\(\)]/g, ''))) {
-      return 'Please enter a valid phone number';
-    }
-
-    return null;
-  };
 
   // Filter contacts based on search term
   const filteredContacts = contacts.filter(contact =>
-    contact.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    contact.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
     contact.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     contact.phone?.includes(searchTerm)
   );
 
-  // Handle form submission for both create and update
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setFormError('');
-    setSuccessMessage('');
-
-    const validationError = validateForm();
-    if (validationError) {
-      setFormError(validationError);
-      return;
-    }
-
+  // Handle form submission
+  const handleSubmit = async (values: any) => {
     setIsSubmitting(true);
 
     try {
-      const trimmedFormData = {
-        name: formData.name.trim(),
-        email: formData.email.trim(),
-        phone: formData.phone.trim(),
-        address: formData.address.trim(),
-      };
-
       if (editingContact) {
         // Update existing contact
         setContacts(prev => prev.map(contact =>
           contact.id === editingContact.id
             ? {
                 ...contact,
-                ...trimmedFormData,
-                updatedAt: new Date().toISOString(),
+                fullName: `${values.firstName} ${values.lastName}`,
+                firstName: values.firstName,
+                lastName: values.lastName,
+                email: values.email,
+                phone: values.phone,
+                address: {
+                  street1: values.street1,
+                  street2: values.street2 || '',
+                  city: values.city,
+                  state: values.state,
+                  zipCode: values.zipCode,
+                  country: values.country,
+                },
+                updatedAt: new Date(),
+                updatedBy: 'system',
               }
             : contact
         ));
@@ -114,33 +122,40 @@ export const AddressBookPage: React.FC = () => {
         }
         const newContact: Contact = {
           id: crypto.randomUUID(),
-          ...trimmedFormData,
           tenantId: tenant.id,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
+          firstName: values.firstName,
+          lastName: values.lastName,
+          fullName: `${values.firstName} ${values.lastName}`,
+          email: values.email,
+          phone: values.phone,
+          address: {
+            street1: values.street1,
+            street2: values.street2 || '',
+            city: values.city,
+            state: values.state,
+            zipCode: values.zipCode,
+            country: values.country,
+          },
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          createdBy: 'system',
+          updatedBy: 'system',
+          isActive: true,
         };
         setContacts(prev => [...prev, newContact]);
       }
 
-      // Success
+      // Success message
       const successMsg = editingContact ? 'Contact updated successfully!' : 'Contact created successfully!';
-      setSuccessMessage(successMsg);
+      message.success(successMsg);
 
       // Reset form and close modal on success
-      setFormData({
-        name: '',
-        email: '',
-        phone: '',
-        address: '',
-      });
       setEditingContact(null);
       setIsFormOpen(false);
-
-      // Clear success message after delay to allow user to see it
-      setTimeout(() => setSuccessMessage(''), 3000);
+      form.resetFields();
 
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : 'An error occurred while saving the contact.');
+      message.error(error instanceof Error ? error.message : 'An error occurred while saving the contact.');
     } finally {
       setIsSubmitting(false);
     }
@@ -149,14 +164,18 @@ export const AddressBookPage: React.FC = () => {
   // Handle edit
   const handleEdit = (contact: Contact) => {
     setEditingContact(contact);
-    setFormData({
-      name: contact.name,
-      email: contact.email || '',
-      phone: contact.phone || '',
-      address: contact.address || '',
+    form.setFieldsValue({
+      firstName: contact.firstName,
+      lastName: contact.lastName,
+      email: contact.email,
+      phone: contact.phone,
+      street1: contact.address?.street1,
+      street2: contact.address?.street2,
+      city: contact.address?.city,
+      state: contact.address?.state,
+      zipCode: contact.address?.zipCode,
+      country: contact.address?.country,
     });
-    setFormError('');
-    setSuccessMessage('');
     setIsFormOpen(true);
   };
 
@@ -170,6 +189,7 @@ export const AddressBookPage: React.FC = () => {
     if (deleteContactId) {
       setContacts(prev => prev.filter(contact => contact.id !== deleteContactId));
       setDeleteContactId(null);
+      message.success('Contact deleted successfully!');
     }
   };
 
@@ -181,225 +201,181 @@ export const AddressBookPage: React.FC = () => {
   // Open form for new contact
   const handleNewContact = () => {
     setEditingContact(null);
-    setFormData({
-      name: '',
-      email: '',
-      phone: '',
-      address: '',
-    });
-    setFormError('');
-    setSuccessMessage('');
+    form.resetFields();
     setIsFormOpen(true);
   };
 
+  // Table columns for contacts display
+  const columns = [
+    {
+      title: 'Name',
+      dataIndex: 'fullName',
+      key: 'fullName',
+      sorter: (a: Contact, b: Contact) => a.fullName.localeCompare(b.fullName),
+    },
+    {
+      title: 'Email',
+      dataIndex: 'email',
+      key: 'email',
+    },
+    {
+      title: 'Phone',
+      dataIndex: 'phone',
+      key: 'phone',
+    },
+    {
+      title: 'Address',
+      dataIndex: 'address',
+      key: 'address',
+      render: (address: Contact['address']) =>
+        address ? `${address.street1}, ${address.city}, ${address.state} ${address.zipCode}, ${address.country}` : '-',
+    },
+    {
+      title: 'Actions',
+      key: 'actions',
+      render: (_: any, contact: Contact) => (
+        <Space size="middle">
+          <Button
+            type="link"
+            icon={<EditOutlined />}
+            onClick={() => handleEdit(contact)}
+          >
+            Edit
+          </Button>
+          <Button
+            type="link"
+            danger
+            icon={<DeleteOutlined />}
+            onClick={() => handleDelete(contact.id)}
+          >
+            Delete
+          </Button>
+        </Space>
+      ),
+    },
+  ];
+
   return (
-    <div className="space-y-6">
+    <Space direction="vertical" size="large" style={{ width: '100%' }}>
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Address Book</h1>
-          <p className="text-gray-600">Manage your contacts and addresses</p>
+          <Typography.Title level={2} style={{ margin: 0 }}>Address Book</Typography.Title>
+          <Typography.Text type="secondary">Manage your contacts and addresses</Typography.Text>
         </div>
-        <button
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
           onClick={handleNewContact}
-          className="btn btn-primary"
         >
           Add Contact
-        </button>
+        </Button>
       </div>
+
+      <Divider />
 
       {/* Search Bar */}
-      <div className="max-w-md">
-        <input
-          type="text"
-          placeholder="Search contacts..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="form-input"
-        />
-      </div>
+      <Input
+        placeholder="Search contacts..."
+        prefix={<SearchOutlined />}
+        value={searchTerm}
+        onChange={(e) => setSearchTerm(e.target.value)}
+        style={{ maxWidth: 400 }}
+      />
 
-      {/* Success Message */}
-      {successMessage && (
-        <div className="bg-green-50 border border-green-200 rounded-md p-4">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div className="ml-3">
-              <p className="text-sm font-medium text-green-800">{successMessage}</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Contacts List */}
-      <div className="card">
-        <div className="card-header">
-          <h3 className="text-lg font-semibold text-gray-900">
-            Contacts ({filteredContacts.length})
-          </h3>
-        </div>
-        <div className="card-body">
-          {filteredContacts.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-gray-500 mb-4">
-                {contacts.length === 0 ? 'No contacts yet. Add your first contact!' : 'No contacts match your search.'}
-              </p>
-              {contacts.length === 0 && (
-                <button
-                  onClick={handleNewContact}
-                  className="btn btn-primary"
-                >
-                  Add Contact
-                </button>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {filteredContacts.map((contact) => (
-                <div key={contact.id} className="border rounded-lg p-4 hover:bg-gray-50">
-                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
-                    <div className="flex-1">
-                      <h4 className="text-lg font-semibold text-gray-900 mb-2">
-                        {contact.name}
-                      </h4>
-                      <div className="space-y-1 text-sm text-gray-600">
-                        {contact.email && (
-                          <p>📧 {contact.email}</p>
-                        )}
-                        {contact.phone && (
-                          <p>📞 {contact.phone}</p>
-                        )}
-                        {contact.address && (
-                          <p>📍 {contact.address}</p>
-                        )}
-                      </div>
-                      <p className="text-xs text-gray-400 mt-2">
-                        Last updated: {new Date(contact.updatedAt).toLocaleDateString()}
-                      </p>
-                    </div>
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => handleEdit(contact)}
-                        className="btn btn-secondary text-xs"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDelete(contact.id)}
-                        className="btn bg-red-600 text-white hover:bg-red-700 text-xs"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </div>
+      {/* Contacts Table */}
+      <Card title={`Contacts (${filteredContacts.length})`}>
+        <Table
+          columns={columns}
+          dataSource={filteredContacts}
+          rowKey="id"
+          pagination={{
+            pageSize: 10,
+            showSizeChanger: true,
+            showQuickJumper: true,
+            showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} contacts`,
+          }}
+          locale={{
+            emptyText: contacts.length === 0
+              ? <div style={{ textAlign: 'center', padding: '32px' }}>
+                  <Typography.Text>No contacts yet. Add your first contact!</Typography.Text>
+                  <br />
+                  <br />
+                  <Button type="primary" onClick={handleNewContact}>Add Contact</Button>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+              : 'No contacts match your search.',
+          }}
+        />
+      </Card>
 
       {/* Contact Form Modal */}
-      {isFormOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-lg font-semibold text-gray-900">
-                {editingContact ? 'Edit Contact' : 'Add New Contact'}
-              </h3>
-              <button
-                onClick={() => setIsFormOpen(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                ✕
-              </button>
-            </div>
+      <Modal
+        title={editingContact ? 'Edit Contact' : 'Add New Contact'}
+        open={isFormOpen}
+        onCancel={() => setIsFormOpen(false)}
+        footer={null}
+      >
+        <Form
+          form={form}
+          onFinish={handleSubmit}
+          layout="vertical"
+          initialValues={{
+            firstName: '',
+            lastName: '',
+            email: '',
+            phone: '',
+            street1: '',
+            street2: '',
+            city: '',
+            state: '',
+            zipCode: '',
+            country: '',
+          }}
+        >
+          <Form.Item name="firstName" label="First Name" rules={[{ required: true, message: 'Please enter first name' }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="lastName" label="Last Name" rules={[{ required: true, message: 'Please enter last name' }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="email" label="Email" rules={[{ type: 'email', message: 'Please enter a valid email' }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="phone" label="Phone">
+            <Input />
+          </Form.Item>
 
-            {formError && (
-              <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-4">
-                <div className="flex">
-                  <div className="flex-shrink-0">
-                    <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  <div className="ml-3">
-                    <p className="text-sm font-medium text-red-800">{formError}</p>
-                  </div>
-                </div>
-              </div>
-            )}
+          <Divider>Address</Divider>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="form-group">
-                <label htmlFor="name" className="form-label">Name *</label>
-                <input
-                  id="name"
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                  className="form-input"
-                  required
-                />
-              </div>
+          <Form.Item name="street1" label="Street Address" rules={[{ required: true, message: 'Please enter street address' }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="street2" label="Street Address 2">
+            <Input />
+          </Form.Item>
+          <Form.Item name="city" label="City" rules={[{ required: true, message: 'Please enter city' }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="state" label="State" rules={[{ required: true, message: 'Please enter state' }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="zipCode" label="ZIP Code" rules={[{ required: true, message: 'Please enter ZIP code' }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="country" label="Country" rules={[{ required: true, message: 'Please enter country' }]}>
+            <Input defaultValue="USA" />
+          </Form.Item>
 
-              <div className="form-group">
-                <label htmlFor="email" className="form-label">Email</label>
-                <input
-                  id="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                  className="form-input"
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="phone" className="form-label">Phone</label>
-                <input
-                  id="phone"
-                  type="tel"
-                  value={formData.phone}
-                  onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-                  className="form-input"
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="address" className="form-label">Address</label>
-                <textarea
-                  id="address"
-                  value={formData.address}
-                  onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
-                  className="form-input"
-                  rows={3}
-                />
-              </div>
-
-              <div className="flex justify-end space-x-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setIsFormOpen(false)}
-                  className="btn btn-secondary"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="btn btn-primary"
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting ? 'Saving...' : (editingContact ? 'Update Contact' : 'Add Contact')}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+          <Form.Item>
+            <Space>
+              <Button type="primary" htmlType="submit" loading={isSubmitting}>
+                {editingContact ? 'Update Contact' : 'Add Contact'}
+              </Button>
+              <Button onClick={() => setIsFormOpen(false)}>Cancel</Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
 
       {/* Confirmation Modal */}
       <ConfirmationModal
@@ -410,6 +386,6 @@ export const AddressBookPage: React.FC = () => {
         onConfirm={confirmDelete}
         onCancel={cancelDelete}
       />
-    </div>
+    </Space>
   );
 };
