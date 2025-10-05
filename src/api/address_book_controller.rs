@@ -112,6 +112,7 @@ mod tests {
                 let login_dto = LoginDTO {
                     username_or_email: "admin".to_string(),
                     password: "123456".to_string(),
+                    tenant_id: "tenant1".to_string(),
                 };
                 match account_service::login(login_dto, pool) {
                     Ok(token_res) => Ok(token_res.token),

@@ -5,7 +5,6 @@ use crate::{
     schema::tenants::{self, dsl::*},
 };
 use chrono::NaiveDateTime;
-use std::io::{Error as IoError, ErrorKind};
 
 #[derive(Identifiable, Queryable, Serialize, Deserialize)]
 #[diesel(table_name = tenants)]

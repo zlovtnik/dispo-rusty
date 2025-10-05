@@ -12,14 +12,14 @@ impl r2d2::ManageConnection for RedisManager {
     type Error = redis::RedisError;
 
     fn connect(&self) -> Result<Self::Connection, Self::Error> {
-        self.client.get_connection().map_err(|e| e)
+        self.client.get_connection()
     }
 
     fn is_valid(&self, conn: &mut Self::Connection) -> Result<(), Self::Error> {
-        redis::cmd("PING").query(conn).map_err(|e| e)
+        redis::cmd("PING").query(conn)
     }
 
-    fn has_broken(&self, conn: &mut Self::Connection) -> bool {
+    fn has_broken(&self, _conn: &mut Self::Connection) -> bool {
         false
     }
 }

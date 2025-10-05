@@ -20,11 +20,11 @@ pub fn init_db_pool(url: &str) -> Pool {
 
     info!("Migrating and configuring database...");
     let manager = ConnectionManager::<Connection>::new(url);
-    let pool = r2d2::Pool::builder()
-        .build(manager)
-        .expect("Failed to create pool.");
     
-    pool
+    
+    r2d2::Pool::builder()
+        .build(manager)
+        .expect("Failed to create pool.")
 }
 
 pub fn run_migration(conn: &mut PgConnection) {

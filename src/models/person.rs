@@ -68,24 +68,14 @@ impl Person {
         }
         query
             .paginate(
-                filter
-                    .page_num
-                    .unwrap_or(crate::constants::DEFAULT_PAGE_NUM),
+                filter.cursor.unwrap_or(0),
             )
             .per_page(
                 filter
                     .page_size
                     .unwrap_or(crate::constants::DEFAULT_PER_PAGE),
             )
-            .sort(
-                filter
-                    .sort_by
-                    .unwrap_or(crate::constants::EMPTY_STR.to_string()),
-                filter
-                    .sort_direction
-                    .unwrap_or(crate::constants::EMPTY_STR.to_string()),
-            )
-            .load_and_count_items::<Person>(conn)
+            .load_items::<Person>(conn)
     }
 
     pub fn insert(new_person: PersonDTO, conn: &mut Connection) -> QueryResult<usize> {

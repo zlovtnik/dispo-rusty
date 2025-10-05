@@ -14,18 +14,15 @@ use crate::constants::MESSAGE_OK;
 use super::response::Page;
 
 pub trait SortingAndPaging: Sized {
-    fn paginate(self, page: i64) -> SortedAndPaginated<Self>;
+    fn paginate(self, cursor: i32) -> SortedAndPaginated<Self>;
 }
 
 impl<T> SortingAndPaging for T {
-    fn paginate(self, page: i64) -> SortedAndPaginated<Self> {
+    fn paginate(self, cursor: i32) -> SortedAndPaginated<Self> {
         SortedAndPaginated {
             query: self,
-            sort_by: crate::constants::EMPTY_STR.to_string(),
-            sort_direction: crate::constants::EMPTY_STR.to_string(),
+            cursor: i64::from(cursor),
             per_page: crate::constants::DEFAULT_PER_PAGE,
-            page,
-            offset: (page - 1) * crate::constants::DEFAULT_PER_PAGE,
         }
     }
 }
@@ -33,41 +30,40 @@ impl<T> SortingAndPaging for T {
 #[derive(Debug, Clone, QueryId)]
 pub struct SortedAndPaginated<T> {
     query: T,
-    sort_by: String,
-    sort_direction: String,
-    page: i64,
+    cursor: i64,
     per_page: i64,
-    offset: i64,
 }
 
 impl<T> SortedAndPaginated<T> {
     pub fn per_page(self, per_page: i64) -> Self {
-        SortedAndPaginated { per_page, offset: (self.page - 1) * per_page, ..self }
-    }
-
-    pub fn sort(self, sort_by: String, sort_direction: String) -> Self {
         SortedAndPaginated {
-            sort_by,
-            sort_direction,
+            per_page,
             ..self
         }
     }
 
-    pub fn load_and_count_items<'a, U>(self, conn: &mut PgConnection) -> QueryResult<Page<U>>
+    pub fn load_items<'a, U>(self, conn: &mut PgConnection) -> QueryResult<Page<U>>
     where
-        Self: LoadQuery<'a, PgConnection, (U, i64)>,
+        Self: LoadQuery<'a, PgConnection, U>,
     {
-        let page = self.page;
+        let cursor = self.cursor;
         let per_page = self.per_page;
-        let results = self.load::<(U, i64)>(conn)?;
-        let total = results.get(0).map(|x| x.1).unwrap_or(0);
-        let records = results.into_iter().map(|x| x.0).collect();
-        Ok(Page::new(MESSAGE_OK, records, page, per_page, total))
+        let records = self.load::<U>(conn)?;
+        let current_cursor = cursor as i32;
+        let next_cursor = Some(current_cursor + per_page as i32);
+        Ok(Page::new(
+            MESSAGE_OK,
+            records,
+            current_cursor,
+            per_page,
+            0,
+            next_cursor,
+        ))
     }
 }
 
 impl<T: Query> Query for SortedAndPaginated<T> {
-    type SqlType = (T::SqlType, BigInt);
+    type SqlType = T::SqlType;
 }
 
 impl<T> RunQueryDsl<PgConnection> for SortedAndPaginated<T> {}
@@ -77,12 +73,12 @@ where
     T: QueryFragment<Pg>,
 {
     fn walk_ast<'b>(&'b self, mut out: AstPass<'_, 'b, Pg>) -> QueryResult<()> {
-        out.push_sql("SELECT *, COUNT(*) OVER () FROM (");
+        out.push_sql("SELECT * FROM (");
         self.query.walk_ast(out.reborrow())?;
-        out.push_sql(") t LIMIT ");
+        out.push_sql(") t WHERE t.id > ");
+        out.push_bind_param::<BigInt, _>(&self.cursor)?;
+        out.push_sql(" ORDER BY t.id LIMIT ");
         out.push_bind_param::<BigInt, _>(&self.per_page)?;
-        out.push_sql(" OFFSET ");
-        out.push_bind_param::<BigInt, _>(&self.offset)?;
         Ok(())
     }
 }

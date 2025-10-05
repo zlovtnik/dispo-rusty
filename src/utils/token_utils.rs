@@ -1,4 +1,4 @@
-use actix_web::{web, http::header::HeaderValue};
+use actix_web::http::header::HeaderValue;
 use jsonwebtoken::{DecodingKey, TokenData, Validation};
 
 use crate::{
@@ -33,5 +33,5 @@ pub fn is_auth_header_valid(authen_header: &HeaderValue) -> bool {
         return authen_str.starts_with("bearer") || authen_str.starts_with("Bearer");
     }
 
-    return false;
+    false
 }

@@ -7,7 +7,7 @@ use crate::config::cache::Pool as RedisPool;
 
 use diesel::prelude::*;
 use redis;
-use log::{debug, error, info, warn};
+use log::{debug, error, info};
 use chrono::{Utc};
 use actix_web::web::Bytes;
 use std::io::Error as IoError;
@@ -156,7 +156,7 @@ async fn logs() -> HttpResponse {
 
         if let Err(e) = file.seek(SeekFrom::End(0)).await {
             error!("Failed to seek to end of log file: {}", e);
-            let _ = tx.send(Err(IoError::new(std::io::ErrorKind::Other, e.to_string()))).await;
+            let _ = tx.send(Err(IoError::other(e.to_string()))).await;
             return;
         }
 
@@ -260,16 +260,13 @@ mod tests {
     use crate::App;
     use std::env;
     use tempfile::NamedTempFile;
-    use tokio::io::AsyncWriteExt;
     use tokio::time::{timeout, Duration};
-    use tokio_stream::StreamExt;
-    use actix_web::web::Bytes;
 
     #[actix_web::test]
     async fn test_health_ok() {
         let docker = clients::Cli::default();
         let postgres = docker.run(Postgres::default());
-        let redis = docker.run(Redis::default());
+        let redis = docker.run(Redis);
 
         let pool = config::db::init_db_pool(
             format!(
@@ -313,6 +310,8 @@ mod tests {
 
     #[actix_web::test]
     async fn test_logs_ok() {
+        use actix_web::body::to_bytes;
+        
         // Create a temporary log file
         let temp_file = NamedTempFile::new().unwrap();
         let log_path = temp_file.path().to_str().unwrap().to_string();
@@ -325,7 +324,7 @@ mod tests {
         // initialize testcontainers for Postgres and Redis
         let docker = clients::Cli::default();
         let postgres = docker.run(Postgres::default());
-        let redis = docker.run(Redis::default());
+        let redis = docker.run(Redis);
 
         // set up the database pool and run migrations
         let pool = config::db::init_db_pool(
@@ -370,15 +369,10 @@ mod tests {
 
         // Consume the body to verify SSE frames or keep-alive messages
         let sse_frame_received = timeout(Duration::from_secs(35), async {
-            let mut body = resp.into_body();
-            let pinned_body = std::pin::pin!(&mut body);
-            while let Some(chunk_result) = pinned_body.next().await {
-                let chunk = chunk_result.unwrap();
-                if String::from_utf8_lossy(&chunk).starts_with("data:") {
-                    return Ok(true);
-                }
-            }
-            Ok(false)
+            let body = resp.into_body();
+            let bytes = to_bytes(body).await.unwrap();
+            let body_str = String::from_utf8_lossy(&bytes);
+            Ok::<bool, ()>(body_str.starts_with("data:"))
         }).await.unwrap_or(Ok(false)).unwrap();
 
         assert!(sse_frame_received, "No SSE frame received within timeout");
@@ -393,7 +387,7 @@ mod tests {
         // initialize testcontainers for Postgres and Redis
         let docker = clients::Cli::default();
         let postgres = docker.run(Postgres::default());
-        let redis = docker.run(Redis::default());
+        let redis = docker.run(Redis);
 
         // set up the database pool and run migrations
         let pool = config::db::init_db_pool(
@@ -445,7 +439,7 @@ mod tests {
         // initialize testcontainers for Postgres and Redis
         let docker = clients::Cli::default();
         let postgres = docker.run(Postgres::default());
-        let redis = docker.run(Redis::default());
+        let redis = docker.run(Redis);
 
         // set up the database pool and run migrations
         let pool = config::db::init_db_pool(
