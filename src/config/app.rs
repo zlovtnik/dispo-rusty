@@ -28,6 +28,9 @@ pub fn config_services(cfg: &mut web::ServiceConfig) {
         info!("  - PUT /api/address-book/{{id}} -> address_book_controller::update (update contact)");
         info!("  - DELETE /api/address-book/{{id}} -> address_book_controller::delete (delete contact)");
         info!("  - GET /api/address-book/filter -> address_book_controller::filter (filter contacts)");
+        info!("  - GET /api/admin/tenant/stats -> tenant_controller::get_tenant_stats (tenant statistics)");
+        info!("  - GET /api/admin/tenant/health -> tenant_controller::get_tenant_health (tenant health status)");
+        info!("  - GET /api/admin/tenant/status -> tenant_controller::get_tenant_status (tenant connection status)");
         let end_timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
         info!("Route configuration completed successfully at {}", end_timestamp);
     });
@@ -58,6 +61,12 @@ fn configure_api_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/address-book")
             .configure(configure_address_book_routes),
+    );
+
+    // Admin scope routes
+    cfg.service(
+        web::scope("/admin")
+            .configure(configure_admin_routes),
     );
 }
 
@@ -91,5 +100,24 @@ fn configure_address_book_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::resource("/filter")
             .route(web::get().to(address_book_controller::filter)),
+    );
+}
+
+fn configure_admin_routes(cfg: &mut web::ServiceConfig) {
+    cfg.service(
+        web::scope("/tenant")
+            .configure(configure_tenant_admin_routes),
+    );
+}
+
+fn configure_tenant_admin_routes(cfg: &mut web::ServiceConfig) {
+    cfg.service(
+        web::resource("/stats").route(web::get().to(tenant_controller::get_tenant_stats)),
+    );
+    cfg.service(
+        web::resource("/health").route(web::get().to(tenant_controller::get_tenant_health)),
+    );
+    cfg.service(
+        web::resource("/status").route(web::get().to(tenant_controller::get_tenant_status)),
     );
 }
