@@ -21,6 +21,7 @@ pub fn config_services(cfg: &mut web::ServiceConfig) {
         info!("  - POST /api/auth/signup -> account_controller::signup");
         info!("  - POST /api/auth/login -> account_controller::login");
         info!("  - POST /api/auth/logout -> account_controller::logout");
+        info!("  - POST /api/auth/refresh -> account_controller::refresh");
         info!("  - GET /api/auth/me -> account_controller::me");
         info!("  - GET /api/address-book -> address_book_controller::find_all (list all contacts)");
         info!("  - POST /api/address-book -> address_book_controller::insert (create new contact)");
@@ -28,6 +29,9 @@ pub fn config_services(cfg: &mut web::ServiceConfig) {
         info!("  - PUT /api/address-book/{{id}} -> address_book_controller::update (update contact)");
         info!("  - DELETE /api/address-book/{{id}} -> address_book_controller::delete (delete contact)");
         info!("  - GET /api/address-book/filter -> address_book_controller::filter (filter contacts)");
+        info!("  - GET /api/admin/tenant/stats -> tenant_controller::get_system_stats (system statistics)");
+        info!("  - GET /api/admin/tenant/health -> tenant_controller::get_tenant_health (tenant health status)");
+        info!("  - GET /api/admin/tenant/status -> tenant_controller::get_tenant_status (tenant connection status)");
         let end_timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
         info!("Route configuration completed successfully at {}", end_timestamp);
     });
@@ -59,6 +63,12 @@ fn configure_api_routes(cfg: &mut web::ServiceConfig) {
         web::scope("/address-book")
             .configure(configure_address_book_routes),
     );
+
+    // Admin scope routes
+    cfg.service(
+        web::scope("/admin")
+            .configure(configure_admin_routes),
+    );
 }
 
 fn configure_auth_routes(cfg: &mut web::ServiceConfig) {
@@ -70,6 +80,9 @@ fn configure_auth_routes(cfg: &mut web::ServiceConfig) {
     );
     cfg.service(
         web::resource("/logout").route(web::post().to(account_controller::logout)),
+    );
+    cfg.service(
+        web::resource("/refresh").route(web::post().to(account_controller::refresh)),
     );
     cfg.service(
         web::resource("/me").route(web::get().to(account_controller::me)),
@@ -91,5 +104,24 @@ fn configure_address_book_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::resource("/filter")
             .route(web::get().to(address_book_controller::filter)),
+    );
+}
+
+fn configure_admin_routes(cfg: &mut web::ServiceConfig) {
+    cfg.service(
+        web::scope("/tenant")
+            .configure(configure_tenant_admin_routes),
+    );
+}
+
+fn configure_tenant_admin_routes(cfg: &mut web::ServiceConfig) {
+    cfg.service(
+        web::resource("/stats").route(web::get().to(tenant_controller::get_system_stats)),
+    );
+    cfg.service(
+        web::resource("/health").route(web::get().to(tenant_controller::get_tenant_health)),
+    );
+    cfg.service(
+        web::resource("/status").route(web::get().to(tenant_controller::get_tenant_status)),
     );
 }

@@ -1,19 +1,36 @@
 {
-  "name": "frontend-astro",
-  "type": "module",
-  "version": "0.0.1",
+  "name": "actix-web-rest-api-frontend",
+  "version": "1.0.0",
+  "description": "TypeScript/Bun/React frontend for Actix Web REST API with JWT authentication and multi-tenant support",
   "scripts": {
-    "dev": "astro dev",
-    "build": "astro build",
-    "preview": "astro preview",
-    "astro": "astro"
+    "dev": "vite",
+    "build": "bun build src/main.tsx --outdir dist --minify",
+    "preview": "bun run dist/main.js",
+    "test": "bun test --coverage",
+    "test:watch": "bun test --watch",
+    "test:ui": "bun test --dom"
+  },
+  "keywords": [
+    "typescript",
+    "bun",
+    "react",
+    "frontend",
+    "jwt",
+    "multi-tenant"
+  ],
+  "author": "Actix Web REST API Team",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/react": "^18.3.1",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.0.0",
+    "typescript": "^5.9.0",
+    "vite": "^5.0.0"
   },
   "dependencies": {
-    "astro": "^5.14.1"
-  },
-  "devDependencies": {
-    "lightningcss": "^1.30.2",
-    "typescript": "^5.9.0",
-    "vite-plugin-javascript-obfuscator": "^3.1.0"
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.0.0",
+    "react-hook-form": "^7.0.0"
   }
 }

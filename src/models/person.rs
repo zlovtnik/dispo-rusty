@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     config::db::Connection,
+    constants::MESSAGE_OK,
     models::pagination::SortingAndPaging,
     schema::people::{self, dsl::*},
 };
@@ -90,20 +91,25 @@ impl Person {
         if let Some(i) = filter.phone {
             query = query.filter(phone.like(format!("%{}%", i)));
         }
-        // Note: total_elements is omitted for performance. To include count:
-        // .load_and_count_items(conn) returns (Vec<Person>, i64) which can be used to construct Page
-        // but for large datasets, consider approximate counts or separate count queries
-        query
+        let cursor = filter.cursor.unwrap_or(0);
+        let page_size = filter
+            .page_size
+            .unwrap_or(crate::constants::DEFAULT_PER_PAGE);
+        let records = query
             .paginate(
                 people::id,
-                filter.cursor.unwrap_or(0),
+                cursor,
             )
-            .per_page(
-                filter
-                    .page_size
-                    .unwrap_or(crate::constants::DEFAULT_PER_PAGE),
-            )
-            .load_items::<Person>(conn)
+            .per_page(page_size)
+            .load_items::<Person>(conn)?;
+        Ok(Page::new(
+            MESSAGE_OK,
+            records.data,
+            cursor,
+            page_size,
+            records.total_elements,
+            records.next_cursor,
+        ))
     }
 
     /// Insert a new person record into the `people` table.

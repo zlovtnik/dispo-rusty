@@ -2,8 +2,9 @@ use actix_web::{get, HttpResponse, web};
 use serde::Serialize;
 use tokio::time::{timeout, Duration};
 
-use crate::config::db::Pool as DatabasePool;
+use crate::config::db::{Pool as DatabasePool, TenantPoolManager};
 use crate::config::cache::Pool as RedisPool;
+use crate::models::tenant::Tenant;
 
 use diesel::prelude::*;
 use redis;
@@ -44,6 +45,14 @@ struct HealthResponse {
     status: Status,
     timestamp: String,
     components: HealthStatus,
+    tenants: Option<Vec<TenantHealth>>,
+}
+
+#[derive(Serialize)]
+struct TenantHealth {
+    tenant_id: String,
+    name: String,
+    status: Status,
 }
 
 async fn check_database_health_async(pool: web::Data<DatabasePool>) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
@@ -55,7 +64,7 @@ async fn check_cache_health_async(redis_pool: web::Data<RedisPool>) -> Result<()
 }
 
 #[get("/health")]
-async fn health(pool: web::Data<DatabasePool>, redis_pool: web::Data<RedisPool>) -> HttpResponse {
+async fn health(pool: web::Data<DatabasePool>, redis_pool: web::Data<RedisPool>, manager: Option<web::Data<TenantPoolManager>>, main_conn: web::Data<DatabasePool>) -> HttpResponse {
     info!("Health check requested");
 
     // Check database with timeout
@@ -84,7 +93,44 @@ async fn health(pool: web::Data<DatabasePool>, redis_pool: web::Data<RedisPool>)
         },
     };
 
-    let overall_status = if db_status.is_healthy() && cache_status.is_healthy() {
+    // Check tenant health if tenant manager is available
+    let tenants = if let Some(manager) = manager {
+        match tokio::task::spawn_blocking(move || {
+            let mut main_conn = main_conn.get().map_err(|e| format!("Failed to get db connection: {}", e))?;
+            let tenants = Tenant::list_all(&mut main_conn).unwrap_or_else(|_| Vec::new());
+            let mut tenant_healths = Vec::new();
+
+            for tenant in tenants {
+                let status = match manager.get_tenant_pool(&tenant.id) {
+                    Some(pool) => {
+                        match pool.get() {
+                            Ok(mut conn) => {
+                                match diesel::sql_query("SELECT 1").execute(&mut conn) {
+                                    Ok(_) => Status::Healthy,
+                                    Err(_) => Status::Unhealthy,
+                                }
+                            }
+                            Err(_) => Status::Unhealthy,
+                        }
+                    }
+                    None => Status::Unhealthy,
+                };
+                tenant_healths.push(TenantHealth {
+                    tenant_id: tenant.id,
+                    name: tenant.name,
+                    status,
+                });
+            }
+            Ok::<Vec<TenantHealth>, String>(tenant_healths)
+        }).await {
+            Ok(Ok(healths)) if !healths.is_empty() => Some(healths),
+            _ => None,
+        }
+    } else {
+        None
+    };
+
+    let overall_status = if db_status.is_healthy() && cache_status.is_healthy() && tenants.as_ref().map_or(true, |t| t.iter().all(|th| th.status.is_healthy())) {
         Status::Healthy
     } else {
         Status::Unhealthy
@@ -97,6 +143,7 @@ async fn health(pool: web::Data<DatabasePool>, redis_pool: web::Data<RedisPool>)
             database: db_status,
             cache: cache_status,
         },
+        tenants,
     };
 
     HttpResponse::Ok().json(response)

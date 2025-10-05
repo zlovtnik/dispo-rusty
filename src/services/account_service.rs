@@ -73,6 +73,43 @@ pub fn logout(authen_header: &HeaderValue, pool: &Pool) -> Result<(), ServiceErr
     })
 }
 
+pub fn refresh(authen_header: &HeaderValue, pool: &Pool) -> Result<TokenBodyResponse, ServiceError> {
+    if let Ok(authen_str) = authen_header.to_str() {
+        if token_utils::is_auth_header_valid(authen_header) {
+            let token = authen_str[6..authen_str.len()].trim();
+            if let Ok(token_data) = token_utils::decode_token(token.to_string()) {
+                // Validate the token and generate a new one
+                if User::is_valid_login_session(&token_data.claims, &mut pool.get().unwrap()) {
+                    // Get login info and generate new token
+                    match User::find_login_info_by_token(&token_data.claims, &mut pool.get().unwrap()) {
+                        Ok(login_info) => {
+                            match serde_json::from_value(
+                                json!({ "token": UserToken::generate_token(&login_info), "token_type": "bearer" }),
+                            ) {
+                                Ok(token_res) => return Ok(token_res),
+                                Err(_) => return Err(ServiceError::InternalServerError {
+                                    error_message: constants::MESSAGE_INTERNAL_SERVER_ERROR.to_string(),
+                                }),
+                            }
+                        },
+                        Err(_) => return Err(ServiceError::Unauthorized {
+                            error_message: constants::MESSAGE_TOKEN_MISSING.to_string(),
+                        }),
+                    }
+                } else {
+                    return Err(ServiceError::Unauthorized {
+                        error_message: constants::MESSAGE_TOKEN_MISSING.to_string(),
+                    });
+                }
+            }
+        }
+    }
+
+    Err(ServiceError::Unauthorized {
+        error_message: constants::MESSAGE_TOKEN_MISSING.to_string(),
+    })
+}
+
 pub fn me(authen_header: &HeaderValue, pool: &Pool) -> Result<LoginInfoDTO, ServiceError> {
     if let Ok(authen_str) = authen_header.to_str() {
         if token_utils::is_auth_header_valid(authen_header) {

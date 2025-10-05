@@ -62,6 +62,7 @@ where
 
 impl<T, Col> SortedAndPaginated<T, Col>
 where
+    T: diesel::prelude::QueryDsl,
     Col: diesel::Expression + QueryFragment<Pg> + Copy,
     i32: diesel::serialize::ToSql<Col::SqlType, Pg>,
 {
@@ -94,12 +95,13 @@ where
             next_cursor,
         ))
     }
+
+
 }
 
 impl<T: Query, Col> Query for SortedAndPaginated<T, Col> {
     type SqlType = T::SqlType;
 }
-
 impl<T, Col> RunQueryDsl<PgConnection> for SortedAndPaginated<T, Col> {}
 
 impl<T, Col> QueryFragment<Pg> for SortedAndPaginated<T, Col>

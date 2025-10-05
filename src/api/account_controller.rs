@@ -73,6 +73,25 @@ pub async fn logout(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
     }
 }
 
+pub async fn refresh(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
+    if let Some(authen_header) = req.headers().get(constants::AUTHORIZATION) {
+        if let Some(pool) = req.extensions().get::<Pool>() {
+            match account_service::refresh(authen_header, pool) {
+                Ok(login_info) => Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, login_info))),
+                Err(err) => Err(err),
+            }
+        } else {
+            Err(ServiceError::InternalServerError {
+                error_message: "Pool not found".to_string(),
+            })
+        }
+    } else {
+        Err(ServiceError::BadRequest {
+            error_message: constants::MESSAGE_TOKEN_MISSING.to_string(),
+        })
+    }
+}
+
 // GET api/auth/me
 pub async fn me(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
     if let Some(authen_header) = req.headers().get(constants::AUTHORIZATION) {
