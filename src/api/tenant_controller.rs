@@ -1,11 +1,12 @@
-use actix_web::{get, web, HttpResponse};
+use actix_web::{web, HttpResponse};
 use serde::Serialize;
 use log::info;
 use std::collections::HashMap;
 use diesel::prelude::*;
+use diesel::pg::PgConnection;
 
 use crate::{
-    config::db::{DatabasePool, TenantPoolManager},
+    config::db::{Pool as DatabasePool, TenantPoolManager},
     models::tenant::Tenant,
     models::user::User,
     error::ServiceError,
@@ -38,27 +39,26 @@ struct TenantHealth {
 }
 
 /// Get system-wide tenant status and statistics (admin only)
-#[get("/stats")]
-async fn get_tenant_stats(
+pub async fn get_tenant_stats(
     pool: web::Data<DatabasePool>,
     manager: web::Data<TenantPoolManager>,
 ) -> Result<HttpResponse, ServiceError> {
     info!("Fetching tenant statistics");
 
-    let conn = pool.get().map_err(|e| ServiceError::InternalServerError {
+    let mut conn = pool.get().map_err(|e| ServiceError::InternalServerError {
         error_message: format!("Failed to get db connection: {}", e),
     })?;
 
     // Get all tenants
-    let tenants = Tenant::list_all(&conn).map_err(|e| ServiceError::InternalServerError {
+    let tenants = Tenant::list_all(&mut *conn).map_err(|e| ServiceError::InternalServerError {
         error_message: format!("Failed to fetch tenants: {}", e),
     })?;
 
     // Get total users and logged in count (global, since no tenant_id in users)
-    let total_users = User::count_all(&conn).map_err(|e| ServiceError::InternalServerError {
+    let total_users = User::count_all(&mut *conn).map_err(|e| ServiceError::InternalServerError {
         error_message: format!("Failed to count users: {}", e),
     })?;
-    let logged_in_users = User::count_logged_in(&conn).map_err(|e| ServiceError::InternalServerError {
+    let logged_in_users = User::count_logged_in(&mut *conn).map_err(|e| ServiceError::InternalServerError {
         error_message: format!("Failed to count logged in users: {}", e),
     })?;
 
@@ -102,18 +102,17 @@ async fn get_tenant_stats(
 }
 
 /// Get detailed health status of all tenants (admin only)
-#[get("/health")]
-async fn get_tenant_health(
+pub async fn get_tenant_health(
     pool: web::Data<DatabasePool>,
     manager: web::Data<TenantPoolManager>,
 ) -> Result<HttpResponse, ServiceError> {
     info!("Fetching tenant health status");
 
-    let conn = pool.get().map_err(|e| ServiceError::InternalServerError {
+    let mut conn = pool.get().map_err(|e| ServiceError::InternalServerError {
         error_message: format!("Failed to get db connection: {}", e),
     })?;
 
-    let tenants = Tenant::list_all(&conn).map_err(|e| ServiceError::InternalServerError {
+    let tenants = Tenant::list_all(&mut *conn).map_err(|e| ServiceError::InternalServerError {
         error_message: format!("Failed to fetch tenants: {}", e),
     })?;
     let mut tenant_health_status = Vec::new();
@@ -147,18 +146,17 @@ async fn get_tenant_health(
 }
 
 /// Get overview of tenant connections (active/inactive) (admin only)
-#[get("/status")]
-async fn get_tenant_status(
+pub async fn get_tenant_status(
     pool: web::Data<DatabasePool>,
     manager: web::Data<TenantPoolManager>,
 ) -> Result<HttpResponse, ServiceError> {
     info!("Fetching tenant connection status");
 
-    let conn = pool.get().map_err(|e| ServiceError::InternalServerError {
+    let mut conn = pool.get().map_err(|e| ServiceError::InternalServerError {
         error_message: format!("Failed to get db connection: {}", e),
     })?;
 
-    let tenants = Tenant::list_all(&conn).map_err(|e| ServiceError::InternalServerError {
+    let tenants = Tenant::list_all(&mut *conn).map_err(|e| ServiceError::InternalServerError {
         error_message: format!("Failed to fetch tenants: {}", e),
     })?;
     let mut status_map = HashMap::new();
@@ -176,12 +174,12 @@ async fn get_tenant_status(
 
 // Implement User model extensions needed for stats
 impl User {
-    pub fn count_all(conn: &mut Connection) -> QueryResult<i64> {
+    pub fn count_all(conn: &mut PgConnection) -> QueryResult<i64> {
         use crate::schema::users::dsl::*;
         users.count().get_result(conn)
     }
 
-    pub fn count_logged_in(conn: &mut Connection) -> QueryResult<i64> {
+    pub fn count_logged_in(conn: &mut PgConnection) -> QueryResult<i64> {
         use crate::schema::users::dsl::*;
         users.filter(login_session.ne("")).count().get_result(conn)
     }
