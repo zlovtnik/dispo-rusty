@@ -2,6 +2,12 @@
 
 const API_BASE_URL = window.PUBLIC_API_BASE_URL || window.location.origin + '/api';
 
+/**
+ * Decode a JWT's payload and validate its `exp` claim if present.
+ *
+ * @param {string} token - A JWT string composed of three base64url-encoded segments separated by dots.
+ * @returns {Object|null} The parsed payload object if decoding succeeds and the token is not expired; `null` if the token is malformed or the `exp` claim indicates the token has expired.
+ */
 function decodeJwtPayload(token) {
   try {
     const payload = token.split('.')[1];
@@ -21,7 +27,16 @@ function decodeJwtPayload(token) {
     return null;
   }
 }
-// Note: Signature/issuer/audience checks must occur on the backend
+/**
+ * Perform an HTTP request against the configured API base URL, attaching a valid auth token when available and enforcing a request timeout.
+ *
+ * @param {string} endpoint - Path appended to the API base URL (should begin with `/`).
+ * @param {object} [options] - Fetch options merged with defaults. Recognized fields:
+ *   - {number} [timeout=30000] - Milliseconds before the request is aborted.
+ *   - Any other fetch-init properties (method, headers, body, etc.) may be provided and will be merged.
+ * @returns {*} The parsed response body: a JavaScript value for JSON responses or a string for non-JSON responses.
+ * @throws {Error} If the request times out, the response is a non-OK HTTP status (error message is sanitized), or the fetch fails.
+ */
 
 async function makeRequest(endpoint, options = {}) {
   const url = `${API_BASE_URL}${endpoint}`;
@@ -136,6 +151,12 @@ async function testBackendConnectivity() {
   }
 }
 
+/**
+ * Authenticate with the backend using the provided credentials and return the auth token and user info.
+ * @param {Object} loginData - Login credentials (e.g., `{ username, password }`).
+ * @returns {{ token: string, user: { username: string, email: undefined }}} An object containing the JWT `token` and a `user` object with `username`; `email` is `undefined` because the backend does not return it.
+ * @throws {Error} If the response or response.data is missing, if the token is missing or not a non-empty string, if the token payload cannot be decoded or is expired, or if the decoded token does not contain user information.
+ */
 async function apiLogin(loginData) {
   const response = await makeRequest('/auth/login', {
     method: 'POST',
@@ -173,6 +194,10 @@ async function apiLogin(loginData) {
   };
 }
 
+/**
+ * Create a new user account using the provided signup data.
+ * @param {Object} signupData - User signup fields (e.g., `username`, `password`, and optional `email`).
+ */
 async function signup(signupData) {
   await makeRequest('/auth/signup', {
     method: 'POST',
@@ -180,12 +205,19 @@ async function signup(signupData) {
   });
 }
 
+/**
+ * Log out the current user by calling the backend logout endpoint.
+ */
 async function logout() {
   await makeRequest('/auth/logout', {
     method: 'POST'
   });
 }
 
+/**
+ * Create a new contact in the backend address book.
+ * @param {Object} contactData - Contact fields to send to the server (for example: name, age, gender, address, phone, email).
+ */
 async function addContact(contactData) {
   await makeRequest('/address-book', {
     method: 'POST',
@@ -391,10 +423,22 @@ function getFormData(formElement) {
   return result;
 }
 
+/**
+ * Reset the given form's fields to their initial values.
+ * @param {HTMLFormElement} formElement - The form element to reset.
+ */
 function resetForm(formElement) {
   formElement.reset();
 }
 
+/**
+ * Check whether a password meets the configured strength requirements.
+ *
+ * The rules are: at least 8 characters long, contains an uppercase letter,
+ * contains a lowercase letter, contains a digit, and contains a special character.
+ * @param {string} password - The password to validate.
+ * @returns {boolean} `true` if the password satisfies all strength rules, `false` otherwise.
+ */
 function isStrongPassword(password) {
   // Configurable rules: min 8 chars, uppercase, lowercase, digit, special char
   if (password.length < 8) return false;
@@ -405,6 +449,10 @@ function isStrongPassword(password) {
   return true;
 }
 
+/**
+ * Show a modal confirmation dialog asking the user to confirm deleting a contact.
+ * @returns {Promise<boolean>} `true` if the user confirms deletion, `false` otherwise.
+ */
 async function confirmDelete() {
   return new Promise((resolve) => {
     const dialog = document.createElement('dialog');
@@ -470,7 +518,14 @@ async function confirmDelete() {
   });
 }
 
-// Helper function to test backend connectivity with retry logic
+/**
+ * Attempt to verify backend reachability, retrying up to three times with increasing delays.
+ *
+ * Retries testBackendConnectivity() up to three times (500ms, 1000ms, 2000ms) and returns on the first success.
+ * If all attempts fail, the function throws an error.
+ *
+ * @throws {Error} If all retry attempts fail.
+ */
 async function testBackendConnectivityWithRetries() {
   const maxRetries = 3;
   const delays = [500, 1000, 2000]; // ms
@@ -500,6 +555,13 @@ document.addEventListener('DOMContentLoaded', async function() {
   });
 });
 
+/**
+ * Attach all UI event handlers for navigation, forms, contact loading, and contact deletion.
+ *
+ * Wires navigation buttons to section switches, binds login/signup/add-contact forms to their submit handlers,
+ * connects the load contacts button to the loader, and sets up delegated click handling on the contacts list
+ * to invoke contact deletion when a delete control is activated.
+ */
 function setupEventListeners() {
   // Navigation buttons
   const loginBtn = document.getElementById('loginBtn');
@@ -567,6 +629,15 @@ async function handleLogin(event) {
   }
 }
 
+/**
+ * Handle the signup form submission by validating input, sending signup data, and updating the UI.
+ *
+ * Validates that the password and confirmation match and that the password meets strength requirements,
+ * calls the signup API with username, email, and password, shows success or error alerts, navigates to
+ * the login section on success, and resets the form.
+ *
+ * @param {Event} event - The submit event from the signup form; the function reads form values from event.target.
+ */
 async function handleSignup(event) {
   event.preventDefault();
   const form = event.target;
@@ -601,6 +672,11 @@ async function handleSignup(event) {
   }
 }
 
+/**
+ * Log the user out from the backend and clear local authentication state and UI.
+ *
+ * Attempts to perform a server-side logout, clears stored auth credentials, updates the UI to the unauthenticated state, and clears the contacts list. If the logout request fails, displays an error alert.
+ */
 async function handleLogout() {
   try {
     await logout();
@@ -612,6 +688,11 @@ async function handleLogout() {
   }
 }
 
+/**
+ * Handle the add-contact form submission by validating input, sending the contact to the backend, and updating the UI.
+ *
+ * @param {Event} event - Submit event from the add-contact form; the form element is expected as `event.target`.
+ */
 async function handleAddContact(event) {
   event.preventDefault();
   const form = event.target;
@@ -655,6 +736,15 @@ async function loadContacts() {
   }
 }
 
+/**
+ * Render a list of contact entries into the DOM element with id "contactsList".
+ *
+ * Clears any existing content, shows a placeholder message when the list is empty,
+ * and for each contact renders name, age, gender, address, phone, email, and a delete button.
+ *
+ * @param {Array<Object>} contacts - Array of contact objects to render.
+ *   Each contact should include: `id`, `name`, `age`, `gender`, `address`, `phone`, and `email`.
+ */
 function displayContacts(contacts) {
   const contactsList = document.getElementById('contactsList');
   if (!contactsList) return;

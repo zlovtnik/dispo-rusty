@@ -121,6 +121,32 @@ fn check_cache_health(redis_pool: &RedisPool) -> Result<(), Box<dyn std::error::
     Ok(())
 }
 
+/// Streams server logs over Server-Sent Events (SSE) when log streaming is enabled.
+///
+/// When enabled via the `ENABLE_LOG_STREAM` environment variable and a valid log file
+/// exists at `LOG_FILE` (defaults to `/var/log/app.log`), this handler returns an
+/// `HttpResponse` that streams new log lines as SSE `data:` frames. If streaming is
+/// disabled, the handler responds with `405 MethodNotAllowed`. If the configured log
+/// file does not exist, the handler responds with `404 NotFound`.
+///
+/// # Examples
+///
+/// ```
+/// use actix_web::{App, test};
+/// use std::env;
+/// use std::fs;
+///
+/// # async fn run_example() {
+/// env::set_var("ENABLE_LOG_STREAM", "true");
+/// env::set_var("LOG_FILE", "/tmp/app.log");
+/// let _ = fs::write("/tmp/app.log", ""); // ensure file exists
+///
+/// let app = test::init_service(App::new().service(crate::logs)).await;
+/// let req = test::TestRequest::get().uri("/logs").to_request();
+/// let resp = test::call_service(&app, req).await;
+/// assert!(resp.status().is_success() || resp.status() == actix_web::http::StatusCode::OK);
+/// # }
+/// ```
 #[get("/logs")]
 async fn logs() -> HttpResponse {
     // Check if log streaming is enabled
@@ -262,6 +288,17 @@ mod tests {
     use tempfile::NamedTempFile;
     use tokio::time::{timeout, Duration};
 
+    /// Verifies that the /api/health endpoint returns HTTP 200 when PostgreSQL and Redis are available.
+    ///
+    /// Spawns PostgreSQL and Redis test containers, initializes the database and cache clients, mounts the application,
+    /// and asserts the health endpoint responds with status 200.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// // Run the integration test with:
+    /// // cargo test --test integration_tests -- --nocapture
+    /// ```
     #[actix_web::test]
     async fn test_health_ok() {
         let docker = clients::Cli::default();
@@ -308,6 +345,22 @@ mod tests {
         // You can parse the JSON and check fields
     }
 
+    /// Verifies that the `/api/logs` endpoint streams Server-Sent Events (SSE) when log streaming is enabled.
+    ///
+    /// This integration test enables log streaming via environment variables, creates a temporary log file,
+    /// starts PostgreSQL and Redis test containers, initializes the application, and asserts that:
+    /// - the endpoint responds with HTTP 200,
+    /// - the `Content-Type` header is `text/event-stream`,
+    /// - at least one SSE frame (a body starting with `data:`) is received within 35 seconds.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // The test performs an end-to-end request against the initialized Actix app:
+    /// // 1. Enable log streaming and point LOG_FILE to a temp file.
+    /// // 2. Start required test containers and initialize DB/Redis clients.
+    /// // 3. Call GET /api/logs and assert SSE response and an initial `data:` frame.
+    /// ```
     #[actix_web::test]
     async fn test_logs_ok() {
         use actix_web::body::to_bytes;
