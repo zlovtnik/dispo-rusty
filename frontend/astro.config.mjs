@@ -56,7 +56,7 @@ export default defineConfig({
           assetFileNames: 'asset-[hash].[ext]'
         }
       },
-      sourcemap: false,
+      sourcemap: process.env.NODE_ENV === 'production' ? 'hidden' : true,
       chunkSizeWarningLimit: 2000
     },
     define: {
