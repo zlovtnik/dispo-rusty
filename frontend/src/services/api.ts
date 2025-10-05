@@ -1,3 +1,25 @@
+export interface LoginCredentials {
+  usernameOrEmail: string;
+  password: string;
+  tenantId: string;
+  rememberMe?: boolean;
+}
+
+export interface AuthResponse {
+  token?: string;
+  // Add other fields as needed, e.g. user, tenant
+}
+
+export interface CreateTenantDTO {
+  name: string;
+  // Add other required fields
+}
+
+export interface UpdateTenantDTO {
+  name?: string;
+  // Add other optional fields
+}
+
 // API Service for Actix Web REST API integration
 // This will be connected to the existing backend endpoints
 
@@ -15,7 +37,7 @@ export interface ApiError {
 }
 
 // Base API configuration
-const API_BASE_URL = (Bun?.env?.API_URL as string) || 'http://localhost:8080/api';
+const API_BASE_URL = ((import.meta as any).env?.API_URL as string) || 'http://localhost:8080/api';
 
 // HTTP Client class
 class HttpClient {
@@ -108,20 +130,16 @@ const apiClient = new HttpClient();
 
 // API Services
 export const authService = {
-  async login(credentials: {
-    usernameOrEmail: string;
-    password: string;
-    tenantId: string;
-  }) {
-    return apiClient.post('/auth/login', credentials);
+  async login(credentials: LoginCredentials): Promise<AuthResponse> {
+    return apiClient.post<AuthResponse>('/auth/login', credentials);
   },
 
-  async logout() {
-    return apiClient.post('/auth/logout');
+  async logout(): Promise<AuthResponse> {
+    return apiClient.post<AuthResponse>('/auth/logout');
   },
 
-  async refreshToken() {
-    return apiClient.post('/auth/refresh');
+  async refreshToken(): Promise<AuthResponse> {
+    return apiClient.post<AuthResponse>('/auth/refresh');
   },
 };
 
@@ -144,11 +162,11 @@ export const tenantService = {
     return apiClient.get(`/tenants/${id}`);
   },
 
-  async create(data: any) {
+  async create(data: CreateTenantDTO) {
     return apiClient.post('/tenants', data);
   },
 
-  async update(id: string, data: any) {
+  async update(id: string, data: UpdateTenantDTO) {
     return apiClient.put(`/tenants/${id}`, data);
   },
 

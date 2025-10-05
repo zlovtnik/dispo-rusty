@@ -62,7 +62,7 @@ where
 
 impl<T, Col> SortedAndPaginated<T, Col>
 where
-    T: diesel::prelude::QueryDsl + diesel::query_dsl::QueryDsl,
+    T: diesel::prelude::QueryDsl,
     Col: diesel::Expression + QueryFragment<Pg> + Copy,
     i32: diesel::serialize::ToSql<Col::SqlType, Pg>,
 {

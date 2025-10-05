@@ -57,12 +57,8 @@ describe('AuthContext', () => {
     test('should handle invalid JSON gracefully', () => {
       localStorage.setItem('user', 'invalid json');
 
-      try {
-        const stored = localStorage.getItem('user');
-        if (stored) JSON.parse(stored);
-      } catch (error) {
-        expect(error).toBeInstanceOf(SyntaxError);
-      }
+      const stored = localStorage.getItem('user');
+      expect(() => JSON.parse(stored!)).toThrow(SyntaxError);
     });
   });
 

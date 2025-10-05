@@ -74,11 +74,13 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             <div className="text-sm text-gray-500">
               © 2025 Actix Web REST API Frontend. Built with TypeScript, Bun, and React.
             </div>
-            <div className="mt-4 md:mt-0">
-              <span className="text-xs text-gray-400">
-                Tenant: {tenant?.id} | User: {user?.id}
-              </span>
-            </div>
+            {(import.meta as any).env?.DEV && (
+              <div className="mt-4 md:mt-0">
+                <span className="text-xs text-gray-400">
+                  Tenant: {tenant?.id} | User: {user?.id}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </footer>

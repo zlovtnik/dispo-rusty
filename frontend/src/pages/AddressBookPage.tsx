@@ -1,18 +1,9 @@
 import React, { useState } from 'react';
-
-// Type definitions (will move to types file later)
-interface Contact {
-  id: string;
-  name: string;
-  email?: string;
-  phone?: string;
-  address?: string;
-  tenantId: string;
-  createdAt: string;
-  updatedAt: string;
-}
+import { useAuth } from '@/contexts/AuthContext';
+import type { Contact } from '@/types/contact';
 
 export const AddressBookPage: React.FC = () => {
+  const { tenant } = useAuth();
   const [contacts, setContacts] = useState<Contact[]>([
     // Mock data for demonstration
     {
@@ -71,10 +62,14 @@ export const AddressBookPage: React.FC = () => {
       ));
     } else {
       // Create new contact
+      if (!tenant?.id) {
+        alert('Tenant ID is required to create contacts.');
+        return;
+      }
       const newContact: Contact = {
-        id: Date.now().toString(),
+        id: crypto.randomUUID(),
         ...formData,
-        tenantId: 'tenant1', // In real app, this would come from auth context
+        tenantId: tenant.id,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };

@@ -17,8 +17,6 @@ struct TenantStats {
     tenant_id: String,
     name: String,
     status: String,
-    logged_in_users: i64,
-    total_users: i64,
 }
 
 #[derive(Serialize)]
@@ -85,8 +83,6 @@ pub async fn get_tenant_stats(
             tenant_id: tenant.id.clone(),
             name: tenant.name.clone(),
             status: if status { "active".to_string() } else { "inactive".to_string() },
-            logged_in_users,
-            total_users,
         });
     }
 
@@ -181,6 +177,6 @@ impl User {
 
     pub fn count_logged_in(conn: &mut PgConnection) -> QueryResult<i64> {
         use crate::schema::users::dsl::*;
-        users.filter(login_session.ne("")).count().get_result(conn)
+        users.filter(login_session.is_not_null().and(login_session.ne(""))).count().get_result(conn)
     }
 }

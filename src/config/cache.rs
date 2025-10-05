@@ -40,7 +40,7 @@ impl r2d2::ManageConnection for RedisManager {
     /// manager.is_valid(&mut conn).unwrap();
     /// ```
     fn is_valid(&self, conn: &mut Self::Connection) -> Result<(), Self::Error> {
-        redis::cmd("PING").exec(conn).unwrap();
+        redis::cmd("PING").exec(conn)?;
         Ok(())
     }
 
