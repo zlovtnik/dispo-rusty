@@ -4,6 +4,8 @@ export interface Props {
 }
 
 const { title = "Address Book - Frontend Client" } = Astro.props;
+const apiUrl = import.meta.env.PUBLIC_API_BASE_URL;
+
 import '../styles/global.css';
 import '../styles/components.css';
 ---
@@ -20,7 +22,7 @@ import '../styles/components.css';
     <meta http-equiv="X-Content-Type-Options" content="nosniff" />
     <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin" />
     <script>
-      (window as any).PUBLIC_API_BASE_URL = "${import.meta.env.PUBLIC_API_BASE_URL}";
+      (window as any).PUBLIC_API_BASE_URL = {JSON.stringify(apiUrl)};
     </script>
 
   </head>

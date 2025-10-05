@@ -21,7 +21,7 @@ pub struct Page<T> {
     pub data: Vec<T>,
     pub current_cursor: i32,
     pub page_size: i64,
-    pub total_elements: i64,
+    pub total_elements: Option<i64>, // Made optional for performance - counts may be omitted
     pub next_cursor: Option<i32>,
 }
 impl<T> Page<T> {
@@ -45,7 +45,7 @@ impl<T> Page<T> {
         data: Vec<T>,
         current_cursor: i32,
         page_size: i64,
-        total_elements: i64,
+        total_elements: Option<i64>, // Now optional
         next_cursor: Option<i32>,
     ) -> Page<T> {
         Page {

@@ -40,7 +40,8 @@ impl r2d2::ManageConnection for RedisManager {
     /// manager.is_valid(&mut conn).unwrap();
     /// ```
     fn is_valid(&self, conn: &mut Self::Connection) -> Result<(), Self::Error> {
-        redis::cmd("PING").query(conn)
+        redis::cmd("PING").execute(conn);
+        Ok(())
     }
 
     /// Indicates whether a pooled Redis connection should be treated as broken and removed from the pool.

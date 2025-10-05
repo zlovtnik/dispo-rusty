@@ -779,21 +779,24 @@ function displayContacts(contacts) {
     addressItem.appendChild(detailsPara);
 
     const addressPara = document.createElement('p');
-    addressPara.innerHTML = '<strong>Address:</strong> ';
-    const addressText = document.createTextNode(contact.address);
-    addressPara.appendChild(addressText);
+    const addressStrong = document.createElement('strong');
+    addressStrong.textContent = 'Address: ';
+    addressPara.appendChild(addressStrong);
+    addressPara.appendChild(document.createTextNode(contact.address));
     addressItem.appendChild(addressPara);
 
     const phonePara = document.createElement('p');
-    phonePara.innerHTML = '<strong>Phone:</strong> ';
-    const phoneText = document.createTextNode(contact.phone);
-    phonePara.appendChild(phoneText);
+    const phoneStrong = document.createElement('strong');
+    phoneStrong.textContent = 'Phone: ';
+    phonePara.appendChild(phoneStrong);
+    phonePara.appendChild(document.createTextNode(contact.phone));
     addressItem.appendChild(phonePara);
 
     const emailPara = document.createElement('p');
-    emailPara.innerHTML = '<strong>Email:</strong> ';
-    const emailText = document.createTextNode(contact.email);
-    emailPara.appendChild(emailText);
+    const emailStrong = document.createElement('strong');
+    emailStrong.textContent = 'Email: ';
+    emailPara.appendChild(emailStrong);
+    emailPara.appendChild(document.createTextNode(contact.email));
     addressItem.appendChild(emailPara);
 
     const actionsDiv = document.createElement('div');

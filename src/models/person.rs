@@ -7,7 +7,7 @@ use crate::{
     schema::people::{self, dsl::*},
 };
 
-use super::{filters::PersonFilter, response::Page};
+use super::{filters::PersonFilter, response::Page, pagination::HasId};
 
 #[derive(Queryable, Serialize, Deserialize)]
 pub struct Person {
@@ -29,6 +29,12 @@ pub struct PersonDTO {
     pub address: String,
     pub phone: String,
     pub email: String,
+}
+
+impl HasId for Person {
+    fn id(&self) -> i32 {
+        self.id
+    }
 }
 
 impl Person {
@@ -84,8 +90,12 @@ impl Person {
         if let Some(i) = filter.phone {
             query = query.filter(phone.like(format!("%{}%", i)));
         }
+        // Note: total_elements is omitted for performance. To include count:
+        // .load_and_count_items(conn) returns (Vec<Person>, i64) which can be used to construct Page
+        // but for large datasets, consider approximate counts or separate count queries
         query
             .paginate(
+                people::id,
                 filter.cursor.unwrap_or(0),
             )
             .per_page(
