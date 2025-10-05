@@ -36,8 +36,8 @@ struct TenantHealth {
     error_message: Option<String>,
 }
 
-/// Get system-wide tenant status and statistics (admin only)
-pub async fn get_tenant_stats(
+/// Get system-wide statistics and tenant status (admin only)
+pub async fn get_system_stats(
     pool: web::Data<DatabasePool>,
     manager: web::Data<TenantPoolManager>,
 ) -> Result<HttpResponse, ServiceError> {
@@ -162,7 +162,7 @@ pub async fn get_tenant_status(
             Some(pool) => pool.get().is_ok(),
             None => false,
         };
-        status_map.insert(tenant.name, connected);
+        status_map.insert(tenant.id.clone(), connected);
     }
 
     Ok(HttpResponse::Ok().json(status_map))

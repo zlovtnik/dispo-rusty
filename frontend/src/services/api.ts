@@ -60,6 +60,13 @@ export interface CircuitBreakerState {
   lastFailureTime: number;
 }
 
+export interface IHttpClient {
+  get<T>(endpoint: string): Promise<T>;
+  post<T>(endpoint: string, data?: any): Promise<T>;
+  put<T>(endpoint: string, data?: any): Promise<T>;
+  delete<T>(endpoint: string): Promise<T>;
+}
+
 // Base API configuration
 const API_BASE_URL = ((import.meta as any).env?.API_URL as string) || 'http://localhost:8080/api';
 
@@ -77,8 +84,8 @@ const DEFAULT_CONFIG: HttpClientConfig = {
   },
 };
 
-// HTTP Client class with timeout, retry, and circuit breaker support
-class HttpClient {
+//// HTTP Client class with timeout, retry, and circuit breaker support
+class HttpClient implements IHttpClient {
   private baseURL: string;
   private config: HttpClientConfig;
   private circuitBreakerState: CircuitBreakerState;
@@ -181,8 +188,8 @@ class HttpClient {
       throw apiError;
     }
 
-    // Add authentication headers if token exists
-    const token = localStorage.getItem('token');
+    // Add tenant header if available
+    // Note: Authentication now handled via httpOnly cookies automatically sent by browser
     const tenantId = (() => {
       try {
         const storedTenant = localStorage.getItem('tenant');
@@ -196,10 +203,6 @@ class HttpClient {
       'Content-Type': 'application/json',
       ...options.headers,
     });
-
-    if (token) {
-      headers.set('Authorization', `Bearer ${token}`);
-    }
 
     if (tenantId) {
       headers.set('X-Tenant-ID', tenantId);
@@ -215,15 +218,55 @@ class HttpClient {
         });
 
         if (response.ok) {
+          // Validate Content-Type before parsing JSON
+          const contentType = response.headers.get('content-type');
+          if (!contentType || !contentType.includes('application/json')) {
+            // Handle non-JSON response as error
+            let responseText = '';
+            try {
+              responseText = await response.text();
+            } catch {
+              responseText = 'Unable to read response content';
+            }
+
+            this.updateCircuitBreaker(false);
+            const apiError: ApiError = {
+              code: 'INVALID_CONTENT_TYPE',
+              message: `Expected JSON response but received: ${contentType || 'no content-type'}. Response: ${responseText.substring(0, 200)}`,
+              type: 'other',
+              statusCode: response.status,
+            };
+            throw apiError;
+          }
+
           this.updateCircuitBreaker(true);
           return await response.json();
         }
 
         // Handle HTTP errors
-        const errorData: ApiError = await response.clone().json().catch(() => ({
-          code: 'UNKNOWN_ERROR',
-          message: `HTTP ${response.status}: ${response.statusText}`,
-        }));
+        const errorContentType = response.headers.get('content-type');
+        const errorData: ApiError = await (async () => {
+          if (errorContentType && errorContentType.includes('application/json')) {
+            try {
+              return await response.clone().json();
+            } catch {
+              return { code: 'JSON_PARSE_ERROR', message: 'Failed to parse JSON error response' };
+            }
+          } else {
+            // For non-JSON responses (HTML, plain text, etc.), read as text
+            let errorText = '';
+            try {
+              errorText = await response.clone().text();
+            } catch {
+              errorText = 'Unable to read error response content';
+            }
+
+            return {
+              code: 'HTTP_ERROR',
+              message: `HTTP ${response.status}: ${response.statusText}${errorText ? `\nResponse: ${errorText.substring(0, 200)}` : ''}`,
+            };
+          }
+        })();
 
         const apiError: ApiError = {
           ...errorData,
@@ -385,9 +428,9 @@ export { DEFAULT_CONFIG };
 export type { HttpClientConfig as ApiConfig };
 
 // Create custom HTTP client instance with custom configuration
-export function createHttpClient(config?: Partial<HttpClientConfig>): typeof apiClient {
-  return new HttpClient(API_BASE_URL, config) as any;
+export function createHttpClient(config?: Partial<HttpClientConfig>): IHttpClient {
+  return new HttpClient(API_BASE_URL, config);
 }
 
-// Export default client
-export default apiClient;
+// Export default client (implements IHttpClient interface)
+export default apiClient as IHttpClient;

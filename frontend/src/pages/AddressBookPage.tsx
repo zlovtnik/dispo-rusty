@@ -134,7 +134,9 @@ export const AddressBookPage: React.FC = () => {
       });
       setEditingContact(null);
       setIsFormOpen(false);
-      setSuccessMessage(''); // Clear after closing
+
+      // Clear success message after delay to allow user to see it
+      setTimeout(() => setSuccessMessage(''), 3000);
 
     } catch (error) {
       setFormError(error instanceof Error ? error.message : 'An error occurred while saving the contact.');
