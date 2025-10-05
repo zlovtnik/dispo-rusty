@@ -10,6 +10,7 @@ use crate::{
     schema::users::{self, dsl::*},
 };
 #[derive(Identifiable, Queryable, Serialize, Deserialize)]
+#[diesel(table_name = users)]
 pub struct User {
     pub id: i32,
     pub username: String,
@@ -27,16 +28,25 @@ pub struct UserDTO {
 }
 
 #[derive(Serialize, Deserialize)]
+pub struct SignupDTO {
+    pub username: String,
+    pub email: String,
+    pub password: String,
+    pub tenant_id: String,
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct LoginDTO {
     pub username_or_email: String,
     pub password: String,
+    pub tenant_id: String,
 }
 
-#[derive(Insertable, Serialize, Deserialize)]
-#[diesel(table_name = users)]
+#[derive(Serialize, Deserialize)]
 pub struct LoginInfoDTO {
     pub username: String,
     pub login_session: String,
+    pub tenant_id: String,
 }
 
 impl User {
@@ -78,6 +88,7 @@ impl User {
                         return Some(LoginInfoDTO {
                             username: user_to_verify.username,
                             login_session: login_session_str,
+                            tenant_id: login.tenant_id,
                         });
                     }
                 }
@@ -85,6 +96,7 @@ impl User {
                 return Some(LoginInfoDTO {
                     username: user_to_verify.username,
                     login_session: String::new(),
+                    tenant_id: login.tenant_id,
                 });
             }
         }
@@ -116,6 +128,7 @@ impl User {
             return Ok(LoginInfoDTO {
                 username: user.username,
                 login_session: user.login_session,
+                tenant_id: user_token.tenant_id.clone(),
             });
         }
 

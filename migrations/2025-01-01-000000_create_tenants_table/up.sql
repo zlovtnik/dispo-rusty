@@ -1,0 +1,5 @@
+CREATE TABLE tenants (
+  id VARCHAR PRIMARY KEY,
+  name VARCHAR NOT NULL,
+  db_url TEXT NOT NULL
+);

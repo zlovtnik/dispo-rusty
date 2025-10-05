@@ -1,48 +1,71 @@
-use actix_web::{web, HttpRequest, HttpResponse};
+use actix_web::{web, HttpRequest, HttpResponse, HttpMessage};
 
 use crate::{
-    config::db::Pool,
+    config::db::{TenantPoolManager, Pool},
     constants,
     error::ServiceError,
     models::{
         response::ResponseBody,
-        user::{LoginDTO, UserDTO},
+        user::{LoginDTO, SignupDTO, UserDTO},
     },
     services::account_service,
 };
 // POST api/auth/signup
 pub async fn signup(
-    user_dto: web::Json<UserDTO>,
-    pool: web::Data<Pool>,
+    user_dto: web::Json<SignupDTO>,
+    manager: web::Data<TenantPoolManager>,
 ) -> Result<HttpResponse, ServiceError> {
-    match account_service::signup(user_dto.0, &pool) {
-        Ok(message) => Ok(HttpResponse::Ok().json(ResponseBody::new(&message, constants::EMPTY))),
-        Err(err) => Err(err),
+    let user_db = UserDTO {
+        username: user_dto.username.clone(),
+        email: user_dto.email.clone(),
+        password: user_dto.password.clone(),
+    };
+    if let Some(pool) = manager.get_tenant_pool(&user_dto.tenant_id) {
+        match account_service::signup(user_db, &pool) {
+            Ok(message) => Ok(HttpResponse::Ok().json(ResponseBody::new(&message, constants::EMPTY))),
+            Err(err) => Err(err),
+        }
+    } else {
+        Err(ServiceError::BadRequest {
+            error_message: "Tenant not found".to_string(),
+        })
     }
 }
 
 // POST api/auth/login
 pub async fn login(
     login_dto: web::Json<LoginDTO>,
-    pool: web::Data<Pool>,
+    manager: web::Data<TenantPoolManager>,
 ) -> Result<HttpResponse, ServiceError> {
-    match account_service::login(login_dto.0, &pool) {
-        Ok(token_res) => Ok(HttpResponse::Ok().json(ResponseBody::new(
-            constants::MESSAGE_LOGIN_SUCCESS,
-            token_res,
-        ))),
-        Err(err) => Err(err),
+    if let Some(pool) = manager.get_tenant_pool(&login_dto.tenant_id) {
+        match account_service::login(login_dto.0, &pool) {
+            Ok(token_res) => Ok(HttpResponse::Ok().json(ResponseBody::new(
+                constants::MESSAGE_LOGIN_SUCCESS,
+                token_res,
+            ))),
+            Err(err) => Err(err),
+        }
+    } else {
+        Err(ServiceError::BadRequest {
+            error_message: "Tenant not found".to_string(),
+        })
     }
 }
 
 // POST api/auth/logout
-pub async fn logout(req: HttpRequest, pool: web::Data<Pool>) -> Result<HttpResponse, ServiceError> {
+pub async fn logout(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
     if let Some(authen_header) = req.headers().get(constants::AUTHORIZATION) {
-        account_service::logout(authen_header, &pool);
-        Ok(HttpResponse::Ok().json(ResponseBody::new(
-            constants::MESSAGE_LOGOUT_SUCCESS,
-            constants::EMPTY,
-        )))
+        if let Some(pool) = req.extensions().get::<Pool>() {
+            account_service::logout(authen_header, pool);
+            Ok(HttpResponse::Ok().json(ResponseBody::new(
+                constants::MESSAGE_LOGOUT_SUCCESS,
+                constants::EMPTY,
+            )))
+        } else {
+            Err(ServiceError::InternalServerError {
+                error_message: "Pool not found".to_string(),
+            })
+        }
     } else {
         Err(ServiceError::BadRequest {
             error_message: constants::MESSAGE_TOKEN_MISSING.to_string(),
@@ -51,11 +74,17 @@ pub async fn logout(req: HttpRequest, pool: web::Data<Pool>) -> Result<HttpRespo
 }
 
 // GET api/auth/me
-pub async fn me(req: HttpRequest, pool: web::Data<Pool>) -> Result<HttpResponse, ServiceError> {
+pub async fn me(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
     if let Some(authen_header) = req.headers().get(constants::AUTHORIZATION) {
-        match account_service::me(authen_header, &pool) {
-            Ok(login_info) => Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, login_info))),
-            Err(err) => Err(err),
+        if let Some(pool) = req.extensions().get::<Pool>() {
+            match account_service::me(authen_header, pool) {
+                Ok(login_info) => Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, login_info))),
+                Err(err) => Err(err),
+            }
+        } else {
+            Err(ServiceError::InternalServerError {
+                error_message: "Pool not found".to_string(),
+            })
         }
     } else {
         Err(ServiceError::BadRequest {

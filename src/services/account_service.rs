@@ -18,7 +18,7 @@ pub struct TokenBodyResponse {
     pub token_type: String,
 }
 
-pub fn signup(user: UserDTO, pool: &web::Data<Pool>) -> Result<String, ServiceError> {
+pub fn signup(user: UserDTO, pool: &Pool) -> Result<String, ServiceError> {
     match User::signup(user, &mut pool.get().unwrap()) {
         Ok(message) => Ok(message),
         Err(message) => Err(ServiceError::BadRequest {
@@ -27,7 +27,7 @@ pub fn signup(user: UserDTO, pool: &web::Data<Pool>) -> Result<String, ServiceEr
     }
 }
 
-pub fn login(login: LoginDTO, pool: &web::Data<Pool>) -> Result<TokenBodyResponse, ServiceError> {
+pub fn login(login: LoginDTO, pool: &Pool) -> Result<TokenBodyResponse, ServiceError> {
     match User::login(login, &mut pool.get().unwrap()) {
         Some(logged_user) => {
             match serde_json::from_value(
@@ -53,7 +53,7 @@ pub fn login(login: LoginDTO, pool: &web::Data<Pool>) -> Result<TokenBodyRespons
     }
 }
 
-pub fn logout(authen_header: &HeaderValue, pool: &web::Data<Pool>) -> Result<(), ServiceError> {
+pub fn logout(authen_header: &HeaderValue, pool: &Pool) -> Result<(), ServiceError> {
     if let Ok(authen_str) = authen_header.to_str() {
         if token_utils::is_auth_header_valid(authen_header) {
             let token = authen_str[6..authen_str.len()].trim();
@@ -73,7 +73,7 @@ pub fn logout(authen_header: &HeaderValue, pool: &web::Data<Pool>) -> Result<(),
     })
 }
 
-pub fn me(authen_header: &HeaderValue, pool: &web::Data<Pool>) -> Result<LoginInfoDTO, ServiceError> {
+pub fn me(authen_header: &HeaderValue, pool: &Pool) -> Result<LoginInfoDTO, ServiceError> {
     if let Ok(authen_str) = authen_header.to_str() {
         if token_utils::is_auth_header_valid(authen_header) {
             let token = authen_str[6..authen_str.len()].trim();

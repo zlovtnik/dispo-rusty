@@ -8,10 +8,11 @@ use actix_web::http::{
 use actix_web::web::Data;
 use actix_web::Error;
 use actix_web::HttpResponse;
+use actix_web::HttpMessage;
 use futures::future::{ok, LocalBoxFuture, Ready};
 use log::{error, info};
 
-use crate::config::db::Pool;
+use crate::config::db::{TenantPoolManager, Pool};
 use crate::constants;
 use crate::models::response::ResponseBody;
 use crate::utils::token_utils;
@@ -72,21 +73,24 @@ where
         }
 
         if !authenticate_pass {
-            if let Some(pool) = req.app_data::<Data<Pool>>() {
-                info!("Connecting to database...");
+            if let Some(manager) = req.app_data::<Data<TenantPoolManager>>() {
                 if let Some(authen_header) = req.headers().get(constants::AUTHORIZATION) {
                     info!("Parsing authorization header...");
                     if let Ok(authen_str) = authen_header.to_str() {
                         if authen_str.starts_with("bearer") || authen_str.starts_with("Bearer") {
-                            info!("Parsing token...");
                             let token = authen_str[6..authen_str.len()].trim();
                             if let Ok(token_data) = token_utils::decode_token(token.to_string()) {
                                 info!("Decoding token...");
-                                if token_utils::verify_token(&token_data, pool).is_ok() {
-                                    info!("Valid token");
-                                    authenticate_pass = true;
+                                if let Some(tenant_pool) = manager.get_tenant_pool(&token_data.claims.tenant_id) {
+                                    if token_utils::verify_token(&token_data, &tenant_pool).is_ok() {
+                                        info!("Valid token");
+                                        req.extensions_mut().insert(tenant_pool.clone());
+                                        authenticate_pass = true;
+                                    } else {
+                                        error!("Invalid token");
+                                    }
                                 } else {
-                                    error!("Invalid token");
+                                    error!("Tenant not found");
                                 }
                             }
                         }
