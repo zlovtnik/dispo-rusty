@@ -19,6 +19,7 @@ import {
   LogoutOutlined,
   MenuOutlined,
   HeartOutlined,
+  DatabaseOutlined,
 } from '@ant-design/icons';
 
 // MDC: Always use Ant Design components for UI - never use raw HTML elements, custom CSS classes, or non-interactive elements. Use only Antd theme colors and components. Replace any custom styling with Ant Design equivalents.
@@ -32,6 +33,29 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
+
+  const { token } = theme.useToken();
+
+  const layoutStyles = {
+    siderHeader: {
+      height: 64,
+      padding: token.paddingMD,
+      textAlign: 'center' as const,
+      color: token.colorTextLightSolid,
+    },
+    header: {
+      background: token.colorBgContainer,
+      padding: `0 ${token.paddingMD}`,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    content: {
+      margin: `0 ${token.paddingMD}`,
+      padding: token.paddingLG,
+      background: token.colorBgContainer,
+    },
+  };
 
   const handleLogout = async () => {
     try {
@@ -58,6 +82,11 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       icon: <ContactsOutlined />,
       label: 'Address Book',
     },
+    {
+      key: '/tenants',
+      icon: <DatabaseOutlined />,
+      label: 'Tenants',
+    },
   ];
 
   const userMenuItems = [
@@ -82,6 +111,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     const pathMap: Record<string, string> = {
       '/dashboard': 'Dashboard',
       '/address-book': 'Address Book',
+      '/tenants': 'Tenants',
     };
     const items = [{ title: 'Home' }];
     if (pathMap[pathname]) {
@@ -93,7 +123,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   return (
     <AntLayout style={{ minHeight: '100vh' }}>
       <AntLayout.Sider collapsible collapsed={collapsed} onCollapse={(value) => setCollapsed(value)}>
-        <div style={{ height: 64, padding: '16px', textAlign: 'center', color: 'white' }}>
+        <div style={layoutStyles.siderHeader}>
           <HeartOutlined style={{ fontSize: 32 }} />
           <div>{tenant?.name || 'Natural Pharmacy System'}</div>
         </div>
@@ -107,12 +137,12 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       </AntLayout.Sider>
 
       <AntLayout>
-        <AntLayout.Header style={{ background: '#fafaf9', padding: '0 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Button type="text" icon={<MenuOutlined />} onClick={() => setCollapsed(!collapsed)} style={{ fontSize: '16px' }} />
+        <AntLayout.Header style={layoutStyles.header}>
+          <Button type="text" icon={<MenuOutlined />} onClick={() => setCollapsed(!collapsed)} style={{ fontSize: token.fontSizeLG }} />
           <Breadcrumb items={generateBreadcrumbs(location.pathname)} />
           <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
             <div style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-              <Avatar style={{ backgroundColor: theme.useToken().token.colorPrimary }}>
+              <Avatar style={{ backgroundColor: token.colorPrimary }}>
                 {(user?.firstName || user?.username || 'U').charAt(0).toUpperCase()}
               </Avatar>
               <span style={{ marginLeft: 8, display: 'none' }}>{user?.firstName || user?.username}</span>
@@ -120,7 +150,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           </Dropdown>
         </AntLayout.Header>
 
-        <AntLayout.Content style={{ margin: '0 16px', padding: 24, background: '#fafaf9' }}>
+        <AntLayout.Content style={layoutStyles.content}>
           {children}
         </AntLayout.Content>
 

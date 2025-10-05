@@ -7,8 +7,11 @@ use diesel::prelude::*;
 
 use crate::{
     config::db::{Pool as DatabasePool, TenantPoolManager},
-    models::tenant::Tenant,
+    models::tenant::{Tenant, TenantDTO, UpdateTenant},
+    models::filters::TenantFilter,
     models::user::User,
+    constants,
+    models::response::ResponseBody,
     error::ServiceError,
 };
 
@@ -166,4 +169,137 @@ pub async fn get_tenant_status(
     }
 
     Ok(HttpResponse::Ok().json(status_map))
+}
+
+// CRUD operations for tenants
+
+/// Get all tenants
+pub async fn find_all(
+    pool: web::Data<DatabasePool>,
+) -> Result<HttpResponse, ServiceError> {
+    let mut conn = pool.get().map_err(|e| ServiceError::InternalServerError {
+        error_message: format!("Failed to get db connection: {}", e),
+    })?;
+
+    let tenants = Tenant::list_all(&mut conn).map_err(|e| ServiceError::InternalServerError {
+        error_message: format!("Failed to fetch tenants: {}", e),
+    })?;
+
+    Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, tenants)))
+}
+
+/// Get tenants with filters
+pub async fn filter(
+    query: web::Query<std::collections::HashMap<String, String>>,
+    pool: web::Data<DatabasePool>,
+) -> Result<HttpResponse, ServiceError> {
+    let mut conn = pool.get().map_err(|e| ServiceError::InternalServerError {
+        error_message: format!("Failed to get db connection: {}", e),
+    })?;
+
+    // Parse filters from query parameters
+    let mut filters = Vec::new();
+    let mut cursor = None;
+    let mut page_size = None;
+
+    for (key, value) in query.iter() {
+        if key.starts_with("filters[") && key.ends_with("][field]") {
+            // Extract index from filters[index][field]
+            if let Some(index_str) = key.strip_prefix("filters[").and_then(|s| s.strip_suffix("][field]")) {
+                if let Ok(index) = index_str.parse::<usize>() {
+                    // Get corresponding operator and value
+                    let operator_key = format!("filters[{}][operator]", index);
+                    let value_key = format!("filters[{}][value]", index);
+                    if let (Some(operator), Some(field_val)) = (query.get(&operator_key), query.get(&value_key)) {
+                        filters.push(crate::models::filters::FieldFilter {
+                            field: value.clone(),
+                            operator: operator.clone(),
+                            value: field_val.clone(),
+                        });
+                    }
+                }
+            }
+        } else if key == "cursor" {
+            cursor = value.parse().ok();
+        } else if key == "page_size" {
+            page_size = value.parse().ok();
+        }
+    }
+
+    let filter = TenantFilter {
+        filters,
+        cursor,
+        page_size,
+    };
+
+    let tenants = Tenant::filter(filter, &mut conn).map_err(|e| ServiceError::InternalServerError {
+        error_message: format!("Failed to filter tenants: {}", e),
+    })?;
+
+    Ok(HttpResponse::Ok().json(tenants))
+}
+
+/// Get tenant by ID
+pub async fn find_by_id(
+    id: web::Path<String>,
+    pool: web::Data<DatabasePool>,
+) -> Result<HttpResponse, ServiceError> {
+    let mut conn = pool.get().map_err(|e| ServiceError::InternalServerError {
+        error_message: format!("Failed to get db connection: {}", e),
+    })?;
+
+    let tenant = Tenant::find_by_id(&id, &mut conn).map_err(|e| ServiceError::InternalServerError {
+        error_message: format!("Failed to find tenant: {}", e),
+    })?;
+
+    Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, tenant)))
+}
+
+/// Create new tenant
+pub async fn create(
+    tenant_dto: web::Json<TenantDTO>,
+    pool: web::Data<DatabasePool>,
+) -> Result<HttpResponse, ServiceError> {
+    let mut conn = pool.get().map_err(|e| ServiceError::InternalServerError {
+        error_message: format!("Failed to get db connection: {}", e),
+    })?;
+
+    let tenant = Tenant::create(tenant_dto.0, &mut conn).map_err(|e| ServiceError::InternalServerError {
+        error_message: format!("Failed to create tenant: {}", e),
+    })?;
+
+    Ok(HttpResponse::Created().json(ResponseBody::new(constants::MESSAGE_OK, tenant)))
+}
+
+/// Update tenant
+pub async fn update(
+    id: web::Path<String>,
+    update_dto: web::Json<UpdateTenant>,
+    pool: web::Data<DatabasePool>,
+) -> Result<HttpResponse, ServiceError> {
+    let mut conn = pool.get().map_err(|e| ServiceError::InternalServerError {
+        error_message: format!("Failed to get db connection: {}", e),
+    })?;
+
+    let tenant = Tenant::update(&id, update_dto.0, &mut conn).map_err(|e| ServiceError::InternalServerError {
+        error_message: format!("Failed to update tenant: {}", e),
+    })?;
+
+    Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, tenant)))
+}
+
+/// Delete tenant
+pub async fn delete(
+    id: web::Path<String>,
+    pool: web::Data<DatabasePool>,
+) -> Result<HttpResponse, ServiceError> {
+    let mut conn = pool.get().map_err(|e| ServiceError::InternalServerError {
+        error_message: format!("Failed to get db connection: {}", e),
+    })?;
+
+    Tenant::delete(&id, &mut conn).map_err(|e| ServiceError::InternalServerError {
+        error_message: format!("Failed to delete tenant: {}", e),
+    })?;
+
+    Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, constants::EMPTY)))
 }

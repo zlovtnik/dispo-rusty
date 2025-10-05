@@ -227,8 +227,23 @@ export const AddressBookPage: React.FC = () => {
       title: 'Address',
       dataIndex: 'address',
       key: 'address',
-      render: (address: Contact['address']) =>
-        address ? `${address.street1}, ${address.city}, ${address.state} ${address.zipCode}, ${address.country}` : '-',
+      render: (address: Contact['address']) => {
+        if (!address) return '-';
+
+        const parts = [];
+
+        if (address.street1) parts.push(address.street1);
+        if (address.city) parts.push(address.city);
+        if (address.state && address.zipCode) {
+          parts.push(`${address.state} ${address.zipCode}`);
+        } else {
+          if (address.state) parts.push(address.state);
+          if (address.zipCode) parts.push(address.zipCode);
+        }
+        if (address.country) parts.push(address.country);
+
+        return parts.length > 0 ? parts.join(', ') : '-';
+      },
     },
     {
       title: 'Actions',

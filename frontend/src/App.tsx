@@ -6,6 +6,7 @@ import { HomePage } from './pages/HomePage';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { AddressBookPage } from './pages/AddressBookPage';
+import { TenantsPage } from './pages/TenantsPage';
 import { Layout } from './components/Layout';
 
 export const App: React.FC = () => {
@@ -31,6 +32,16 @@ export const App: React.FC = () => {
               <PrivateRoute>
                 <Layout>
                   <AddressBookPage />
+                </Layout>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/tenants"
+            element={
+              <PrivateRoute>
+                <Layout>
+                  <TenantsPage />
                 </Layout>
               </PrivateRoute>
             }

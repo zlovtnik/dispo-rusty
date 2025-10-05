@@ -444,20 +444,50 @@ export const healthService = {
   },
 };
 
+export interface TenantFilter {
+  filters: Array<{
+    field: string;
+    operator: string;
+    value: string;
+  }>;
+  cursor?: number;
+  page_size?: number;
+}
+
 export const tenantService = {
   async getAll() {
     return apiClient.get('/tenants');
+  },
+
+  async filter(params: TenantFilter) {
+    const queryParams = new URLSearchParams();
+
+    // Add filters as repeated parameters: filters[field]=value&filters[operator]=contains etc.
+    params.filters.forEach((filter, index) => {
+      queryParams.append(`filters[${index}][field]`, filter.field);
+      queryParams.append(`filters[${index}][operator]`, filter.operator);
+      queryParams.append(`filters[${index}][value]`, filter.value);
+    });
+
+    if (params.cursor !== undefined) {
+      queryParams.set('cursor', params.cursor.toString());
+    }
+    if (params.page_size !== undefined) {
+      queryParams.set('page_size', params.page_size.toString());
+    }
+
+    return apiClient.get(`/tenants/filter?${queryParams.toString()}`);
   },
 
   async getById(id: string) {
     return apiClient.get(`/tenants/${id}`);
   },
 
-  async create(data: CreateTenantDTO) {
+  async create(data: import('../types/tenant').CreateTenantDTO) {
     return apiClient.post('/tenants', data);
   },
 
-  async update(id: string, data: UpdateTenantDTO) {
+  async update(id: string, data: import('../types/tenant').UpdateTenantDTO) {
     return apiClient.put(`/tenants/${id}`, data);
   },
 

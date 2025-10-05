@@ -33,6 +33,12 @@ pub fn config_services(cfg: &mut web::ServiceConfig) {
         info!("  - GET /api/admin/tenant/stats -> tenant_controller::get_system_stats (system statistics)");
         info!("  - GET /api/admin/tenant/health -> tenant_controller::get_tenant_health (tenant health status)");
         info!("  - GET /api/admin/tenant/status -> tenant_controller::get_tenant_status (tenant connection status)");
+        info!("  - GET /api/tenants -> tenant_controller::find_all (list all tenants)");
+        info!("  - GET /api/tenants/filter -> tenant_controller::filter (filter tenants)");
+        info!("  - POST /api/tenants -> tenant_controller::create (create new tenant)");
+        info!("  - GET /api/tenants/{{id}} -> tenant_controller::find_by_id (get tenant by id)");
+        info!("  - PUT /api/tenants/{{id}} -> tenant_controller::update (update tenant)");
+        info!("  - DELETE /api/tenants/{{id}} -> tenant_controller::delete (delete tenant)");
         let end_timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
         info!("Route configuration completed successfully at {}", end_timestamp);
     });
@@ -70,6 +76,12 @@ fn configure_api_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/admin")
             .configure(configure_admin_routes),
+    );
+
+    // Tenant scope routes
+    cfg.service(
+        web::scope("/tenants")
+            .configure(configure_tenant_routes),
     );
 }
 
@@ -125,5 +137,23 @@ fn configure_tenant_admin_routes(cfg: &mut web::ServiceConfig) {
     );
     cfg.service(
         web::resource("/status").route(web::get().to(tenant_controller::get_tenant_status)),
+    );
+}
+
+fn configure_tenant_routes(cfg: &mut web::ServiceConfig) {
+    cfg.service(
+        web::resource("")
+            .route(web::get().to(tenant_controller::find_all))
+            .route(web::post().to(tenant_controller::create)),
+    );
+    cfg.service(
+        web::resource("/filter")
+            .route(web::get().to(tenant_controller::filter)),
+    );
+    cfg.service(
+        web::resource("/{id}")
+            .route(web::get().to(tenant_controller::find_by_id))
+            .route(web::put().to(tenant_controller::update))
+            .route(web::delete().to(tenant_controller::delete)),
     );
 }

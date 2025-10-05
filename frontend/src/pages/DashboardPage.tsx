@@ -73,6 +73,17 @@ export const DashboardPage: React.FC = () => {
     },
   ];
 
+  const getColor = (color: string): string => {
+    switch (color) {
+      case 'blue':
+        return '#1890ff';
+      case 'gold':
+        return '#faad14';
+      default:
+        return '#fa8c16';
+    }
+  };
+
   return (
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
       {/* Welcome Section */}
@@ -166,7 +177,7 @@ export const DashboardPage: React.FC = () => {
                 <Avatar
                   size="large"
                   icon={tech.icon}
-                  style={{ backgroundColor: tech.color === 'blue' ? '#1890ff' : tech.color === 'gold' ? '#faad14' : '#fa8c16' }}
+                  style={{ backgroundColor: getColor(tech.color) }}
                 />
                 <div style={{ marginTop: 8 }}>
                   <div style={{ fontWeight: 'medium' }}>{tech.name}</div>

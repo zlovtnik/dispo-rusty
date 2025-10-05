@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Modal } from 'antd';
 
 interface ConfirmationModalProps {
@@ -21,18 +22,30 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   onConfirm,
   onCancel,
 }) => {
-  if (isOpen) {
-    Modal.confirm({
-      title,
-      content: message,
-      okText: confirmText,
-      cancelText: cancelText,
-      onOk: onConfirm,
-      onCancel: onCancel,
-      centered: true,
-      destroyOnClose: true,
-    });
-  }
+  useEffect(() => {
+    if (isOpen) {
+      const modal = Modal.confirm({
+        title,
+        content: message,
+        okText: confirmText,
+        cancelText: cancelText,
+        onOk: () => {
+          onConfirm();
+          modal.destroy();
+        },
+        onCancel: () => {
+          onCancel();
+          modal.destroy();
+        },
+        centered: true,
+        destroyOnClose: true,
+      });
+
+      return () => {
+        modal.destroy();
+      };
+    }
+  }, [isOpen]);
 
   return null;
 };

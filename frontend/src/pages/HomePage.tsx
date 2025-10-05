@@ -28,16 +28,19 @@ export const HomePage: React.FC = () => {
 
   const features = [
     {
+      id: 1,
       icon: <SecurityScanOutlined style={{ fontSize: 32 }} />,
       title: 'Secure Authentication',
       description: 'JWT-based login system with comprehensive security measures and multi-tenant support.',
     },
     {
+      id: 2,
       icon: <HomeOutlined style={{ fontSize: 32 }} />,
       title: 'Multi-Tenant Architecture',
       description: 'Complete tenant isolation ensuring data security and privacy across different organizations.',
     },
     {
+      id: 3,
       icon: <ThunderboltOutlined style={{ fontSize: 32 }} />,
       title: 'High Performance',
       description: 'Built with Bun runtime for exceptional speed and TypeScript for reliable development.',
@@ -83,8 +86,8 @@ export const HomePage: React.FC = () => {
         {/* Features Section */}
         <div style={{ background: '#fff', padding: '64px 24px' }}>
           <Row gutter={[24, 24]}>
-            {features.map((feature, index) => (
-              <Col xs={24} md={8} key={index}>
+            {features.map((feature) => (
+              <Col xs={24} md={8} key={feature.id}>
                 <Card
                   style={{ textAlign: 'center', height: '100%' }}
                   hoverable
