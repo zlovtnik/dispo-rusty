@@ -1,35 +1,39 @@
+import type {
+  AuthResponse,
+  User,
+  Tenant,
+  LoginCredentials,
+  RegisterData,
+} from '../types/auth';
+import type {
+  UpdateContactRequest,
+  ContactListParams,
+  ContactListResponse,
+  Contact,
+  ContactTag,
+  BulkContactOperation,
+  ContactImportRequest,
+} from '../types/contact';
+
 // API Response wrapper interface
 export interface ApiResponseWrapper<T> {
   message: string;
   data: T;
-}
-
-export interface AuthResponse {
-  token: string;
-  token_type: string;
-}
-
-export interface LoginCredentials {
-  usernameOrEmail: string;
-  password: string;
-  tenantId: string;
-  rememberMe?: boolean;
-}
-
-export interface LoginInfoResponse {
-  username: string;
-  login_session: string;
-  tenant_id: string;
+  success: boolean;
+  error?: string;
 }
 
 export interface CreateTenantDTO {
   name: string;
-  // Add other required fields
+  domain?: string;
+  settings?: {
+    theme?: string;
+    language?: string;
+  };
 }
 
-export interface UpdateTenantDTO {
-  name?: string;
-  // Add other optional fields
+export interface UpdateTenantDTO extends Partial<CreateTenantDTO> {
+  id: string;
 }
 
 // API Service for Actix Web REST API integration

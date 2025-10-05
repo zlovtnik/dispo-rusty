@@ -1,0 +1,8 @@
+[test]
+# Test runner configuration
+coverage = true
+
+[define]
+# Environment variables
+NODE_ENV = "production"
+VITE_API_URL = "http://localhost:8080/api"

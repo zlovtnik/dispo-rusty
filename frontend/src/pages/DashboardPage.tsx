@@ -91,29 +91,29 @@ export const DashboardPage: React.FC = () => {
         <div className="card-body">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="text-center">
-              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-2">
-                <span className="text-blue-600 font-bold">TS</span>
+              <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-2">
+                <span className="text-blue-600 font-bold text-sm">TS</span>
               </div>
               <p className="text-sm font-medium">TypeScript</p>
               <p className="text-xs text-gray-500">5.9+</p>
             </div>
             <div className="text-center">
-              <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center mx-auto mb-2">
-                <span className="text-yellow-600 font-bold">⚡</span>
+              <div className="w-8 h-8 bg-yellow-100 rounded-lg flex items-center justify-center mx-auto mb-2">
+                <span className="text-yellow-600 font-bold text-lg">⚡</span>
               </div>
               <p className="text-sm font-medium">Bun</p>
               <p className="text-xs text-gray-500">1.0+</p>
             </div>
             <div className="text-center">
-              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-2">
-                <span className="text-blue-600 font-bold">R</span>
+              <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-2">
+                <span className="text-blue-600 font-bold text-sm">R</span>
               </div>
               <p className="text-sm font-medium">React</p>
               <p className="text-xs text-gray-500">18.3.1</p>
             </div>
             <div className="text-center">
-              <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center mx-auto mb-2">
-                <span className="text-orange-600 font-bold">🚀</span>
+              <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center mx-auto mb-2">
+                <span className="text-orange-600 font-bold text-lg">🚀</span>
               </div>
               <p className="text-sm font-medium">Actix Web</p>
               <p className="text-xs text-gray-500">Backend</p>
