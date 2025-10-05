@@ -29,6 +29,16 @@ table! {
     }
 }
 
+table! {
+    tenants (id) {
+        id -> Varchar,
+        name -> Varchar,
+        db_url -> Text,
+        created_at -> Timestamptz,
+        updated_at -> Timestamptz,
+    }
+}
+
 joinable!(login_history -> users (user_id));
 
-allow_tables_to_appear_in_same_query!(login_history, people, users);
+allow_tables_to_appear_in_same_query!(login_history, people, users, tenants);

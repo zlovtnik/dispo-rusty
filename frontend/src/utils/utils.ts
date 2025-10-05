@@ -3,9 +3,9 @@
 export type AlertType = 'success' | 'error';
 
 export class UIManager {
-  static showAlert(message: string, type: AlertType = 'success'): void {
+  static showAlert(message: string, type: AlertType = 'success'): () => void {
     const alertContainer = document.getElementById('alertContainer');
-    if (!alertContainer) return;
+    if (!alertContainer) return () => {}; // No-op cleanup if container doesn't exist
 
     const alertDiv = document.createElement('div');
     alertDiv.className = `alert alert-${type}`;
@@ -15,9 +15,14 @@ export class UIManager {
     alertContainer.appendChild(alertDiv);
 
     // Auto-hide alert after 5 seconds
-    setTimeout(() => {
+    const timeoutId: ReturnType<typeof setTimeout> = setTimeout(() => {
       alertContainer.innerHTML = '';
     }, 5000);
+
+    // Return cleanup function to cancel the timeout
+    return () => {
+      clearTimeout(timeoutId);
+    };
   }
 
   static showSection(section: 'login' | 'signup' | 'addressBook'): void {
@@ -122,6 +127,88 @@ export function resetForm(formElement: HTMLFormElement): void {
   formElement.reset();
 }
 
-export function confirmDelete(): boolean {
-  return confirm('Are you sure you want to delete this contact?');
+export async function confirmDelete(): Promise<boolean> {
+  // Check if HTMLDialogElement is supported
+  if (typeof HTMLDialogElement === 'function') {
+    return new Promise<boolean>((resolve) => {
+      // Create modal dialog
+      const dialog = document.createElement('dialog');
+      dialog.className = 'delete-confirm-dialog';
+      dialog.innerHTML = `
+        <div class="dialog-content">
+          <h3>Delete Contact</h3>
+          <p>Are you sure you want to delete this contact?</p>
+          <div class="dialog-actions">
+            <button class="btn btn-secondary" id="cancel-btn">Cancel</button>
+            <button class="btn btn-danger" id="confirm-btn">Delete</button>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(dialog);
+
+      const confirmBtn = dialog.querySelector('#confirm-btn') as HTMLButtonElement;
+      const cancelBtn = dialog.querySelector('#cancel-btn') as HTMLButtonElement;
+
+      // Handle confirm
+      const handleConfirm = () => {
+        dialog.close();
+        document.body.removeChild(dialog);
+        resolve(true);
+      };
+
+      // Handle cancel
+      const handleCancel = () => {
+        dialog.close();
+        document.body.removeChild(dialog);
+        resolve(false);
+      };
+
+      // Handle escape key
+      const handleEscape = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+          handleCancel();
+          dialog.removeEventListener('keydown', handleEscape);
+        }
+      };
+
+      confirmBtn.addEventListener('click', handleConfirm);
+      cancelBtn.addEventListener('click', handleCancel);
+      dialog.addEventListener('keydown', handleEscape);
+
+      // Focus management
+      const previousFocus = document.activeElement as HTMLElement;
+      confirmBtn.focus();
+      dialog.addEventListener('close', () => {
+        if (previousFocus && 'focus' in previousFocus) {
+          previousFocus.focus();
+        }
+      });
+
+      try {
+        dialog.showModal();
+      } catch (error) {
+        console.error('Failed to show modal dialog:', error);
+        // Clean up: remove dialog and event listeners
+        confirmBtn.removeEventListener('click', handleConfirm);
+        cancelBtn.removeEventListener('click', handleCancel);
+        dialog.removeEventListener('keydown', handleEscape);
+        dialog.removeEventListener('close', () => {
+          if (previousFocus && 'focus' in previousFocus) {
+            previousFocus.focus();
+          }
+        });
+        document.body.removeChild(dialog);
+        // Restore focus
+        if (previousFocus && 'focus' in previousFocus) {
+          previousFocus.focus();
+        }
+        resolve(false);
+        return;
+      }
+    });
+  } else {
+    // Fallback to native confirm for unsupported environments
+    return confirm('Are you sure you want to delete this contact?');
+  }
 }

@@ -4,6 +4,8 @@ export interface Props {
 }
 
 const { title = "Address Book - Frontend Client" } = Astro.props;
+import '../styles/global.css';
+import '../styles/components.css';
 ---
 
 <!DOCTYPE html>
@@ -13,15 +15,12 @@ const { title = "Address Book - Frontend Client" } = Astro.props;
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{title}</title>
     <meta name="generator" content={Astro.generator} />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' http://localhost:8000; img-src 'self' data:; font-src 'self';" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <meta http-equiv="X-Frame-Options" content="DENY" />
     <meta http-equiv="X-Content-Type-Options" content="nosniff" />
     <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin" />
-    <meta http-equiv="Strict-Transport-Security" content="max-age=31536000; includeSubDomains" />
-    
-    <!-- Import styles -->
-    <link rel="stylesheet" href="/src/styles/global.css" />
-    <link rel="stylesheet" href="/src/styles/components.css" />
+
+
   </head>
   <body>
     <div class="container">

@@ -19,12 +19,20 @@
         <input type="text" id="contactName" name="name" required>
       </div>
       <div class="form-group">
-        <label for="contactGenderKey">Gender (M/F):</label>
-        <input type="text" id="contactGenderKey" name="gender_key" maxlength="1" required>
+        <label for="contactGenderKey">Gender:</label>
+        <select id="contactGenderKey" name="gender" aria-describedby="genderHelp">
+          <option value="">Select gender</option>
+          <option value="M">Male</option>
+          <option value="F">Female</option>
+          <option value="NB">Non-binary</option>
+          <option value="P">Prefer not to say</option>
+          <option value="O">Other</option>
+        </select>
+        <small id="genderHelp" class="form-help">Select your gender identity.</small>
       </div>
       <div class="form-group">
         <label for="contactAge">Age:</label>
-        <input type="number" id="contactAge" name="age" min="0" required>
+        <input type="number" id="contactAge" name="age" min="1" max="120" required>
       </div>
       <div class="form-group">
         <label for="contactAddress">Address:</label>

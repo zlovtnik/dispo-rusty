@@ -19,6 +19,7 @@ pub struct UserToken {
     // data
     pub user: String,
     pub login_session: String,
+    pub tenant_id: String,
 }
 
 
@@ -39,6 +40,7 @@ impl UserToken {
             exp: now + max_age,
             user: login.username.clone(),
             login_session: login.login_session.clone(),
+            tenant_id: login.tenant_id.clone(),
         };
 
         jsonwebtoken::encode(

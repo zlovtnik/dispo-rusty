@@ -22,7 +22,7 @@ mod services;
 mod utils;
 #[actix_rt::main]
 async fn main() -> io::Result<()> {
-    dotenv::dotenv().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to read .env file: {}", e)))?;
+    dotenv::dotenv().map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("Failed to read .env file: {}", e)))?;
     env::set_var("RUST_LOG", "actix_web=debug");
 
     if let Ok(log_file_path) = env::var("LOG_FILE") {
@@ -41,15 +41,21 @@ async fn main() -> io::Result<()> {
         env_logger::init();
     }
 
-    let app_host = env::var("APP_HOST").map_err(|e| std::io::Error::new(std::io::ErrorKind::NotFound, format!("APP_HOST not found: {}", e)))?;
-    let app_port = env::var("APP_PORT").map_err(|e| std::io::Error::new(std::io::ErrorKind::NotFound, format!("APP_PORT not found: {}", e)))?;
+    let app_host = env::var("APP_HOST").map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("APP_HOST not found: {}", e)))?;
+    let app_port = env::var("APP_PORT").map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("APP_PORT not found: {}", e)))?;
     let app_url = format!("{}:{}", &app_host, &app_port);
-    let db_url = env::var("DATABASE_URL").map_err(|e| std::io::Error::new(std::io::ErrorKind::NotFound, format!("DATABASE_URL not found: {}", e)))?;
-    let redis_url = env::var("REDIS_URL").map_err(|e| std::io::Error::new(std::io::ErrorKind::NotFound, format!("REDIS_URL not found: {}", e)))?;
+    let db_url = env::var("DATABASE_URL").map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("DATABASE_URL not found: {}", e)))?;
+    let redis_url = env::var("REDIS_URL").map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("REDIS_URL not found: {}", e)))?;
 
-    let pool = config::db::init_db_pool(&db_url);
-    config::db::run_migration(&mut pool.get().unwrap());
+    let main_pool = config::db::init_db_pool(&db_url);
+    config::db::run_migration(&mut main_pool.get().unwrap());
     let redis_client = config::cache::init_redis_client(&redis_url);
+
+    let manager = config::db::TenantPoolManager::new(main_pool.clone());
+    // Hardcode a tenant for demonstration, in production load from DB
+    manager
+        .add_tenant_pool("tenant1".to_string(), main_pool.clone())
+        .expect("Failed to add tenant pool");
 
     HttpServer::new(move || {
         App::new()
@@ -57,13 +63,15 @@ async fn main() -> io::Result<()> {
                 Cors::default() // allowed_origin return access-control-allow-origin: * by default
                     .allowed_origin("http://127.0.0.1:3000")
                     .allowed_origin("http://localhost:3000")
+                    .allowed_origin("http://localhost:4321")
                     .send_wildcard()
                     .allowed_methods(vec!["GET", "POST", "PUT", "DELETE"])
                     .allowed_headers(vec![http::header::AUTHORIZATION, http::header::ACCEPT])
                     .allowed_header(http::header::CONTENT_TYPE)
                     .max_age(3600),
             )
-            .app_data(web::Data::new(pool.clone()))
+            .app_data(web::Data::new(manager.clone()))
+            .app_data(web::Data::new(main_pool.clone()))
             .app_data(web::Data::new(redis_client.clone()))
             .wrap(actix_web::middleware::Logger::default())
             .wrap(crate::middleware::auth_middleware::Authentication) // Comment this line if you want to integrate with yew-address-book-frontend

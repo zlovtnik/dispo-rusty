@@ -10,30 +10,48 @@ export class AuthManager {
   private static readonly CURRENT_USER_KEY = 'current_user';
 
   static getAuthToken(): string | null {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem(AuthManager.AUTH_TOKEN_KEY);
+    if (typeof window !== 'undefined' && 'localStorage' in window) {
+      try {
+        return localStorage.getItem(AuthManager.AUTH_TOKEN_KEY);
+      } catch (error) {
+        console.error('Error accessing localStorage:', error);
+        return null;
+      }
     }
     return null;
   }
 
   static getCurrentUser(): string | null {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem(AuthManager.CURRENT_USER_KEY);
+    if (typeof window !== 'undefined' && 'localStorage' in window) {
+      try {
+        return localStorage.getItem(AuthManager.CURRENT_USER_KEY);
+      } catch (error) {
+        console.error('Error accessing localStorage:', error);
+        return null;
+      }
     }
     return null;
   }
 
   static setAuth(token: string, username: string): void {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(AuthManager.AUTH_TOKEN_KEY, token);
-      localStorage.setItem(AuthManager.CURRENT_USER_KEY, username);
+    if (typeof window !== 'undefined' && 'localStorage' in window) {
+      try {
+        localStorage.setItem(AuthManager.AUTH_TOKEN_KEY, token);
+        localStorage.setItem(AuthManager.CURRENT_USER_KEY, username);
+      } catch (error) {
+        console.error('Error writing to localStorage:', error);
+      }
     }
   }
 
   static clearAuth(): void {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem(AuthManager.AUTH_TOKEN_KEY);
-      localStorage.removeItem(AuthManager.CURRENT_USER_KEY);
+    if (typeof window !== 'undefined' && 'localStorage' in window) {
+      try {
+        localStorage.removeItem(AuthManager.AUTH_TOKEN_KEY);
+        localStorage.removeItem(AuthManager.CURRENT_USER_KEY);
+      } catch (error) {
+        console.error('Error clearing localStorage:', error);
+      }
     }
   }
 
