@@ -3,7 +3,7 @@ use serde::Serialize;
 use log::info;
 use std::collections::HashMap;
 use diesel::prelude::*;
-use diesel::pg::PgConnection;
+
 
 use crate::{
     config::db::{Pool as DatabasePool, TenantPoolManager},
@@ -166,17 +166,4 @@ pub async fn get_tenant_status(
     }
 
     Ok(HttpResponse::Ok().json(status_map))
-}
-
-// Implement User model extensions needed for stats
-impl User {
-    pub fn count_all(conn: &mut PgConnection) -> QueryResult<i64> {
-        use crate::schema::users::dsl::*;
-        users.count().get_result(conn)
-    }
-
-    pub fn count_logged_in(conn: &mut PgConnection) -> QueryResult<i64> {
-        use crate::schema::users::dsl::*;
-        users.filter(login_session.is_not_null().and(login_session.ne(""))).count().get_result(conn)
-    }
 }

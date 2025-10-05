@@ -1,4 +1,4 @@
-use actix_web::{get, HttpResponse, web};
+use actix_web::{get, HttpRequest, HttpResponse, web};
 use serde::Serialize;
 use tokio::time::{timeout, Duration};
 
@@ -64,7 +64,7 @@ async fn check_cache_health_async(redis_pool: web::Data<RedisPool>) -> Result<()
 }
 
 #[get("/health")]
-async fn health(pool: web::Data<DatabasePool>, redis_pool: web::Data<RedisPool>, manager: Option<web::Data<TenantPoolManager>>, main_conn: web::Data<DatabasePool>) -> HttpResponse {
+async fn health(pool: web::Data<DatabasePool>, redis_pool: web::Data<RedisPool>) -> HttpResponse {
     info!("Health check requested");
 
     // Check database with timeout
@@ -93,15 +93,68 @@ async fn health(pool: web::Data<DatabasePool>, redis_pool: web::Data<RedisPool>,
         },
     };
 
+    let overall_status = if db_status.is_healthy() && cache_status.is_healthy() {
+        Status::Healthy
+    } else {
+        Status::Unhealthy
+    };
+
+    let response = HealthResponse {
+        status: overall_status,
+        timestamp: Utc::now().to_rfc3339(),
+        components: HealthStatus {
+            database: db_status,
+            cache: cache_status,
+        },
+        tenants: None,
+    };
+
+    HttpResponse::Ok().json(response)
+}
+
+#[get("/health/detailed")]
+async fn health_detailed(req: HttpRequest, pool: web::Data<DatabasePool>, redis_pool: web::Data<RedisPool>, main_conn: web::Data<DatabasePool>) -> HttpResponse {
+    let manager = req.app_data::<web::Data<TenantPoolManager>>();
+    info!("Detailed health check requested");
+
+    // Check database with timeout
+    let db_status = match timeout(Duration::from_secs(5), check_database_health_async(pool)).await {
+        Ok(Ok(())) => Status::Healthy,
+        Ok(Err(e)) => {
+            error!("Database health check failed: {}", e);
+            Status::Unhealthy
+        },
+        Err(_) => {
+            error!("Database health check timeout");
+            Status::Unhealthy
+        },
+    };
+
+    // Check cache with timeout
+    let cache_status = match timeout(Duration::from_secs(3), check_cache_health_async(redis_pool)).await {
+        Ok(Ok(())) => Status::Healthy,
+        Ok(Err(e)) => {
+            error!("Cache health check failed: {}", e);
+            Status::Unhealthy
+        },
+        Err(_) => {
+            error!("Cache health check timeout");
+            Status::Unhealthy
+        },
+    };
+
     // Check tenant health if tenant manager is available
-    let tenants = if let Some(manager) = manager {
+    let tenants = if let Some(manager_ref) = manager {
+        let manager_data = manager_ref.clone();
         match tokio::task::spawn_blocking(move || {
-            let mut main_conn = main_conn.get().map_err(|e| format!("Failed to get db connection: {}", e))?;
+            let mut main_conn = main_conn
+                .get()
+                .map_err(|e| format!("Failed to get db connection: {}", e))?;
             let tenants = Tenant::list_all(&mut main_conn).unwrap_or_else(|_| Vec::new());
             let mut tenant_healths = Vec::new();
 
             for tenant in tenants {
-                let status = match manager.get_tenant_pool(&tenant.id) {
+                let status = match manager_data.get_tenant_pool(&tenant.id) {
                     Some(pool) => {
                         match pool.get() {
                             Ok(mut conn) => {
@@ -122,7 +175,9 @@ async fn health(pool: web::Data<DatabasePool>, redis_pool: web::Data<RedisPool>,
                 });
             }
             Ok::<Vec<TenantHealth>, String>(tenant_healths)
-        }).await {
+        })
+        .await
+        {
             Ok(Ok(healths)) if !healths.is_empty() => Some(healths),
             _ => None,
         }

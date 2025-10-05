@@ -40,7 +40,7 @@ export const LoginPage: React.FC = () => {
       await login(credentials);
       navigate(from, { replace: true });
     } catch (error) {
-      console.error('Login or navigation error:', error);
+      console.error('Login error occurred', error);
       setSubmitError(error instanceof Error ? error.message : 'Login failed');
     } finally {
       setIsSubmitting(false);
@@ -163,7 +163,7 @@ export const LoginPage: React.FC = () => {
         {/* Additional Info */}
         <div className="mt-4 text-center">
           <p className="text-sm text-gray-600">
-            For demo purposes, try any credentials (API integration coming next)
+            Use your account credentials and tenant ID to sign in
           </p>
         </div>
       </div>

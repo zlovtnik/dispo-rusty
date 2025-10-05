@@ -1,23 +1,39 @@
-export interface LoginCredentials {
-  usernameOrEmail: string;
-  password: string;
-  tenantId: string;
-  rememberMe?: boolean;
-}
+import type {
+  AuthResponse,
+  User,
+  Tenant,
+  LoginCredentials,
+  RegisterData,
+} from '../types/auth';
+import type {
+  UpdateContactRequest,
+  ContactListParams,
+  ContactListResponse,
+  Contact,
+  ContactTag,
+  BulkContactOperation,
+  ContactImportRequest,
+} from '../types/contact';
 
-export interface AuthResponse {
-  token?: string;
-  // Add other fields as needed, e.g. user, tenant
+// API Response wrapper interface
+export interface ApiResponseWrapper<T> {
+  message: string;
+  data: T;
+  success: boolean;
+  error?: string;
 }
 
 export interface CreateTenantDTO {
   name: string;
-  // Add other required fields
+  domain?: string;
+  settings?: {
+    theme?: string;
+    language?: string;
+  };
 }
 
-export interface UpdateTenantDTO {
-  name?: string;
-  // Add other optional fields
+export interface UpdateTenantDTO extends Partial<CreateTenantDTO> {
+  id: string;
 }
 
 // API Service for Actix Web REST API integration
@@ -68,7 +84,20 @@ export interface IHttpClient {
 }
 
 // Base API configuration
-const API_BASE_URL = ((import.meta as any).env?.API_URL as string) || 'http://localhost:8080/api';
+const API_BASE_URL = (() => {
+  const url = import.meta.env.VITE_API_URL as string;
+  if (url) {
+    return url;
+  }
+
+  // Only allow localhost fallback in development
+  if (import.meta.env.MODE === 'development') {
+    return 'http://localhost:8000/api';
+  }
+
+  // In production, throw an error if API URL is missing
+  throw new Error('VITE_API_URL environment variable is required in production');
+})();
 
 // Default configuration
 const DEFAULT_CONFIG: HttpClientConfig = {
@@ -86,9 +115,9 @@ const DEFAULT_CONFIG: HttpClientConfig = {
 
 //// HTTP Client class with timeout, retry, and circuit breaker support
 class HttpClient implements IHttpClient {
-  private baseURL: string;
-  private config: HttpClientConfig;
-  private circuitBreakerState: CircuitBreakerState;
+  private readonly baseURL: string;
+  private readonly config: HttpClientConfig;
+  private readonly circuitBreakerState: CircuitBreakerState;
 
   constructor(baseURL: string = API_BASE_URL, config: Partial<HttpClientConfig> = {}) {
     this.baseURL = baseURL;
@@ -98,6 +127,31 @@ class HttpClient implements IHttpClient {
       failureCount: 0,
       lastFailureTime: 0,
     };
+  }
+
+  private safeGetJsonValue(key: string): any {
+    try {
+      const stored = localStorage.getItem(key);
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Storage format convention:
+   * - 'auth_token': JSON object {token: string}
+   * - 'tenant': JSON object {id: string, name: string, ...}
+   * - 'user': JSON object {id: string, email: string, ...}
+   */
+  private safeGetToken(): string | null {
+    const tokenData = this.safeGetJsonValue('auth_token');
+    return (tokenData && typeof tokenData.token === 'string') ? tokenData.token : null;
+  }
+
+  private safeGetTenantId(): string | null {
+    const tenantData = this.safeGetJsonValue('tenant');
+    return (tenantData && typeof tenantData.id === 'string') ? tenantData.id : null;
   }
 
   private sleep(delay: number): Promise<void> {
@@ -112,7 +166,7 @@ class HttpClient implements IHttpClient {
   private isRetryableError(error: ApiError | Error): boolean {
     // Check if it's an ApiError by checking for type property
     if ('type' in error && error.type) {
-      const apiError = error as ApiError;
+      const apiError = error;
       // Network errors, timeouts, and 5xx errors are retryable
       // 4xx errors are not retryable (client errors)
       return apiError.type === 'network' ||
@@ -127,11 +181,17 @@ class HttpClient implements IHttpClient {
       this.circuitBreakerState.failureCount = 0;
       this.circuitBreakerState.state = 'closed';
     } else {
-      this.circuitBreakerState.failureCount++;
-      this.circuitBreakerState.lastFailureTime = Date.now();
-
-      if (this.circuitBreakerState.failureCount >= this.config.circuitBreaker.failureThreshold) {
+      if (this.circuitBreakerState.state === 'half-open') {
+        // Failure in half-open state: immediately go back to open
         this.circuitBreakerState.state = 'open';
+      } else {
+        // In closed state: increment failure count and check threshold
+        this.circuitBreakerState.failureCount++;
+        this.circuitBreakerState.lastFailureTime = Date.now();
+
+        if (this.circuitBreakerState.failureCount >= this.config.circuitBreaker.failureThreshold) {
+          this.circuitBreakerState.state = 'open';
+        }
       }
     }
   }
@@ -146,6 +206,103 @@ class HttpClient implements IHttpClient {
       return false;
     }
     return true;
+  }
+
+  private buildHeaders(options: RequestInit): Headers {
+    // Add tenant header if available from localStorage
+    const tenantId = this.safeGetTenantId();
+
+    // Add authorization header if token exists
+    const authToken = this.safeGetToken();
+
+    const headers = new Headers({
+      'Content-Type': 'application/json',
+      ...options.headers,
+    });
+
+    if (tenantId) {
+      headers.set('X-Tenant-ID', tenantId);
+    }
+
+    if (authToken) {
+      headers.set('Authorization', `Bearer ${authToken}`);
+    }
+
+    return headers;
+  }
+
+  private async handleSuccessResponse(response: Response): Promise<any> {
+    // Validate Content-Type before parsing JSON
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      // Handle non-JSON response as error
+      let responseText = '';
+      try {
+        responseText = await response.text();
+      } catch {
+        responseText = 'Unable to read response content';
+      }
+
+      this.updateCircuitBreaker(false);
+      const apiError: ApiError = {
+        code: 'INVALID_CONTENT_TYPE',
+        message: `Expected JSON response but received: ${contentType || 'no content-type'}. Response: ${responseText.substring(0, 200)}`,
+        type: 'other',
+        statusCode: response.status,
+      };
+      throw apiError;
+    }
+
+    this.updateCircuitBreaker(true);
+    return await response.json();
+  }
+
+  private async parseErrorData(response: Response): Promise<any> {
+    if (response.headers.get('content-type')?.includes('application/json')) {
+      try {
+        return await response.clone().json();
+      } catch {
+        return { code: 'JSON_PARSE_ERROR', message: 'Failed to parse JSON error response' };
+      }
+    } else {
+      // For non-JSON responses (HTML, plain text, etc.), read as text
+      let errorText = '';
+      try {
+        errorText = await response.clone().text();
+      } catch {
+        errorText = 'Unable to read error response content';
+      }
+
+      return {
+        code: 'HTTP_ERROR',
+        message: `HTTP ${response.status}: ${response.statusText}${errorText ? `\nResponse: ${errorText.substring(0, 200)}` : ''}`,
+      };
+    }
+  }
+
+  private createHttpError(response: Response, errorData: any): ApiError {
+    const apiError: ApiError = {
+      ...errorData,
+      type: 'http',
+      statusCode: response.status,
+      retryable: response.status >= 500,
+    };
+    return apiError;
+  }
+
+  private createFetchError(error: any): ApiError {
+    const isAborted = (error as any)?.name === 'AbortError';
+    const apiError: ApiError = {
+      code: isAborted ? 'TIMEOUT' : 'NETWORK_ERROR',
+      message: isAborted ? 'Request timed out' : 'Network error: Unable to connect to the server',
+      type: isAborted ? 'timeout' : 'network',
+      retryable: true,
+    };
+    return apiError;
+  }
+
+  private shouldRetry(apiError: ApiError, attempt: number): boolean {
+    return this.isRetryableError(apiError) && attempt < this.config.retry.maxAttempts;
   }
 
   private async makeRequest(
@@ -188,126 +345,41 @@ class HttpClient implements IHttpClient {
       throw apiError;
     }
 
-    // Add tenant header if available
-    // Note: Authentication now handled via httpOnly cookies automatically sent by browser
-    const tenantId = (() => {
-      try {
-        const storedTenant = localStorage.getItem('tenant');
-        return storedTenant ? JSON.parse(storedTenant).id : null;
-      } catch {
-        return null;
-      }
-    })();
-
-    const headers = new Headers({
-      'Content-Type': 'application/json',
-      ...options.headers,
-    });
-
-    if (tenantId) {
-      headers.set('X-Tenant-ID', tenantId);
-    }
-
+    const headers = this.buildHeaders(options);
     let lastError: ApiError | Error | undefined;
 
     for (let attempt = 1; attempt <= this.config.retry.maxAttempts; attempt++) {
       try {
-        const response = await this.makeRequest(url, {
-          ...options,
-          headers,
-        });
+        const response = await this.makeRequest(url, { ...options, headers });
 
         if (response.ok) {
-          // Validate Content-Type before parsing JSON
-          const contentType = response.headers.get('content-type');
-          if (!contentType || !contentType.includes('application/json')) {
-            // Handle non-JSON response as error
-            let responseText = '';
-            try {
-              responseText = await response.text();
-            } catch {
-              responseText = 'Unable to read response content';
-            }
-
-            this.updateCircuitBreaker(false);
-            const apiError: ApiError = {
-              code: 'INVALID_CONTENT_TYPE',
-              message: `Expected JSON response but received: ${contentType || 'no content-type'}. Response: ${responseText.substring(0, 200)}`,
-              type: 'other',
-              statusCode: response.status,
-            };
-            throw apiError;
-          }
-
-          this.updateCircuitBreaker(true);
-          return await response.json();
+          return this.handleSuccessResponse(response);
         }
 
         // Handle HTTP errors
-        const errorContentType = response.headers.get('content-type');
-        const errorData: ApiError = await (async () => {
-          if (errorContentType && errorContentType.includes('application/json')) {
-            try {
-              return await response.clone().json();
-            } catch {
-              return { code: 'JSON_PARSE_ERROR', message: 'Failed to parse JSON error response' };
-            }
-          } else {
-            // For non-JSON responses (HTML, plain text, etc.), read as text
-            let errorText = '';
-            try {
-              errorText = await response.clone().text();
-            } catch {
-              errorText = 'Unable to read error response content';
-            }
+        const errorData = await this.parseErrorData(response);
+        const apiError = this.createHttpError(response, errorData);
 
-            return {
-              code: 'HTTP_ERROR',
-              message: `HTTP ${response.status}: ${response.statusText}${errorText ? `\nResponse: ${errorText.substring(0, 200)}` : ''}`,
-            };
-          }
-        })();
-
-        const apiError: ApiError = {
-          ...errorData,
-          type: 'http',
-          statusCode: response.status,
-          retryable: response.status >= 500,
-        };
-
-        // If it's not retryable or we've exhausted retries, throw immediately
-        if (!this.isRetryableError(apiError) || attempt === this.config.retry.maxAttempts) {
-          this.updateCircuitBreaker(false);
-          throw apiError;
+        if (this.shouldRetry(apiError, attempt)) {
+          lastError = apiError;
+          await this.sleep(this.calculateBackoffDelay(attempt));
+          continue;
         }
 
-        lastError = apiError;
+        this.updateCircuitBreaker(false);
+        throw apiError;
 
       } catch (error) {
-        // Handle fetch errors (network or timeout)
-        const isAborted = (error as any)?.name === 'AbortError';
-        const isNetworkError = error instanceof TypeError;
+        const apiError = this.createFetchError(error);
 
-        const apiError: ApiError = {
-          code: isAborted ? 'TIMEOUT' : 'NETWORK_ERROR',
-          message: isAborted ? 'Request timed out' : 'Network error: Unable to connect to the server',
-          type: isAborted ? 'timeout' : 'network',
-          retryable: true,
-        };
-
-        // If not retryable or exhausted retries, throw
-        if (!this.isRetryableError(apiError) || attempt === this.config.retry.maxAttempts) {
-          this.updateCircuitBreaker(false);
-          throw apiError;
+        if (this.shouldRetry(apiError, attempt)) {
+          lastError = apiError;
+          await this.sleep(this.calculateBackoffDelay(attempt));
+          continue;
         }
 
-        lastError = apiError;
-      }
-
-      // Wait before retrying (not on last attempt)
-      if (attempt < this.config.retry.maxAttempts) {
-        const delay = this.calculateBackoffDelay(attempt);
-        await this.sleep(delay);
+        this.updateCircuitBreaker(false);
+        throw apiError;
       }
     }
 
@@ -344,16 +416,21 @@ const apiClient = new HttpClient();
 
 // API Services
 export const authService = {
-  async login(credentials: LoginCredentials): Promise<AuthResponse> {
-    return apiClient.post<AuthResponse>('/auth/login', credentials);
+  async login(credentials: LoginCredentials): Promise<ApiResponseWrapper<AuthResponse>> {
+    const payload = {
+      username_or_email: credentials.usernameOrEmail,
+      password: credentials.password,
+      tenant_id: credentials.tenantId,
+    };
+    return apiClient.post<ApiResponseWrapper<AuthResponse>>('/auth/login', payload);
   },
 
-  async logout(): Promise<AuthResponse> {
-    return apiClient.post<AuthResponse>('/auth/logout');
+  async logout(): Promise<ApiResponseWrapper<any>> {
+    return apiClient.post<ApiResponseWrapper<any>>('/auth/logout');
   },
 
-  async refreshToken(): Promise<AuthResponse> {
-    return apiClient.post<AuthResponse>('/auth/refresh');
+  async refreshToken(): Promise<ApiResponseWrapper<AuthResponse>> {
+    return apiClient.post<ApiResponseWrapper<AuthResponse>>('/auth/refresh');
   },
 };
 

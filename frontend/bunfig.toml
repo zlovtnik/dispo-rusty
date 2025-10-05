@@ -1,0 +1,3 @@
+[test]
+# Test runner configuration
+coverage = true

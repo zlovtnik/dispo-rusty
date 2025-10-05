@@ -5,7 +5,7 @@ A modern TypeScript/Bun/React frontend application for the Actix Web REST API ba
 ## 🚀 Technology Stack
 
 - **Runtime**: Bun 1.0+ (Fast JavaScript runtime)
-- **Language**: TypeScript 5.8+ (First-class citizen)
+- **Language**: TypeScript 5.9+ (First-class citizen)
 - **Framework**: React 18.3.1+ (Concurrent features)
 - **Routing**: React Router 6.x
 - **Forms**: React Hook Form 7.x
@@ -22,10 +22,16 @@ A modern TypeScript/Bun/React frontend application for the Actix Web REST API ba
 
 ## 🏃 Development
 
-Start the development server with hot reload:
+Start the development server with hot reload in development mode:
 
 ```bash
-bun run dev
+NODE_ENV=development bun run dev
+```
+
+Or in production mode:
+
+```bash
+NODE_ENV=production bun run dev
 ```
 
 The application will be available at `http://localhost:3000`
@@ -62,11 +68,24 @@ bun run test:watch
 
 ### Environment Variables
 
-Create a `.env` file in the frontend directory:
+Vite automatically loads environment-specific `.env` files:
+
+- `.env.development` - for development environment
+- `.env.production` - for production environment
+
+Example `.env.development`:
 
 ```env
-API_URL=http://localhost:8080/api
+VITE_API_URL=http://localhost:8000/api
 ```
+
+Example `.env.production`:
+
+```env
+VITE_API_URL=https://your-production-api.com/api
+```
+
+Note: Vite only exposes environment variables that start with `VITE_` to the client-side code at runtime. Use `NODE_ENV` when running Bun to control which env file is loaded.
 
 ### TypeScript Configuration
 

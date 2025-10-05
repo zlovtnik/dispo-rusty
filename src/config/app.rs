@@ -17,6 +17,7 @@ pub fn config_services(cfg: &mut web::ServiceConfig) {
         info!("  - GET /health -> health_controller::health");
         info!("  - GET /api/ping -> ping_controller::ping");
         info!("  - GET /api/health -> health_controller::health");
+        info!("  - GET /api/health/detailed -> health_controller::health_detailed");
         info!("  - GET /api/logs -> health_controller::logs");
         info!("  - POST /api/auth/signup -> account_controller::signup");
         info!("  - POST /api/auth/login -> account_controller::login");
@@ -50,6 +51,7 @@ fn configure_api_routes(cfg: &mut web::ServiceConfig) {
     // Standalone routes in /api
     cfg.service(ping_controller::ping);
     cfg.service(health_controller::health);
+    cfg.service(health_controller::health_detailed);
     cfg.service(health_controller::logs);
 
     // Auth scope routes

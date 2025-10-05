@@ -58,18 +58,61 @@ async fn main() -> io::Result<()> {
         .expect("Failed to add tenant pool");
 
     HttpServer::new(move || {
+        // Configure CORS based on environment
+        let app_env = env::var("APP_ENV").unwrap_or_else(|_| "development".to_string());
+        let mut cors_builder = if app_env == "production" {
+            // Production: restrictive CORS with configured allowed origins
+            let mut builder = Cors::default();
+
+            if let Ok(allowed_origins) = env::var("CORS_ALLOWED_ORIGINS") {
+                // Split comma-separated origins and add each one
+                for origin in allowed_origins.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()) {
+                    builder = builder.allowed_origin(origin);
+                }
+            } else {
+                // Default to localhost fallback if no origins configured
+                builder = builder.allowed_origin("http://localhost:3000");
+            }
+            builder
+        } else {
+            // Development/Test: more permissive but explicit CORS
+            Cors::default()
+                .send_wildcard()
+                .allowed_origin("http://localhost:3000")
+                .allowed_origin("http://127.0.0.1:3000")
+                .allowed_origin("http://localhost:5173")  // Vite dev server
+                .allowed_origin("http://127.0.0.1:5173") // Vite dev server
+        };
+
+        // Add common methods and headers
+        cors_builder = cors_builder
+            .allowed_methods(vec![
+                http::Method::GET,
+                http::Method::POST,
+                http::Method::PUT,
+                http::Method::DELETE,
+                http::Method::OPTIONS,
+            ])
+            .allowed_headers(vec![
+                http::header::AUTHORIZATION,
+                http::header::ACCEPT,
+                http::header::CONTENT_TYPE,
+                http::header::HeaderName::from_static("x-tenant-id"),
+            ])
+            .max_age(3600);
+
+        // Check for credentials flag
+        let cors = if env::var("CORS_ALLOW_CREDENTIALS")
+            .map(|v| v == "true")
+            .unwrap_or(false)
+        {
+            cors_builder.supports_credentials()
+        } else {
+            cors_builder
+        };
+
         App::new()
-            .wrap(
-                Cors::default() // allowed_origin return access-control-allow-origin: * by default
-                    .allowed_origin("http://127.0.0.1:3000")
-                    .allowed_origin("http://localhost:3000")
-                    .allowed_origin("http://localhost:4321")
-                    .send_wildcard()
-                    .allowed_methods(vec!["GET", "POST", "PUT", "DELETE"])
-                    .allowed_headers(vec![http::header::AUTHORIZATION, http::header::ACCEPT])
-                    .allowed_header(http::header::CONTENT_TYPE)
-                    .max_age(3600),
-            )
+            .wrap(cors)
             .app_data(web::Data::new(manager.clone()))
             .app_data(web::Data::new(main_pool.clone()))
             .app_data(web::Data::new(redis_client.clone()))

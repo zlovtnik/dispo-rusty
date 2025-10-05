@@ -58,7 +58,8 @@ export const AddressBookPage: React.FC = () => {
       return 'Please enter a valid email address';
     }
 
-    const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
+
+    const phoneRegex = /^\+?[1-9]\d{0,15}$/;
     if (trimmedPhone && !phoneRegex.test(trimmedPhone.replace(/[\s\-\(\)]/g, ''))) {
       return 'Please enter a valid phone number';
     }
