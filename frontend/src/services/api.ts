@@ -6,8 +6,14 @@ export interface LoginCredentials {
 }
 
 export interface AuthResponse {
-  token?: string;
-  // Add other fields as needed, e.g. user, tenant
+  token: string;
+  token_type: string;
+}
+
+export interface LoginInfoResponse {
+  username: string;
+  login_session: string;
+  tenant_id: string;
 }
 
 export interface CreateTenantDTO {
@@ -86,9 +92,9 @@ const DEFAULT_CONFIG: HttpClientConfig = {
 
 //// HTTP Client class with timeout, retry, and circuit breaker support
 class HttpClient implements IHttpClient {
-  private baseURL: string;
-  private config: HttpClientConfig;
-  private circuitBreakerState: CircuitBreakerState;
+  private readonly baseURL: string;
+  private readonly config: HttpClientConfig;
+  private readonly circuitBreakerState: CircuitBreakerState;
 
   constructor(baseURL: string = API_BASE_URL, config: Partial<HttpClientConfig> = {}) {
     this.baseURL = baseURL;
@@ -112,7 +118,7 @@ class HttpClient implements IHttpClient {
   private isRetryableError(error: ApiError | Error): boolean {
     // Check if it's an ApiError by checking for type property
     if ('type' in error && error.type) {
-      const apiError = error as ApiError;
+      const apiError = error;
       // Network errors, timeouts, and 5xx errors are retryable
       // 4xx errors are not retryable (client errors)
       return apiError.type === 'network' ||
@@ -127,11 +133,17 @@ class HttpClient implements IHttpClient {
       this.circuitBreakerState.failureCount = 0;
       this.circuitBreakerState.state = 'closed';
     } else {
-      this.circuitBreakerState.failureCount++;
-      this.circuitBreakerState.lastFailureTime = Date.now();
-
-      if (this.circuitBreakerState.failureCount >= this.config.circuitBreaker.failureThreshold) {
+      if (this.circuitBreakerState.state === 'half-open') {
+        // Failure in half-open state: immediately go back to open
         this.circuitBreakerState.state = 'open';
+      } else {
+        // In closed state: increment failure count and check threshold
+        this.circuitBreakerState.failureCount++;
+        this.circuitBreakerState.lastFailureTime = Date.now();
+
+        if (this.circuitBreakerState.failureCount >= this.config.circuitBreaker.failureThreshold) {
+          this.circuitBreakerState.state = 'open';
+        }
       }
     }
   }
@@ -146,6 +158,116 @@ class HttpClient implements IHttpClient {
       return false;
     }
     return true;
+  }
+
+  private buildHeaders(options: RequestInit): Headers {
+    // Add tenant header if available from localStorage
+    const tenantId = (() => {
+      try {
+        const storedTenant = localStorage.getItem('tenant');
+        return storedTenant ? JSON.parse(storedTenant).id : null;
+      } catch {
+        return null;
+      }
+    })();
+
+    // Add authorization header if token exists
+    const authToken = (() => {
+      try {
+        return localStorage.getItem('auth_token');
+      } catch {
+        return null;
+      }
+    })();
+
+    const headers = new Headers({
+      'Content-Type': 'application/json',
+      ...options.headers,
+    });
+
+    if (tenantId) {
+      headers.set('X-Tenant-ID', tenantId);
+    }
+
+    if (authToken) {
+      headers.set('Authorization', `Bearer ${authToken}`);
+    }
+
+    return headers;
+  }
+
+  private async handleSuccessResponse(response: Response): Promise<any> {
+    // Validate Content-Type before parsing JSON
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      // Handle non-JSON response as error
+      let responseText = '';
+      try {
+        responseText = await response.text();
+      } catch {
+        responseText = 'Unable to read response content';
+      }
+
+      this.updateCircuitBreaker(false);
+      const apiError: ApiError = {
+        code: 'INVALID_CONTENT_TYPE',
+        message: `Expected JSON response but received: ${contentType || 'no content-type'}. Response: ${responseText.substring(0, 200)}`,
+        type: 'other',
+        statusCode: response.status,
+      };
+      throw apiError;
+    }
+
+    this.updateCircuitBreaker(true);
+    return await response.json();
+  }
+
+  private async parseErrorData(response: Response): Promise<any> {
+    if (response.headers.get('content-type')?.includes('application/json')) {
+      try {
+        return await response.clone().json();
+      } catch {
+        return { code: 'JSON_PARSE_ERROR', message: 'Failed to parse JSON error response' };
+      }
+    } else {
+      // For non-JSON responses (HTML, plain text, etc.), read as text
+      let errorText = '';
+      try {
+        errorText = await response.clone().text();
+      } catch {
+        errorText = 'Unable to read error response content';
+      }
+
+      return {
+        code: 'HTTP_ERROR',
+        message: `HTTP ${response.status}: ${response.statusText}${errorText ? `\nResponse: ${errorText.substring(0, 200)}` : ''}`,
+      };
+    }
+  }
+
+  private createHttpError(response: Response, errorData: any): ApiError {
+    const apiError: ApiError = {
+      ...errorData,
+      type: 'http',
+      statusCode: response.status,
+      retryable: response.status >= 500,
+    };
+    return apiError;
+  }
+
+  private createFetchError(error: any): ApiError {
+    const isAborted = (error as any)?.name === 'AbortError';
+    const apiError: ApiError = {
+      code: isAborted ? 'TIMEOUT' : 'NETWORK_ERROR',
+      message: isAborted ? 'Request timed out' : 'Network error: Unable to connect to the server',
+      type: isAborted ? 'timeout' : 'network',
+      retryable: true,
+    };
+    return apiError;
+  }
+
+  private shouldRetry(apiError: ApiError, attempt: number): boolean {
+    return this.isRetryableError(apiError) && attempt < this.config.retry.maxAttempts;
   }
 
   private async makeRequest(
@@ -188,126 +310,41 @@ class HttpClient implements IHttpClient {
       throw apiError;
     }
 
-    // Add tenant header if available
-    // Note: Authentication now handled via httpOnly cookies automatically sent by browser
-    const tenantId = (() => {
-      try {
-        const storedTenant = localStorage.getItem('tenant');
-        return storedTenant ? JSON.parse(storedTenant).id : null;
-      } catch {
-        return null;
-      }
-    })();
-
-    const headers = new Headers({
-      'Content-Type': 'application/json',
-      ...options.headers,
-    });
-
-    if (tenantId) {
-      headers.set('X-Tenant-ID', tenantId);
-    }
-
+    const headers = this.buildHeaders(options);
     let lastError: ApiError | Error | undefined;
 
     for (let attempt = 1; attempt <= this.config.retry.maxAttempts; attempt++) {
       try {
-        const response = await this.makeRequest(url, {
-          ...options,
-          headers,
-        });
+        const response = await this.makeRequest(url, { ...options, headers });
 
         if (response.ok) {
-          // Validate Content-Type before parsing JSON
-          const contentType = response.headers.get('content-type');
-          if (!contentType || !contentType.includes('application/json')) {
-            // Handle non-JSON response as error
-            let responseText = '';
-            try {
-              responseText = await response.text();
-            } catch {
-              responseText = 'Unable to read response content';
-            }
-
-            this.updateCircuitBreaker(false);
-            const apiError: ApiError = {
-              code: 'INVALID_CONTENT_TYPE',
-              message: `Expected JSON response but received: ${contentType || 'no content-type'}. Response: ${responseText.substring(0, 200)}`,
-              type: 'other',
-              statusCode: response.status,
-            };
-            throw apiError;
-          }
-
-          this.updateCircuitBreaker(true);
-          return await response.json();
+          return this.handleSuccessResponse(response);
         }
 
         // Handle HTTP errors
-        const errorContentType = response.headers.get('content-type');
-        const errorData: ApiError = await (async () => {
-          if (errorContentType && errorContentType.includes('application/json')) {
-            try {
-              return await response.clone().json();
-            } catch {
-              return { code: 'JSON_PARSE_ERROR', message: 'Failed to parse JSON error response' };
-            }
-          } else {
-            // For non-JSON responses (HTML, plain text, etc.), read as text
-            let errorText = '';
-            try {
-              errorText = await response.clone().text();
-            } catch {
-              errorText = 'Unable to read error response content';
-            }
+        const errorData = await this.parseErrorData(response);
+        const apiError = this.createHttpError(response, errorData);
 
-            return {
-              code: 'HTTP_ERROR',
-              message: `HTTP ${response.status}: ${response.statusText}${errorText ? `\nResponse: ${errorText.substring(0, 200)}` : ''}`,
-            };
-          }
-        })();
-
-        const apiError: ApiError = {
-          ...errorData,
-          type: 'http',
-          statusCode: response.status,
-          retryable: response.status >= 500,
-        };
-
-        // If it's not retryable or we've exhausted retries, throw immediately
-        if (!this.isRetryableError(apiError) || attempt === this.config.retry.maxAttempts) {
-          this.updateCircuitBreaker(false);
-          throw apiError;
+        if (this.shouldRetry(apiError, attempt)) {
+          lastError = apiError;
+          await this.sleep(this.calculateBackoffDelay(attempt));
+          continue;
         }
 
-        lastError = apiError;
+        this.updateCircuitBreaker(false);
+        throw apiError;
 
       } catch (error) {
-        // Handle fetch errors (network or timeout)
-        const isAborted = (error as any)?.name === 'AbortError';
-        const isNetworkError = error instanceof TypeError;
+        const apiError = this.createFetchError(error);
 
-        const apiError: ApiError = {
-          code: isAborted ? 'TIMEOUT' : 'NETWORK_ERROR',
-          message: isAborted ? 'Request timed out' : 'Network error: Unable to connect to the server',
-          type: isAborted ? 'timeout' : 'network',
-          retryable: true,
-        };
-
-        // If not retryable or exhausted retries, throw
-        if (!this.isRetryableError(apiError) || attempt === this.config.retry.maxAttempts) {
-          this.updateCircuitBreaker(false);
-          throw apiError;
+        if (this.shouldRetry(apiError, attempt)) {
+          lastError = apiError;
+          await this.sleep(this.calculateBackoffDelay(attempt));
+          continue;
         }
 
-        lastError = apiError;
-      }
-
-      // Wait before retrying (not on last attempt)
-      if (attempt < this.config.retry.maxAttempts) {
-        const delay = this.calculateBackoffDelay(attempt);
-        await this.sleep(delay);
+        this.updateCircuitBreaker(false);
+        throw apiError;
       }
     }
 

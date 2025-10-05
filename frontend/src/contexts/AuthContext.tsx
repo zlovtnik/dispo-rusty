@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
+import { authService } from '../services/api';
+import type { AuthResponse } from '../services/api';
 
 // Types
 export interface User {
@@ -30,13 +32,12 @@ export interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (credentials: LoginCredentials) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   refreshToken: () => Promise<void>;
-  // Token refresh implemented with robust error handling:
-  // - Only logs out on 401/403 (auth failures), not network errors
-  // - Built-in retry logic for transient failures
-  // - TODO: Plan migration to httpOnly cookies - implement /me endpoint to remove client-side token storage
-  // Currently using demo/mock implementation. In production, token should be managed server-side with httpOnly cookies.
+  // JWT Authentication Integration with backend API
+  // - Real authentication endpoints integration with existing Actix Web backend
+  // - JWT token storage and automatic Authorization header inclusion
+  // - Robust error handling with proper logout on auth failures
 }
 
 export interface LoginCredentials {
@@ -45,6 +46,21 @@ export interface LoginCredentials {
   tenantId: string;
   rememberMe?: boolean;
 }
+
+// JWT decoding utility
+const decodeJwtPayload = (token: string): any => {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3 || !parts[1]) {
+      throw new Error('Invalid JWT format');
+    }
+    const decoded = atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'));
+    return JSON.parse(decoded);
+  } catch (error) {
+    console.error('Failed to decode JWT:', error);
+    return null;
+  }
+};
 
 // Context
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -63,24 +79,63 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // In a multi-tenant system, authentication requires both user and tenant
   const isAuthenticated = !!user && !!tenant;
 
-  // Initialize auth state by simulating /me endpoint call
-  // TODO: Replace with actual API call to /me endpoint once backend supports httpOnly cookies
+  // Initialize auth state by validating stored token and data
   useEffect(() => {
     const initAuth = async () => {
       try {
-        // Simulate /me endpoint call - browser will automatically send httpOnly cookie
-        await new Promise(resolve => setTimeout(resolve, 500)); // Simulate API delay
-
-        // For demo purposes, check if there's valid stored user/tenant from previous sessions
-        // In production, this would be replaced by calling /me endpoint
+        const storedToken = localStorage.getItem('auth_token');
         const storedUser = localStorage.getItem('user');
         const storedTenant = localStorage.getItem('tenant');
 
-        if (storedUser && storedTenant) {
+        if (storedToken && storedUser && storedTenant) {
+          // Decode and validate the JWT token
+          const tokenPayload = decodeJwtPayload(storedToken);
+          if (!tokenPayload) {
+            throw new Error('Invalid stored token');
+          }
+
+          // Check if token is expired
+          const now = Math.floor(Date.now() / 1000);
+          if (tokenPayload.exp && tokenPayload.exp < now) {
+            console.log('Stored token expired, attempting refresh');
+            try {
+              // Attempt to refresh the token
+              const response = await authService.refreshToken();
+              const newToken = response.token;
+              if (newToken) {
+                localStorage.setItem('auth_token', newToken);
+
+                // Decode the new token to get fresh user/tenant info
+                const newPayload = decodeJwtPayload(newToken);
+                if (newPayload) {
+                  // Create user object from new token payload
+                  const refreshedUser = JSON.parse(storedUser);
+                  const refreshedTenant = JSON.parse(storedTenant);
+
+                  // Update stored data if needed (in case username or tenant changed)
+                  refreshedUser.username = newPayload.user;
+                  refreshedTenant.id = newPayload.tenant_id;
+
+                  localStorage.setItem('user', JSON.stringify(refreshedUser));
+                  localStorage.setItem('tenant', JSON.stringify(refreshedTenant));
+
+                  setUser(refreshedUser);
+                  setTenant(refreshedTenant);
+                }
+              }
+            } catch (refreshError) {
+              console.log('Token refresh failed during init, clearing authentication');
+              localStorage.removeItem('auth_token');
+              localStorage.removeItem('user');
+              localStorage.removeItem('tenant');
+            }
+            return;
+          }
+
+          // Validate stored user and tenant data structure
           const parsedUser = JSON.parse(storedUser) as User;
           const parsedTenant = JSON.parse(storedTenant) as Tenant;
 
-          // Strengthen shape validation
           const isValidUser = parsedUser &&
             typeof parsedUser.id === 'string' &&
             parsedUser.id.trim() !== '' &&
@@ -100,21 +155,33 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             parsedTenant.settings !== null;
 
           if (isValidUser && isValidTenant) {
-            setUser(parsedUser);
-            setTenant(parsedTenant);
-            // Note: No token stored client-side - authentication verified via httpOnly cookie
-            // isAuthenticated is now computed from user && tenant
+            // Cross-reference with token payload if possible
+            const tokenUsername = tokenPayload.user;
+            const tokenTenantId = tokenPayload.tenant_id;
+
+            if (parsedUser.username === tokenUsername && parsedTenant.id === tokenTenantId) {
+              setUser(parsedUser);
+              setTenant(parsedTenant);
+            } else {
+              console.warn('Token payload mismatch with stored data, clearing authentication');
+              localStorage.removeItem('auth_token');
+              localStorage.removeItem('user');
+              localStorage.removeItem('tenant');
+            }
           } else {
             // Invalid data structure, clear stored data
+            console.warn('Invalid stored user/tenant data structure');
+            localStorage.removeItem('auth_token');
             localStorage.removeItem('user');
             localStorage.removeItem('tenant');
           }
         }
       } catch (error) {
-        // Authentication failed or /me endpoint call failed - user not authenticated
+        // Authentication initialization failed - clear all auth data
+        localStorage.removeItem('auth_token');
         localStorage.removeItem('user');
         localStorage.removeItem('tenant');
-        console.error('Authentication check failed:', error);
+        console.error('Authentication initialization failed:', error);
       } finally {
         setIsLoading(false);
       }
@@ -126,68 +193,112 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const login = async (credentials: LoginCredentials): Promise<void> => {
     setIsLoading(true);
     try {
-      // Demo implementation - accept any credentials
-      // TODO: Replace with actual login API call that sets httpOnly cookie server-side
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API delay
+      // Call actual login API endpoint
+      const response: AuthResponse = await authService.login(credentials);
 
-      // Mock successful login - in production, backend would set httpOnly cookie
-      const mockUser: User = {
-        id: 'user_' + Date.now(),
-        email: credentials.usernameOrEmail,
-        username: credentials.usernameOrEmail.split('@')[0] || 'demo',
-        firstName: credentials.usernameOrEmail.split('.')[0] || 'Demo',
+      // Extract JWT token from response
+      const token = response.token;
+      if (!token) {
+        throw new Error('No token received from server');
+      }
+
+      // Store JWT token in localStorage
+      localStorage.setItem('auth_token', token);
+
+      // Decode JWT to extract user and tenant information
+      const tokenPayload = decodeJwtPayload(token);
+      if (!tokenPayload) {
+        throw new Error('Invalid token format');
+      }
+
+      // Create user object from token payload
+      const user: User = {
+        id: tokenPayload.user || `user_${Date.now()}`,
+        email: credentials.usernameOrEmail.includes('@') ? credentials.usernameOrEmail : `${tokenPayload.user}@demo.com`,
+        username: tokenPayload.user || credentials.usernameOrEmail.split('@')[0] || 'user',
+        firstName: tokenPayload.user ? tokenPayload.user.charAt(0).toUpperCase() + tokenPayload.user.slice(1) : 'Demo',
         lastName: 'User',
-        roles: ['user'],
+        roles: ['user'], // Default role, could be extracted from token if available
       };
 
-      const mockTenant: Tenant = {
-        id: credentials.tenantId,
-        name: `Tenant ${credentials.tenantId}`,
-        domain: `${credentials.tenantId}.demo.com`,
+      // Create tenant object
+      const tenant: Tenant = {
+        id: credentials.tenantId || tokenPayload.tenant_id,
+        name: `Tenant ${credentials.tenantId || tokenPayload.tenant_id}`,
+        domain: `${credentials.tenantId || tokenPayload.tenant_id}.demo.com`,
         settings: {
           theme: 'default',
           features: ['dashboard', 'address-book'],
         } as TenantSettings,
       };
 
-      // Store user and tenant info (token stored server-side in httpOnly cookie)
-      setUser(mockUser);
-      setTenant(mockTenant);
-      // isAuthenticated will be computed as !!user && !!tenant
+      // Set state
+      setUser(user);
+      setTenant(tenant);
 
-      // Persist only user/tenant info to localStorage, no sensitive tokens
-      localStorage.setItem('user', JSON.stringify(mockUser));
-      localStorage.setItem('tenant', JSON.stringify(mockTenant));
-      // Note: Token not stored client-side - managed server-side with httpOnly cookie
+      // Persist user and tenant info to localStorage
+      localStorage.setItem('user', JSON.stringify(user));
+      localStorage.setItem('tenant', JSON.stringify(tenant));
 
-    } catch (error) {
-      throw new Error('Login failed');
+    } catch (error: any) {
+      // Clear any partial data
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('user');
+      localStorage.removeItem('tenant');
+
+      console.error('Login request failed:', error);
+
+      // Re-throw with a user-friendly message
+      if (error?.statusCode === 401) {
+        throw new Error('Invalid username or password');
+      } else if (error?.statusCode === 400) {
+        throw new Error('Tenant not found or invalid request');
+      } else {
+        throw new Error(error?.message || 'Login failed');
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
-  const logout = (): void => {
-    // TODO: Call logout endpoint to clear server-side session/httpOnly cookie
-    setUser(null);
-    setTenant(null);
-    // isAuthenticated will be computed as false when both are null
-    // Clear stored user/tenant data
-    localStorage.removeItem('user');
-    localStorage.removeItem('tenant');
-    // Token is cleared server-side via logout endpoint
+  const logout = async (): Promise<void> => {
+    try {
+      // Call logout endpoint to clear server-side session
+      await authService.logout();
+      console.log('Server-side logout successful');
+    } catch (error) {
+      // Even if the API call fails, we should clear local data
+      console.error('Server-side logout failed, clearing local data anyway:', error);
+    } finally {
+      // Always clear local data regardless of API call success
+      setUser(null);
+      setTenant(null);
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('user');
+      localStorage.removeItem('tenant');
+    }
   };
 
   const refreshToken = async (): Promise<void> => {
     try {
       // Call backend refresh endpoint to validate and refresh the session
-      await import('../services/api').then(({ authService }) => authService.refreshToken());
+      const response: AuthResponse = await authService.refreshToken();
+
+      // Extract new JWT token from response
+      const newToken = response.token;
+      if (!newToken) {
+        throw new Error('No token received from server during refresh');
+      }
+
+      // Store the new JWT token in localStorage
+      localStorage.setItem('auth_token', newToken);
+
       console.log('Token refresh successful');
     } catch (error: any) {
       // Only logout on authentication failures (401/403), not on network/timeout errors
       if (error?.statusCode === 401 || error?.statusCode === 403) {
-        console.log('Authentication failed, logging out');
-        logout();
+        console.log('Authentication failed during refresh, logging out');
+        await logout(); // Call logout to clear everything
         throw new Error('Authentication expired');
       } else {
         // For network errors, timeouts, or other transient failures, don't logout
