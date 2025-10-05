@@ -28,6 +28,20 @@ pub fn verify_token(
     }
 }
 
+/// Checks whether an HTTP Authorization header contains a Bearer token prefix.
+///
+/// Returns `true` if the header value starts with "bearer" or "Bearer", `false` otherwise.
+///
+/// # Examples
+///
+/// ```
+/// use actix_web::http::header::HeaderValue;
+/// let h = HeaderValue::from_static("Bearer abc.def.ghi");
+/// assert!(is_auth_header_valid(&h));
+///
+/// let h2 = HeaderValue::from_static("Basic dXNlcjpwYXNz");
+/// assert!(!is_auth_header_valid(&h2));
+/// ```
 pub fn is_auth_header_valid(authen_header: &HeaderValue) -> bool {
     if let Ok(authen_str) = authen_header.to_str() {
         return authen_str.starts_with("bearer") || authen_str.starts_with("Bearer");

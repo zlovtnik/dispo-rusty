@@ -40,6 +40,24 @@ impl Person {
         people.find(i).get_result::<Person>(conn)
     }
 
+    /// Returns a paginated page of people matching the provided filter criteria.
+    ///
+    /// Applies any of the following filters when present on `PersonFilter`:
+    /// - `age`: exact match.
+    /// - `email`, `name`, `phone`: case-sensitive partial match using SQL `LIKE` with surrounding `%` wildcards.
+    /// - `gender`: accepts the strings `"male"` or `"female"` (case-insensitive) and maps them to the stored boolean value.
+    ///
+    /// Pagination uses `filter.cursor` as the page cursor (defaults to `0`) and `filter.page_size` as items per page (defaults to `crate::constants::DEFAULT_PER_PAGE`).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // Construct a filter to find people with "example" in their email and use a DB connection.
+    /// let filter = PersonFilter { email: Some("example".into()), age: None, gender: None, name: None, phone: None, cursor: None, page_size: None };
+    /// let mut conn: Connection = /* obtain connection */;
+    /// let page = Person::filter(filter, &mut conn).expect("query failed");
+    /// assert!(page.items.len() <= crate::constants::DEFAULT_PER_PAGE);
+    /// ```
     pub fn filter(filter: PersonFilter, conn: &mut Connection) -> QueryResult<Page<Person>> {
         let mut query = people::table.into_boxed();
 
@@ -78,6 +96,26 @@ impl Person {
             .load_items::<Person>(conn)
     }
 
+    /// Insert a new person record into the `people` table.
+    ///
+    /// Inserts the provided `PersonDTO` and returns the number of rows inserted.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use crate::models::{PersonDTO, insert};
+    /// // `conn` is a mutable database connection available in your test/setup.
+    /// let new_person = PersonDTO {
+    ///     name: "Alice".into(),
+    ///     gender: true,
+    ///     age: 30,
+    ///     address: "123 Main St".into(),
+    ///     phone: "555-1234".into(),
+    ///     email: "alice@example.com".into(),
+    /// };
+    /// let rows_inserted = insert(new_person, &mut conn).unwrap();
+    /// assert_eq!(rows_inserted, 1);
+    /// ```
     pub fn insert(new_person: PersonDTO, conn: &mut Connection) -> QueryResult<usize> {
         diesel::insert_into(people)
             .values(&new_person)

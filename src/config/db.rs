@@ -15,6 +15,18 @@ pub type Connection = PgConnection;
 
 pub type Pool = r2d2::Pool<ConnectionManager<Connection>>;
 
+/// Create and configure a new database connection pool from the given database URL.
+///
+/// # Examples
+///
+/// ```no_run
+/// let pool = init_db_pool("postgres://user:password@localhost/mydb");
+/// // Acquire a connection: `let conn = pool.get().unwrap();`
+/// ```
+///
+/// # Returns
+///
+/// A configured r2d2 connection pool connected to the specified database URL.
 pub fn init_db_pool(url: &str) -> Pool {
     use log::info;
 
@@ -27,6 +39,19 @@ pub fn init_db_pool(url: &str) -> Pool {
         .expect("Failed to create pool.")
 }
 
+/// Applies all embedded, pending database migrations against the provided PostgreSQL connection.
+///
+/// # Panics
+///
+/// Panics if running the pending migrations fails.
+///
+/// # Examples
+///
+/// ```
+/// // Obtain a `PgConnection`, then apply migrations:
+/// // let mut conn = establish_connection(); // user-provided connection setup
+/// // run_migration(&mut conn);
+/// ```
 pub fn run_migration(conn: &mut PgConnection) {
     conn.run_pending_migrations(MIGRATIONS).unwrap();
 }
