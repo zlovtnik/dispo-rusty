@@ -13,9 +13,15 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isDesktopMenuHidden, setIsDesktopMenuHidden] = useState(false);
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate('/login');
+    } catch (error) {
+      console.error('Logout failed:', error);
+      // Show user-facing error message or toast here
+      alert('Failed to logout properly. Please try again.');
+    }
   };
 
   const navigation = [

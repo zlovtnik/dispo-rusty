@@ -50,7 +50,7 @@
   border-color: var(--primary-300);
   box-shadow: 0 0 0 3px rgba(45, 157, 90, 0.1);
 }
-n
+
 .form-error {
   display: block;
   color: #dc2626;

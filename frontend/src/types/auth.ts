@@ -8,8 +8,8 @@ export interface User {
   avatar?: string;
   roles: string[];
   tenantId: string;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Tenant {
@@ -52,7 +52,7 @@ export interface AuthState {
   tenant: Tenant | null;
   token: string | null;
   refreshToken: string | null;
-  lastActivity: Date | null;
+  lastActivity: string | null;
 }
 
 export interface LoginCredentials {
@@ -62,10 +62,11 @@ export interface LoginCredentials {
   rememberMe?: boolean;
 }
 
-export interface RegisterData extends LoginCredentials {
+export interface RegisterData {
   firstName: string;
   lastName: string;
   email: string;
+  password: string;
   confirmPassword: string;
   acceptTerms: boolean;
 }

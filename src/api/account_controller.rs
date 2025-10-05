@@ -54,16 +54,6 @@ pub async fn login(
 
 // POST api/auth/logout
 pub async fn logout(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
-    // Handle CORS preflight OPTIONS request
-    if req.method() == "OPTIONS" {
-        return Ok(HttpResponse::Ok()
-            .header("Access-Control-Allow-Origin", "*")
-            .header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-            .header("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept, X-Tenant-ID")
-            .header("Access-Control-Max-Age", "3600")
-            .finish());
-    }
-
     if let Some(authen_header) = req.headers().get(constants::AUTHORIZATION) {
         if let Some(pool) = req.extensions().get::<Pool>() {
             account_service::logout(authen_header, pool);

@@ -11,14 +11,14 @@ export const HomePage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-color-natural-light to-color-healing-light">
+    <div className="min-h-screen bg-gradient-to-br from-natural-light to-healing-light">
       {/* Hero Section */}
       <div className="container mx-auto px-4 py-16">
         <div className="text-center max-w-4xl mx-auto">
-          <h1 className="text-5xl md:text-6xl font-bold text-color-healing-dark mb-6">
+          <h1 className="text-5xl md:text-6xl font-bold text-healing-dark mb-6">
             Welcome to the Natural Pharmacy System
           </h1>
-          <p className="text-xl text-color-natural-dark mb-8 max-w-2xl mx-auto">
+          <p className="text-xl text-natural-dark mb-8 max-w-2xl mx-auto">
             A modern, secure multi-tenant platform for managing pharmaceutical data
             with JWT authentication and comprehensive tenant isolation.
           </p>
@@ -39,31 +39,31 @@ export const HomePage: React.FC = () => {
         <div className="container mx-auto px-4">
           <div className="grid md:grid-cols-3 gap-8">
             <div className="text-center">
-              <div className="w-16 h-16 bg-color-healing-light rounded-full flex items-center justify-center mx-auto mb-4">
-                <div className="text-3xl text-color-healing-dark">🔒</div>
+              <div className="w-16 h-16 bg-healing-light rounded-full flex items-center justify-center mx-auto mb-4">
+                <div className="text-3xl text-healing-dark">🔒</div>
               </div>
-              <h3 className="text-xl font-semibold text-color-healing-dark mb-2">Secure Authentication</h3>
-              <p className="text-color-natural-dark">
+              <h3 className="text-xl font-semibold text-healing-dark mb-2">Secure Authentication</h3>
+              <p className="text-natural-dark">
                 JWT-based login system with comprehensive security measures and multi-tenant support.
               </p>
             </div>
 
             <div className="text-center">
-              <div className="w-16 h-16 bg-color-healing-light rounded-full flex items-center justify-center mx-auto mb-4">
-                <div className="text-3xl text-color-healing-dark">🏢</div>
+              <div className="w-16 h-16 bg-healing-light rounded-full flex items-center justify-center mx-auto mb-4">
+                <div className="text-3xl text-healing-dark">🏢</div>
               </div>
-              <h3 className="text-xl font-semibold text-color-healing-dark mb-2">Multi-Tenant Architecture</h3>
-              <p className="text-color-natural-dark">
+              <h3 className="text-xl font-semibold text-healing-dark mb-2">Multi-Tenant Architecture</h3>
+              <p className="text-natural-dark">
                 Complete tenant isolation ensuring data security and privacy across different organizations.
               </p>
             </div>
 
             <div className="text-center">
-              <div className="w-16 h-16 bg-color-healing-light rounded-full flex items-center justify-center mx-auto mb-4">
-                <div className="text-3xl text-color-healing-dark">⚡</div>
+              <div className="w-16 h-16 bg-healing-light rounded-full flex items-center justify-center mx-auto mb-4">
+                <div className="text-3xl text-healing-dark">⚡</div>
               </div>
-              <h3 className="text-xl font-semibold text-color-healing-dark mb-2">High Performance</h3>
-              <p className="text-color-natural-dark">
+              <h3 className="text-xl font-semibold text-healing-dark mb-2">High Performance</h3>
+              <p className="text-natural-dark">
                 Built with Bun runtime for exceptional speed and TypeScript for reliable development.
               </p>
             </div>
@@ -72,7 +72,7 @@ export const HomePage: React.FC = () => {
       </div>
 
       {/* Footer */}
-      <footer className="bg-color-natural-dark text-white py-8">
+      <footer className="bg-natural-dark text-white py-8">
         <div className="container mx-auto px-4">
           <div className="text-center">
             <p className="text-sm">

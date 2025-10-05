@@ -37,7 +37,7 @@ test("hello world", () => {
 
 ## Frontend
 
-Use HTML imports with `Bun.serve()`. Don't use `vite`. HTML imports fully support React, CSS, Tailwind.
+For complex TypeScript/React applications requiring modern bundling, HMR, and optimization features, use Vite as the development server and bundler (include vite.config.ts, @vite/client types, and related devDependencies). Use Bun primarily for package management, running scripts, and simple serving. For simple static sites or basic React apps without complex build requirements, use HTML imports with `Bun.serve()` instead of Vite.
 
 Server:
 

@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { authService } from '../services/api';
-import type { AuthResponse, ApiResponseWrapper } from '../services/api';
+import type { AuthResponse } from '../types/auth';
+import type { ApiResponseWrapper } from '../services/api';
 
 // Types
 export interface User {
@@ -78,12 +79,22 @@ const decodeJwtPayload = (token: string): JwtPayload | null => {
 };
 
 // Helper to attempt token refresh and validate/construct user and tenant objects
-const attemptTokenRefresh = async (storedUser: string, storedTenant: string): Promise<{ user: User; tenant: Tenant; token: string } | null> => {
+const attemptTokenRefresh = async (storedUser: string, storedTenant: string, signal?: AbortSignal): Promise<{ user: User; tenant: Tenant; token: string } | null> => {
   try {
+    if (signal?.aborted) {
+      console.log('Token refresh cancelled');
+      return null;
+    }
+
     const response = await authService.refreshToken();
     const newToken = response.data.token;
     if (!newToken) {
       console.log('No token received from refresh');
+      return null;
+    }
+
+    if (signal?.aborted) {
+      console.log('Token refresh cancelled after API call');
       return null;
     }
 
@@ -135,6 +146,10 @@ const attemptTokenRefresh = async (storedUser: string, storedTenant: string): Pr
       return null;
     }
   } catch (refreshError) {
+    if (signal?.aborted) {
+      console.log('Token refresh cancelled due to abort');
+      return null;
+    }
     console.log('Token refresh failed:', refreshError);
     return null;
   }
@@ -160,15 +175,30 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Initialize auth state by validating stored token and data
   useEffect(() => {
+    const abortController = new AbortController();
+
     const initAuth = async () => {
       try {
-        const storedToken = localStorage.getItem('auth_token');
+        const storedTokenData = localStorage.getItem('auth_token');
         const storedUser = localStorage.getItem('user');
         const storedTenant = localStorage.getItem('tenant');
 
-        if (storedToken && storedUser && storedTenant) {
+        if (storedTokenData && storedUser && storedTenant) {
+          // Parse token data and extract JWT token
+          let token: string;
+          try {
+            const tokenObj = JSON.parse(storedTokenData);
+            token = tokenObj?.token;
+            if (!token || typeof token !== 'string') {
+              throw new Error('Invalid token data structure');
+            }
+          } catch {
+            // Fallback for legacy plain string format (for backward compatibility)
+            token = storedTokenData;
+          }
+
           // Decode and validate the JWT token
-          const tokenPayload = decodeJwtPayload(storedToken);
+          const tokenPayload = decodeJwtPayload(token);
           if (!tokenPayload) {
             throw new Error('Invalid stored token');
           }
@@ -176,19 +206,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           // Check if token is expired
           const now = Math.floor(Date.now() / 1000);
           if (tokenPayload.exp && tokenPayload.exp < now) {
-            const result = await attemptTokenRefresh(storedUser, storedTenant);
-            if (result) {
-              localStorage.setItem('auth_token', result.token);
-              localStorage.setItem('user', JSON.stringify(result.user));
-              localStorage.setItem('tenant', JSON.stringify(result.tenant));
-              if (isMountedRef.current) {
+            const result = await attemptTokenRefresh(storedUser, storedTenant, abortController.signal);
+            if (result && !abortController.signal.aborted) {
+              if (!abortController.signal.aborted) {
+                localStorage.setItem('auth_token', JSON.stringify({ token: result.token }));
+                localStorage.setItem('user', JSON.stringify(result.user));
+                localStorage.setItem('tenant', JSON.stringify(result.tenant));
+              }
+              if (isMountedRef.current && !abortController.signal.aborted) {
                 setUser(result.user);
                 setTenant(result.tenant);
               }
             } else {
-              localStorage.removeItem('auth_token');
-              localStorage.removeItem('user');
-              localStorage.removeItem('tenant');
+              if (!abortController.signal.aborted) {
+                localStorage.removeItem('auth_token');
+                localStorage.removeItem('user');
+                localStorage.removeItem('tenant');
+              }
             }
             return;
           } else {
@@ -220,33 +254,39 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               const tokenTenantId = tokenPayload.tenant_id;
 
               if (parsedUser.username === tokenUsername && parsedTenant.id === tokenTenantId) {
-                if (isMountedRef.current) {
+                if (isMountedRef.current && !abortController.signal.aborted) {
                   setUser(parsedUser);
                   setTenant(parsedTenant);
                 }
               } else {
                 console.warn('Token payload mismatch with stored data, clearing authentication');
-                localStorage.removeItem('auth_token');
-                localStorage.removeItem('user');
-                localStorage.removeItem('tenant');
+                if (!abortController.signal.aborted) {
+                  localStorage.removeItem('auth_token');
+                  localStorage.removeItem('user');
+                  localStorage.removeItem('tenant');
+                }
               }
             } else {
               // Invalid data structure, clear stored data
               console.warn('Invalid stored user/tenant data structure');
-              localStorage.removeItem('auth_token');
-              localStorage.removeItem('user');
-              localStorage.removeItem('tenant');
+              if (!abortController.signal.aborted) {
+                localStorage.removeItem('auth_token');
+                localStorage.removeItem('user');
+                localStorage.removeItem('tenant');
+              }
             }
           }
         }
       } catch (error) {
-        // Authentication initialization failed - clear all auth data
-        localStorage.removeItem('auth_token');
-        localStorage.removeItem('user');
-        localStorage.removeItem('tenant');
-        console.error('Authentication initialization failed:', error);
+        if (!abortController.signal.aborted) {
+          // Authentication initialization failed - clear all auth data
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('user');
+          localStorage.removeItem('tenant');
+          console.error('Authentication initialization failed:', error);
+        }
       } finally {
-        if (isMountedRef.current) {
+        if (isMountedRef.current && !abortController.signal.aborted) {
           setIsLoading(false);
         }
       }
@@ -255,6 +295,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     initAuth();
 
     return () => {
+      abortController.abort();
       isMountedRef.current = false;
     };
   }, []);
@@ -273,8 +314,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         throw new Error('No token received from server');
       }
 
-      // Store JWT token in localStorage
-      localStorage.setItem('auth_token', token);
+      // Store JWT token in localStorage as JSON object
+      localStorage.setItem('auth_token', JSON.stringify({ token }));
 
       // Decode JWT to extract user and tenant information
       const tokenPayload = decodeJwtPayload(token);
@@ -363,8 +404,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         throw new Error('No token received from server during refresh');
       }
 
-      // Store the new JWT token in localStorage
-      localStorage.setItem('auth_token', newToken);
+      // Store the new JWT token in localStorage as JSON object
+      localStorage.setItem('auth_token', JSON.stringify({ token: newToken }));
 
       console.log('Token refresh successful');
     } catch (error: any) {

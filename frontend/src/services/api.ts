@@ -129,21 +129,29 @@ class HttpClient implements IHttpClient {
     };
   }
 
-  private safeGet(key: string): string | null {
+  private safeGetJsonValue(key: string): any {
     try {
-      return localStorage.getItem(key);
+      const stored = localStorage.getItem(key);
+      return stored ? JSON.parse(stored) : null;
     } catch {
       return null;
     }
   }
 
-  private safeGetJsonId(key: string): string | null {
-    try {
-      const stored = localStorage.getItem(key);
-      return stored ? JSON.parse(stored).id : null;
-    } catch {
-      return null;
-    }
+  /**
+   * Storage format convention:
+   * - 'auth_token': JSON object {token: string}
+   * - 'tenant': JSON object {id: string, name: string, ...}
+   * - 'user': JSON object {id: string, email: string, ...}
+   */
+  private safeGetToken(): string | null {
+    const tokenData = this.safeGetJsonValue('auth_token');
+    return (tokenData && typeof tokenData.token === 'string') ? tokenData.token : null;
+  }
+
+  private safeGetTenantId(): string | null {
+    const tenantData = this.safeGetJsonValue('tenant');
+    return (tenantData && typeof tenantData.id === 'string') ? tenantData.id : null;
   }
 
   private sleep(delay: number): Promise<void> {
@@ -202,10 +210,10 @@ class HttpClient implements IHttpClient {
 
   private buildHeaders(options: RequestInit): Headers {
     // Add tenant header if available from localStorage
-    const tenantId = this.safeGetJsonId('tenant');
+    const tenantId = this.safeGetTenantId();
 
     // Add authorization header if token exists
-    const authToken = this.safeGet('auth_token');
+    const authToken = this.safeGetToken();
 
     const headers = new Headers({
       'Content-Type': 'application/json',
