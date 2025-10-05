@@ -24,22 +24,4 @@
     </div>
     <button type="submit" class="btn">Sign Up</button>
   </form>
-
-  <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      const signupForm = document.getElementById('signupForm');
-      if (!signupForm) return;
-
-      signupForm.addEventListener('submit', function(e) {
-        const password = (document.getElementById('signupPassword') as HTMLInputElement)?.value;
-        const confirmPassword = (document.getElementById('signupConfirmPassword') as HTMLInputElement)?.value;
-
-        if (password !== confirmPassword) {
-          e.preventDefault();
-          alert('Passwords do not match. Please try again.');
-          return false;
-        }
-      });
-    });
-  </script>
 </div>

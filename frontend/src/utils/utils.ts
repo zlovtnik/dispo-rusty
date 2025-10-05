@@ -145,41 +145,6 @@ export async function confirmDelete(): Promise<boolean> {
         </div>
       `;
 
-      // Add dialog styles if not present
-      if (!document.getElementById('dialog-styles')) {
-        const styles = document.createElement('style');
-        styles.id = 'dialog-styles';
-        styles.textContent = `
-          .delete-confirm-dialog {
-            border: none;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            padding: 0;
-          }
-          .dialog-content {
-            padding: 20px;
-            min-width: 300px;
-          }
-          .dialog-content h3 {
-            margin: 0 0 10px 0;
-            color: #333;
-          }
-          .dialog-content p {
-            margin: 0 0 20px 0;
-            color: #666;
-          }
-          .dialog-actions {
-            display: flex;
-            gap: 10px;
-            justify-content: flex-end;
-          }
-          .delete-confirm-dialog::backdrop {
-            background: rgba(0, 0, 0, 0.5);
-          }
-        `;
-        document.head.appendChild(styles);
-      }
-
       document.body.appendChild(dialog);
 
       const confirmBtn = dialog.querySelector('#confirm-btn') as HTMLButtonElement;

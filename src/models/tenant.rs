@@ -40,14 +40,6 @@ impl Tenant {
             Box::new("Invalid database URL format".to_string()),
         ))?;
 
-        // Test connection
-        use diesel::pg::PgConnection;
-        let test_conn = PgConnection::establish(url).map_err(|e| result::Error::DatabaseError(
-            result::DatabaseErrorKind::Unknown,
-            Box::new(format!("Cannot connect to database: {}", e)),
-        ))?;
-        drop(test_conn); // Close the test connection
-
         Ok(())
     }
 
