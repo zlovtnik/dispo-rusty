@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { authService } from '../services/api';
-import type { AuthResponse } from '../services/api';
+import type { AuthResponse, ApiResponseWrapper } from '../services/api';
 
 // Types
 export interface User {
@@ -77,6 +77,69 @@ const decodeJwtPayload = (token: string): JwtPayload | null => {
   }
 };
 
+// Helper to attempt token refresh and validate/construct user and tenant objects
+const attemptTokenRefresh = async (storedUser: string, storedTenant: string): Promise<{ user: User; tenant: Tenant; token: string } | null> => {
+  try {
+    const response = await authService.refreshToken();
+    const newToken = response.data.token;
+    if (!newToken) {
+      console.log('No token received from refresh');
+      return null;
+    }
+
+    const newPayload = decodeJwtPayload(newToken);
+    if (!newPayload || typeof newPayload !== 'object') {
+      console.log('Failed to decode refreshed JWT token');
+      return null;
+    }
+
+    if (!newPayload.user?.trim() || !newPayload.tenant_id?.trim()) {
+      console.log('JWT payload validation failed: missing or invalid user/tenant_id in refreshed token');
+      return null;
+    }
+
+    let refreshedUser: User | null = null;
+    let refreshedTenant: Tenant | null = null;
+
+    try {
+      const parsedUser = JSON.parse(storedUser);
+      if (parsedUser && typeof parsedUser === 'object' &&
+          typeof parsedUser.id === 'string' && parsedUser.id.trim() !== '' &&
+          typeof parsedUser.email === 'string' && parsedUser.email.trim() !== '' &&
+          typeof parsedUser.username === 'string' && parsedUser.username.trim() !== '' &&
+          Array.isArray(parsedUser.roles) && parsedUser.roles.every((role: any) => typeof role === 'string')) {
+        parsedUser.username = newPayload.user;
+        refreshedUser = parsedUser;
+      }
+    } catch (parseError) {
+      console.log('Failed to parse stored user data:', parseError);
+    }
+
+    try {
+      const parsedTenant = JSON.parse(storedTenant);
+      if (parsedTenant && typeof parsedTenant === 'object' &&
+          typeof parsedTenant.id === 'string' && parsedTenant.id.trim() !== '' &&
+          typeof parsedTenant.name === 'string' && parsedTenant.name.trim() !== '' &&
+          typeof parsedTenant.settings === 'object' && parsedTenant.settings !== null) {
+        parsedTenant.id = newPayload.tenant_id;
+        refreshedTenant = parsedTenant;
+      }
+    } catch (parseError) {
+      console.log('Failed to parse stored tenant data:', parseError);
+    }
+
+    if (refreshedUser && refreshedTenant) {
+      return { user: refreshedUser, tenant: refreshedTenant, token: newToken };
+    } else {
+      console.log('Stored user/tenant data validation failed after token refresh');
+      return null;
+    }
+  } catch (refreshError) {
+    console.log('Token refresh failed:', refreshError);
+    return null;
+  }
+};
+
 // Context
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -113,135 +176,67 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           // Check if token is expired
           const now = Math.floor(Date.now() / 1000);
           if (tokenPayload.exp && tokenPayload.exp < now) {
-            console.log('Stored token expired, attempting refresh');
-            try {
-              // Attempt to refresh the token
-              const response = await authService.refreshToken();
-              const newToken = response.token;
-              if (newToken) {
-                localStorage.setItem('auth_token', newToken);
-
-                // Decode the new token to get fresh user/tenant info
-                const newPayload = decodeJwtPayload(newToken);
-                if (newPayload && typeof newPayload === 'object') {
-                  // Since newPayload is already validated in decodeJwtPayload, we can trust it has the required fields
-                  // but double-check for runtime safety
-                  if (!newPayload.user?.trim() || !newPayload.tenant_id?.trim()) {
-                    console.log('JWT payload validation failed: missing or invalid user/tenant_id in refreshed token');
-                    localStorage.removeItem('auth_token');
-                    localStorage.removeItem('user');
-                    localStorage.removeItem('tenant');
-                    return;
-                  }
-
-                  let refreshedUser: User | null = null;
-                  let refreshedTenant: Tenant | null = null;
-
-                  try {
-                    const parsedUser = JSON.parse(storedUser);
-                    if (parsedUser && typeof parsedUser === 'object' &&
-                        typeof parsedUser.id === 'string' && parsedUser.id.trim() !== '' &&
-                        typeof parsedUser.email === 'string' && parsedUser.email.trim() !== '' &&
-                        typeof parsedUser.username === 'string' && parsedUser.username.trim() !== '' &&
-                        Array.isArray(parsedUser.roles) && parsedUser.roles.every((role: any) => typeof role === 'string')) {
-                      refreshedUser = parsedUser;
-                    }
-                  } catch (parseError) {
-                    console.log('Failed to parse stored user data:', parseError);
-                  }
-
-                  try {
-                    const parsedTenant = JSON.parse(storedTenant);
-                    if (parsedTenant && typeof parsedTenant === 'object' &&
-                        typeof parsedTenant.id === 'string' && parsedTenant.id.trim() !== '' &&
-                        typeof parsedTenant.name === 'string' && parsedTenant.name.trim() !== '' &&
-                        typeof parsedTenant.settings === 'object' && parsedTenant.settings !== null) {
-                      refreshedTenant = parsedTenant;
-                    }
-                  } catch (parseError) {
-                    console.log('Failed to parse stored tenant data:', parseError);
-                  }
-
-                  // Only update if all validations passed
-                  if (refreshedUser && refreshedTenant) {
-                    // Update stored data if needed (in case username or tenant changed)
-                    refreshedUser.username = newPayload.user;
-                    refreshedTenant.id = newPayload.tenant_id;
-
-                    localStorage.setItem('user', JSON.stringify(refreshedUser));
-                    localStorage.setItem('tenant', JSON.stringify(refreshedTenant));
-
-                    if (isMountedRef.current) {
-                      setUser(refreshedUser);
-                      setTenant(refreshedTenant);
-                    }
-                  } else {
-                    console.log('Stored user/tenant data validation failed after token refresh');
-                    localStorage.removeItem('auth_token');
-                    localStorage.removeItem('user');
-                    localStorage.removeItem('tenant');
-                  }
-                } else {
-                  console.log('Failed to decode refreshed JWT token');
-                  localStorage.removeItem('auth_token');
-                  localStorage.removeItem('user');
-                  localStorage.removeItem('tenant');
-                }
+            const result = await attemptTokenRefresh(storedUser, storedTenant);
+            if (result) {
+              localStorage.setItem('auth_token', result.token);
+              localStorage.setItem('user', JSON.stringify(result.user));
+              localStorage.setItem('tenant', JSON.stringify(result.tenant));
+              if (isMountedRef.current) {
+                setUser(result.user);
+                setTenant(result.tenant);
               }
-            } catch (refreshError) {
-              console.log('Token refresh failed during init, clearing authentication');
+            } else {
               localStorage.removeItem('auth_token');
               localStorage.removeItem('user');
               localStorage.removeItem('tenant');
             }
             return;
-          }
-        }
+          } else {
+            // Validate stored user and tenant data structure
+            const parsedUser = JSON.parse(storedUser) as User;
+            const parsedTenant = JSON.parse(storedTenant) as Tenant;
 
-          // Validate stored user and tenant data structure
-          const parsedUser = JSON.parse(storedUser) as User;
-          const parsedTenant = JSON.parse(storedTenant) as Tenant;
+            const isValidUser = parsedUser &&
+              typeof parsedUser.id === 'string' &&
+              parsedUser.id.trim() !== '' &&
+              typeof parsedUser.email === 'string' &&
+              parsedUser.email.trim() !== '' &&
+              typeof parsedUser.username === 'string' &&
+              parsedUser.username.trim() !== '' &&
+              Array.isArray(parsedUser.roles) &&
+              parsedUser.roles.every(role => typeof role === 'string');
 
-          const isValidUser = parsedUser &&
-            typeof parsedUser.id === 'string' &&
-            parsedUser.id.trim() !== '' &&
-            typeof parsedUser.email === 'string' &&
-            parsedUser.email.trim() !== '' &&
-            typeof parsedUser.username === 'string' &&
-            parsedUser.username.trim() !== '' &&
-            Array.isArray(parsedUser.roles) &&
-            parsedUser.roles.every(role => typeof role === 'string');
+            const isValidTenant = parsedTenant &&
+              typeof parsedTenant.id === 'string' &&
+              parsedTenant.id.trim() !== '' &&
+              typeof parsedTenant.name === 'string' &&
+              parsedTenant.name.trim() !== '' &&
+              typeof parsedTenant.settings === 'object' &&
+              parsedTenant.settings !== null;
 
-          const isValidTenant = parsedTenant &&
-            typeof parsedTenant.id === 'string' &&
-            parsedTenant.id.trim() !== '' &&
-            typeof parsedTenant.name === 'string' &&
-            parsedTenant.name.trim() !== '' &&
-            typeof parsedTenant.settings === 'object' &&
-            parsedTenant.settings !== null;
+            if (isValidUser && isValidTenant) {
+              // Cross-reference with token payload if possible
+              const tokenUsername = tokenPayload.user;
+              const tokenTenantId = tokenPayload.tenant_id;
 
-          if (isValidUser && isValidTenant) {
-            // Cross-reference with token payload if possible
-            const tokenUsername = tokenPayload.user;
-            const tokenTenantId = tokenPayload.tenant_id;
-
-            if (parsedUser.username === tokenUsername && parsedTenant.id === tokenTenantId) {
-              if (isMountedRef.current) {
-                setUser(parsedUser);
-                setTenant(parsedTenant);
+              if (parsedUser.username === tokenUsername && parsedTenant.id === tokenTenantId) {
+                if (isMountedRef.current) {
+                  setUser(parsedUser);
+                  setTenant(parsedTenant);
+                }
+              } else {
+                console.warn('Token payload mismatch with stored data, clearing authentication');
+                localStorage.removeItem('auth_token');
+                localStorage.removeItem('user');
+                localStorage.removeItem('tenant');
               }
             } else {
-              console.warn('Token payload mismatch with stored data, clearing authentication');
+              // Invalid data structure, clear stored data
+              console.warn('Invalid stored user/tenant data structure');
               localStorage.removeItem('auth_token');
               localStorage.removeItem('user');
               localStorage.removeItem('tenant');
             }
-          } else {
-            // Invalid data structure, clear stored data
-            console.warn('Invalid stored user/tenant data structure');
-            localStorage.removeItem('auth_token');
-            localStorage.removeItem('user');
-            localStorage.removeItem('tenant');
           }
         }
       } catch (error) {
@@ -267,11 +262,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const login = async (credentials: LoginCredentials): Promise<void> => {
     setIsLoading(true);
     try {
+      // Use "tenant1" for demo purposes, as hardcoded in backend
+      const modifiedCredentials = { ...credentials, tenantId: 'tenant1' };
       // Call actual login API endpoint
-      const response: AuthResponse = await authService.login(credentials);
+      const response: ApiResponseWrapper<AuthResponse> = await authService.login(modifiedCredentials);
 
       // Extract JWT token from response
-      const token = response.token;
+      const token = response.data.token;
       if (!token) {
         throw new Error('No token received from server');
       }
@@ -285,21 +282,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         throw new Error('Invalid token format');
       }
 
-      // Create user object from token payload
+      // Validate token payload fields
+      if (!tokenPayload.user || !tokenPayload.tenant_id) {
+        throw new Error('Required fields missing in token');
+      }
+
+      // Create user object from token payload (remove synthetic fallbacks)
       const user: User = {
-        id: tokenPayload.user || `user_${Date.now()}`,
-        email: credentials.usernameOrEmail.includes('@') ? credentials.usernameOrEmail : `${tokenPayload.user}@demo.com`,
-        username: tokenPayload.user || credentials.usernameOrEmail.split('@')[0] || 'user',
-        firstName: tokenPayload.user ? tokenPayload.user.charAt(0).toUpperCase() + tokenPayload.user.slice(1) : 'Demo',
+        id: tokenPayload.user,
+        email: credentials.usernameOrEmail,
+        username: tokenPayload.user,
+        firstName: tokenPayload.user.charAt(0).toUpperCase() + tokenPayload.user.slice(1),
         lastName: 'User',
-        roles: ['user'], // Default role, could be extracted from token if available
+        roles: ['user'], // Default role
       };
 
       // Create tenant object
+      if (!tokenPayload.tenant_id) {
+        throw new Error('Tenant ID missing in token');
+      }
       const tenant: Tenant = {
-        id: credentials.tenantId || tokenPayload.tenant_id,
-        name: `Tenant ${credentials.tenantId || tokenPayload.tenant_id}`,
-        domain: `${credentials.tenantId || tokenPayload.tenant_id}.demo.com`,
+        id: tokenPayload.tenant_id,
+        name: `Tenant ${tokenPayload.tenant_id}`,
+        domain: `${tokenPayload.tenant_id}.demo.com`,
         settings: {
           theme: 'default',
           features: ['dashboard', 'address-book'],
@@ -322,14 +327,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       console.error('Login request failed:', error);
 
-      // Re-throw with a user-friendly message
-      if (error?.statusCode === 401) {
-        throw new Error('Invalid username or password');
-      } else if (error?.statusCode === 400) {
-        throw new Error('Tenant not found or invalid request');
-      } else {
-        throw new Error(error?.message || 'Login failed');
-      }
+      // Re-throw with the actual error message from the server
+      throw new Error(error?.message || 'Login failed');
     } finally {
       setIsLoading(false);
     }
@@ -356,10 +355,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const refreshToken = async (): Promise<void> => {
     try {
       // Call backend refresh endpoint to validate and refresh the session
-      const response: AuthResponse = await authService.refreshToken();
+      const response: ApiResponseWrapper<AuthResponse> = await authService.refreshToken();
 
       // Extract new JWT token from response
-      const newToken = response.token;
+      const newToken = response.data.token;
       if (!newToken) {
         throw new Error('No token received from server during refresh');
       }

@@ -1,13 +1,19 @@
-export interface LoginCredentials {
-  usernameOrEmail: string;
-  password: string;
-  tenantId: string;
-  rememberMe?: boolean;
+// API Response wrapper interface
+export interface ApiResponseWrapper<T> {
+  message: string;
+  data: T;
 }
 
 export interface AuthResponse {
   token: string;
   token_type: string;
+}
+
+export interface LoginCredentials {
+  usernameOrEmail: string;
+  password: string;
+  tenantId: string;
+  rememberMe?: boolean;
 }
 
 export interface LoginInfoResponse {
@@ -82,7 +88,7 @@ const API_BASE_URL = (() => {
 
   // Only allow localhost fallback in development
   if (import.meta.env.MODE === 'development') {
-    return 'http://localhost:8080/api';
+    return 'http://localhost:8000/api';
   }
 
   // In production, throw an error if API URL is missing
@@ -398,16 +404,21 @@ const apiClient = new HttpClient();
 
 // API Services
 export const authService = {
-  async login(credentials: LoginCredentials): Promise<AuthResponse> {
-    return apiClient.post<AuthResponse>('/auth/login', credentials);
+  async login(credentials: LoginCredentials): Promise<ApiResponseWrapper<AuthResponse>> {
+    const payload = {
+      username_or_email: credentials.usernameOrEmail,
+      password: credentials.password,
+      tenant_id: credentials.tenantId,
+    };
+    return apiClient.post<ApiResponseWrapper<AuthResponse>>('/auth/login', payload);
   },
 
-  async logout(): Promise<AuthResponse> {
-    return apiClient.post<AuthResponse>('/auth/logout');
+  async logout(): Promise<ApiResponseWrapper<any>> {
+    return apiClient.post<ApiResponseWrapper<any>>('/auth/logout');
   },
 
-  async refreshToken(): Promise<AuthResponse> {
-    return apiClient.post<AuthResponse>('/auth/refresh');
+  async refreshToken(): Promise<ApiResponseWrapper<AuthResponse>> {
+    return apiClient.post<ApiResponseWrapper<AuthResponse>>('/auth/refresh');
   },
 };
 

@@ -3,7 +3,7 @@ use serde::Serialize;
 use log::info;
 use std::collections::HashMap;
 use diesel::prelude::*;
-use diesel::pg::PgConnection;
+
 
 use crate::{
     config::db::{Pool as DatabasePool, TenantPoolManager},
@@ -167,5 +167,3 @@ pub async fn get_tenant_status(
 
     Ok(HttpResponse::Ok().json(status_map))
 }
-
-use crate::models::user::User;

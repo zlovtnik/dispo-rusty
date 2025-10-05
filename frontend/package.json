@@ -1,7 +1,7 @@
 {
   "name": "actix-web-rest-api-frontend",
   "version": "1.0.0",
-  "description": "TypeScript/Bun/React frontend for Actix Web REST API with JWT authentication and multi-tenant support",
+  "description": "TypeScript/Vite/React frontend for Actix Web REST API with JWT authentication and multi-tenant support",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

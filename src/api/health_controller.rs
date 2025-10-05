@@ -1,4 +1,4 @@
-use actix_web::{get, HttpResponse, web};
+use actix_web::{get, HttpRequest, HttpResponse, web};
 use serde::Serialize;
 use tokio::time::{timeout, Duration};
 
@@ -113,7 +113,8 @@ async fn health(pool: web::Data<DatabasePool>, redis_pool: web::Data<RedisPool>)
 }
 
 #[get("/health/detailed")]
-async fn health_detailed(pool: web::Data<DatabasePool>, redis_pool: web::Data<RedisPool>, manager: Option<web::Data<TenantPoolManager>>, main_conn: web::Data<DatabasePool>) -> HttpResponse {
+async fn health_detailed(req: HttpRequest, pool: web::Data<DatabasePool>, redis_pool: web::Data<RedisPool>, main_conn: web::Data<DatabasePool>) -> HttpResponse {
+    let manager = req.app_data::<web::Data<TenantPoolManager>>();
     info!("Detailed health check requested");
 
     // Check database with timeout
@@ -143,14 +144,17 @@ async fn health_detailed(pool: web::Data<DatabasePool>, redis_pool: web::Data<Re
     };
 
     // Check tenant health if tenant manager is available
-    let tenants = if let Some(manager) = manager {
+    let tenants = if let Some(manager_ref) = manager {
+        let manager_data = manager_ref.clone();
         match tokio::task::spawn_blocking(move || {
-            let mut main_conn = main_conn.get().map_err(|e| format!("Failed to get db connection: {}", e))?;
+            let mut main_conn = main_conn
+                .get()
+                .map_err(|e| format!("Failed to get db connection: {}", e))?;
             let tenants = Tenant::list_all(&mut main_conn).unwrap_or_else(|_| Vec::new());
             let mut tenant_healths = Vec::new();
 
             for tenant in tenants {
-                let status = match manager.get_tenant_pool(&tenant.id) {
+                let status = match manager_data.get_tenant_pool(&tenant.id) {
                     Some(pool) => {
                         match pool.get() {
                             Ok(mut conn) => {
@@ -171,7 +175,9 @@ async fn health_detailed(pool: web::Data<DatabasePool>, redis_pool: web::Data<Re
                 });
             }
             Ok::<Vec<TenantHealth>, String>(tenant_healths)
-        }).await {
+        })
+        .await
+        {
             Ok(Ok(healths)) if !healths.is_empty() => Some(healths),
             _ => None,
         }
