@@ -34,17 +34,134 @@ export interface ApiError {
   code: string;
   message: string;
   details?: Record<string, any>;
+  type?: 'network' | 'timeout' | 'http' | 'other';
+  statusCode?: number;
+  retryable?: boolean;
+}
+
+export interface RetryConfig {
+  maxAttempts: number;
+  baseDelay: number; // in milliseconds
+  maxDelay: number; // in milliseconds
+}
+
+export interface HttpClientConfig {
+  timeout: number; // in milliseconds
+  retry: RetryConfig;
+  circuitBreaker: {
+    failureThreshold: number;
+    resetTimeout: number; // in milliseconds
+  };
+}
+
+export interface CircuitBreakerState {
+  state: 'closed' | 'open' | 'half-open';
+  failureCount: number;
+  lastFailureTime: number;
 }
 
 // Base API configuration
 const API_BASE_URL = ((import.meta as any).env?.API_URL as string) || 'http://localhost:8080/api';
 
-// HTTP Client class
+// Default configuration
+const DEFAULT_CONFIG: HttpClientConfig = {
+  timeout: 30000, // 30 seconds
+  retry: {
+    maxAttempts: 3,
+    baseDelay: 1000, // 1 second
+    maxDelay: 10000, // 10 seconds
+  },
+  circuitBreaker: {
+    failureThreshold: 5,
+    resetTimeout: 60000, // 1 minute
+  },
+};
+
+// HTTP Client class with timeout, retry, and circuit breaker support
 class HttpClient {
   private baseURL: string;
+  private config: HttpClientConfig;
+  private circuitBreakerState: CircuitBreakerState;
 
-  constructor(baseURL: string = API_BASE_URL) {
+  constructor(baseURL: string = API_BASE_URL, config: Partial<HttpClientConfig> = {}) {
     this.baseURL = baseURL;
+    this.config = { ...DEFAULT_CONFIG, ...config };
+    this.circuitBreakerState = {
+      state: 'closed',
+      failureCount: 0,
+      lastFailureTime: 0,
+    };
+  }
+
+  private sleep(delay: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, delay));
+  }
+
+  private calculateBackoffDelay(attempt: number): number {
+    const delay = this.config.retry.baseDelay * Math.pow(2, attempt - 1);
+    return Math.min(delay, this.config.retry.maxDelay);
+  }
+
+  private isRetryableError(error: ApiError | Error): boolean {
+    // Check if it's an ApiError by checking for type property
+    if ('type' in error && error.type) {
+      const apiError = error as ApiError;
+      // Network errors, timeouts, and 5xx errors are retryable
+      // 4xx errors are not retryable (client errors)
+      return apiError.type === 'network' ||
+             apiError.type === 'timeout' ||
+             (apiError.statusCode !== undefined && apiError.statusCode >= 500);
+    }
+    return false;
+  }
+
+  private updateCircuitBreaker(success: boolean): void {
+    if (success) {
+      this.circuitBreakerState.failureCount = 0;
+      this.circuitBreakerState.state = 'closed';
+    } else {
+      this.circuitBreakerState.failureCount++;
+      this.circuitBreakerState.lastFailureTime = Date.now();
+
+      if (this.circuitBreakerState.failureCount >= this.config.circuitBreaker.failureThreshold) {
+        this.circuitBreakerState.state = 'open';
+      }
+    }
+  }
+
+  private shouldAttemptRequest(): boolean {
+    if (this.circuitBreakerState.state === 'open') {
+      const elapsed = Date.now() - this.circuitBreakerState.lastFailureTime;
+      if (elapsed >= this.config.circuitBreaker.resetTimeout) {
+        this.circuitBreakerState.state = 'half-open';
+        return true;
+      }
+      return false;
+    }
+    return true;
+  }
+
+  private async makeRequest(
+    url: string,
+    options: RequestInit
+  ): Promise<Response> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+    }, this.config.timeout);
+
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+      return response;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      throw error;
+    }
   }
 
   private async request<T>(
@@ -52,6 +169,17 @@ class HttpClient {
     options: RequestInit = {}
   ): Promise<T> {
     const url = `${this.baseURL}${endpoint}`;
+
+    // Check circuit breaker
+    if (!this.shouldAttemptRequest()) {
+      const apiError: ApiError = {
+        code: 'CIRCUIT_BREAKER_OPEN',
+        message: 'Service is temporarily unavailable',
+        type: 'other',
+        retryable: true,
+      };
+      throw apiError;
+    }
 
     // Add authentication headers if token exists
     const token = localStorage.getItem('token');
@@ -77,28 +205,71 @@ class HttpClient {
       headers.set('X-Tenant-ID', tenantId);
     }
 
-    try {
-      const response = await fetch(url, {
-        ...options,
-        headers,
-      });
+    let lastError: ApiError | Error | undefined;
 
-      if (!response.ok) {
-        const errorData: ApiError = await response.json().catch(() => ({
+    for (let attempt = 1; attempt <= this.config.retry.maxAttempts; attempt++) {
+      try {
+        const response = await this.makeRequest(url, {
+          ...options,
+          headers,
+        });
+
+        if (response.ok) {
+          this.updateCircuitBreaker(true);
+          return await response.json();
+        }
+
+        // Handle HTTP errors
+        const errorData: ApiError = await response.clone().json().catch(() => ({
           code: 'UNKNOWN_ERROR',
           message: `HTTP ${response.status}: ${response.statusText}`,
         }));
 
-        throw new Error(errorData.message || `Request failed with status ${response.status}`);
+        const apiError: ApiError = {
+          ...errorData,
+          type: 'http',
+          statusCode: response.status,
+          retryable: response.status >= 500,
+        };
+
+        // If it's not retryable or we've exhausted retries, throw immediately
+        if (!this.isRetryableError(apiError) || attempt === this.config.retry.maxAttempts) {
+          this.updateCircuitBreaker(false);
+          throw apiError;
+        }
+
+        lastError = apiError;
+
+      } catch (error) {
+        // Handle fetch errors (network or timeout)
+        const isAborted = (error as any)?.name === 'AbortError';
+        const isNetworkError = error instanceof TypeError;
+
+        const apiError: ApiError = {
+          code: isAborted ? 'TIMEOUT' : 'NETWORK_ERROR',
+          message: isAborted ? 'Request timed out' : 'Network error: Unable to connect to the server',
+          type: isAborted ? 'timeout' : 'network',
+          retryable: true,
+        };
+
+        // If not retryable or exhausted retries, throw
+        if (!this.isRetryableError(apiError) || attempt === this.config.retry.maxAttempts) {
+          this.updateCircuitBreaker(false);
+          throw apiError;
+        }
+
+        lastError = apiError;
       }
 
-      return await response.json();
-    } catch (error) {
-      if (error instanceof TypeError && error.message.includes('fetch')) {
-        throw new Error('Network error: Unable to connect to the server');
+      // Wait before retrying (not on last attempt)
+      if (attempt < this.config.retry.maxAttempts) {
+        const delay = this.calculateBackoffDelay(attempt);
+        await this.sleep(delay);
       }
-      throw error;
     }
+
+    // This should never be reached, but just in case
+    throw lastError || new Error('Request failed after all retries');
   }
 
   // HTTP methods
@@ -208,6 +379,15 @@ export const addressBookService = {
     return apiClient.delete(`/address-book/${id}`);
   },
 };
+
+// Export configuration and utilities
+export { DEFAULT_CONFIG };
+export type { HttpClientConfig as ApiConfig };
+
+// Create custom HTTP client instance with custom configuration
+export function createHttpClient(config?: Partial<HttpClientConfig>): typeof apiClient {
+  return new HttpClient(API_BASE_URL, config) as any;
+}
 
 // Export default client
 export default apiClient;

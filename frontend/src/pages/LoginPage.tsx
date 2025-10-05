@@ -22,11 +22,13 @@ export const LoginPage: React.FC = () => {
     }
   });
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Get the intended destination
   const from = location.state?.from?.pathname || '/dashboard';
 
   const onSubmit = async (data: LoginFormData) => {
+    setIsSubmitting(true);
     try {
       setSubmitError(null);
       const credentials: LoginCredentials = {
@@ -38,7 +40,10 @@ export const LoginPage: React.FC = () => {
       await login(credentials);
       navigate(from, { replace: true });
     } catch (error) {
+      console.error('Login or navigation error:', error);
       setSubmitError(error instanceof Error ? error.message : 'Login failed');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -139,10 +144,10 @@ export const LoginPage: React.FC = () => {
               {/* Submit Button */}
               <button
                 type="submit"
-                disabled={isLoading}
+                disabled={isLoading || isSubmitting}
                 className="w-full btn btn-primary"
               >
-                {isLoading ? (
+                {(isLoading || isSubmitting) ? (
                   <div className="loading">
                     <div className="spinner"></div>
                     <span>Signing in...</span>

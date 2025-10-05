@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { ConfirmationModal } from '@/components/ConfirmationModal';
 import type { Contact } from '@/types/contact';
 
 export const AddressBookPage: React.FC = () => {
@@ -31,12 +32,39 @@ export const AddressBookPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
+  const [deleteContactId, setDeleteContactId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     phone: '',
     address: '',
   });
+  const [formError, setFormError] = useState<string>('');
+  const [successMessage, setSuccessMessage] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Validate form data
+  const validateForm = () => {
+    const trimmedName = formData.name.trim();
+    const trimmedEmail = formData.email.trim();
+    const trimmedPhone = formData.phone.trim();
+
+    if (!trimmedName) {
+      return 'Name is required';
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (trimmedEmail && !emailRegex.test(trimmedEmail)) {
+      return 'Please enter a valid email address';
+    }
+
+    const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
+    if (trimmedPhone && !phoneRegex.test(trimmedPhone.replace(/[\s\-\(\)]/g, ''))) {
+      return 'Please enter a valid phone number';
+    }
+
+    return null;
+  };
 
   // Filter contacts based on search term
   const filteredContacts = contacts.filter(contact =>
@@ -46,45 +74,73 @@ export const AddressBookPage: React.FC = () => {
   );
 
   // Handle form submission for both create and update
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError('');
+    setSuccessMessage('');
 
-    if (editingContact) {
-      // Update existing contact
-      setContacts(prev => prev.map(contact =>
-        contact.id === editingContact.id
-          ? {
-              ...contact,
-              ...formData,
-              updatedAt: new Date().toISOString(),
-            }
-          : contact
-      ));
-    } else {
-      // Create new contact
-      if (!tenant?.id) {
-        alert('Tenant ID is required to create contacts.');
-        return;
-      }
-      const newContact: Contact = {
-        id: crypto.randomUUID(),
-        ...formData,
-        tenantId: tenant.id,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      setContacts(prev => [...prev, newContact]);
+    const validationError = validateForm();
+    if (validationError) {
+      setFormError(validationError);
+      return;
     }
 
-    // Reset form and close modal
-    setFormData({
-      name: '',
-      email: '',
-      phone: '',
-      address: '',
-    });
-    setEditingContact(null);
-    setIsFormOpen(false);
+    setIsSubmitting(true);
+
+    try {
+      const trimmedFormData = {
+        name: formData.name.trim(),
+        email: formData.email.trim(),
+        phone: formData.phone.trim(),
+        address: formData.address.trim(),
+      };
+
+      if (editingContact) {
+        // Update existing contact
+        setContacts(prev => prev.map(contact =>
+          contact.id === editingContact.id
+            ? {
+                ...contact,
+                ...trimmedFormData,
+                updatedAt: new Date().toISOString(),
+              }
+            : contact
+        ));
+      } else {
+        // Create new contact
+        if (!tenant?.id) {
+          throw new Error('Tenant ID is required to create contacts.');
+        }
+        const newContact: Contact = {
+          id: crypto.randomUUID(),
+          ...trimmedFormData,
+          tenantId: tenant.id,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        setContacts(prev => [...prev, newContact]);
+      }
+
+      // Success
+      const successMsg = editingContact ? 'Contact updated successfully!' : 'Contact created successfully!';
+      setSuccessMessage(successMsg);
+
+      // Reset form and close modal on success
+      setFormData({
+        name: '',
+        email: '',
+        phone: '',
+        address: '',
+      });
+      setEditingContact(null);
+      setIsFormOpen(false);
+      setSuccessMessage(''); // Clear after closing
+
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'An error occurred while saving the contact.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Handle edit
@@ -96,14 +152,27 @@ export const AddressBookPage: React.FC = () => {
       phone: contact.phone || '',
       address: contact.address || '',
     });
+    setFormError('');
+    setSuccessMessage('');
     setIsFormOpen(true);
   };
 
-  // Handle delete
+  // Handle delete - open confirmation modal
   const handleDelete = (id: string) => {
-    if (window.confirm('Are you sure you want to delete this contact?')) {
-      setContacts(prev => prev.filter(contact => contact.id !== id));
+    setDeleteContactId(id);
+  };
+
+  // Confirm delete
+  const confirmDelete = () => {
+    if (deleteContactId) {
+      setContacts(prev => prev.filter(contact => contact.id !== deleteContactId));
+      setDeleteContactId(null);
     }
+  };
+
+  // Cancel delete
+  const cancelDelete = () => {
+    setDeleteContactId(null);
   };
 
   // Open form for new contact
@@ -115,6 +184,8 @@ export const AddressBookPage: React.FC = () => {
       phone: '',
       address: '',
     });
+    setFormError('');
+    setSuccessMessage('');
     setIsFormOpen(true);
   };
 
@@ -144,6 +215,22 @@ export const AddressBookPage: React.FC = () => {
           className="form-input"
         />
       </div>
+
+      {/* Success Message */}
+      {successMessage && (
+        <div className="bg-green-50 border border-green-200 rounded-md p-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <p className="text-sm font-medium text-green-800">{successMessage}</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Contacts List */}
       <div className="card">
@@ -229,6 +316,21 @@ export const AddressBookPage: React.FC = () => {
               </button>
             </div>
 
+            {formError && (
+              <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-4">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm font-medium text-red-800">{formError}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="form-group">
                 <label htmlFor="name" className="form-label">Name *</label>
@@ -286,14 +388,25 @@ export const AddressBookPage: React.FC = () => {
                 <button
                   type="submit"
                   className="btn btn-primary"
+                  disabled={isSubmitting}
                 >
-                  {editingContact ? 'Update Contact' : 'Add Contact'}
+                  {isSubmitting ? 'Saving...' : (editingContact ? 'Update Contact' : 'Add Contact')}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
+
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={deleteContactId !== null}
+        title="Delete Contact"
+        message="Are you sure you want to delete this contact? This action cannot be undone."
+        confirmText="Delete"
+        onConfirm={confirmDelete}
+        onCancel={cancelDelete}
+      />
     </div>
   );
 };
