@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "TypeScript/Bun/React frontend for Actix Web REST API with JWT authentication and multi-tenant support",
   "scripts": {
-    "dev": "bun --hot src/main.tsx",
+    "dev": "vite",
     "build": "bun build src/main.tsx --outdir dist --minify",
     "preview": "bun run dist/main.js",
     "test": "bun test --coverage",
@@ -23,7 +23,9 @@
   "devDependencies": {
     "@types/react": "^18.3.1",
     "@types/react-dom": "^18.3.1",
-    "typescript": "^5.9.0"
+    "@vitejs/plugin-react": "^4.0.0",
+    "typescript": "^5.9.0",
+    "vite": "^5.0.0"
   },
   "dependencies": {
     "react": "^18.3.1",
