@@ -26,7 +26,7 @@ jobs:
           mv dotenv.sample .env
 
       - name: Cache cargo registry
-        uses: actions/cache@v1
+        uses: actions/cache@v4
         with:
           path: ~/.cargo/registry
           key: ${{ runner.os }}-registry-${{ hashFiles('**/Cargo.lock') }}
@@ -35,7 +35,7 @@ jobs:
             ${{ runner.os }}-
 
       - name: Cache cargo index
-        uses: actions/cache@v1
+        uses: actions/cache@v4
         with:
           path: ~/.cargo/git
           key: ${{ runner.os }}-index-${{ hashFiles('**/Cargo.lock') }}
@@ -44,7 +44,7 @@ jobs:
             ${{ runner.os }}-
 
       - name: Cache cargo build
-        uses: actions/cache@v1
+        uses: actions/cache@v4
         with:
           path: target
           key: ${{ runner.os }}-build-${{ hashFiles('**/Cargo.lock') }}
@@ -105,7 +105,7 @@ jobs:
         run: ren dotenv.sample .env
 
       - name: Cache cargo registry
-        uses: actions/cache@v1
+        uses: actions/cache@v4
         with:
           path: ~/.cargo/registry
           key: ${{ runner.os }}-registry-${{ hashFiles('**/Cargo.lock') }}
@@ -114,7 +114,7 @@ jobs:
             ${{ runner.os }}-
 
       - name: Cache cargo index
-        uses: actions/cache@v1
+        uses: actions/cache@v4
         with:
           path: ~/.cargo/git
           key: ${{ runner.os }}-index-${{ hashFiles('**/Cargo.lock') }}
@@ -123,7 +123,7 @@ jobs:
             ${{ runner.os }}-
 
       - name: Cache cargo build
-        uses: actions/cache@v1
+        uses: actions/cache@v4
         with:
           path: target
           key: ${{ runner.os }}-build-${{ hashFiles('**/Cargo.lock') }}
@@ -193,7 +193,7 @@ jobs:
           mv dotenv.sample .env
 
       - name: Cache cargo registry
-        uses: actions/cache@v1
+        uses: actions/cache@v4
         with:
           path: ~/.cargo/registry
           key: ${{ runner.os }}-registry-${{ hashFiles('**/Cargo.lock') }}
@@ -202,7 +202,7 @@ jobs:
             ${{ runner.os }}-
 
       - name: Cache cargo index
-        uses: actions/cache@v1
+        uses: actions/cache@v4
         with:
           path: ~/.cargo/git
           key: ${{ runner.os }}-index-${{ hashFiles('**/Cargo.lock') }}
@@ -211,7 +211,7 @@ jobs:
             ${{ runner.os }}-
 
       - name: Cache cargo build
-        uses: actions/cache@v1
+        uses: actions/cache@v4
         with:
           path: target
           key: ${{ runner.os }}-build-${{ hashFiles('**/Cargo.lock') }}
