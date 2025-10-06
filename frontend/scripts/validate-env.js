@@ -8,8 +8,9 @@
  * 
  * Mimics Vite's environment file loading behavior:
  * 1. Load .env (base configuration)
- * 2. Load .env.{NODE_ENV} (environment-specific)
- * 3. Load .env.{NODE_ENV}.local (local overrides)
+ * 2. Load .env.local (local overrides)
+ * 3. Load .env.{NODE_ENV} (environment-specific)
+ * 4. Load .env.{NODE_ENV}.local (local overrides)
  * 
  * Later files override earlier ones, and we only load files for the current NODE_ENV.
  */
@@ -17,7 +18,6 @@
 import { readFileSync, existsSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import dotenv from 'dotenv';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -27,12 +27,27 @@ const NODE_ENV = process.env.NODE_ENV || 'development';
 
 console.log(`📦 Environment: ${NODE_ENV}\n`);
 
-// Manually load .env files for Node.js (Bun does this automatically)
+// Simple .env parser to replace dotenv.parse
+function parseEnv(content) {
+  const parsed = {};
+  content.split('\n').forEach(line => {
+    line = line.trim();
+    if (line && !line.startsWith('#')) {
+      const [key, ...valueParts] = line.split('=');
+      if (key) {
+        parsed[key] = valueParts.join('=');
+      }
+    }
+  });
+  return parsed;
+}
+
+// Manually load .env files for validation (Bun auto-loads them in runtime)
 function loadEnvFile(filePath, description) {
   if (existsSync(filePath)) {
     console.log(`📄 Loading: ${description}`);
     const content = readFileSync(filePath, 'utf-8');
-    const parsed = dotenv.parse(content);
+    const parsed = parseEnv(content);
     // Assign parsed values to process.env, allowing later files to override earlier ones
     Object.assign(process.env, parsed);
   }
@@ -41,6 +56,7 @@ function loadEnvFile(filePath, description) {
 // Load environment variables in Vite's priority order
 // Later files override earlier ones
 loadEnvFile(resolve(__dirname, '../.env'), '.env (base)');
+loadEnvFile(resolve(__dirname, '../.env.local'), '.env.local (local overrides)');
 loadEnvFile(resolve(__dirname, `../.env.${NODE_ENV}`), `.env.${NODE_ENV} (environment-specific)`);
 loadEnvFile(resolve(__dirname, `../.env.${NODE_ENV}.local`), `.env.${NODE_ENV}.local (local overrides)`);
 
