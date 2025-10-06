@@ -256,17 +256,21 @@ async fn logs() -> HttpResponse {
         return HttpResponse::MethodNotAllowed().body("Log streaming disabled");
     }
 
+    // Get log file path
+    let log_file = std::env::var("LOG_FILE").unwrap_or_else(|_| "/var/log/app.log".to_string());
+    let path = Path::new(&log_file);
+
+    // In test mode, check file existence before returning test response
     if cfg!(test) {
+        if !path.exists() {
+            return HttpResponse::NotFound().body("Log file not found");
+        }
         return HttpResponse::Ok()
             .insert_header(("Content-Type", "text/event-stream"))
             .insert_header(("Cache-Control", "no-cache"))
             .insert_header(("Connection", "keep-alive"))
             .body("data: Log streaming started for test\n\n");
     }
-
-    // Get log file path
-    let log_file = std::env::var("LOG_FILE").unwrap_or_else(|_| "/var/log/app.log".to_string());
-    let path = Path::new(&log_file);
 
     if !path.exists() {
         return HttpResponse::NotFound().body("Log file not found");
@@ -478,7 +482,8 @@ mod tests {
         // Create a temporary log file
         let temp_file = NamedTempFile::new().unwrap();
         let log_path = temp_file.path().to_str().unwrap().to_string();
-        temp_file.close().unwrap(); // Close to allow the handler to open it
+        // Persist the file so it remains after temp_file is dropped
+        let (_file, _path) = temp_file.keep().unwrap();
 
         // Set environment variables
         env::set_var("ENABLE_LOG_STREAM", "true");
@@ -543,7 +548,8 @@ mod tests {
 
     #[actix_web::test]
     async fn test_logs_disabled() {
-        // Clear environment variables
+        // Explicitly set to false first, then remove to ensure clean state
+        env::set_var("ENABLE_LOG_STREAM", "false");
         env::remove_var("ENABLE_LOG_STREAM");
         env::remove_var("LOG_FILE");
 
