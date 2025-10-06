@@ -1,5 +1,31 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import type { LoginCredentials } from './AuthContext';
+import type { LoginCredentials } from '../types/auth';
+
+// Mock localStorage for testing environment
+const localStorageMock = (() => {
+  let store: Record<string, string> = {};
+
+  return {
+    getItem: (key: string): string | null => {
+      return store[key] || null;
+    },
+    setItem: (key: string, value: string): void => {
+      store[key] = value.toString();
+    },
+    removeItem: (key: string): void => {
+      delete store[key];
+    },
+    clear: (): void => {
+      store = {};
+    },
+  };
+})();
+
+// Assign the mock to global localStorage
+Object.defineProperty(global, 'localStorage', {
+  value: localStorageMock,
+  writable: true,
+});
 
 describe('AuthContext', () => {
   beforeEach(() => {
