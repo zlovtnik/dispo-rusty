@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { ConfirmationModal } from '@/components/ConfirmationModal';
+import { pharmacyPaginationConfig } from '@/components/PharmacyPagination';
 import type { Tenant } from '@/types/tenant';
 import {
   Button,
@@ -13,9 +14,10 @@ import {
   Space,
   Typography,
   Divider,
-  message,
   Select,
+  App,
 } from 'antd';
+import type { TableProps } from 'antd';
 import {
   PlusOutlined,
   EditOutlined,
@@ -34,6 +36,7 @@ import { tenantService } from '@/services/api';
 export const TenantsPage: React.FC = () => {
   const { user } = useAuth();
   const [tenants, setTenants] = useState<Tenant[]>([]);
+  const { message } = App.useApp();
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
@@ -44,17 +47,29 @@ export const TenantsPage: React.FC = () => {
   const [powerFilters, setPowerFilters] = useState<{ field: string; operator: string; value: string }[]>([
     { field: 'name', operator: 'contains', value: '' }
   ]);
+  const [pagination, setPagination] = useState({
+    current: 1,
+    pageSize: 12,
+    total: 0,
+  });
 
 
 
-  // Load tenants from API
-  const loadTenants = async () => {
+  // Load tenants from API with pagination
+  const loadTenants = async (params?: { offset?: number; limit?: number }) => {
     try {
       setLoading(true);
-      const response = await tenantService.getAll() as any;
-      setTenants(response.data || []);
+      const response = await tenantService.getAllWithPagination(params) as any;
+      const data = response.data;
+      if (data && data.data && Array.isArray(data.data)) {
+        setTenants(data.data);
+        setPagination(prev => ({ ...prev, total: data.total || data.data.length }));
+      } else {
+        setTenants([]);
+        setPagination(prev => ({ ...prev, total: 0 }));
+      }
     } catch (error) {
-      message.error('Failed to load tenants');
+      message.error(error instanceof Error ? error.message : 'Failed to load tenants');
     } finally {
       setLoading(false);
     }
@@ -62,8 +77,27 @@ export const TenantsPage: React.FC = () => {
 
   // Load tenants on component mount
   useEffect(() => {
-    loadTenants();
+    loadTenants({ offset: 0, limit: pagination.pageSize });
   }, []);
+
+  // Handle pagination changes (page size and page number)
+  const handlePaginationChange = async (page: number, pageSize: number) => {
+    setPagination(prev => ({ ...prev, current: page, pageSize }));
+
+    // Calculate offset for backend API
+    const offset = (page - 1) * pageSize;
+    await loadTenants({ offset, limit: pageSize });
+  };
+
+  // Custom pagination config that extends pharmacyPaginationConfig with dynamic values
+  const tablePagination = {
+    current: pagination.current,
+    pageSize: pagination.pageSize,
+    total: pagination.total,
+    onChange: handlePaginationChange,
+    showSizeChanger: false,
+    showQuickJumper: false,
+  };
 
   // Handle form submission
   const handleSubmit = async (values: any) => {
@@ -73,13 +107,13 @@ export const TenantsPage: React.FC = () => {
       if (editingTenant) {
         // Update existing tenant
         await tenantService.update(editingTenant.id, { name: values.name, db_url: values.db_url });
-        // Refresh the list
-        await loadTenants();
+        // Refresh the current page
+        await loadTenants({ offset: (pagination.current - 1) * pagination.pageSize, limit: pagination.pageSize });
       } else {
         // Create new tenant
         await tenantService.create({ id: crypto.randomUUID(), name: values.name, db_url: values.db_url });
-        // Refresh the list
-        await loadTenants();
+        // Refresh the current page
+        await loadTenants({ offset: (pagination.current - 1) * pagination.pageSize, limit: pagination.pageSize });
       }
 
       // Success message
@@ -114,13 +148,18 @@ export const TenantsPage: React.FC = () => {
   };
 
   // Confirm delete
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (deleteTenantId) {
-      setTenants(prev => prev.filter(tenant => tenant.id !== deleteTenantId));
-      setDeleteTenantId(null);
-      message.success('Tenant deleted successfully!');
-      // TODO: Uncomment when API is ready
-      // await tenantService.delete(deleteTenantId);
+      try {
+        await tenantService.delete(deleteTenantId);
+        // Update tenants state after successful API response
+        await loadTenants({ offset: (pagination.current - 1) * pagination.pageSize, limit: pagination.pageSize });
+        message.success('Tenant deleted successfully!');
+      } catch (error) {
+        message.error(error instanceof Error ? error.message : 'Failed to delete tenant');
+      } finally {
+        setDeleteTenantId(null);
+      }
     }
   };
 
@@ -157,12 +196,27 @@ export const TenantsPage: React.FC = () => {
       const validFilters = powerFilters.filter(f => f.value.trim() !== '');
       if (validFilters.length === 0) {
         // No filters, load all
-        await loadTenants();
+        setPagination(prev => ({ ...prev, current: 1 })); // Reset to first page
+        await loadTenants({ offset: 0, limit: pagination.pageSize });
         return;
       }
 
-      const response = await tenantService.filter({ filters: validFilters }) as any;
-      setTenants(response || []);
+      const response = await tenantService.filter({
+        filters: validFilters,
+        page_size: pagination.pageSize // Use current page size for filtered results
+      }) as any;
+      // Handle paginated response format from filter API
+      const data = response;
+      if (Array.isArray(data)) {
+        setTenants(data);
+        setPagination(prev => ({ ...prev, current: 1 })); // Reset to first page for filtered results
+      } else if (data && data.data && Array.isArray(data.data)) {
+        setTenants(data.data);
+        setPagination(prev => ({ ...prev, current: 1 })); // Reset to first page for filtered results
+      } else {
+        setTenants([]);
+        setPagination(prev => ({ ...prev, current: 1, total: 0 }));
+      }
     } catch (error) {
       message.error('Failed to filter tenants');
     } finally {
@@ -172,7 +226,8 @@ export const TenantsPage: React.FC = () => {
 
   const clearFilters = async () => {
     setPowerFilters([{ field: 'name', operator: 'contains', value: '' }]);
-    await loadTenants();
+    setPagination(prev => ({ ...prev, current: 1 })); // Reset to first page
+    await loadTenants({ offset: 0, limit: pagination.pageSize });
   };
 
   // Format date for display
@@ -189,12 +244,11 @@ export const TenantsPage: React.FC = () => {
   // Format database URL for display (hide password if present)
   const formatDbUrl = (url: string) => {
     try {
-      const parsedUrl = new URL(url);
       // Hide password from display
       const displayUrl = url.replace(/:\/\/([^:]+):[^@]+@/, '://$1:***@');
       return displayUrl;
     } catch {
-      return url;
+      return "<invalid-db-url>";
     }
   };
 
@@ -391,171 +445,7 @@ export const TenantsPage: React.FC = () => {
           rowClassName={(record, index) =>
             index % 2 === 0 ? 'stripe-row' : ''
           }
-          pagination={{
-            pageSize: 12,
-            showSizeChanger: true,
-            showQuickJumper: true,
-            showTotal: (total, range) => (
-              <div style={{
-                padding: '8px 16px',
-                background: 'linear-gradient(135deg, var(--primary-100) 0%, var(--accent-50) 100%)',
-                borderRadius: '12px',
-                border: '2px solid var(--primary-200)',
-                fontWeight: '600',
-                color: 'var(--tertiary-600)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}>
-                <span style={{ fontSize: '18px' }}>🌿</span>
-                <span>
-                  Showing <strong style={{ color: 'var(--primary-600)' }}>{range[0]}</strong> to{' '}
-                  <strong style={{ color: 'var(--primary-600)' }}>{range[1]}</strong> of{' '}
-                  <strong style={{ color: 'var(--secondary-600)' }}>{total}</strong> tenants
-                </span>
-              </div>
-            ),
-            style: {
-              marginTop: '16px',
-              border: '2px solid var(--primary-200)',
-              borderRadius: '12px',
-              padding: '12px',
-              background: 'var(--neutral-50)',
-              display: 'flex',
-              alignItems: 'center',
-              flexWrap: 'wrap',
-              gap: '8px',
-              justifyContent: 'center',
-            },
-            itemRender: (page, type, originalElement) => {
-              // Navigation buttons with pharmacy theme
-              if (type === 'prev') {
-                return (
-                  <div
-                    style={{
-                      border: '2px solid var(--primary-400)',
-                      borderRadius: '12px',
-                      padding: '8px 12px',
-                      margin: '0 4px',
-                      background: 'linear-gradient(135deg, var(--primary-100) 0%, var(--primary-200) 100%)',
-                      color: 'var(--primary-700)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      fontWeight: '600',
-                      transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                      cursor: 'pointer',
-                      fontSize: '14px',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = 'scale(1.05)';
-                      e.currentTarget.style.background = 'linear-gradient(135deg, var(--primary-200) 0%, var(--primary-300) 100%)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = 'scale(1)';
-                      e.currentTarget.style.background = 'linear-gradient(135deg, var(--primary-100) 0%, var(--primary-200) 100%)';
-                    }}
-                  >
-                    <LeftOutlined style={{ fontSize: '16px' }} />
-                    <span>Previous</span>
-                  </div>
-                );
-              }
-
-              if (type === 'next') {
-                return (
-                  <div
-                    style={{
-                      border: '2px solid var(--primary-400)',
-                      borderRadius: '12px',
-                      padding: '8px 12px',
-                      margin: '0 4px',
-                      background: 'linear-gradient(135deg, var(--primary-100) 0%, var(--primary-200) 100%)',
-                      color: 'var(--primary-700)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      fontWeight: '600',
-                      transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                      cursor: 'pointer',
-                      fontSize: '14px',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = 'scale(1.05)';
-                      e.currentTarget.style.background = 'linear-gradient(135deg, var(--primary-200) 0%, var(--primary-300) 100%)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = 'scale(1)';
-                      e.currentTarget.style.background = 'linear-gradient(135deg, var(--primary-100) 0%, var(--primary-200) 100%)';
-                    }}
-                  >
-                    <span>Next</span>
-                    <RightOutlined style={{ fontSize: '16px' }} />
-                  </div>
-                );
-              }
-
-              // Page numbers with clean rectangular styling
-              if (type === 'page') {
-                return (
-                  <Button
-                    type="text"
-                    size="small"
-                    style={{
-                      minWidth: '32px',
-                      height: '32px',
-                      padding: '4px 8px',
-                      margin: '0 2px',
-                      fontWeight: '600',
-                      fontSize: '14px',
-                      border: 'none',
-                      transition: 'all 0.2s ease',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = 'var(--primary-100)';
-                      e.currentTarget.style.color = 'var(--primary-700)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = 'transparent';
-                      e.currentTarget.style.color = 'inherit';
-                    }}
-                  >
-                    {page}
-                  </Button>
-                );
-              }
-
-              // Jump to first/last pages
-              if (type === 'jump-prev' || type === 'jump-next') {
-                return (
-                  <div
-                    style={{
-                      border: '2px solid var(--secondary-300)',
-                      borderRadius: '8px',
-                      padding: '6px',
-                      margin: '0 8px',
-                      backgroundColor: 'var(--secondary-50)',
-                      color: 'var(--secondary-600)',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = 'scale(1.1)';
-                      e.currentTarget.style.backgroundColor = 'var(--secondary-100)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = 'scale(1)';
-                      e.currentTarget.style.backgroundColor = 'var(--secondary-50)';
-                    }}
-                  >
-                    {type === 'jump-prev' ? <DoubleLeftOutlined /> : <DoubleRightOutlined />}
-                  </div>
-                );
-              }
-
-              return originalElement;
-            },
-          }}
+          pagination={tablePagination}
           locale={{
             emptyText: tenants.length === 0
               ? <div style={{ textAlign: 'center', padding: '48px' }}>
@@ -605,7 +495,7 @@ export const TenantsPage: React.FC = () => {
             rules={[
               { required: true, message: 'Please enter database URL' },
               {
-                pattern: /^postgres(?:ql)?:\/\/.+/,
+                pattern: /^postgres(?:ql)?:\/\/(?:[A-Za-z0-9._%+-]+(?::[A-Za-z0-9._%+-]+)?@)?(?:\[[0-9a-fA-F:]+\]|[A-Za-z0-9.-]+)(?::\d{1,5})?\/[A-Za-z0-9_\-]+(?:\?.*)?$/,
                 message: 'Please enter a valid PostgreSQL URL'
               }
             ]}

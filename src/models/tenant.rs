@@ -67,11 +67,41 @@ impl Tenant {
         tenants.load::<Tenant>(conn)
     }
 
-    pub fn batch_create(dtos: Vec<TenantDTO>, conn: &mut crate::config::db::Connection) -> QueryResult<usize> {
-        for dto in &dtos {
-            Self::validate_db_url(&dto.db_url)?;
+    pub fn list_paginated(offset: i64, limit: i64, conn: &mut crate::config::db::Connection) -> QueryResult<(Vec<Tenant>, i64)> {
+        let total = tenants.count().get_result::<i64>(conn)?;
+        let results = tenants.offset(offset).limit(limit).load::<Tenant>(conn)?;
+        Ok((results, total))
+    }
+
+    pub fn find_by_name(name_: &str, conn: &mut crate::config::db::Connection) -> QueryResult<Tenant> {
+        tenants.filter(name.eq(name_)).get_result::<Tenant>(conn)
+    }
+
+    pub fn validate_tenant_dto(dto: &TenantDTO) -> Result<(), String> {
+        // Validate ID: non-empty, alphanumeric + dashes/underscores
+        if dto.id.trim().is_empty() {
+            return Err("Tenant ID cannot be empty".to_string());
         }
-        diesel::insert_into(tenants).values(&dtos).execute(conn)
+
+        if !dto.id.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
+            return Err("Tenant ID must contain only alphanumeric characters, dashes, and underscores".to_string());
+        }
+
+        // Validate name: non-empty
+        if dto.name.trim().is_empty() {
+            return Err("Tenant name cannot be empty".to_string());
+        }
+
+        Ok(())
+    }
+
+    pub fn batch_create(dtos: Vec<TenantDTO>, conn: &mut crate::config::db::Connection) -> QueryResult<usize> {
+        conn.transaction(|tx_conn| {
+            for dto in &dtos {
+                Self::validate_db_url(&dto.db_url)?;
+            }
+            diesel::insert_into(tenants).values(&dtos).execute(tx_conn)
+        })
     }
 
     pub fn filter(filter: TenantFilter, conn: &mut crate::config::db::Connection) -> QueryResult<Vec<Tenant>> {
@@ -113,68 +143,69 @@ impl Tenant {
                     }
                 }
                 "created_at" => {
-                    // Parse the value as datetime if possible
-                    if let Ok(dt) = NaiveDateTime::parse_from_str(&field_filter.value, "%Y-%m-%dT%H:%M:%S%.fZ") {
-                        match field_filter.operator.as_str() {
-                            "gt" => {
-                                query = query.filter(created_at.gt(dt));
-                            }
-                            "gte" => {
-                                query = query.filter(created_at.ge(dt));
-                            }
-                            "lt" => {
-                                query = query.filter(created_at.lt(dt));
-                            }
-                            "lte" => {
-                                query = query.filter(created_at.le(dt));
-                            }
-                            "equals" => {
-                                query = query.filter(created_at.eq(dt));
-                            }
-                            _ => {} // Ignore unsupported operators for dates
+                    // Parse the value as datetime
+                    let dt = NaiveDateTime::parse_from_str(&field_filter.value, "%Y-%m-%dT%H:%M:%S%.fZ")
+                        .map_err(|_| result::Error::DatabaseError(
+                            result::DatabaseErrorKind::Unknown,
+                            Box::new(format!("Invalid datetime format for field '{}': '{}'. Expected ISO format like '2023-12-25T10:00:00.000Z'", field_filter.field, field_filter.value)),
+                        ))?;
+                    match field_filter.operator.as_str() {
+                        "gt" => {
+                            query = query.filter(created_at.gt(dt));
                         }
+                        "gte" => {
+                            query = query.filter(created_at.ge(dt));
+                        }
+                        "lt" => {
+                            query = query.filter(created_at.lt(dt));
+                        }
+                        "lte" => {
+                            query = query.filter(created_at.le(dt));
+                        }
+                        "equals" => {
+                            query = query.filter(created_at.eq(dt));
+                        }
+                        _ => {} // Ignore unsupported operators for dates
                     }
                 }
                 "updated_at" => {
-                    // Parse the value as datetime if possible
-                    if let Ok(dt) = NaiveDateTime::parse_from_str(&field_filter.value, "%Y-%m-%dT%H:%M:%S%.fZ") {
-                        match field_filter.operator.as_str() {
-                            "gt" => {
-                                query = query.filter(updated_at.gt(dt));
-                            }
-                            "gte" => {
-                                query = query.filter(updated_at.ge(dt));
-                            }
-                            "lt" => {
-                                query = query.filter(updated_at.lt(dt));
-                            }
-                            "lte" => {
-                                query = query.filter(updated_at.le(dt));
-                            }
-                            "equals" => {
-                                query = query.filter(updated_at.eq(dt));
-                            }
-                            _ => {} // Ignore unsupported operators for dates
+                    // Parse the value as datetime
+                    let dt = NaiveDateTime::parse_from_str(&field_filter.value, "%Y-%m-%dT%H:%M:%S%.fZ")
+                        .map_err(|_| result::Error::DatabaseError(
+                            result::DatabaseErrorKind::Unknown,
+                            Box::new(format!("Invalid datetime format for field '{}': '{}'. Expected ISO format like '2023-12-25T10:00:00.000Z'", field_filter.field, field_filter.value)),
+                        ))?;
+                    match field_filter.operator.as_str() {
+                        "gt" => {
+                            query = query.filter(updated_at.gt(dt));
                         }
+                        "gte" => {
+                            query = query.filter(updated_at.ge(dt));
+                        }
+                        "lt" => {
+                            query = query.filter(updated_at.lt(dt));
+                        }
+                        "lte" => {
+                            query = query.filter(updated_at.le(dt));
+                        }
+                        "equals" => {
+                            query = query.filter(updated_at.eq(dt));
+                        }
+                        _ => {} // Ignore unsupported operators for dates
                     }
                 }
                 _ => {} // Ignore unknown fields
             }
         }
 
-        let mut results = query.load::<Tenant>(conn)?;
-
-        // Apply pagination if specified
-        if let Some(page_size) = filter.page_size {
-            let cursor = filter.cursor.unwrap_or(0) as usize;
-            let start = cursor * page_size as usize;
-            let end = start + page_size as usize;
-            if start < results.len() {
-                results = results[start..std::cmp::min(end, results.len())].to_vec();
-            } else {
-                results = vec![];
-            }
+        // Apply pagination at DB level if specified
+        if let Some(page_size) = &filter.page_size {
+            let cursor = filter.cursor.unwrap_or(0) as i64;
+            let offset = cursor * *page_size as i64;
+            query = query.limit((*page_size).into()).offset(offset.into());
         }
+
+        let results = query.load::<Tenant>(conn)?;
 
         Ok(results)
     }

@@ -1,3 +1,4 @@
+import qs from 'qs';
 import type {
   AuthResponse,
   User,
@@ -14,6 +15,7 @@ import type {
   BulkContactOperation,
   ContactImportRequest,
 } from '../types/contact';
+import type { CreateTenantDTO, UpdateTenantDTO } from '../types/tenant';
 
 // API Response wrapper interface
 export interface ApiResponseWrapper<T> {
@@ -21,19 +23,6 @@ export interface ApiResponseWrapper<T> {
   data: T;
   success: boolean;
   error?: string;
-}
-
-export interface CreateTenantDTO {
-  name: string;
-  domain?: string;
-  settings?: {
-    theme?: string;
-    language?: string;
-  };
-}
-
-export interface UpdateTenantDTO extends Partial<CreateTenantDTO> {
-  id: string;
 }
 
 // API Service for Actix Web REST API integration
@@ -459,35 +448,40 @@ export const tenantService = {
     return apiClient.get('/tenants');
   },
 
-  async filter(params: TenantFilter) {
+  async getAllWithPagination(params?: { offset?: number; limit?: number }) {
     const queryParams = new URLSearchParams();
+    if (params?.offset !== undefined) queryParams.set('offset', params.offset.toString());
+    if (params?.limit !== undefined) queryParams.set('limit', params.limit.toString());
 
-    // Add filters as repeated parameters: filters[field]=value&filters[operator]=contains etc.
-    params.filters.forEach((filter, index) => {
-      queryParams.append(`filters[${index}][field]`, filter.field);
-      queryParams.append(`filters[${index}][operator]`, filter.operator);
-      queryParams.append(`filters[${index}][value]`, filter.value);
-    });
+    const query = queryParams.toString();
+    return apiClient.get(query ? `/tenants?${query}` : '/tenants');
+  },
+
+  async filter(params: TenantFilter) {
+    const queryObj: Record<string, any> = {
+      filters: params.filters,
+    };
 
     if (params.cursor !== undefined) {
-      queryParams.set('cursor', params.cursor.toString());
+      queryObj.cursor = params.cursor;
     }
     if (params.page_size !== undefined) {
-      queryParams.set('page_size', params.page_size.toString());
+      queryObj.page_size = params.page_size;
     }
 
-    return apiClient.get(`/tenants/filter?${queryParams.toString()}`);
+    const queryString = qs.stringify(queryObj, { arrayFormat: 'indices' });
+    return apiClient.get(`/tenants/filter?${queryString}`);
   },
 
   async getById(id: string) {
     return apiClient.get(`/tenants/${id}`);
   },
 
-  async create(data: import('../types/tenant').CreateTenantDTO) {
+  async create(data: CreateTenantDTO) {
     return apiClient.post('/tenants', data);
   },
 
-  async update(id: string, data: import('../types/tenant').UpdateTenantDTO) {
+  async update(id: string, data: UpdateTenantDTO) {
     return apiClient.put(`/tenants/${id}`, data);
   },
 

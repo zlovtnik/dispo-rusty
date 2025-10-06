@@ -19,6 +19,9 @@ pub enum ServiceError {
 
     #[display(fmt = "{error_message}")]
     NotFound { error_message: String },
+
+    #[display(fmt = "{error_message}")]
+    Conflict { error_message: String },
 }
 impl error::ResponseError for ServiceError {
     fn status_code(&self) -> StatusCode {
@@ -27,6 +30,7 @@ impl error::ResponseError for ServiceError {
             ServiceError::InternalServerError { .. } => StatusCode::INTERNAL_SERVER_ERROR,
             ServiceError::BadRequest { .. } => StatusCode::BAD_REQUEST,
             ServiceError::NotFound { .. } => StatusCode::NOT_FOUND,
+            ServiceError::Conflict { .. } => StatusCode::CONFLICT,
         }
     }
     fn error_response(&self) -> HttpResponse {

@@ -73,15 +73,15 @@ export const DashboardPage: React.FC = () => {
     },
   ];
 
+  const COLOR_MAP: Record<string, string> = {
+    blue: '#1890ff',
+    gold: '#faad14',
+    orange: '#fa8c16',
+    default: '#fa8c16',
+  };
+
   const getColor = (color: string): string => {
-    switch (color) {
-      case 'blue':
-        return '#1890ff';
-      case 'gold':
-        return '#faad14';
-      default:
-        return '#fa8c16';
-    }
+    return COLOR_MAP[color] ?? COLOR_MAP.default!;
   };
 
   return (

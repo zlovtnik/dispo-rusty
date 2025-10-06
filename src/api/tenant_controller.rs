@@ -39,6 +39,14 @@ struct TenantHealth {
     error_message: Option<String>,
 }
 
+#[derive(Serialize)]
+struct PaginatedTenantResponse {
+    data: Vec<Tenant>,
+    total: i64,
+    count: usize,
+    next_cursor: Option<String>,
+}
+
 /// Get system-wide statistics and tenant status (admin only)
 pub async fn get_system_stats(
     pool: web::Data<DatabasePool>,
@@ -173,19 +181,46 @@ pub async fn get_tenant_status(
 
 // CRUD operations for tenants
 
-/// Get all tenants
+/// Get all tenants with pagination
 pub async fn find_all(
+    query: web::Query<HashMap<String, String>>,
     pool: web::Data<DatabasePool>,
 ) -> Result<HttpResponse, ServiceError> {
+    // Parse pagination parameters
+    let offset = query.get("offset").and_then(|s| s.parse::<i64>().ok())
+        .or_else(|| query.get("cursor").and_then(|s| s.parse::<i64>().ok()))
+        .unwrap_or(0);
+
+    let limit = query.get("limit").and_then(|s| s.parse::<i64>().ok()).unwrap_or(50);
+    let limit = limit.min(500); // Max limit
+
+    info!("Fetching tenants with pagination - offset: {}, limit: {}", offset, limit);
+
     let mut conn = pool.get().map_err(|e| ServiceError::InternalServerError {
         error_message: format!("Failed to get db connection: {}", e),
     })?;
 
-    let tenants = Tenant::list_all(&mut conn).map_err(|e| ServiceError::InternalServerError {
+    let (tenants, total) = Tenant::list_paginated(offset, limit, &mut conn).map_err(|e| ServiceError::InternalServerError {
         error_message: format!("Failed to fetch tenants: {}", e),
     })?;
 
-    Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, tenants)))
+    let count = tenants.len();
+    let next_cursor = if offset + limit < total {
+        Some((offset + limit).to_string())
+    } else {
+        None
+    };
+
+    let response = PaginatedTenantResponse {
+        data: tenants,
+        total,
+        count,
+        next_cursor,
+    };
+
+    info!("Returning {} tenants out of {} total", count, total);
+
+    Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, response)))
 }
 
 /// Get tenants with filters
@@ -236,7 +271,7 @@ pub async fn filter(
         error_message: format!("Failed to filter tenants: {}", e),
     })?;
 
-    Ok(HttpResponse::Ok().json(tenants))
+    Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, tenants)))
 }
 
 /// Get tenant by ID
@@ -248,9 +283,15 @@ pub async fn find_by_id(
         error_message: format!("Failed to get db connection: {}", e),
     })?;
 
-    let tenant = Tenant::find_by_id(&id, &mut conn).map_err(|e| ServiceError::InternalServerError {
-        error_message: format!("Failed to find tenant: {}", e),
-    })?;
+    let tenant = match Tenant::find_by_id(&id, &mut conn) {
+        Ok(t) => t,
+        Err(diesel::result::Error::NotFound) => return Err(ServiceError::NotFound {
+            error_message: format!("Tenant not found: {}", id),
+        }),
+        Err(e) => return Err(ServiceError::InternalServerError {
+            error_message: format!("Failed to find tenant: {}", e),
+        }),
+    };
 
     Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, tenant)))
 }
@@ -260,10 +301,32 @@ pub async fn create(
     tenant_dto: web::Json<TenantDTO>,
     pool: web::Data<DatabasePool>,
 ) -> Result<HttpResponse, ServiceError> {
+    // Validate input data format and required fields
+    if let Err(validation_error) = Tenant::validate_tenant_dto(&tenant_dto.0) {
+        return Err(ServiceError::BadRequest {
+            error_message: validation_error,
+        });
+    }
+
     let mut conn = pool.get().map_err(|e| ServiceError::InternalServerError {
         error_message: format!("Failed to get db connection: {}", e),
     })?;
 
+    // Check for duplicate ID
+    if Tenant::find_by_id(&tenant_dto.id, &mut conn).is_ok() {
+        return Err(ServiceError::Conflict {
+            error_message: format!("Tenant with ID '{}' already exists", tenant_dto.id),
+        });
+    }
+
+    // Check for duplicate name
+    if Tenant::find_by_name(&tenant_dto.name, &mut conn).is_ok() {
+        return Err(ServiceError::Conflict {
+            error_message: format!("Tenant with name '{}' already exists", tenant_dto.name),
+        });
+    }
+
+    // Create the tenant
     let tenant = Tenant::create(tenant_dto.0, &mut conn).map_err(|e| ServiceError::InternalServerError {
         error_message: format!("Failed to create tenant: {}", e),
     })?;
@@ -281,9 +344,15 @@ pub async fn update(
         error_message: format!("Failed to get db connection: {}", e),
     })?;
 
-    let tenant = Tenant::update(&id, update_dto.0, &mut conn).map_err(|e| ServiceError::InternalServerError {
-        error_message: format!("Failed to update tenant: {}", e),
-    })?;
+    let tenant = match Tenant::update(&id, update_dto.0, &mut conn) {
+        Ok(t) => t,
+        Err(diesel::result::Error::NotFound) => return Err(ServiceError::NotFound {
+            error_message: format!("Tenant not found: {}", id),
+        }),
+        Err(e) => return Err(ServiceError::InternalServerError {
+            error_message: format!("Failed to update tenant: {}", e),
+        }),
+    };
 
     Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, tenant)))
 }
@@ -297,9 +366,15 @@ pub async fn delete(
         error_message: format!("Failed to get db connection: {}", e),
     })?;
 
-    Tenant::delete(&id, &mut conn).map_err(|e| ServiceError::InternalServerError {
-        error_message: format!("Failed to delete tenant: {}", e),
-    })?;
+    match Tenant::delete(&id, &mut conn) {
+        Ok(_) => (),
+        Err(diesel::result::Error::NotFound) => return Err(ServiceError::NotFound {
+            error_message: format!("Tenant not found: {}", id),
+        }),
+        Err(e) => return Err(ServiceError::InternalServerError {
+            error_message: format!("Failed to delete tenant: {}", e),
+        }),
+    };
 
     Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, constants::EMPTY)))
 }

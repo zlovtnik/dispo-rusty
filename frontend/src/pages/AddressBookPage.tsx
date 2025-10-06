@@ -13,7 +13,7 @@ import {
   Space,
   Typography,
   Divider,
-  message,
+  App,
 } from 'antd';
 import {
   PlusOutlined,
@@ -24,6 +24,7 @@ import {
 
 export const AddressBookPage: React.FC = () => {
   const { tenant } = useAuth();
+  const { message } = App.useApp();
   const [contacts, setContacts] = useState<Contact[]>([
     // Mock data for demonstration - using full Contact structure
     {

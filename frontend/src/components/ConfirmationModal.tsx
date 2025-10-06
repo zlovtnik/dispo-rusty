@@ -38,14 +38,13 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
           modal.destroy();
         },
         centered: true,
-        destroyOnClose: true,
       });
 
       return () => {
         modal.destroy();
       };
     }
-  }, [isOpen]);
+  }, [isOpen, title, message, confirmText, cancelText, onConfirm, onCancel]);
 
   return null;
 };

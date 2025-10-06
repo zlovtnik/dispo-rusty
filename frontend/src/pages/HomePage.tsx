@@ -68,7 +68,7 @@ export const HomePage: React.FC = () => {
           </Typography.Paragraph>
 
           <Space size="large">
-            <Link to="/login">
+            <Link to="/register">
               <Button type="primary" size="large">
                 Get Started
               </Button>

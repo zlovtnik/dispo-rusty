@@ -42,6 +42,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       padding: token.paddingMD,
       textAlign: 'center' as const,
       color: token.colorTextLightSolid,
+      background: 'linear-gradient(135deg, #1a3037 0%, #203b45 100%)', // primary-700 to primary-600 gradient
+    },
+    sider: {
+      background: 'linear-gradient(135deg, #203b45 0%, #15262a 100%)', // primary-600 to primary-800 gradient
     },
     header: {
       background: token.colorBgContainer,
@@ -122,7 +126,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   return (
     <AntLayout style={{ minHeight: '100vh' }}>
-      <AntLayout.Sider collapsible collapsed={collapsed} onCollapse={(value) => setCollapsed(value)}>
+      <AntLayout.Sider collapsible collapsed={collapsed} onCollapse={(value) => setCollapsed(value)} trigger={null} style={layoutStyles.sider}>
         <div style={layoutStyles.siderHeader}>
           <HeartOutlined style={{ fontSize: 32 }} />
           <div>{tenant?.name || 'Natural Pharmacy System'}</div>
@@ -138,7 +142,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
       <AntLayout>
         <AntLayout.Header style={layoutStyles.header}>
-          <Button type="text" icon={<MenuOutlined />} onClick={() => setCollapsed(!collapsed)} style={{ fontSize: token.fontSizeLG }} />
+          <Button type="text" icon={<MenuOutlined />} onClick={() => setCollapsed(!collapsed)} style={{ fontSize: token.fontSizeLG, color: 'var(--tertiary-500)' }} />
           <Breadcrumb items={generateBreadcrumbs(location.pathname)} />
           <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
             <div style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
@@ -154,10 +158,21 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           {children}
         </AntLayout.Content>
 
-        <AntLayout.Footer style={{ textAlign: 'center' }}>
-          © 2025 Natural Pharmacy System. Built with TypeScript, Bun, and React.
-          <br />
-          Secure multi-tenant platform with JWT authentication
+        <AntLayout.Footer style={{
+          textAlign: 'center',
+          borderTop: '4px solid var(--secondary-200)',
+          padding: '20px 0',
+          background: 'var(--neutral-50)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: '100%',
+          margin: `0 -${token.paddingMD}`,
+          boxSizing: 'border-box'
+        }}>
+          <div>© 2025 Natural Pharmacy System. Built with TypeScript, Bun, and React.</div>
+          <div>Secure multi-tenant platform with JWT authentication</div>
         </AntLayout.Footer>
       </AntLayout>
     </AntLayout>
