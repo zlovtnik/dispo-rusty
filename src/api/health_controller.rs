@@ -575,8 +575,8 @@ mod tests {
 
     #[actix_web::test]
     async fn test_logs_disabled() {
-        // Ensure clean environment state
-        env::remove_var("ENABLE_LOG_STREAM");
+        // Set environment variables to disabled state
+        env::set_var("ENABLE_LOG_STREAM", "false");
         env::remove_var("LOG_FILE");
         env::remove_var("TEST_MODE");
 
@@ -628,14 +628,10 @@ mod tests {
 
     #[actix_web::test]
     async fn test_logs_file_not_found() {
-        // Ensure clean environment state
-        env::remove_var("ENABLE_LOG_STREAM");
-        env::remove_var("LOG_FILE");
-        env::remove_var("TEST_MODE");
-
-        // Set environment variables
+        // Set environment variables to enabled state with non-existent file
         env::set_var("ENABLE_LOG_STREAM", "true");
         env::set_var("LOG_FILE", "/nonexistent/path/log.txt");
+        env::remove_var("TEST_MODE");
 
         // initialize testcontainers for Postgres and Redis
         let docker = clients::Cli::default();
