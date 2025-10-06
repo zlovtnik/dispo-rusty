@@ -1,13 +1,25 @@
 # Multi-stage build: Rust backend + Node.js frontend
-
+#
+# SECURITY NOTE: JWT secrets are injected at runtime, never generated at build time.
+# Production deployments must provide JWT_SECRET via:
+# - Environment variable: JWT_SECRET (base64 encoded 16-byte key)
+# - Mounted secret file: /run/secrets/jwt_secret
+# - Docker/Kubernetes secrets management
+#
+# Development builds: Set DEV_MODE=true to generate a temporary secret.key
+# Example: docker build --build-arg DEV_MODE=true -t myapp .
+#
 # Stage 1: Build Rust backend
-FROM rust:1.90.0-slim as rust-builder
+FROM rust:1.90.0-slim AS rust-builder
+
+# Build arguments
+ARG DEV_MODE=false
 
 # Install required dependencies for diesel_cli (PostgreSQL client)
 RUN apt-get update && apt-get install -y \
-    pkg-config \
-    libssl-dev \
     libpq-dev \
+    libssl-dev \
+    pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -20,11 +32,21 @@ COPY migrations/ ./migrations/
 # Copy source code
 COPY src/ ./src/
 
+# Development fallback: Generate secret.key only if DEV_MODE is true
+# In production, secrets should be injected at runtime via:
+# - Environment variable: JWT_SECRET (base64 encoded 16-byte key)
+# - Mounted file: /run/secrets/jwt_secret
+# - Kubernetes/Docker secrets management
+RUN if [ "$DEV_MODE" = "true" ] && [ ! -f src/secret.key ]; then \
+    echo "WARNING: Generating development secret.key - NOT for production use!"; \
+    head -c 16 /dev/urandom > src/secret.key; \
+    fi
+
 # Build the application
 RUN cargo build --release
 
 # Stage 2: Frontend build
-FROM oven/bun:1-slim as frontend-builder
+FROM oven/bun:1-slim AS frontend-builder
 
 WORKDIR /app
 
@@ -49,8 +71,9 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Create app directories
+# Create app directories and secrets directory
 WORKDIR /app
+RUN mkdir -p /run/secrets
 
 # Copy backend binary from rust-builder stage
 COPY --from=rust-builder /app/target/release/actix-web-rest-api-with-jwt /app/backend
@@ -72,4 +95,8 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
 # Run the backend application
+# Production usage examples:
+# docker run -e JWT_SECRET=$(openssl rand -base64 16) myapp
+# docker run -v /path/to/secret:/run/secrets/jwt_secret myapp
+# kubectl: mount secret as env var or volume
 CMD ["/app/backend"]
