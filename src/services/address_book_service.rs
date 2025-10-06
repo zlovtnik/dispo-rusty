@@ -1,5 +1,3 @@
-use actix_web::web;
-
 use crate::{
     config::db::Pool,
     constants,
@@ -10,7 +8,8 @@ use crate::{
         response::Page,
     },
 };
-pub fn find_all(pool: &web::Data<Pool>) -> Result<Vec<Person>, ServiceError> {
+
+pub fn find_all(pool: &Pool) -> Result<Vec<Person>, ServiceError> {
     match Person::find_all(&mut pool.get().unwrap()) {
         Ok(person) => Ok(person),
         Err(_) => Err(ServiceError::InternalServerError {
@@ -19,7 +18,7 @@ pub fn find_all(pool: &web::Data<Pool>) -> Result<Vec<Person>, ServiceError> {
     }
 }
 
-pub fn find_by_id(id: i32, pool: &web::Data<Pool>) -> Result<Person, ServiceError> {
+pub fn find_by_id(id: i32, pool: &Pool) -> Result<Person, ServiceError> {
     match Person::find_by_id(id, &mut pool.get().unwrap()) {
         Ok(person) => Ok(person),
         Err(_) => Err(ServiceError::NotFound {
@@ -28,7 +27,7 @@ pub fn find_by_id(id: i32, pool: &web::Data<Pool>) -> Result<Person, ServiceErro
     }
 }
 
-pub fn filter(filter: PersonFilter, pool: &web::Data<Pool>) -> Result<Page<Person>, ServiceError> {
+pub fn filter(filter: PersonFilter, pool: &Pool) -> Result<Page<Person>, ServiceError> {
     match Person::filter(filter, &mut pool.get().unwrap()) {
         Ok(people) => Ok(people),
         Err(_) => Err(ServiceError::InternalServerError {
@@ -37,7 +36,7 @@ pub fn filter(filter: PersonFilter, pool: &web::Data<Pool>) -> Result<Page<Perso
     }
 }
 
-pub fn insert(new_person: PersonDTO, pool: &web::Data<Pool>) -> Result<(), ServiceError> {
+pub fn insert(new_person: PersonDTO, pool: &Pool) -> Result<(), ServiceError> {
     match Person::insert(new_person, &mut pool.get().unwrap()) {
         Ok(_) => Ok(()),
         Err(_) => Err(ServiceError::InternalServerError {
@@ -49,7 +48,7 @@ pub fn insert(new_person: PersonDTO, pool: &web::Data<Pool>) -> Result<(), Servi
 pub fn update(
     id: i32,
     updated_person: PersonDTO,
-    pool: &web::Data<Pool>,
+    pool: &Pool,
 ) -> Result<(), ServiceError> {
     match Person::find_by_id(id, &mut pool.get().unwrap()) {
         Ok(_) => match Person::update(id, updated_person, &mut pool.get().unwrap()) {
@@ -64,7 +63,7 @@ pub fn update(
     }
 }
 
-pub fn delete(id: i32, pool: &web::Data<Pool>) -> Result<(), ServiceError> {
+pub fn delete(id: i32, pool: &Pool) -> Result<(), ServiceError> {
     match Person::find_by_id(id, &mut pool.get().unwrap()) {
         Ok(_) => match Person::delete(id, &mut pool.get().unwrap()) {
             Ok(_) => Ok(()),

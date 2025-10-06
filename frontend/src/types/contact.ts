@@ -197,8 +197,3 @@ export enum Gender {
   male = 'male',
   female = 'female',
 }
-
-// Gender conversion helpers
-export const genderToBoolean = (gender: Gender): boolean => gender === Gender.male;
-
-export const booleanToGender = (b: boolean): Gender => b ? Gender.male : Gender.female;

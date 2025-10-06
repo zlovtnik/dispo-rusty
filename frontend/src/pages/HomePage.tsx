@@ -18,6 +18,23 @@ import {
   HeartOutlined,
 } from '@ant-design/icons';
 
+const styles = {
+  header: {
+    background: '#fafaf9',
+    borderBottom: '1px solid #d9d9d9',
+  },
+  headerContent: {
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: '100%',
+  },
+  title: {
+    margin: 0,
+    color: '#1f6b3e',
+  },
+};
+
 export const HomePage: React.FC = () => {
   const { isAuthenticated } = useAuth();
 
@@ -49,9 +66,9 @@ export const HomePage: React.FC = () => {
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Layout.Header style={{ background: '#fafaf9', borderBottom: '1px solid #d9d9d9' }}>
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-          <Typography.Title level={4} style={{ margin: 0, color: '#1f6b3e' }}>
+      <Layout.Header style={styles.header}>
+        <div style={styles.headerContent}>
+          <Typography.Title level={4} style={styles.title}>
             <HeartOutlined style={{ marginRight: 8 }} />
             Natural Pharmacy System
           </Typography.Title>
@@ -91,21 +108,25 @@ export const HomePage: React.FC = () => {
                 <Card
                   style={{ textAlign: 'center', height: '100%' }}
                   hoverable
+                  aria-labelledby={`feature-title-${feature.id}`}
                   cover={
-                    <div style={{
-                      padding: '24px 0',
-                      background: '#dcf2e6',
-                      display: 'flex',
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                      margin: '0 0 24px 0'
-                    }}>
+                    <div
+                      style={{
+                        padding: '24px 0',
+                        background: '#dcf2e6',
+                        display: 'flex',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        margin: '0 0 24px 0'
+                      }}
+                      aria-label={`${feature.title} icon`}
+                    >
                       {feature.icon}
                     </div>
                   }
                 >
                   <Card.Meta
-                    title={<Typography.Title level={4}>{feature.title}</Typography.Title>}
+                    title={<Typography.Title level={4} id={`feature-title-${feature.id}`}>{feature.title}</Typography.Title>}
                     description={<Typography.Paragraph>{feature.description}</Typography.Paragraph>}
                   />
                 </Card>

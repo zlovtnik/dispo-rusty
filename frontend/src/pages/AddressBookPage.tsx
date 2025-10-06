@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { ConfirmationModal } from '@/components/ConfirmationModal';
 import type { Contact } from '@/types/contact';
-import { Gender, genderToBoolean, booleanToGender } from '@/types/contact';
-import { addressBookService } from '@/services/api';
+import { Gender } from '@/types/contact';
+import { addressBookService, genderConversion } from '@/services/api';
 import {
   Button,
   Input,
@@ -73,7 +73,7 @@ export const AddressBookPage: React.FC = () => {
       fullName: person.name || '',
       email: person.email || '',
       phone: person.phone || '',
-      gender: typeof person.gender === 'boolean' ? booleanToGender(person.gender) : undefined,
+      gender: typeof person.gender === 'boolean' ? genderConversion.fromBoolean(person.gender) : undefined,
       age: typeof person.age === 'number' ? person.age : undefined,
       address: {
         street1: person.address || '',
@@ -98,7 +98,7 @@ export const AddressBookPage: React.FC = () => {
       address,
       phone,
       email,
-      gender: gender ? genderToBoolean(gender) : false,
+      gender: gender ? genderConversion.toBoolean(gender) : false,
       age: age || 25,
     };
   };
@@ -149,7 +149,7 @@ export const AddressBookPage: React.FC = () => {
         // Update existing contact
         await addressBookService.update(editingContact.id, {
           name: `${values.firstName} ${values.lastName}`,
-          gender: genderToBoolean(values.gender),
+          gender: genderConversion.toBoolean(values.gender),
           age: values.age,
           address: values.street1,
           phone: values.phone || '',

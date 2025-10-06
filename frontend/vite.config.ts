@@ -9,7 +9,7 @@ const pwaOptions = {
     enabled: false,
   },
   workbox: {
-    globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+    globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,woff,ttf,eot,otf}'],
     runtimeCaching: [
       {
         urlPattern: /^https:\/\/api\./,

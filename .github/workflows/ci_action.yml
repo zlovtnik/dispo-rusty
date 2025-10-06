@@ -1,202 +1,104 @@
-name: CI
+name: CI/CD Pipeline
 
-on: [ push, pull_request ]
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
-  cicd-linux:
-    name: CI Linux
+  test-and-build:
+    name: Test & Build
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout sources
-        uses: actions/checkout@v2
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Install stable toolchain
+      - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Get temporary secret key
-        shell: sh
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            frontend/node_modules
+          key: ${{ runner.os }}-deps-${{ hashFiles('**/Cargo.lock', '**/bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-deps-
+
+      - name: Setup environment
         run: |
-          mv src/secret.key.sample src/secret.key
+          cp dotenv.sample .env
+          head -c16 /dev/urandom > src/secret.key
 
-      - name: Import sample dotenv file
-        shell: sh
+      - name: Run backend tests
+        run: cargo test
+
+      - name: Run frontend tests
         run: |
-          mv dotenv.sample .env
+          cd frontend
+          bun install --frozen-lockfile
+          bun test
 
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/registry
-          key: ${{ runner.os }}-registry-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-registry-
-            ${{ runner.os }}-
+      - name: Build frontend
+        run: |
+          cd frontend
+          bun install --frozen-lockfile
+          bun run build
 
-      - name: Cache cargo index
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/git
-          key: ${{ runner.os }}-index-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-index-
-            ${{ runner.os }}-
-
-      - name: Cache cargo build
-        uses: actions/cache@v4
-        with:
-          path: target
-          key: ${{ runner.os }}-build-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-build-
-            ${{ runner.os }}-
-
-      - name: Run cargo check
-        run: cargo check --release
-
-      - name: Run cargo fmt
-        run: cargo fmt --all -- --check
-        continue-on-error: true
-
-      - name: Run cargo clippy
-        run: cargo clippy -- -D warnings
-        continue-on-error: true
-
-      - name: Run cargo test
-        run: cargo test -- --nocapture
-
-      - name: Run cargo build
+      - name: Build backend (release)
         run: cargo build --release
 
-  cicd-windows:
-    name: CI Windows
-    runs-on: windows-latest
+  deploy:
+    name: Build & Push Docker Image
+    needs: test-and-build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
-      - name: Checkout sources
-        uses: actions/checkout@v2
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Install stable toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Get temporary secret key
-        shell: cmd
-        run: ren src\secret.key.sample secret.key
-
-      - name: Import sample dotenv file
-        shell: cmd
-        run: ren dotenv.sample .env
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
         with:
-          path: ~/.cargo/registry
-          key: ${{ runner.os }}-registry-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-registry-
-            ${{ runner.os }}-
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Cache cargo index
-        uses: actions/cache@v4
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
         with:
-          path: ~/.cargo/git
-          key: ${{ runner.os }}-index-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-index-
-            ${{ runner.os }}-
+          images: sakadream/actix-web-rest-api-with-jwt
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Cache cargo build
-        uses: actions/cache@v4
+      - name: Build and push Docker image
+        id: push
+        uses: docker/build-push-action@v5
         with:
-          path: target
-          key: ${{ runner.os }}-build-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-build-
-            ${{ runner.os }}-
+          context: .
+          file: ./Dockerfile.github-action
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
 
-      - name: Run cargo check
-        run: cargo check --release
-        env:
-          RUSTFLAGS: -L D:\a\actix-web-rest-api-with-jwt\actix-web-rest-api-with-jwt\libs\windows
-
-      - name: Run cargo fmt
-        run: cargo fmt --all -- --check
-        continue-on-error: true
-
-      - name: Run cargo clippy
-        run: cargo clippy -- -D warnings
-        continue-on-error: true
-
-      - name: Run cargo test
-        run: cargo test -- --nocapture
-        continue-on-error: true
-        env:
-          RUSTFLAGS: -L D:\a\actix-web-rest-api-with-jwt\actix-web-rest-api-with-jwt\libs\windows
-
-      - name: Run cargo build
-        run: cargo build --release
-        env:
-          RUSTFLAGS: -L D:\a\actix-web-rest-api-with-jwt\actix-web-rest-api-with-jwt\libs\windows
-
-  cicd-macos:
-    name: CI macOS
-    runs-on: macos-latest
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v2
-
-      - name: Install stable toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Get temporary secret key
-        shell: sh
-        run: |
-          mv src/secret.key.sample src/secret.key
-
-      - name: Import sample dotenv file
-        shell: sh
-        run: |
-          mv dotenv.sample .env
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
+      - name: Generate artifact attestation
+        uses: actions/attest-build-provenance@v1
         with:
-          path: ~/.cargo/registry
-          key: ${{ runner.os }}-registry-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-registry-
-            ${{ runner.os }}-
-
-      - name: Cache cargo index
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/git
-          key: ${{ runner.os }}-index-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-index-
-            ${{ runner.os }}-
-
-      - name: Cache cargo build
-        uses: actions/cache@v4
-        with:
-          path: target
-          key: ${{ runner.os }}-build-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-build-
-            ${{ runner.os }}-
-
-      - name: Run cargo check
-        run: cargo check --release
-
-      - name: Run cargo fmt
-        run: cargo fmt --all -- --check
-        continue-on-error: true
-
-      - name: Run cargo clippy
-        run: cargo clippy -- -D warnings
-        continue-on-error: true
-
-      - name: Run cargo test
-        run: cargo test -- --nocapture
-        continue-on-error: true
-
-      - name: Run cargo build
-        run: cargo build --release
+          subject-name: sakadream/actix-web-rest-api-with-jwt
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
