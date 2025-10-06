@@ -4,6 +4,8 @@ import { AuthProvider } from './contexts/AuthContext';
 import { PrivateRoute } from './components/PrivateRoute';
 import { Layout } from './components/Layout';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { EnvironmentErrorUI } from './components/EnvironmentErrorUI';
+import { getEnv, EnvironmentError } from './config/env';
 
 const HomePage = lazy(() => import('./pages/HomePage').then(module => ({ default: module.HomePage })));
 const LoginPage = lazy(() => import('./pages/LoginPage').then(module => ({ default: module.LoginPage })));
@@ -12,6 +14,17 @@ const AddressBookPage = lazy(() => import('./pages/AddressBookPage').then(module
 const TenantsPage = lazy(() => import('./pages/TenantsPage').then(module => ({ default: module.TenantsPage })));
 
 export const App: React.FC = () => {
+  // Validate environment configuration on app startup
+  try {
+    getEnv();
+  } catch (error) {
+    if (error instanceof EnvironmentError) {
+      return <EnvironmentErrorUI error={error} />;
+    }
+    // For unexpected errors, show generic message
+    return <EnvironmentErrorUI error={new Error('Failed to initialize application configuration')} />;
+  }
+
   return (
     <ErrorBoundary>
       <div className="min-h-screen bg-natural-light text-natural-dark">

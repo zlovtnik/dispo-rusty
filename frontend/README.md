@@ -73,30 +73,136 @@ bun run test:watch
 
 ## 🔧 Configuration
 
-### Environment Variables
+### Environment Variables Setup
+
+⚠️ **IMPORTANT**: The application requires proper environment configuration to run. Follow these steps:
+
+#### 1. Create Environment Files
+
+Copy the example file to create your environment-specific configuration:
+
+```bash
+# For development
+cp .env.example .env.development
+
+# For production
+cp .env.example .env.production
+```
+
+#### 2. Required Environment Variables
+
+The following variables are **REQUIRED** for the application to function:
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `VITE_API_URL` | Backend API endpoint URL | `http://localhost:8000/api` |
+
+#### 3. Optional Environment Variables
+
+| Variable | Description | Default | Example |
+|----------|-------------|---------|---------|
+| `VITE_APP_NAME` | Application display name | `Actix Web REST API` | `My App` |
+| `VITE_JWT_STORAGE_KEY` | LocalStorage key for JWT token | `auth_token` | `jwt_token` |
+| `VITE_DEBUG` | Enable debug logging | `false` | `true` |
+| `NODE_ENV` | Node environment (auto-set) | `development` | `production` |
+
+#### 4. Environment Files by Environment
 
 Vite automatically loads environment-specific `.env` files:
 
-- `.env.development` - for development environment
-- `.env.production` - for production environment
+- `.env` - Loaded in all environments (base configuration)
+- `.env.development` - Development environment (loaded during `bun run dev`)
+- `.env.production` - Production environment (loaded during `bun run build`)
+- `.env.local` - Local overrides (git-ignored, highest priority)
 
-Example `.env.development`:
-
+**Example `.env.development`:**
 ```env
 VITE_API_URL=http://localhost:8000/api
+VITE_DEBUG=true
 ```
 
-Example `.env.production`:
-
+**Example `.env.production`:**
 ```env
-VITE_API_URL=https://your-production-api.com/api
+VITE_API_URL=https://api.yourdomain.com/api
+VITE_DEBUG=false
 ```
 
-Note: Vite only exposes environment variables that start with `VITE_` to the client-side code at runtime. Use `NODE_ENV` when running Bun to control which env file is loaded.
+#### 5. Environment Variable Validation
 
-#### Environment Variable Validation
+The application performs comprehensive validation of environment variables:
 
-Before building the application, environment variables are validated to prevent production failures. The `VITE_API_URL` variable is required and must be a valid URL.
+**Build-Time Validation** (via `scripts/validate-env.js`):
+- Validates required variables are present
+- Checks URL format validity
+- Warns about invalid optional variables
+- Prevents builds with missing configuration
+
+**Runtime Validation** (via `src/config/env.ts`):
+- Validates configuration on app startup
+- Displays user-friendly error UI if validation fails
+- Provides helpful troubleshooting steps in development mode
+
+**What Happens if Variables are Missing?**
+
+- **Development Mode**: Clear error message with quick fix instructions
+- **Production Mode**: Build fails with detailed error message before deployment
+- **Runtime**: Application shows configuration error UI instead of broken page
+
+#### 6. Accessing Environment Variables in Code
+
+**❌ WRONG - Direct access:**
+```typescript
+const apiUrl = import.meta.env.VITE_API_URL; // Type-unsafe, no validation
+```
+
+**✅ CORRECT - Use the config utility:**
+```typescript
+import { getEnv } from '@/config/env';
+
+const config = getEnv();
+const apiUrl = config.apiUrl; // Type-safe, validated
+```
+
+#### 7. Troubleshooting
+
+**Problem: "Configuration Error" screen on startup**
+
+Solution:
+1. Check if `.env.development` or `.env.production` exists
+2. Verify `VITE_API_URL` is set and is a valid URL
+3. Restart the development server after making changes
+
+**Problem: Build fails with environment variable error**
+
+Solution:
+1. Ensure the appropriate `.env.production` file exists
+2. Check that `VITE_API_URL` is set for the target environment
+3. Verify URL format includes protocol (http:// or https://)
+
+**Problem: Changes to `.env` not taking effect**
+
+Solution:
+1. Restart the Vite dev server (`bun run dev`)
+2. For production builds, run `bun run build` again
+3. Clear browser cache if testing built files
+
+Note: Vite only exposes environment variables that start with `VITE_` to the client-side code. Never store secrets or API keys in these variables as they are embedded in the client-side bundle.
+
+### TypeScript Configuration
+
+The project uses TypeScript 5.9+ with strict type checking enabled. Key configurations:
+
+- **Module System**: ESNext with Preserve mode for optimal Bun compatibility
+- **Path Aliases**: Configured for clean imports (e.g., `@/components/*`)
+- **Type Definitions**: 
+  - `vite/client` - Vite environment types
+  - `@types/bun` - Bun runtime types
+  - Custom `vite-env.d.ts` - Application-specific environment types
+
+**Verify TypeScript Configuration:**
+```bash
+bun run tsc --noEmit  # Type-check without emitting files
+```
 
 Validation is performed automatically during the build process. If validation fails, the build will be aborted with clear error messages.
 

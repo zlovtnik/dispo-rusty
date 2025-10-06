@@ -1,4 +1,5 @@
 import qs from 'qs';
+import { getEnv } from '../config/env';
 import type {
   AuthResponse,
   User,
@@ -39,7 +40,7 @@ export interface ApiResponse<T> {
 export interface ApiError {
   code: string;
   message: string;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
   type?: 'network' | 'timeout' | 'http' | 'other';
   statusCode?: number;
   retryable?: boolean;
@@ -68,26 +69,13 @@ export interface CircuitBreakerState {
 
 export interface IHttpClient {
   get<T>(endpoint: string): Promise<T>;
-  post<T>(endpoint: string, data?: any): Promise<T>;
-  put<T>(endpoint: string, data?: any): Promise<T>;
+  post<T>(endpoint: string, data?: unknown): Promise<T>;
+  put<T>(endpoint: string, data?: unknown): Promise<T>;
   delete<T>(endpoint: string): Promise<T>;
 }
 
 // Base API configuration
-const API_BASE_URL = (() => {
-  const url = import.meta.env.VITE_API_URL as string;
-  if (url) {
-    return url;
-  }
-
-  // Only allow localhost fallback in development
-  if (import.meta.env.MODE === 'development') {
-    return 'http://localhost:8000/api';
-  }
-
-  // In production, throw an error if API URL is missing
-  throw new Error('VITE_API_URL environment variable is required in production');
-})();
+const API_BASE_URL = getEnv().apiUrl;
 
 // Default configuration
 const DEFAULT_CONFIG: HttpClientConfig = {
@@ -119,15 +107,6 @@ class HttpClient implements IHttpClient {
     };
   }
 
-  private safeGetJsonValue(key: string): any {
-    try {
-      const stored = localStorage.getItem(key);
-      return stored ? JSON.parse(stored) : null;
-    } catch {
-      return null;
-    }
-  }
-
   /**
    * Storage format convention:
    * - 'auth_token': JSON object {token: string}
@@ -135,13 +114,27 @@ class HttpClient implements IHttpClient {
    * - 'user': JSON object {id: string, email: string, ...}
    */
   private safeGetToken(): string | null {
-    const tokenData = this.safeGetJsonValue('auth_token');
-    return (tokenData && typeof tokenData.token === 'string') ? tokenData.token : null;
+    const stored = localStorage.getItem('auth_token');
+    if (!stored) return null;
+    try {
+      const data = JSON.parse(stored);
+      if (typeof data === 'object' && data !== null && 'token' in data && typeof data.token === 'string') {
+        return data.token;
+      }
+    } catch {}
+    return null;
   }
 
   private safeGetTenantId(): string | null {
-    const tenantData = this.safeGetJsonValue('tenant');
-    return (tenantData && typeof tenantData.id === 'string') ? tenantData.id : null;
+    const stored = localStorage.getItem('tenant');
+    if (!stored) return null;
+    try {
+      const data = JSON.parse(stored);
+      if (typeof data === 'object' && data !== null && 'id' in data && typeof data.id === 'string') {
+        return data.id;
+      }
+    } catch {}
+    return null;
   }
 
   private sleep(delay: number): Promise<void> {
@@ -221,7 +214,7 @@ class HttpClient implements IHttpClient {
     return headers;
   }
 
-  private async handleSuccessResponse(response: Response): Promise<any> {
+  private async handleSuccessResponse(response: Response): Promise<unknown> {
     // Validate Content-Type before parsing JSON
     const contentType = response.headers.get('content-type');
     if (!contentType || !contentType.includes('application/json')) {
@@ -247,7 +240,7 @@ class HttpClient implements IHttpClient {
     return await response.json();
   }
 
-  private async parseErrorData(response: Response): Promise<any> {
+  private async parseErrorData(response: Response): Promise<unknown> {
     if (response.headers.get('content-type')?.includes('application/json')) {
       try {
         return await response.clone().json();
@@ -270,9 +263,10 @@ class HttpClient implements IHttpClient {
     }
   }
 
-  private createHttpError(response: Response, errorData: any): ApiError {
+  private createHttpError(response: Response, errorData: unknown): ApiError {
+    const errorDataObj = errorData as Record<string, unknown> & { code: string; message: string };
     const apiError: ApiError = {
-      ...errorData,
+      ...errorDataObj,
       type: 'http',
       statusCode: response.status,
       retryable: response.status >= 500,
@@ -280,8 +274,8 @@ class HttpClient implements IHttpClient {
     return apiError;
   }
 
-  private createFetchError(error: any): ApiError {
-    const isAborted = (error as any)?.name === 'AbortError';
+  private createFetchError(error: unknown): ApiError {
+    const isAborted = error instanceof DOMException && error.name === 'AbortError';
     const apiError: ApiError = {
       code: isAborted ? 'TIMEOUT' : 'NETWORK_ERROR',
       message: isAborted ? 'Request timed out' : 'Network error: Unable to connect to the server',
@@ -343,7 +337,7 @@ class HttpClient implements IHttpClient {
         const response = await this.makeRequest(url, { ...options, headers });
 
         if (response.ok) {
-          return this.handleSuccessResponse(response);
+          return (this.handleSuccessResponse(response) as Promise<T>);
         }
 
         // Handle HTTP errors

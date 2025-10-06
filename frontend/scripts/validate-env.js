@@ -5,15 +5,51 @@
  *
  * This script validates critical environment variables required for the build process.
  * It ensures that production builds don't fail due to missing required variables.
+ * 
+ * Mimics Vite's environment file loading behavior:
+ * 1. Load .env (base configuration)
+ * 2. Load .env.{NODE_ENV} (environment-specific)
+ * 3. Load .env.{NODE_ENV}.local (local overrides)
+ * 
+ * Later files override earlier ones, and we only load files for the current NODE_ENV.
  */
 
-const fs = require('fs');
-const path = require('path');
+import { readFileSync, existsSync } from 'fs';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
 
-// Load environment variables from .env files
-require('dotenv').config({ path: path.resolve(__dirname, '../.env.production') });
-require('dotenv').config({ path: path.resolve(__dirname, '../.env.development') });
-require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Determine the current environment
+const NODE_ENV = process.env.NODE_ENV || 'development';
+
+console.log(`📦 Environment: ${NODE_ENV}\n`);
+
+// Manually load .env files for Node.js (Bun does this automatically)
+function loadEnvFile(filePath, description) {
+  if (existsSync(filePath)) {
+    console.log(`📄 Loading: ${description}`);
+    const content = readFileSync(filePath, 'utf-8');
+    content.split('\n').forEach(line => {
+      const match = line.match(/^([^=:#]+?)[=:](.*)$/);
+      if (match) {
+        const key = match[1].trim();
+        const value = match[2].trim();
+        // Allow overriding: later files take precedence
+        process.env[key] = value;
+      }
+    });
+  }
+}
+
+// Load environment variables in Vite's priority order
+// Later files override earlier ones
+loadEnvFile(resolve(__dirname, '../.env'), '.env (base)');
+loadEnvFile(resolve(__dirname, `../.env.${NODE_ENV}`), `.env.${NODE_ENV} (environment-specific)`);
+loadEnvFile(resolve(__dirname, `../.env.${NODE_ENV}.local`), `.env.${NODE_ENV}.local (local overrides)`);
+
+console.log();
 
 // Required environment variables for build
 const requiredVars = {

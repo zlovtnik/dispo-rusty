@@ -1,16 +1,19 @@
 export interface Tenant {
   id: string;
   name: string;
+  db_url: string;
   created_at: string;
   updated_at: string;
 }
 
 export interface CreateTenantDTO {
   name: string;
+  db_url: string;
 }
 
 export interface UpdateTenantDTO {
   name?: string;
+  db_url?: string;
 }
 
 export interface TenantListParams {
