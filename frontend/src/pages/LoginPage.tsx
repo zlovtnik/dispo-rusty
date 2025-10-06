@@ -71,13 +71,15 @@ export const LoginPage: React.FC = () => {
             Welcome Back
           </Typography.Title>
         }
-        headStyle={{
-          border: 'none',
-          padding: '40px 30px 20px',
-          textAlign: 'center'
-        }}
-        bodyStyle={{
-          padding: '30px'
+        styles={{
+          header: {
+            border: 'none',
+            padding: '40px 30px 20px',
+            textAlign: 'center'
+          },
+          body: {
+            padding: '30px'
+          }
         }}
       >
         <Typography.Text

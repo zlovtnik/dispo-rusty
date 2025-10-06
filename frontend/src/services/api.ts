@@ -503,18 +503,22 @@ export const addressBookService = {
 
   async create(data: {
     name: string;
-    email?: string;
-    phone?: string;
-    address?: string;
+    email: string;
+    gender: boolean;
+    age: number;
+    address: string;
+    phone: string;
   }) {
     return apiClient.post('/address-book', data);
   },
 
   async update(id: string, data: {
     name: string;
-    email?: string;
-    phone?: string;
-    address?: string;
+    email: string;
+    gender: boolean;
+    age: number;
+    address: string;
+    phone: string;
   }) {
     return apiClient.put(`/address-book/${id}`, data);
   },

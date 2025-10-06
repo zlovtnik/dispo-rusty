@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { ConfirmationModal } from '@/components/ConfirmationModal';
 import type { Contact } from '@/types/contact';
+import { addressBookService } from '@/services/api';
 import {
   Button,
   Input,
@@ -14,6 +15,7 @@ import {
   Typography,
   Divider,
   App,
+  Spin,
 } from 'antd';
 import {
   PlusOutlined,
@@ -25,53 +27,9 @@ import {
 export const AddressBookPage: React.FC = () => {
   const { tenant } = useAuth();
   const { message } = App.useApp();
-  const [contacts, setContacts] = useState<Contact[]>([
-    // Mock data for demonstration - using full Contact structure
-    {
-      id: '1',
-      tenantId: 'tenant1',
-      firstName: 'John',
-      lastName: 'Doe',
-      fullName: 'John Doe',
-      email: 'john@example.com',
-      phone: '+1-555-0123',
-      address: {
-        street1: '123 Main St',
-        street2: '',
-        city: 'Anytown',
-        state: 'CA',
-        zipCode: '12345',
-        country: 'USA',
-      },
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      createdBy: 'system',
-      updatedBy: 'system',
-      isActive: true,
-    },
-    {
-      id: '2',
-      tenantId: 'tenant1',
-      firstName: 'Jane',
-      lastName: 'Smith',
-      fullName: 'Jane Smith',
-      email: 'jane@example.com',
-      phone: '+1-555-0456',
-      address: {
-        street1: '456 Oak Ave',
-        street2: '',
-        city: 'Somewhere',
-        state: 'CA',
-        zipCode: '67890',
-        country: 'USA',
-      },
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      createdBy: 'system',
-      updatedBy: 'system',
-      isActive: true,
-    },
-  ]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -79,6 +37,71 @@ export const AddressBookPage: React.FC = () => {
   const [deleteContactId, setDeleteContactId] = useState<string | null>(null);
   const [form] = Form.useForm();
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Load contacts from API on component mount
+  useEffect(() => {
+    loadContacts();
+  }, []);
+
+  // Helper function to transform backend Person to frontend Contact
+  const personToContact = (person: any): Contact => {
+    const nameParts = person.name ? person.name.split(' ') : ['', ''];
+    return {
+      id: person.id?.toString() || '',
+      tenantId: 'tenant1', // This should come from context
+      firstName: nameParts[0] || '',
+      lastName: nameParts[1] || '',
+      fullName: person.name || '',
+      email: person.email || '',
+      phone: person.phone || '',
+      address: {
+        street1: person.address || '',
+        street2: '',
+        city: '',
+        state: '',
+        zipCode: '',
+        country: 'USA',
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      createdBy: 'system',
+      updatedBy: 'system',
+      isActive: true,
+    };
+  };
+
+  // Helper function to transform frontend Contact to backend PersonDTO
+  const contactToPersonDTO = (contact: Contact) => {
+    return {
+      name: contact.fullName,
+      gender: true, // Default value - backend expects gender field
+      age: 30, // Default value - backend expects age field
+      address: contact.address?.street1 || '',
+      phone: contact.phone || '',
+      email: contact.email || '',
+    };
+  };
+
+  // Load contacts from API
+  const loadContacts = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await addressBookService.getAll() as any;
+      // Transform backend data to frontend Contact objects
+      const contactData = Array.isArray(response.data)
+        ? response.data.map(personToContact)
+        : [];
+
+      setContacts(contactData);
+    } catch (err: any) {
+      const errorMessage = err?.message || 'Failed to load contacts';
+      setError(errorMessage);
+      message.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Filter contacts based on search term
   const filteredContacts = contacts.filter(contact =>
@@ -94,57 +117,28 @@ export const AddressBookPage: React.FC = () => {
     try {
       if (editingContact) {
         // Update existing contact
-        setContacts(prev => prev.map(contact =>
-          contact.id === editingContact.id
-            ? {
-                ...contact,
-                fullName: `${values.firstName} ${values.lastName}`,
-                firstName: values.firstName,
-                lastName: values.lastName,
-                email: values.email,
-                phone: values.phone,
-                address: {
-                  street1: values.street1,
-                  street2: values.street2 || '',
-                  city: values.city,
-                  state: values.state,
-                  zipCode: values.zipCode,
-                  country: values.country,
-                },
-                updatedAt: new Date(),
-                updatedBy: 'system',
-              }
-            : contact
-        ));
+        await addressBookService.update(editingContact.id, {
+          name: `${values.firstName} ${values.lastName}`,
+          gender: true, // Default value
+          age: 30, // Default value
+          address: values.street1,
+          phone: values.phone || '',
+          email: values.email || '',
+        });
       } else {
         // Create new contact
-        if (!tenant?.id) {
-          throw new Error('Tenant ID is required to create contacts.');
-        }
-        const newContact: Contact = {
-          id: crypto.randomUUID(),
-          tenantId: tenant.id,
-          firstName: values.firstName,
-          lastName: values.lastName,
-          fullName: `${values.firstName} ${values.lastName}`,
-          email: values.email,
-          phone: values.phone,
-          address: {
-            street1: values.street1,
-            street2: values.street2 || '',
-            city: values.city,
-            state: values.state,
-            zipCode: values.zipCode,
-            country: values.country,
-          },
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          createdBy: 'system',
-          updatedBy: 'system',
-          isActive: true,
-        };
-        setContacts(prev => [...prev, newContact]);
+        await addressBookService.create({
+          name: `${values.firstName} ${values.lastName}`,
+          gender: true, // Default value
+          age: 30, // Default value
+          address: values.street1,
+          phone: values.phone || '',
+          email: values.email || '',
+        });
       }
+
+      // Reload contacts
+      await loadContacts();
 
       // Success message
       const successMsg = editingContact ? 'Contact updated successfully!' : 'Contact created successfully!';
@@ -155,8 +149,9 @@ export const AddressBookPage: React.FC = () => {
       setIsFormOpen(false);
       form.resetFields();
 
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : 'An error occurred while saving the contact.');
+    } catch (error: any) {
+      const errorMessage = error?.message || 'An error occurred while saving the contact.';
+      message.error(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -186,11 +181,18 @@ export const AddressBookPage: React.FC = () => {
   };
 
   // Confirm delete
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (deleteContactId) {
-      setContacts(prev => prev.filter(contact => contact.id !== deleteContactId));
-      setDeleteContactId(null);
-      message.success('Contact deleted successfully!');
+      try {
+        await addressBookService.delete(deleteContactId);
+        // Reload contacts
+        await loadContacts();
+        setDeleteContactId(null);
+        message.success('Contact deleted successfully!');
+      } catch (error: any) {
+        const errorMessage = error?.message || 'Failed to delete contact';
+        message.error(errorMessage);
+      }
     }
   };
 
@@ -299,29 +301,48 @@ export const AddressBookPage: React.FC = () => {
         style={{ maxWidth: 400 }}
       />
 
+      {/* Error Alert */}
+      {error && (
+        <Alert
+          message="Error Loading Contacts"
+          description={error}
+          type="error"
+          showIcon
+          closable
+          onClose={() => setError(null)}
+        />
+      )}
+
       {/* Contacts Table */}
       <Card title={`Contacts (${filteredContacts.length})`}>
-        <Table
-          columns={columns}
-          dataSource={filteredContacts}
-          rowKey="id"
-          pagination={{
-            pageSize: 10,
-            showSizeChanger: true,
-            showQuickJumper: true,
-            showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} contacts`,
-          }}
-          locale={{
-            emptyText: contacts.length === 0
-              ? <div style={{ textAlign: 'center', padding: '32px' }}>
-                  <Typography.Text>No contacts yet. Add your first contact!</Typography.Text>
-                  <br />
-                  <br />
-                  <Button type="primary" onClick={handleNewContact}>Add Contact</Button>
-                </div>
-              : 'No contacts match your search.',
-          }}
-        />
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '32px' }}>
+            <Spin size="large" />
+            <Typography.Text style={{ marginLeft: 8 }}>Loading contacts...</Typography.Text>
+          </div>
+        ) : (
+          <Table
+            columns={columns}
+            dataSource={filteredContacts}
+            rowKey="id"
+            pagination={{
+              pageSize: 10,
+              showSizeChanger: true,
+              showQuickJumper: true,
+              showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} contacts`,
+            }}
+            locale={{
+              emptyText: contacts.length === 0
+                ? <div style={{ textAlign: 'center', padding: '32px' }}>
+                    <Typography.Text>No contacts yet. Add your first contact!</Typography.Text>
+                    <br />
+                    <br />
+                    <Button type="primary" onClick={handleNewContact}>Add Contact</Button>
+                  </div>
+                : 'No contacts match your search.',
+            }}
+          />
+        )}
       </Card>
 
       {/* Contact Form Modal */}
@@ -345,7 +366,7 @@ export const AddressBookPage: React.FC = () => {
             city: '',
             state: '',
             zipCode: '',
-            country: '',
+            country: 'USA',
           }}
         >
           <Form.Item name="firstName" label="First Name" rules={[{ required: true, message: 'Please enter first name' }]}>
@@ -379,7 +400,7 @@ export const AddressBookPage: React.FC = () => {
             <Input />
           </Form.Item>
           <Form.Item name="country" label="Country" rules={[{ required: true, message: 'Please enter country' }]}>
-            <Input defaultValue="USA" />
+            <Input />
           </Form.Item>
 
           <Form.Item>

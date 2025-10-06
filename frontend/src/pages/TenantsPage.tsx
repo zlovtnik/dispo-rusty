@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { ConfirmationModal } from '@/components/ConfirmationModal';
-import { pharmacyPaginationConfig } from '@/components/PharmacyPagination';
 import type { Tenant } from '@/types/tenant';
 import {
   Button,
