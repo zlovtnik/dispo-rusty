@@ -180,7 +180,7 @@ export const DashboardPage: React.FC = () => {
                   style={{ backgroundColor: getColor(tech.color) }}
                 />
                 <div style={{ marginTop: 8 }}>
-                  <div style={{ fontWeight: 'medium' }}>{tech.name}</div>
+                  <div style={{ fontWeight: 500 }}>{tech.name}</div>
                   <div style={{ fontSize: '12px', color: '#666' }}>{tech.version}</div>
                 </div>
               </Card>

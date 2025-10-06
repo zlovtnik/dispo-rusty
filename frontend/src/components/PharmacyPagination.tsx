@@ -10,10 +10,12 @@ import {
 interface PharmacyPaginationProps {
   total: number;
   current: number;
+  pageSize?: number;
   onChange: (page: number, pageSize: number) => void;
 }
 
-export const PharmacyPagination: React.FC<PharmacyPaginationProps> = ({ total, current, onChange }) => {
+export const PharmacyPagination: React.FC<PharmacyPaginationProps> = ({ total, current, pageSize = 12, onChange }) => {
+  const totalPages = Math.ceil(total / pageSize);
   return (
     <div style={{
       margin: '16px 0',
@@ -36,8 +38,9 @@ export const PharmacyPagination: React.FC<PharmacyPaginationProps> = ({ total, c
       }}>
         {/* Jump to first */}
         <button
-          onClick={() => onChange(1, 12)}
+          onClick={() => onChange(1, pageSize)}
           disabled={current <= 1}
+          aria-label="Jump to first page"
           style={{
             border: 'none',
             borderRadius: '6px',
@@ -64,25 +67,26 @@ export const PharmacyPagination: React.FC<PharmacyPaginationProps> = ({ total, c
 
         {/* Jump to last */}
         <button
-          onClick={() => onChange(Math.ceil(total / 12), 12)}
-          disabled={current >= Math.ceil(total / 12)}
+          onClick={() => onChange(totalPages, pageSize)}
+          disabled={current >= totalPages}
+          aria-label="Jump to last page"
           style={{
             border: 'none',
             borderRadius: '6px',
             padding: '6px',
-            backgroundColor: current >= Math.ceil(total / 12) ? 'var(--neutral-200)' : 'transparent',
-            color: current >= Math.ceil(total / 12) ? 'var(--neutral-500)' : 'var(--secondary-600)',
-            cursor: current >= Math.ceil(total / 12) ? 'not-allowed' : 'pointer',
+            backgroundColor: current >= totalPages ? 'var(--neutral-200)' : 'transparent',
+            color: current >= totalPages ? 'var(--neutral-500)' : 'var(--secondary-600)',
+            cursor: current >= totalPages ? 'not-allowed' : 'pointer',
             transition: 'all 0.2s ease',
-            opacity: current >= Math.ceil(total / 12) ? 0.5 : 1,
+            opacity: current >= totalPages ? 0.5 : 1,
           }}
           onMouseEnter={(e) => {
-            if (current < Math.ceil(total / 12)) {
+            if (current < totalPages) {
               e.currentTarget.style.backgroundColor = 'var(--secondary-50)';
             }
           }}
           onMouseLeave={(e) => {
-            if (current < Math.ceil(total / 12)) {
+            if (current < totalPages) {
               e.currentTarget.style.backgroundColor = 'transparent';
             }
           }}
@@ -101,8 +105,9 @@ export const PharmacyPagination: React.FC<PharmacyPaginationProps> = ({ total, c
       }}>
         {/* Previous button */}
         <button
-          onClick={() => onChange(current - 1, 12)}
+          onClick={() => onChange(current - 1, pageSize)}
           disabled={current <= 1}
+          aria-label="Previous page"
           style={{
             border: '2px solid var(--primary-400)',
             borderRadius: '8px',
@@ -137,16 +142,16 @@ export const PharmacyPagination: React.FC<PharmacyPaginationProps> = ({ total, c
         <Pagination
           current={current}
           total={total}
-          pageSize={12}
+          pageSize={pageSize}
           showSizeChanger={false}
           showQuickJumper={false}
           showTotal={false}
-          onChange={onChange}
+          onChange={(page, pageSize) => onChange(page, pageSize)}
           itemRender={(page, type) => {
             if (type === 'page') {
               return (
                 <button
-                  onClick={() => onChange(page, 12)}
+                  onClick={() => onChange(page, pageSize)}
                   style={{
                     minWidth: '40px',
                     height: '40px',
@@ -184,30 +189,31 @@ export const PharmacyPagination: React.FC<PharmacyPaginationProps> = ({ total, c
 
         {/* Next button */}
         <button
-          onClick={() => onChange(current + 1, 12)}
-          disabled={current >= Math.ceil(total / 12)}
+          onClick={() => onChange(current + 1, pageSize)}
+          disabled={current >= totalPages}
+          aria-label="Next page"
           style={{
             border: '2px solid var(--primary-400)',
             borderRadius: '8px',
             padding: '8px',
-            background: current >= Math.ceil(total / 12) ? 'var(--neutral-200)' : 'var(--primary-100)',
-            color: current >= Math.ceil(total / 12) ? 'var(--neutral-600)' : 'var(--primary-700)',
+            background: current >= totalPages ? 'var(--neutral-200)' : 'var(--primary-100)',
+            color: current >= totalPages ? 'var(--neutral-600)' : 'var(--primary-700)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             fontWeight: '600',
             transition: 'all 0.2s ease',
-            cursor: current >= Math.ceil(total / 12) ? 'not-allowed' : 'pointer',
-            opacity: current >= Math.ceil(total / 12) ? 0.5 : 1,
+            cursor: current >= totalPages ? 'not-allowed' : 'pointer',
+            opacity: current >= totalPages ? 0.5 : 1,
           }}
           onMouseEnter={(e) => {
-            if (current < Math.ceil(total / 12)) {
+            if (current < totalPages) {
               e.currentTarget.style.transform = 'scale(1.05)';
               e.currentTarget.style.background = 'var(--primary-200)';
             }
           }}
           onMouseLeave={(e) => {
-            if (current < Math.ceil(total / 12)) {
+            if (current < totalPages) {
               e.currentTarget.style.transform = 'scale(1)';
               e.currentTarget.style.background = 'var(--primary-100)';
             }
