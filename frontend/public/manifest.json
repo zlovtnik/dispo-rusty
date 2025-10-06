@@ -1,0 +1,21 @@
+{
+  "name": "Actix Web REST API Frontend",
+  "short_name": "Actix Frontend",
+  "description": "TypeScript/Bun/React frontend for Actix Web REST API with JWT authentication and multi-tenant support - Natural Pharmacy Color System",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f7f8fa",
+  "theme_color": "#264653",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ],
+  "categories": ["business", "productivity"],
+  "lang": "en-US",
+  "dir": "ltr"
+}

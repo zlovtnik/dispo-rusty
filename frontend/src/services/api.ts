@@ -1,3 +1,4 @@
+import qs from 'qs';
 import type {
   AuthResponse,
   User,
@@ -14,6 +15,7 @@ import type {
   BulkContactOperation,
   ContactImportRequest,
 } from '../types/contact';
+import type { CreateTenantDTO, UpdateTenantDTO } from '../types/tenant';
 
 // API Response wrapper interface
 export interface ApiResponseWrapper<T> {
@@ -21,19 +23,6 @@ export interface ApiResponseWrapper<T> {
   data: T;
   success: boolean;
   error?: string;
-}
-
-export interface CreateTenantDTO {
-  name: string;
-  domain?: string;
-  settings?: {
-    theme?: string;
-    language?: string;
-  };
-}
-
-export interface UpdateTenantDTO extends Partial<CreateTenantDTO> {
-  id: string;
 }
 
 // API Service for Actix Web REST API integration
@@ -444,9 +433,44 @@ export const healthService = {
   },
 };
 
+export interface TenantFilter {
+  filters: Array<{
+    field: string;
+    operator: string;
+    value: string;
+  }>;
+  cursor?: number;
+  page_size?: number;
+}
+
 export const tenantService = {
   async getAll() {
     return apiClient.get('/tenants');
+  },
+
+  async getAllWithPagination(params?: { offset?: number; limit?: number }) {
+    const queryParams = new URLSearchParams();
+    if (params?.offset !== undefined) queryParams.set('offset', params.offset.toString());
+    if (params?.limit !== undefined) queryParams.set('limit', params.limit.toString());
+
+    const query = queryParams.toString();
+    return apiClient.get(query ? `/tenants?${query}` : '/tenants');
+  },
+
+  async filter(params: TenantFilter) {
+    const queryObj: Record<string, any> = {
+      filters: params.filters,
+    };
+
+    if (params.cursor !== undefined) {
+      queryObj.cursor = params.cursor;
+    }
+    if (params.page_size !== undefined) {
+      queryObj.page_size = params.page_size;
+    }
+
+    const queryString = qs.stringify(queryObj, { arrayFormat: 'indices' });
+    return apiClient.get(`/tenants/filter?${queryString}`);
   },
 
   async getById(id: string) {
@@ -479,18 +503,22 @@ export const addressBookService = {
 
   async create(data: {
     name: string;
-    email?: string;
-    phone?: string;
-    address?: string;
+    email: string;
+    gender: boolean;
+    age: number;
+    address: string;
+    phone: string;
   }) {
     return apiClient.post('/address-book', data);
   },
 
   async update(id: string, data: {
     name: string;
-    email?: string;
-    phone?: string;
-    address?: string;
+    email: string;
+    gender: boolean;
+    age: number;
+    address: string;
+    phone: string;
   }) {
     return apiClient.put(`/address-book/${id}`, data);
   },

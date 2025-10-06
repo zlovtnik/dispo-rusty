@@ -1,41 +1,36 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation, Navigate } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
 import { useAuth } from '@/contexts/AuthContext';
-import type { LoginCredentials } from '@/contexts/AuthContext';
+import type { LoginCredentials } from '@/types/auth';
+import { Card, Form, Input, Button, Checkbox, Typography, Alert, Flex } from 'antd';
 
-interface LoginFormData {
+interface LoginFormValues {
   usernameOrEmail: string;
   password: string;
   tenantId: string;
-  rememberMe: boolean;
 }
 
 export const LoginPage: React.FC = () => {
   const { login, isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-
-  const { register, handleSubmit, formState: { errors } } = useForm<LoginFormData>({
-    defaultValues: {
-      rememberMe: false,
-    }
-  });
+  const [form] = Form.useForm();
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
 
   // Get the intended destination
   const from = location.state?.from?.pathname || '/dashboard';
 
-  const onSubmit = async (data: LoginFormData) => {
+  const onSubmit = async (values: LoginFormValues) => {
     setIsSubmitting(true);
     try {
       setSubmitError(null);
       const credentials: LoginCredentials = {
-        usernameOrEmail: data.usernameOrEmail,
-        password: data.password,
-        tenantId: data.tenantId,
-        rememberMe: data.rememberMe,
+        usernameOrEmail: values.usernameOrEmail,
+        password: values.password,
+        tenantId: values.tenantId,
+        rememberMe,
       };
       await login(credentials);
       navigate(from, { replace: true });
@@ -53,120 +48,159 @@ export const LoginPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="max-w-md w-full">
-        <div className="card">
-          <div className="card-header">
-            <h2 className="text-lg font-semibold text-gray-900">Sign In</h2>
-            <p className="text-sm text-gray-600 mt-1">
-              Access your multi-tenant application
-            </p>
-          </div>
-          <div className="card-body">
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-              {/* Username/Email Field */}
-              <div className="form-group">
-                <label htmlFor="usernameOrEmail" className="form-label">
-                  Username or Email
-                </label>
-                <input
-                  id="usernameOrEmail"
-                  type="text"
-                  {...register('usernameOrEmail', {
-                    required: 'Username or email is required',
-                  })}
-                  className="form-input"
-                  placeholder="Enter your username or email"
-                />
-                {errors.usernameOrEmail && (
-                  <span className="form-error">{errors.usernameOrEmail.message}</span>
-                )}
-              </div>
+    <Flex
+      justify="center"
+      align="center"
+      style={{
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, var(--color-natural-light) 0%, var(--color-healing-light) 100%)',
+        padding: '20px'
+      }}
+    >
+      <Card
+        style={{
+          width: 420,
+          borderRadius: '16px',
+          border: '2px solid var(--primary-200)',
+          background: 'linear-gradient(145deg, rgba(255,255,255,0.95) 0%, rgba(247,242,240,0.9) 100%)',
+          boxShadow: '0 20px 40px rgba(38, 70, 83, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.8)',
+          backdropFilter: 'blur(10px)'
+        }}
+        title={
+          <Typography.Title level={2} style={{
+            color: 'var(--color-healing-dark)',
+            margin: 0,
+            textAlign: 'center',
+            fontSize: '2rem',
+            fontWeight: 700
+          }}>
+            Welcome Back
+          </Typography.Title>
+        }
+        styles={{
+          header: {
+            border: 'none',
+            padding: '40px 30px 20px',
+            textAlign: 'center'
+          },
+          body: {
+            padding: '30px'
+          }
+        }}
+      >
+        <Typography.Text
+          type="secondary"
+          style={{
+            textAlign: 'center',
+            display: 'block',
+            fontSize: '16px',
+            marginBottom: '32px',
+            color: 'var(--primary-600)'
+          }}
+        >
+          Access your multi-tenant application
+        </Typography.Text>
 
-              {/* Password Field */}
-              <div className="form-group">
-                <label htmlFor="password" className="form-label">
-                  Password
-                </label>
-                <input
-                  id="password"
-                  type="password"
-                  {...register('password', {
-                    required: 'Password is required',
-                  })}
-                  className="form-input"
-                  placeholder="Enter your password"
-                />
-                {errors.password && (
-                  <span className="form-error">{errors.password.message}</span>
-                )}
-              </div>
+        <Form
+          form={form}
+          onFinish={onSubmit}
+          size="large"
+          layout="vertical"
+        >
+          <Form.Item
+            label={<span style={{ color: 'var(--primary-700)', fontWeight: 600 }}>Username or Email</span>}
+            name="usernameOrEmail"
+            rules={[{ required: true, message: 'Username or email is required' }]}
+          >
+            <Input
+              placeholder="Enter your username or email"
+              className="login-input"
+            />
+          </Form.Item>
 
-              {/* Tenant ID Field */}
-              <div className="form-group">
-                <label htmlFor="tenantId" className="form-label">
-                  Tenant ID
-                </label>
-                <input
-                  id="tenantId"
-                  type="text"
-                  {...register('tenantId', {
-                    required: 'Tenant ID is required',
-                  })}
-                  className="form-input"
-                  placeholder="Enter your tenant ID"
-                />
-                {errors.tenantId && (
-                  <span className="form-error">{errors.tenantId.message}</span>
-                )}
-              </div>
+          <Form.Item
+            label={<span style={{ color: 'var(--primary-700)', fontWeight: 600 }}>Password</span>}
+            name="password"
+            rules={[{ required: true, message: 'Password is required' }]}
+          >
+            <Input.Password
+              placeholder="Enter your password"
+              className="login-input"
+            />
+          </Form.Item>
 
-              {/* Remember Me */}
-              <div className="flex items-center">
-                <input
-                  id="rememberMe"
-                  type="checkbox"
-                  {...register('rememberMe')}
-                  className="h-4 w-4 text-primary border-gray-300 rounded focus:ring-primary"
-                />
-                <label htmlFor="rememberMe" className="ml-2 block text-sm text-gray-900">
-                  Remember me
-                </label>
-              </div>
+          <Form.Item
+            label={<span style={{ color: 'var(--primary-700)', fontWeight: 600 }}>Tenant ID</span>}
+            name="tenantId"
+            rules={[{ required: true, message: 'Tenant ID is required' }]}
+          >
+            <Input
+              placeholder="Enter your tenant ID"
+              className="login-input"
+            />
+          </Form.Item>
 
-              {/* Error Display */}
-              {submitError && (
-                <div className="bg-red-50 border border-red-200 rounded-md p-3">
-                  <p className="text-sm text-red-600">{submitError}</p>
-                </div>
-              )}
-
-              {/* Submit Button */}
-              <button
-                type="submit"
-                disabled={isLoading || isSubmitting}
-                className="w-full btn btn-primary"
+          <Form.Item>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: '16px'
+            }}>
+              <Checkbox
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                style={{ color: 'var(--primary-600)' }}
               >
-                {(isLoading || isSubmitting) ? (
-                  <div className="loading">
-                    <div className="spinner"></div>
-                    <span>Signing in...</span>
-                  </div>
-                ) : (
-                  'Sign In'
-                )}
-              </button>
-            </form>
-          </div>
-        </div>
+                Remember me
+              </Checkbox>
+            </div>
+          </Form.Item>
 
-        {/* Additional Info */}
-        <div className="mt-4 text-center">
-          <p className="text-sm text-gray-600">
-            Use your account credentials and tenant ID to sign in
-          </p>
-        </div>
-      </div>
-    </div>
+          {submitError && (
+            <Form.Item>
+              <Alert
+                message={submitError}
+                type="error"
+                closable
+                onClose={() => setSubmitError(null)}
+                style={{
+                  borderRadius: '8px',
+                  border: '1px solid var(--danger-300)',
+                  backgroundColor: 'var(--danger-50)'
+                }}
+              />
+            </Form.Item>
+          )}
+
+          <Form.Item>
+            <Button
+              type="primary"
+              htmlType="submit"
+              block
+              loading={isLoading || isSubmitting}
+              className="login-submit-button"
+            >
+              Sign In
+            </Button>
+          </Form.Item>
+        </Form>
+      </Card>
+
+      <Typography.Text
+        type="secondary"
+        style={{
+          textAlign: 'center',
+          marginTop: '32px',
+          display: 'block',
+          maxWidth: '400px',
+          color: 'var(--primary-500)',
+          fontSize: '14px',
+          lineHeight: '1.5'
+        }}
+      >
+        Use your account credentials and tenant ID to sign in to your secure workspace
+      </Typography.Text>
+    </Flex>
   );
 };

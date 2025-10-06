@@ -163,3 +163,4 @@ ehthumbs.db
 Thumbs.db
 
 # End of https://www.toptal.com/developers/gitignore/api/rust,visualstudiocode,intellij+iml
+backend.pid

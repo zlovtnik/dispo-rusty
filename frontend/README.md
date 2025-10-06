@@ -2,15 +2,22 @@
 
 A modern TypeScript/Bun/React frontend application for the Actix Web REST API backend with JWT authentication and multi-tenant support.
 
-## 🚀 Technology Stack
+## 🚀 Frontend Technology Stack
 
-- **Runtime**: Bun 1.0+ (Fast JavaScript runtime)
-- **Language**: TypeScript 5.9+ (First-class citizen)
-- **Framework**: React 18.3.1+ (Concurrent features)
-- **Routing**: React Router 6.x
-- **Forms**: React Hook Form 7.x
-- **Build Tool**: Bun (Integrated bundler, package manager, test runner)
-- **Styling**: CSS Modules with utility classes
+### Core Frontend Technologies (Frontend-Only)
+- **Runtime & Package Manager**: Bun 1.0+ (Fast runtime, bundler, and test runner)
+- **Programming Language**: TypeScript 5.9+ (Type-safe, compiled to JavaScript)
+- **UI Framework**: React 18.3.1+ (Virtual DOM, component-based architecture)
+- **Routing Library**: React Router DOM 6.x (Declarative client-side routing)
+- **Form Management**: React Hook Form 7.x (Performant form validation and state management)
+- **UI Component Library**: Ant Design (antd) 5.27.4+ (Enterprise-grade UI components)
+- **CSS Framework**: Tailwind CSS 4.1.14+ (Utility-first CSS with custom color palette)
+- **Build Tool & Dev Server**: Vite 5.0+ (Fast HMR, optimized bundling)
+- **CSS Processor**: PostCSS 8.5.6+ with Autoprefixer 10.4.21+ (CSS transformations and vendor prefixes)
+- **Query String Parsing**: QS 6.14.0+ (Query string serialization/deserialization)
+- **Icons**: Ant Design Icons 6.1.0+ (Consistent iconography with UI components)
+- **Typography Plugin**: Tailwind Typography 0.5.19+ (Tailwind utilities for rich text)
+- **Testing Runner**: Bun's built-in test runner (Jest-compatible)
 
 ## 📦 Installation
 
@@ -192,6 +199,50 @@ Deploy to any static hosting platform:
 - Error tracking and reporting
 - Core Web Vitals measurement
 - User experience analytics
+
+## 🚀 Potential Improvements
+
+### Performance Enhancements
+- **Code Splitting**: Implement React.lazy() and Suspense for route-based code splitting to reduce initial bundle size
+- **Bundle Analysis**: Use tools like `vite-bundle-analyzer` to identify large dependencies and optimize accordingly
+- **Image Optimization**: Add image lazy loading and WebP format support for faster page loads
+- **Caching Strategies**: Implement service worker for better caching of static assets and API responses
+
+### Testing & Quality Assurance
+- **End-to-End Testing**: Introduce Cypress or Playwright for comprehensive user workflow testing
+- **Visual Regression Tests**: Add visual testing with tools like Chromatic to detect UI changes
+- **Accessibility Testing**: Implement automated a11y testing using axe-core or similar tools
+- **Performance Testing**: Set up Lighthouse CI for continuous performance monitoring
+
+### Developer Experience
+- **Storybook Integration**: Create a Storybook instance for isolated component development and documentation
+- **ESLint & Prettier**: Add linting and code formatting rules specific to the project style
+- **Git Hooks**: Implement Husky with commitlint for consistent commit messages and pre-commit checks
+- **Type Checking**: Set up automated TypeScript checks in CI/CD pipeline
+
+### State Management & Architecture
+- **Context Optimization**: Replace React Context with Zustand or Redux Toolkit for better performance on complex state
+- **API Layer Improvement**: Add Axios or SWR for better data fetching with caching and error handling
+- **Error Boundaries**: Implement application-wide error boundaries with Sentry integration for production error tracking
+- **Internationalization**: Add i18n support with react-i18next if multi-language support is needed
+
+### UI/UX Enhancements
+- **Dark Mode**: Implement system-aware dark mode using Tailwind's `dark:` prefix
+- **Theming**: Expand the custom color palette with variable-based theming for branded experiences
+- **Progressive Web App**: Add PWA features like offline support, installability, and push notifications
+- **Advanced Animations**: Use Framer Motion for smooth, accessible animations and page transitions
+
+### Build & Deployment Optimization
+- **Environment-specific Builds**: Create different build configurations for staging, production, and local development
+- **CI/CD Pipeline**: Automate testing, building, and deployment with GitHub Actions or similar
+- **Docker Containerization**: Containerize the frontend for consistent deployment environments
+- **Security Headers**: Implement security headers for production builds (CSP, HSTS, etc.)
+
+### Monitoring & Maintenance
+- **Application Insights**: Add tools like LogRocket or Hotjar for session replay and user behavior analytics
+- **Dependency Updates**: Automate dependency updates with Dependabot or similar tools
+- **Performance Metrics**: Track bundle size changes over time with bundle size monitoring
+- **SEO Optimization**: Add React Helmet for dynamic meta tags and sitemap generation if needed
 
 ## 🔄 Roadmap
 

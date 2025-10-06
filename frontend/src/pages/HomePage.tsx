@@ -1,6 +1,22 @@
 import React from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import {
+  Layout,
+  Typography,
+  Button,
+  Row,
+  Col,
+  Card,
+  Space,
+  Divider,
+} from 'antd';
+import {
+  SecurityScanOutlined,
+  HomeOutlined,
+  ThunderboltOutlined,
+  HeartOutlined,
+} from '@ant-design/icons';
 
 export const HomePage: React.FC = () => {
   const { isAuthenticated } = useAuth();
@@ -10,77 +26,98 @@ export const HomePage: React.FC = () => {
     return <Navigate to="/dashboard" replace />;
   }
 
+  const features = [
+    {
+      id: 1,
+      icon: <SecurityScanOutlined style={{ fontSize: 32 }} />,
+      title: 'Secure Authentication',
+      description: 'JWT-based login system with comprehensive security measures and multi-tenant support.',
+    },
+    {
+      id: 2,
+      icon: <HomeOutlined style={{ fontSize: 32 }} />,
+      title: 'Multi-Tenant Architecture',
+      description: 'Complete tenant isolation ensuring data security and privacy across different organizations.',
+    },
+    {
+      id: 3,
+      icon: <ThunderboltOutlined style={{ fontSize: 32 }} />,
+      title: 'High Performance',
+      description: 'Built with Bun runtime for exceptional speed and TypeScript for reliable development.',
+    },
+  ];
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-natural-light to-healing-light">
-      {/* Hero Section */}
-      <div className="container mx-auto px-4 py-16">
-        <div className="text-center max-w-4xl mx-auto">
-          <h1 className="text-5xl md:text-6xl font-bold text-healing-dark mb-6">
-            Welcome to the Natural Pharmacy System
-          </h1>
-          <p className="text-xl text-natural-dark mb-8 max-w-2xl mx-auto">
+    <Layout style={{ minHeight: '100vh' }}>
+      <Layout.Header style={{ background: '#fafaf9', borderBottom: '1px solid #d9d9d9' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+          <Typography.Title level={4} style={{ margin: 0, color: '#1f6b3e' }}>
+            <HeartOutlined style={{ marginRight: 8 }} />
+            Natural Pharmacy System
+          </Typography.Title>
+        </div>
+      </Layout.Header>
+
+      <Layout.Content style={{ background: '#f7f4f0' }}>
+        {/* Hero Section */}
+        <div style={{ padding: '64px 24px', textAlign: 'center', maxWidth: 1000, margin: '0 auto' }}>
+          <Typography.Title level={1}>Welcome to the Natural Pharmacy System</Typography.Title>
+          <Typography.Paragraph style={{ fontSize: 18, marginBottom: 32 }}>
             A modern, secure multi-tenant platform for managing pharmaceutical data
             with JWT authentication and comprehensive tenant isolation.
-          </p>
+          </Typography.Paragraph>
 
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link to="/login" className="btn btn-primary px-8 py-4 text-lg">
-              Get Started
+          <Space size="large">
+            <Link to="/register">
+              <Button type="primary" size="large">
+                Get Started
+              </Button>
             </Link>
-            <Link to="/login" className="btn btn-secondary px-8 py-4 text-lg">
-              Sign In
+            <Link to="/login">
+              <Button size="large">
+                Sign In
+              </Button>
             </Link>
-          </div>
+          </Space>
         </div>
-      </div>
 
-      {/* Features Section */}
-      <div className="bg-white py-16">
-        <div className="container mx-auto px-4">
-          <div className="grid md:grid-cols-3 gap-8">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-healing-light rounded-full flex items-center justify-center mx-auto mb-4">
-                <div className="text-3xl text-healing-dark">🔒</div>
-              </div>
-              <h3 className="text-xl font-semibold text-healing-dark mb-2">Secure Authentication</h3>
-              <p className="text-natural-dark">
-                JWT-based login system with comprehensive security measures and multi-tenant support.
-              </p>
-            </div>
+        <Divider />
 
-            <div className="text-center">
-              <div className="w-16 h-16 bg-healing-light rounded-full flex items-center justify-center mx-auto mb-4">
-                <div className="text-3xl text-healing-dark">🏢</div>
-              </div>
-              <h3 className="text-xl font-semibold text-healing-dark mb-2">Multi-Tenant Architecture</h3>
-              <p className="text-natural-dark">
-                Complete tenant isolation ensuring data security and privacy across different organizations.
-              </p>
-            </div>
-
-            <div className="text-center">
-              <div className="w-16 h-16 bg-healing-light rounded-full flex items-center justify-center mx-auto mb-4">
-                <div className="text-3xl text-healing-dark">⚡</div>
-              </div>
-              <h3 className="text-xl font-semibold text-healing-dark mb-2">High Performance</h3>
-              <p className="text-natural-dark">
-                Built with Bun runtime for exceptional speed and TypeScript for reliable development.
-              </p>
-            </div>
-          </div>
+        {/* Features Section */}
+        <div style={{ background: '#fff', padding: '64px 24px' }}>
+          <Row gutter={[24, 24]}>
+            {features.map((feature) => (
+              <Col xs={24} md={8} key={feature.id}>
+                <Card
+                  style={{ textAlign: 'center', height: '100%' }}
+                  hoverable
+                  cover={
+                    <div style={{
+                      padding: '24px 0',
+                      background: '#dcf2e6',
+                      display: 'flex',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      margin: '0 0 24px 0'
+                    }}>
+                      {feature.icon}
+                    </div>
+                  }
+                >
+                  <Card.Meta
+                    title={<Typography.Title level={4}>{feature.title}</Typography.Title>}
+                    description={<Typography.Paragraph>{feature.description}</Typography.Paragraph>}
+                  />
+                </Card>
+              </Col>
+            ))}
+          </Row>
         </div>
-      </div>
+      </Layout.Content>
 
-      {/* Footer */}
-      <footer className="bg-natural-dark text-white py-8">
-        <div className="container mx-auto px-4">
-          <div className="text-center">
-            <p className="text-sm">
-              © 2025 Natural Pharmacy System. Built with React, TypeScript, and Bun runtime.
-            </p>
-          </div>
-        </div>
-      </footer>
-    </div>
+      <Layout.Footer style={{ textAlign: 'center', background: '#1c1917', color: '#fff' }}>
+        © 2025 Natural Pharmacy System. Built with React, TypeScript, and Bun runtime.
+      </Layout.Footer>
+    </Layout>
   );
 };

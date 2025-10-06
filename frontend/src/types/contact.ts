@@ -24,6 +24,8 @@ export interface Contact {
   department?: string;
   // Health Information (Pharmacy Context)
   dateOfBirth?: Date;
+  gender?: 'male' | 'female';
+  age?: number;
   allergies?: string[];
   medications?: string[];
   medicalNotes?: string;
@@ -189,3 +191,14 @@ export interface ContactTagStats {
   tagName: string;
   contactCount: number;
 }
+
+// Gender enum for type safety
+export enum Gender {
+  male = 'male',
+  female = 'female',
+}
+
+// Gender conversion helpers
+export const genderToBoolean = (gender: Gender): boolean => gender === Gender.male;
+
+export const booleanToGender = (b: boolean): Gender => b ? Gender.male : Gender.female;

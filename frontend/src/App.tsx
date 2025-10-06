@@ -1,42 +1,59 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { PrivateRoute } from './components/PrivateRoute';
-import { HomePage } from './pages/HomePage';
-import { LoginPage } from './pages/LoginPage';
-import { DashboardPage } from './pages/DashboardPage';
-import { AddressBookPage } from './pages/AddressBookPage';
 import { Layout } from './components/Layout';
+import { ErrorBoundary } from './components/ErrorBoundary';
+
+const HomePage = lazy(() => import('./pages/HomePage').then(module => ({ default: module.HomePage })));
+const LoginPage = lazy(() => import('./pages/LoginPage').then(module => ({ default: module.LoginPage })));
+const DashboardPage = lazy(() => import('./pages/DashboardPage').then(module => ({ default: module.DashboardPage })));
+const AddressBookPage = lazy(() => import('./pages/AddressBookPage').then(module => ({ default: module.AddressBookPage })));
+const TenantsPage = lazy(() => import('./pages/TenantsPage').then(module => ({ default: module.TenantsPage })));
 
 export const App: React.FC = () => {
   return (
-    <div className="min-h-screen bg-natural-light text-natural-dark">
-      <AuthProvider>
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route
-            path="/dashboard"
-            element={
-              <PrivateRoute>
-                <Layout>
-                  <DashboardPage />
-                </Layout>
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/address-book"
-            element={
-              <PrivateRoute>
-                <Layout>
-                  <AddressBookPage />
-                </Layout>
-              </PrivateRoute>
-            }
-          />
-        </Routes>
-      </AuthProvider>
-    </div>
+    <ErrorBoundary>
+      <div className="min-h-screen bg-natural-light text-natural-dark">
+        <AuthProvider>
+          <Suspense fallback={<div>Loading...</div>}>
+            <Routes>
+              <Route path="/" element={<HomePage />} />
+              <Route path="/login" element={<LoginPage />} />
+              <Route
+                path="/dashboard"
+                element={
+                  <PrivateRoute>
+                    <Layout>
+                      <DashboardPage />
+                    </Layout>
+                  </PrivateRoute>
+                }
+              />
+              <Route
+                path="/address-book"
+                element={
+                  <PrivateRoute>
+                    <Layout>
+                      <AddressBookPage />
+                    </Layout>
+                  </PrivateRoute>
+                }
+              />
+              <Route
+                path="/tenants"
+                element={
+                  <PrivateRoute>
+                    <Layout>
+                      <TenantsPage />
+                    </Layout>
+                  </PrivateRoute>
+                }
+              />
+            </Routes>
+          </Suspense>
+        </AuthProvider>
+      </div>
+    </ErrorBoundary>
   );
 };
