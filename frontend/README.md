@@ -94,6 +94,18 @@ VITE_API_URL=https://your-production-api.com/api
 
 Note: Vite only exposes environment variables that start with `VITE_` to the client-side code at runtime. Use `NODE_ENV` when running Bun to control which env file is loaded.
 
+#### Environment Variable Validation
+
+Before building the application, environment variables are validated to prevent production failures. The `VITE_API_URL` variable is required and must be a valid URL.
+
+Validation is performed automatically during the build process. If validation fails, the build will be aborted with clear error messages.
+
+To manually validate environment variables:
+
+```bash
+node scripts/validate-env.js
+```
+
 ### TypeScript Configuration
 
 The tsconfig.json is optimized for Bun runtime with:

@@ -1,7 +1,7 @@
 # Multi-stage build: Rust backend + Node.js frontend
 
 # Stage 1: Build Rust backend
-FROM rust:1.90.0-slim as rust-builder
+FROM rust:1.90.0-slim AS rust-builder
 
 # Install required dependencies for diesel_cli (PostgreSQL client)
 RUN apt-get update && apt-get install -y \
@@ -20,11 +20,17 @@ COPY migrations/ ./migrations/
 # Copy source code
 COPY src/ ./src/
 
+# Generate secret.key if it doesn't exist (for build environments)
+# In production, this should be injected via secrets management
+RUN if [ ! -f src/secret.key ]; then \
+    head -c 16 /dev/urandom > src/secret.key; \
+    fi
+
 # Build the application
 RUN cargo build --release
 
 # Stage 2: Frontend build
-FROM oven/bun:1-slim as frontend-builder
+FROM oven/bun:1-slim AS frontend-builder
 
 WORKDIR /app
 
