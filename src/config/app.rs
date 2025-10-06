@@ -7,6 +7,21 @@ use crate::api::*;
 
 static LOG_ONCE: Once = Once::new();
 
+/// Configure application HTTP routes and register the API scope.
+///
+/// This registers the root health endpoint and mounts the `/api` scope with its
+/// nested routes. On the first invocation this function logs a human-readable
+/// summary of all registered routes and timestamps the start and end of the
+/// configuration process.
+///
+/// # Examples
+///
+/// ```
+/// use actix_web::App;
+///
+/// // Mounts the routes onto an Actix application builder.
+/// let app = App::new().configure(config_services);
+/// ```
 pub fn config_services(cfg: &mut web::ServiceConfig) {
     LOG_ONCE.call_once(|| {
         let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
@@ -53,6 +68,18 @@ pub fn config_services(cfg: &mut web::ServiceConfig) {
     );
 }
 
+/// Registers API endpoints and sub-scopes used under the `/api` path.
+///
+/// This function adds standalone routes (ping and health endpoints) and configures the
+/// `/auth`, `/address-book`, `/admin`, and `/tenants` sub-scopes.
+///
+/// # Examples
+///
+/// ```
+/// use actix_web::{App, web};
+///
+/// let app = App::new().service(web::scope("/api").configure(crate::config::configure_api_routes));
+/// ```
 fn configure_api_routes(cfg: &mut web::ServiceConfig) {
     // Standalone routes in /api
     cfg.service(ping_controller::ping);
@@ -85,6 +112,20 @@ fn configure_api_routes(cfg: &mut web::ServiceConfig) {
     );
 }
 
+/// Register authentication-related HTTP routes on the provided ServiceConfig.
+///
+/// The function adds routes for signup, login, logout, token refresh, and retrieving
+/// the current authenticated user's information under the configured scope.
+///
+/// # Examples
+///
+/// ```
+/// use actix_web::{App, web};
+///
+/// let app = App::new().service(
+///     web::scope("/api/auth").configure(configure_auth_routes)
+/// );
+/// ```
 fn configure_auth_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::resource("/signup").route(web::post().to(account_controller::signup)),
@@ -128,6 +169,20 @@ fn configure_admin_routes(cfg: &mut web::ServiceConfig) {
     );
 }
 
+/// Configure tenant-related admin routes under the tenant admin scope.
+///
+/// Registers the following routes (relative to the scope):
+/// - GET `/stats` -> `tenant_controller::get_system_stats`
+/// - GET `/health` -> `tenant_controller::get_tenant_health`
+/// - GET `/status` -> `tenant_controller::get_tenant_status`
+///
+/// # Examples
+///
+/// ```
+/// use actix_web::{web, App};
+///
+/// let app = App::new().service(web::scope("/admin/tenant").configure(configure_tenant_admin_routes));
+/// ```
 fn configure_tenant_admin_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::resource("/stats").route(web::get().to(tenant_controller::get_system_stats)),
@@ -140,6 +195,19 @@ fn configure_tenant_admin_routes(cfg: &mut web::ServiceConfig) {
     );
 }
 
+/// Register tenant-related HTTP routes on the provided ServiceConfig.
+///
+/// This configures handlers for the tenant collection (GET list, POST create),
+/// a filtered listing (GET /filter), and per-tenant operations by `id` (GET, PUT, DELETE).
+///
+/// # Examples
+///
+/// ```
+/// use actix_web::web;
+///
+/// // Attach the tenant routes under the `/tenants` scope.
+/// let scope = web::scope("/tenants").configure(configure_tenant_routes);
+/// ```
 fn configure_tenant_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::resource("")

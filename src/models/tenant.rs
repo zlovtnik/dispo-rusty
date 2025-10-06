@@ -63,20 +63,82 @@ impl Tenant {
         tenants.filter(id.eq(t_id)).get_result::<Tenant>(conn)
     }
 
+    /// Loads all tenant records from the database.
+    ///
+    /// # Returns
+    ///
+    /// A `Vec<Tenant>` containing every record from the `tenants` table.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let all = Tenant::list_all(&mut conn).unwrap();
+    /// assert!(all.len() >= 0);
+    /// ```
     pub fn list_all(conn: &mut crate::config::db::Connection) -> QueryResult<Vec<Tenant>> {
         tenants.load::<Tenant>(conn)
     }
 
+    /// Fetches a page of tenants and the total number of tenant records.
+    ///
+    /// The `offset` and `limit` parameters control the page window applied at the database level:
+    /// `offset` is the number of records to skip and `limit` is the maximum number of records to return.
+    ///
+    /// # Returns
+    ///
+    /// A tuple where the first element is a vector of `Tenant` records for the requested page and the second
+    /// element is the total count of tenants across the table.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // assume `conn` is a mutable database connection: &mut crate::config::db::Connection
+    /// let (page, total) = Tenant::list_paginated(0, 10, &mut conn).expect("query failed");
+    /// assert!(total >= page.len() as i64);
+    /// ```
     pub fn list_paginated(offset: i64, limit: i64, conn: &mut crate::config::db::Connection) -> QueryResult<(Vec<Tenant>, i64)> {
         let total = tenants.count().get_result::<i64>(conn)?;
         let results = tenants.offset(offset).limit(limit).load::<Tenant>(conn)?;
         Ok((results, total))
     }
 
+    /// Finds a tenant by its exact name.
+    ///
+    /// # Returns
+    ///
+    /// The matching `Tenant`.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// let mut conn = crate::config::db::establish_connection();
+    /// let tenant = Tenant::find_by_name("acme", &mut conn).unwrap();
+    /// assert_eq!(tenant.name, "acme");
+    /// ```
     pub fn find_by_name(name_: &str, conn: &mut crate::config::db::Connection) -> QueryResult<Tenant> {
         tenants.filter(name.eq(name_)).get_result::<Tenant>(conn)
     }
 
+    /// Validates a TenantDTO's `id` and `name` according to application rules.
+    ///
+    /// Checks that `id` is not empty and contains only alphanumeric characters, dashes, or underscores,
+    /// and that `name` is not empty.
+    ///
+    /// # Parameters
+    ///
+    /// - `dto`: The `TenantDTO` to validate.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` if validation passes, `Err(String)` with a human-readable message describing the first
+    /// validation failure otherwise.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let dto = TenantDTO { id: "tenant_1".into(), name: "Tenant One".into(), db_url: "postgres://user:pass@localhost/db".into() };
+    /// assert!(Tenant::validate_tenant_dto(&dto).is_ok());
+    /// ```
     pub fn validate_tenant_dto(dto: &TenantDTO) -> Result<(), String> {
         // Validate ID: non-empty, alphanumeric + dashes/underscores
         if dto.id.trim().is_empty() {
@@ -95,6 +157,24 @@ impl Tenant {
         Ok(())
     }
 
+    /// Inserts multiple tenants in a single database transaction after validating each DTO's `db_url`.
+    ///
+    /// Each `TenantDTO`'s `db_url` is validated before insertion. If any validation or insertion fails, the entire transaction is rolled back.
+    ///
+    /// # Returns
+    ///
+    /// `usize` number of rows inserted.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use crate::models::tenant::{Tenant, TenantDTO};
+    ///
+    /// let dtos = vec![TenantDTO { id: "t1".into(), name: "Tenant 1".into(), db_url: "postgres://user:pass@localhost/db".into() }];
+    /// let mut conn = crate::config::db::establish_connection();
+    /// let inserted = Tenant::batch_create(dtos, &mut conn).unwrap();
+    /// assert_eq!(inserted, 1);
+    /// ```
     pub fn batch_create(dtos: Vec<TenantDTO>, conn: &mut crate::config::db::Connection) -> QueryResult<usize> {
         conn.transaction(|tx_conn| {
             for dto in &dtos {
@@ -104,6 +184,22 @@ impl Tenant {
         })
     }
 
+    /// Filters tenants using a set of field-based conditions and optional DB-level pagination.
+    ///
+    /// Supported filter fields:
+    /// - `id`, `name`, `db_url` with operators `contains` and `equals`.
+    /// - `created_at`, `updated_at` with operators `gt`, `gte`, `lt`, `lte`, and `equals`. Date/time values must use ISO-like format `YYYY-MM-DDTHH:MM:SS.sssZ` (e.g. `2023-12-25T10:00:00.000Z`).
+    /// Unknown fields or unsupported operators are ignored.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use crate::models::tenant::Tenant;
+    /// use crate::models::tenant::TenantFilter;
+    /// // let mut conn = ...; // obtain a mutable DB connection
+    /// // let filter = TenantFilter { /* filters and optional pagination */ };
+    /// // let tenants = Tenant::filter(filter, &mut conn).expect("query failed");
+    /// ```
     pub fn filter(filter: TenantFilter, conn: &mut crate::config::db::Connection) -> QueryResult<Vec<Tenant>> {
         let mut query = tenants::table.into_boxed();
 

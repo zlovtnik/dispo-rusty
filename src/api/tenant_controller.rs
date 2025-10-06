@@ -47,7 +47,22 @@ struct PaginatedTenantResponse {
     next_cursor: Option<String>,
 }
 
-/// Get system-wide statistics and tenant status (admin only)
+/// Fetches system-wide statistics and per-tenant connection status.
+///
+/// Acquires a database connection, counts total and logged-in users, inspects each tenant's
+/// connection pool to determine active/inactive status, and returns a `SystemStats` JSON payload.
+///
+/// # Returns
+///
+/// An HTTP 200 response containing serialized `SystemStats` with totals and per-tenant status.
+///
+/// # Examples
+///
+/// ```no_run
+/// use actix_web::{web, HttpResponse};
+/// // `pool` and `manager` would be provided by application setup
+/// // let resp: Result<HttpResponse, _> = get_system_stats(web::Data::new(pool), web::Data::new(manager)).await;
+/// ```
 pub async fn get_system_stats(
     pool: web::Data<DatabasePool>,
     manager: web::Data<TenantPoolManager>,
@@ -152,7 +167,23 @@ pub async fn get_tenant_health(
     Ok(HttpResponse::Ok().json(tenant_health_status))
 }
 
-/// Get overview of tenant connections (active/inactive) (admin only)
+/// Return a map of tenant IDs to their connection status.
+///
+/// Fetches all tenants and reports, for each tenant ID, whether a tenant-specific
+/// connection pool is currently available and able to produce a connection. On
+/// success this handler returns an HTTP 200 response with a JSON object where
+/// keys are tenant IDs and values are booleans (`true` = connected, `false` = not connected).
+///
+/// # Examples
+///
+/// ```no_run
+/// use actix_web::web;
+/// # async fn example() {
+/// let db_pool = web::Data::new(/* DatabasePool */ unimplemented!());
+/// let manager = web::Data::new(/* TenantPoolManager */ unimplemented!());
+/// let _ = get_tenant_status(db_pool, manager).await;
+/// # }
+/// ```
 pub async fn get_tenant_status(
     pool: web::Data<DatabasePool>,
     manager: web::Data<TenantPoolManager>,
@@ -181,7 +212,28 @@ pub async fn get_tenant_status(
 
 // CRUD operations for tenants
 
-/// Get all tenants with pagination
+/// Returns a paginated list of tenants and pagination metadata.
+///
+/// Defaults to `offset = 0` and `limit = 50` if not provided. `limit` is capped at 500. The response
+/// includes the tenant list, the total number of matching tenants, the number of tenants returned in
+/// this page, and an optional `next_cursor` (stringified offset) when more pages are available.
+/// Database connection or query failures are returned as `ServiceError::InternalServerError`.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use std::collections::HashMap;
+/// use actix_web::web;
+///
+/// // Query with explicit cursor/limit
+/// let mut q = HashMap::new();
+/// q.insert("cursor".to_string(), "0".to_string());
+/// q.insert("limit".to_string(), "100".to_string());
+/// let query = web::Query::from(q);
+///
+/// // Calling the handler requires an application DatabasePool; omit here for brevity.
+/// // The handler will return an `HttpResponse` containing a `PaginatedTenantResponse`.
+/// ```
 pub async fn find_all(
     query: web::Query<HashMap<String, String>>,
     pool: web::Data<DatabasePool>,
@@ -223,7 +275,38 @@ pub async fn find_all(
     Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, response)))
 }
 
-/// Get tenants with filters
+/// Retrieve tenants matching provided query filters and optional pagination.
+///
+/// Expects query parameters in the form `filters[N][field]`, `filters[N][operator]`, and
+/// `filters[N][value]` for each filter index N. Also accepts `cursor` and `page_size` for
+/// pagination. Returns a JSON `ResponseBody` with the list of matching tenants.
+///
+/// # Parameters
+///
+/// - `query`: query parameter map parsed from the request; keys should follow the naming
+///   convention described above.
+/// - `pool`: database connection pool (used to obtain a DB connection).
+///
+/// # Returns
+///
+/// A JSON HTTP 200 response containing a `ResponseBody` whose payload is the vector of tenants
+/// that match the provided filters.
+///
+/// # Examples
+///
+/// ```
+/// use std::collections::HashMap;
+///
+/// // Example of how query parameters should be structured:
+/// let mut q = HashMap::new();
+/// q.insert("filters[0][field]".to_string(), "name".to_string());
+/// q.insert("filters[0][operator]".to_string(), "eq".to_string());
+/// q.insert("filters[0][value]".to_string(), "acme".to_string());
+/// q.insert("page_size".to_string(), "25".to_string());
+///
+/// // The controller will parse `q` into a TenantFilter with one FieldFilter:
+/// // field = "name", operator = "eq", value = "acme", and page_size = Some(25).
+/// ```
 pub async fn filter(
     query: web::Query<std::collections::HashMap<String, String>>,
     pool: web::Data<DatabasePool>,
@@ -274,7 +357,27 @@ pub async fn filter(
     Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, tenants)))
 }
 
-/// Get tenant by ID
+/// Fetches a tenant by its ID and returns it in the standard response wrapper.
+///
+/// Attempts to find the tenant with the provided path `id`. On success returns an HTTP 200 response
+/// whose JSON body is a `ResponseBody` containing the tenant. If the tenant does not exist, the
+/// function returns a `ServiceError::NotFound`; other failures map to `ServiceError::InternalServerError`.
+///
+/// # Parameters
+///
+/// - `id`: The tenant identifier from the request path.
+///
+/// # Returns
+///
+/// `HttpResponse` with status 200 and a JSON `ResponseBody` containing the tenant.
+///
+/// # Examples
+///
+/// ```
+/// // Example usage (handler-level): requesting tenant "tenant-123" should return 200 with that tenant.
+/// // let id = web::Path::from("tenant-123".to_string());
+/// // let resp = find_by_id(id, pool).await;
+/// ```
 pub async fn find_by_id(
     id: web::Path<String>,
     pool: web::Data<DatabasePool>,
@@ -296,7 +399,23 @@ pub async fn find_by_id(
     Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, tenant)))
 }
 
-/// Create new tenant
+/// Create a new tenant from the provided `TenantDTO`.
+///
+/// On success returns an HTTP 201 Created response containing a `ResponseBody` with the newly created `Tenant`.
+///
+/// # Errors
+/// - Returns `ServiceError::BadRequest` when input validation fails.
+/// - Returns `ServiceError::Conflict` when a tenant with the same ID or name already exists.
+/// - Returns `ServiceError::InternalServerError` for database connection or creation failures.
+///
+/// # Examples
+///
+/// ```ignore
+/// // Construct a TenantDTO and call the handler (framework wiring omitted).
+/// let dto = TenantDTO { id: "tenant1".into(), name: "Tenant One".into(), /* ... */ };
+/// let resp = create(web::Json(dto), db_pool).await.unwrap();
+/// assert_eq!(resp.status(), 201);
+/// ```
 pub async fn create(
     tenant_dto: web::Json<TenantDTO>,
     pool: web::Data<DatabasePool>,
@@ -334,7 +453,24 @@ pub async fn create(
     Ok(HttpResponse::Created().json(ResponseBody::new(constants::MESSAGE_OK, tenant)))
 }
 
-/// Update tenant
+/// Update an existing tenant by ID.
+///
+/// Attempts to update the tenant identified by `id` using the provided `update_dto`.
+/// On success returns an HTTP 200 response containing the updated tenant; if the tenant
+/// is not found returns a `ServiceError::NotFound`, and other failures map to
+/// `ServiceError::InternalServerError`.
+///
+/// # Examples
+///
+/// ```no_run
+/// use actix_web::web;
+///
+/// // In an async test or handler, prepare `id`, `update_dto`, and `pool` appropriately:
+/// // let id = web::Path::from("tenant-id".to_string());
+/// // let update = web::Json(UpdateTenant { /* fields */ });
+/// // let pool = web::Data::new(database_pool);
+/// // let resp = update(id, update, pool).await;
+/// ```
 pub async fn update(
     id: web::Path<String>,
     update_dto: web::Json<UpdateTenant>,
@@ -357,7 +493,18 @@ pub async fn update(
     Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, tenant)))
 }
 
-/// Delete tenant
+/// Deletes the tenant identified by `id`.
+///
+/// On success returns an HTTP 200 response with a standardized empty payload and message.
+/// If the tenant does not exist, the function returns `ServiceError::NotFound`.
+/// If a database or connection error occurs, the function returns `ServiceError::InternalServerError`.
+///
+/// # Examples
+///
+/// ```rust
+/// // Call from an async context, e.g. an Actix handler or test:
+/// // let resp = delete(web::Path::from(String::from("tenant-id")), pool).await;
+/// ```
 pub async fn delete(
     id: web::Path<String>,
     pool: web::Data<DatabasePool>,
