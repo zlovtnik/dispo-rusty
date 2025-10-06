@@ -20,15 +20,6 @@ export interface TenantListParams {
   cursor?: number;
 }
 
-export interface TenantListResponse {
-  message: string;
-  data: Tenant[];
-  current_cursor?: number;
-  page_size?: number;
-  total_elements?: number;
-  next_cursor?: number;
-}
-
 export interface PaginatedTenantResponse {
   data: Tenant[];
   total: number;

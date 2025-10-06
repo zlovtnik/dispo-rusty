@@ -43,8 +43,8 @@ struct TenantHealth {
 struct PaginatedTenantResponse {
     data: Vec<Tenant>,
     total: i64,
-    count: usize,
-    next_cursor: Option<String>,
+    offset: i64,
+    limit: i64,
 }
 
 /// Fetches system-wide statistics and per-tenant connection status.
@@ -266,8 +266,8 @@ pub async fn find_all(
     let response = PaginatedTenantResponse {
         data: tenants,
         total,
-        count,
-        next_cursor,
+        offset,
+        limit,
     };
 
     info!("Returning {} tenants out of {} total", count, total);

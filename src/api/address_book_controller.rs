@@ -1,4 +1,4 @@
-use actix_web::{web, HttpResponse, Result};
+use actix_web::{web, HttpMessage, HttpRequest, HttpResponse, Result};
 
 use crate::{
     config::db::Pool,
@@ -8,44 +8,72 @@ use crate::{
     services::address_book_service,
 };
 // GET api/address-book
-pub async fn find_all(pool: web::Data<Pool>) -> Result<HttpResponse, ServiceError> {
-    match address_book_service::find_all(&pool) {
-        Ok(people) => Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, people))),
-        Err(err) => Err(err),
+pub async fn find_all(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
+    if let Some(pool) = req.extensions().get::<Pool>() {
+        let pool_data = web::Data::new(pool.clone());
+        match address_book_service::find_all(&pool_data) {
+            Ok(people) => Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, people))),
+            Err(err) => Err(err),
+        }
+    } else {
+        Err(ServiceError::InternalServerError {
+            error_message: "Pool not found".to_string(),
+        })
     }
 }
 
 // GET api/address-book/{id}
 pub async fn find_by_id(
     id: web::Path<i32>,
-    pool: web::Data<Pool>,
+    req: HttpRequest,
 ) -> Result<HttpResponse, ServiceError> {
-    match address_book_service::find_by_id(id.into_inner(), &pool) {
-        Ok(person) => Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, person))),
-        Err(err) => Err(err),
+    if let Some(pool) = req.extensions().get::<Pool>() {
+        let pool_data = web::Data::new(pool.clone());
+        match address_book_service::find_by_id(id.into_inner(), &pool_data) {
+            Ok(person) => Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, person))),
+            Err(err) => Err(err),
+        }
+    } else {
+        Err(ServiceError::InternalServerError {
+            error_message: "Pool not found".to_string(),
+        })
     }
 }
 
 // GET api/address-book/filter
 pub async fn filter(
     web::Query(filter): web::Query<PersonFilter>,
-    pool: web::Data<Pool>,
+    req: HttpRequest,
 ) -> Result<HttpResponse, ServiceError> {
-    match address_book_service::filter(filter, &pool) {
-        Ok(page) => Ok(HttpResponse::Ok().json(page)),
-        Err(err) => Err(err),
+    if let Some(pool) = req.extensions().get::<Pool>() {
+        let pool_data = web::Data::new(pool.clone());
+        match address_book_service::filter(filter, &pool_data) {
+            Ok(page) => Ok(HttpResponse::Ok().json(page)),
+            Err(err) => Err(err),
+        }
+    } else {
+        Err(ServiceError::InternalServerError {
+            error_message: "Pool not found".to_string(),
+        })
     }
 }
 
 // POST api/address-book
 pub async fn insert(
     new_person: web::Json<PersonDTO>,
-    pool: web::Data<Pool>,
+    req: HttpRequest,
 ) -> Result<HttpResponse, ServiceError> {
-    match address_book_service::insert(new_person.0, &pool) {
-        Ok(()) => Ok(HttpResponse::Created()
-            .json(ResponseBody::new(constants::MESSAGE_OK, constants::EMPTY))),
-        Err(err) => Err(err),
+    if let Some(pool) = req.extensions().get::<Pool>() {
+        let pool_data = web::Data::new(pool.clone());
+        match address_book_service::insert(new_person.0, &pool_data) {
+            Ok(()) => Ok(HttpResponse::Created()
+                .json(ResponseBody::new(constants::MESSAGE_OK, constants::EMPTY))),
+            Err(err) => Err(err),
+        }
+    } else {
+        Err(ServiceError::InternalServerError {
+            error_message: "Pool not found".to_string(),
+        })
     }
 }
 
@@ -53,26 +81,40 @@ pub async fn insert(
 pub async fn update(
     id: web::Path<i32>,
     updated_person: web::Json<PersonDTO>,
-    pool: web::Data<Pool>,
+    req: HttpRequest,
 ) -> Result<HttpResponse, ServiceError> {
-    match address_book_service::update(id.into_inner(), updated_person.0, &pool) {
-        Ok(()) => {
-            Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, constants::EMPTY)))
+    if let Some(pool) = req.extensions().get::<Pool>() {
+        let pool_data = web::Data::new(pool.clone());
+        match address_book_service::update(id.into_inner(), updated_person.0, &pool_data) {
+            Ok(()) => {
+                Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, constants::EMPTY)))
+            }
+            Err(err) => Err(err),
         }
-        Err(err) => Err(err),
+    } else {
+        Err(ServiceError::InternalServerError {
+            error_message: "Pool not found".to_string(),
+        })
     }
 }
 
 // DELETE api/address-book/{id}
 pub async fn delete(
     id: web::Path<i32>,
-    pool: web::Data<Pool>,
+    req: HttpRequest,
 ) -> Result<HttpResponse, ServiceError> {
-    match address_book_service::delete(id.into_inner(), &pool) {
-        Ok(()) => {
-            Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, constants::EMPTY)))
+    if let Some(pool) = req.extensions().get::<Pool>() {
+        let pool_data = web::Data::new(pool.clone());
+        match address_book_service::delete(id.into_inner(), &pool_data) {
+            Ok(()) => {
+                Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, constants::EMPTY)))
+            }
+            Err(err) => Err(err),
         }
-        Err(err) => Err(err),
+    } else {
+        Err(ServiceError::InternalServerError {
+            error_message: "Pool not found".to_string(),
+        })
     }
 }
 
@@ -93,6 +135,7 @@ mod tests {
     use testcontainers::images::postgres::Postgres;
 
     use crate::config;
+    use crate::config::db::TenantPoolManager;
     use crate::models::person::{Person, PersonDTO};
     use crate::models::user::{LoginDTO, UserDTO};
     use crate::services::{account_service, address_book_service};
@@ -177,6 +220,8 @@ mod tests {
             .as_str(),
         );
         config::db::run_migration(&mut pool.get().unwrap());
+        
+        let manager = TenantPoolManager::new(pool.clone());
 
         let _app = test::init_service(
             App::new()
@@ -188,6 +233,7 @@ mod tests {
                         .max_age(3600),
                 )
                 .app_data(web::Data::new(pool.clone()))
+                .app_data(web::Data::new(manager))
                 .wrap(actix_web::middleware::Logger::default())
                 .wrap(crate::middleware::auth_middleware::Authentication)
                 .wrap_fn(|req, srv| srv.call(req).map(|res| res))
@@ -219,6 +265,9 @@ mod tests {
             .as_str(),
         );
         config::db::run_migration(&mut pool.get().unwrap());
+
+        let manager = TenantPoolManager::new(pool.clone());
+        manager.add_tenant_pool("tenant1".to_string(), pool.clone()).unwrap();
 
         let app = test::init_service(
             App::new()
@@ -284,6 +333,9 @@ mod tests {
         );
         config::db::run_migration(&mut pool.get().unwrap());
 
+        let manager = TenantPoolManager::new(pool.clone());
+        manager.add_tenant_pool("tenant1".to_string(), pool.clone()).unwrap();
+
         let app = test::init_service(
             App::new()
                 .wrap(
@@ -294,6 +346,7 @@ mod tests {
                         .max_age(3600),
                 )
                 .app_data(web::Data::new(pool.clone()))
+                .app_data(web::Data::new(manager))
                 .wrap(actix_web::middleware::Logger::default())
                 .wrap(crate::middleware::auth_middleware::Authentication)
                 .wrap_fn(|req, srv| srv.call(req).map(|res| res))
@@ -373,6 +426,10 @@ mod tests {
             .as_str(),
         );
         config::db::run_migration(&mut pool.get().unwrap());
+
+        let manager = TenantPoolManager::new(pool.clone());
+        manager.add_tenant_pool("tenant1".to_string(), pool.clone()).unwrap();
+
         let pool_web_data = web::Data::new(pool.clone());
 
         let app = test::init_service(
@@ -385,6 +442,7 @@ mod tests {
                         .max_age(3600),
                 )
                 .app_data(web::Data::new(pool.clone()))
+                .app_data(web::Data::new(manager))
                 .wrap(actix_web::middleware::Logger::default())
                 .wrap(crate::middleware::auth_middleware::Authentication)
                 .wrap_fn(|req, srv| srv.call(req).map(|res| res))

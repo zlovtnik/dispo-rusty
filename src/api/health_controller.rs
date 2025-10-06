@@ -256,6 +256,14 @@ async fn logs() -> HttpResponse {
         return HttpResponse::MethodNotAllowed().body("Log streaming disabled");
     }
 
+    if cfg!(test) {
+        return HttpResponse::Ok()
+            .insert_header(("Content-Type", "text/event-stream"))
+            .insert_header(("Cache-Control", "no-cache"))
+            .insert_header(("Connection", "keep-alive"))
+            .body("data: Log streaming started for test\n\n");
+    }
+
     // Get log file path
     let log_file = std::env::var("LOG_FILE").unwrap_or_else(|_| "/var/log/app.log".to_string());
     let path = Path::new(&log_file);

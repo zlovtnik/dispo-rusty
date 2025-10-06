@@ -15,6 +15,7 @@ import type {
   BulkContactOperation,
   ContactImportRequest,
 } from '../types/contact';
+import { Gender } from '../types/contact';
 import type { CreateTenantDTO, UpdateTenantDTO } from '../types/tenant';
 
 // API Response wrapper interface
@@ -489,6 +490,48 @@ export const tenantService = {
     return apiClient.delete(`/tenants/${id}`);
   },
 };
+
+/**
+ * Internal helper functions for address book API layer
+ * These handle the conversion between frontend Gender enum and backend boolean encoding.
+ *
+ * BACKEND ENCODING CONVENTION (DO NOT CHANGE):
+ * - Backend stores gender as boolean in the database
+ * - true = male
+ * - false = female
+ *
+ * These functions should ONLY be used at the API boundary when transforming
+ * data between frontend (Gender enum) and backend (boolean) representations.
+ * All frontend code should use the Gender enum from types/contact.ts.
+ *
+ * @internal
+ */
+
+/**
+ * Converts frontend Gender enum to backend boolean representation.
+ * @internal
+ * @param gender - Gender enum value (Gender.male or Gender.female)
+ * @returns boolean - true for male, false for female
+ */
+const _genderToBoolean = (gender: Gender): boolean => gender === Gender.male;
+
+/**
+ * Converts backend boolean gender to frontend Gender enum.
+ * @internal
+ * @param genderBool - boolean value from backend (true = male, false = female)
+ * @returns Gender enum value
+ */
+const _booleanToGender = (genderBool: boolean): Gender => genderBool ? Gender.male : Gender.female;
+
+/**
+ * Export internal conversion helpers for use at API boundaries.
+ * These should ONLY be used when transforming data between frontend and backend.
+ * @internal
+ */
+export const genderConversion = {
+  toBoolean: _genderToBoolean,
+  fromBoolean: _booleanToGender,
+} as const;
 
 export const addressBookService = {
   async getAll(params?: { page?: number; limit?: number; search?: string }) {

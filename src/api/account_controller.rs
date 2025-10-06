@@ -124,6 +124,7 @@ mod tests {
     use testcontainers::images::postgres::Postgres;
 
     use crate::{config, App};
+    use crate::config::db::TenantPoolManager;
 
     #[actix_web::test]
     async fn test_signup_ok() {
@@ -138,6 +139,9 @@ mod tests {
         );
         config::db::run_migration(&mut pool.get().unwrap());
 
+        let manager = TenantPoolManager::new(pool.clone());
+        manager.add_tenant_pool("test".to_string(), pool.clone()).unwrap();
+
         let app = test::init_service(
             App::new()
                 .wrap(
@@ -147,7 +151,7 @@ mod tests {
                         .allowed_header(http::header::CONTENT_TYPE)
                         .max_age(3600),
                 )
-                .app_data(web::Data::new(pool.clone()))
+                .app_data(web::Data::new(manager))
                 .wrap(actix_web::middleware::Logger::default())
                 .wrap(crate::middleware::auth_middleware::Authentication)
                 .wrap_fn(|req, srv| srv.call(req).map(|res| res))
@@ -159,7 +163,7 @@ mod tests {
             .uri("/api/auth/signup")
             .insert_header(header::ContentType::json())
             .set_payload(
-                r#"{"username":"admin","email":"admin@gmail.com","password":"123456"}"#.as_bytes(),
+                r#"{"username":"admin","email":"admin@gmail.com","password":"123456","tenant_id":"test"}"#.as_bytes(),
             )
             .send_request(&app)
             .await;
@@ -183,16 +187,19 @@ mod tests {
         );
         config::db::run_migration(&mut pool.get().unwrap());
 
+        let manager = TenantPoolManager::new(pool.clone());
+        manager.add_tenant_pool("test".to_string(), pool.clone()).unwrap();
+
         let app = test::init_service(
             App::new()
                 .wrap(
                     Cors::default()
                         .send_wildcard()
                         .allowed_methods(vec!["GET", "POST", "PUT", "DELETE"])
-                        .allowed_header(header::CONTENT_TYPE)
+                        .allowed_header(http::header::CONTENT_TYPE)
                         .max_age(3600),
                 )
-                .app_data(web::Data::new(pool.clone()))
+                .app_data(web::Data::new(manager))
                 .wrap(actix_web::middleware::Logger::default())
                 .wrap(crate::middleware::auth_middleware::Authentication)
                 .wrap_fn(|req, srv| srv.call(req).map(|res| res))
@@ -204,7 +211,7 @@ mod tests {
             .uri("/api/auth/signup")
             .insert_header(header::ContentType::json())
             .set_payload(
-                r#"{"username":"admin","email":"admin@gmail.com","password":"123456"}"#.as_bytes(),
+                r#"{"username":"admin","email":"admin@gmail.com","password":"123456","tenant_id":"test"}"#.as_bytes(),
             )
             .send_request(&app)
             .await;
@@ -213,7 +220,7 @@ mod tests {
             .uri("/api/auth/signup")
             .insert_header(header::ContentType::json())
             .set_payload(
-                r#"{"username":"admin","email":"admin@gmail.com","password":"123456"}"#.as_bytes(),
+                r#"{"username":"admin","email":"admin@gmail.com","password":"123456","tenant_id":"test"}"#.as_bytes(),
             )
             .send_request(&app)
             .await;
@@ -237,6 +244,9 @@ mod tests {
         );
         config::db::run_migration(&mut pool.get().unwrap());
 
+        let manager = TenantPoolManager::new(pool.clone());
+        manager.add_tenant_pool("test".to_string(), pool.clone()).unwrap();
+
         let app = test::init_service(
             App::new()
                 .wrap(
@@ -246,7 +256,7 @@ mod tests {
                         .allowed_header(http::header::CONTENT_TYPE)
                         .max_age(3600),
                 )
-                .app_data(web::Data::new(pool.clone()))
+                .app_data(web::Data::new(manager))
                 .wrap(actix_web::middleware::Logger::default())
                 .wrap(crate::middleware::auth_middleware::Authentication)
                 .wrap_fn(|req, srv| srv.call(req).map(|res| res))
@@ -258,7 +268,7 @@ mod tests {
             .uri("/api/auth/signup")
             .insert_header(header::ContentType::json())
             .set_payload(
-                r#"{"username":"admin","email":"admin@gmail.com","password":"123456"}"#.as_bytes(),
+                r#"{"username":"admin","email":"admin@gmail.com","password":"123456","tenant_id":"test"}"#.as_bytes(),
             )
             .send_request(&app)
             .await;
@@ -266,7 +276,7 @@ mod tests {
         let resp = test::TestRequest::post()
             .uri("/api/auth/login")
             .insert_header(header::ContentType::json())
-            .set_payload(r#"{"username_or_email":"admin","password":"123456"}"#.as_bytes())
+            .set_payload(r#"{"username_or_email":"admin","password":"123456","tenant_id":"test"}"#.as_bytes())
             .send_request(&app)
             .await;
 
@@ -286,6 +296,9 @@ mod tests {
         );
         config::db::run_migration(&mut pool.get().unwrap());
 
+        let manager = TenantPoolManager::new(pool.clone());
+        manager.add_tenant_pool("test".to_string(), pool.clone()).unwrap();
+
         let app = test::init_service(
             App::new()
                 .wrap(
@@ -295,7 +308,7 @@ mod tests {
                         .allowed_header(http::header::CONTENT_TYPE)
                         .max_age(3600),
                 )
-                .app_data(web::Data::new(pool.clone()))
+                .app_data(web::Data::new(manager))
                 .wrap(actix_web::middleware::Logger::default())
                 .wrap(crate::middleware::auth_middleware::Authentication)
                 .wrap_fn(|req, srv| srv.call(req).map(|res| res))
@@ -307,7 +320,7 @@ mod tests {
             .uri("/api/auth/signup")
             .insert_header(header::ContentType::json())
             .set_payload(
-                r#"{"username":"admin","email":"admin@gmail.com","password":"123456"}"#.as_bytes(),
+                r#"{"username":"admin","email":"admin@gmail.com","password":"123456","tenant_id":"test"}"#.as_bytes(),
             )
             .send_request(&app)
             .await;
@@ -316,7 +329,7 @@ mod tests {
             .uri("/api/auth/login")
             .insert_header(header::ContentType::json())
             .set_payload(
-                r#"{"username_or_email":"admin@gmail.com","password":"123456"}"#.as_bytes(),
+                r#"{"username_or_email":"admin@gmail.com","password":"123456","tenant_id":"test"}"#.as_bytes(),
             )
             .send_request(&app)
             .await;
