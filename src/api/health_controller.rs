@@ -260,17 +260,7 @@ async fn logs() -> HttpResponse {
     let log_file = std::env::var("LOG_FILE").unwrap_or_else(|_| "/var/log/app.log".to_string());
     let path = Path::new(&log_file);
 
-    // In test mode, check file existence before returning test response
-    if cfg!(test) {
-        if !path.exists() {
-            return HttpResponse::NotFound().body("Log file not found");
-        }
-        return HttpResponse::Ok()
-            .insert_header(("Content-Type", "text/event-stream"))
-            .insert_header(("Cache-Control", "no-cache"))
-            .insert_header(("Connection", "keep-alive"))
-            .body("data: Log streaming started for test\n\n");
-    }
+
 
     if !path.exists() {
         return HttpResponse::NotFound().body("Log file not found");
@@ -389,6 +379,14 @@ async fn logs() -> HttpResponse {
 
 #[cfg(test)]
 mod tests {
+    //! Integration tests for health and logging endpoints.
+    //!
+    //! **Important**: Tests involving log streaming (`test_logs_*`) use global environment
+    //! variables which can cause race conditions when tests run in parallel.
+    //! To avoid test failures, run with: `cargo test -- --test-threads=1`
+    //!
+    //! Consider using the `serial_test` crate in the future for better test isolation.
+    
     use actix_web::{test, http::StatusCode};
     use actix_web::web::Data;
     use actix_cors::Cors;
@@ -467,6 +465,10 @@ mod tests {
     /// - the `Content-Type` header is `text/event-stream`,
     /// - at least one SSE frame (a body starting with `data:`) is received within 35 seconds.
     ///
+    /// **Note**: This test and other log-related tests (`test_logs_disabled`, `test_logs_file_not_found`)
+    /// use global environment variables and may fail when run in parallel due to test isolation issues.
+    /// Run with `cargo test -- --test-threads=1` to avoid race conditions.
+    ///
     /// # Examples
     ///
     /// ```
@@ -483,7 +485,16 @@ mod tests {
         let temp_file = NamedTempFile::new().unwrap();
         let log_path = temp_file.path().to_str().unwrap().to_string();
         // Persist the file so it remains after temp_file is dropped
-        let (_file, _path) = temp_file.keep().unwrap();
+        let (_file, persisted_path) = temp_file.keep().unwrap();
+
+        // Create a cleanup guard to ensure file is deleted even on panic
+        struct CleanupGuard(std::path::PathBuf);
+        impl Drop for CleanupGuard {
+            fn drop(&mut self) {
+                std::fs::remove_file(&self.0).ok();
+            }
+        }
+        let _cleanup = CleanupGuard(persisted_path);
 
         // Set environment variables
         env::set_var("ENABLE_LOG_STREAM", "true");
@@ -544,6 +555,8 @@ mod tests {
         }).await.unwrap_or(Ok(false)).unwrap();
 
         assert!(sse_frame_received, "No SSE frame received within timeout");
+        
+        // Cleanup happens automatically via CleanupGuard's Drop implementation
     }
 
     #[actix_web::test]

@@ -10,8 +10,7 @@ use crate::{
 // GET api/address-book
 pub async fn find_all(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
     if let Some(pool) = req.extensions().get::<Pool>() {
-        let pool_data = web::Data::new(pool.clone());
-        match address_book_service::find_all(&pool_data) {
+        match address_book_service::find_all(pool) {
             Ok(people) => Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, people))),
             Err(err) => Err(err),
         }
@@ -28,8 +27,7 @@ pub async fn find_by_id(
     req: HttpRequest,
 ) -> Result<HttpResponse, ServiceError> {
     if let Some(pool) = req.extensions().get::<Pool>() {
-        let pool_data = web::Data::new(pool.clone());
-        match address_book_service::find_by_id(id.into_inner(), &pool_data) {
+        match address_book_service::find_by_id(id.into_inner(), pool) {
             Ok(person) => Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, person))),
             Err(err) => Err(err),
         }
@@ -46,8 +44,7 @@ pub async fn filter(
     req: HttpRequest,
 ) -> Result<HttpResponse, ServiceError> {
     if let Some(pool) = req.extensions().get::<Pool>() {
-        let pool_data = web::Data::new(pool.clone());
-        match address_book_service::filter(filter, &pool_data) {
+        match address_book_service::filter(filter, pool) {
             Ok(page) => Ok(HttpResponse::Ok().json(page)),
             Err(err) => Err(err),
         }
@@ -64,8 +61,7 @@ pub async fn insert(
     req: HttpRequest,
 ) -> Result<HttpResponse, ServiceError> {
     if let Some(pool) = req.extensions().get::<Pool>() {
-        let pool_data = web::Data::new(pool.clone());
-        match address_book_service::insert(new_person.0, &pool_data) {
+        match address_book_service::insert(new_person.0, pool) {
             Ok(()) => Ok(HttpResponse::Created()
                 .json(ResponseBody::new(constants::MESSAGE_OK, constants::EMPTY))),
             Err(err) => Err(err),
@@ -84,8 +80,7 @@ pub async fn update(
     req: HttpRequest,
 ) -> Result<HttpResponse, ServiceError> {
     if let Some(pool) = req.extensions().get::<Pool>() {
-        let pool_data = web::Data::new(pool.clone());
-        match address_book_service::update(id.into_inner(), updated_person.0, &pool_data) {
+        match address_book_service::update(id.into_inner(), updated_person.0, pool) {
             Ok(()) => {
                 Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, constants::EMPTY)))
             }
@@ -104,8 +99,7 @@ pub async fn delete(
     req: HttpRequest,
 ) -> Result<HttpResponse, ServiceError> {
     if let Some(pool) = req.extensions().get::<Pool>() {
-        let pool_data = web::Data::new(pool.clone());
-        match address_book_service::delete(id.into_inner(), &pool_data) {
+        match address_book_service::delete(id.into_inner(), pool) {
             Ok(()) => {
                 Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, constants::EMPTY)))
             }
@@ -153,12 +147,12 @@ mod tests {
     /// ```no_run
     /// # use actix_web::web;
     /// # use crate::tests::Pool;
-    /// # async fn example(pool: &web::Data<Pool>) {
+    /// # async fn example(pool: &Pool) {
     /// let token = signup_and_login(pool).await.unwrap();
     /// println!("{}", token);
     /// # }
     /// ```
-    async fn signup_and_login(pool: &web::Data<Pool>) -> Result<String, String> {
+    async fn signup_and_login(pool: &Pool) -> Result<String, String> {
         let user_dto = UserDTO {
             email: "admin@example.com".to_string(),
             username: "admin".to_string(),
@@ -181,7 +175,7 @@ mod tests {
         }
     }
 
-    async fn insert_mock_data(n: i32, pool: &web::Data<Pool>) -> Result<(), String> {
+    async fn insert_mock_data(n: i32, pool: &Pool) -> Result<(), String> {
         for x in 1..=n {
             if let Err(err) = address_book_service::insert(
                 PersonDTO {
@@ -201,7 +195,7 @@ mod tests {
         Ok(())
     }
 
-    async fn get_people_in_db(pool: &web::Data<Pool>) -> Result<Vec<Person>, String> {
+    async fn get_people_in_db(pool: &Pool) -> Result<Vec<Person>, String> {
         match address_book_service::find_all(pool) {
             Ok(data) => Ok(data),
             Err(err) => Err(format!("{:?}", err.error_response())),
@@ -241,11 +235,11 @@ mod tests {
         )
         .await;
 
-        assert!(insert_mock_data(1, &web::Data::new(pool.clone()))
+        assert!(insert_mock_data(1, &pool)
             .await
             .is_ok());
         assert_eq!(
-            get_people_in_db(&web::Data::new(pool.clone()))
+            get_people_in_db(&pool)
                 .await
                 .unwrap()
                 .len(),
@@ -295,7 +289,7 @@ mod tests {
             "email": "test@example.com"
         });
 
-        match signup_and_login(&web::Data::new(pool.clone())).await {
+        match signup_and_login(&pool).await {
             Ok(token_res) => {
                 let resp = test::TestRequest::post()
                     .uri("/api/address-book")
@@ -307,7 +301,7 @@ mod tests {
 
                 assert_eq!(resp.status(), StatusCode::CREATED);
                 assert_eq!(
-                    get_people_in_db(&web::Data::new(pool.clone()))
+                    get_people_in_db(&pool)
                         .await
                         .unwrap()
                         .len(),
@@ -371,7 +365,7 @@ mod tests {
             "request": 2022
         });
 
-        match signup_and_login(&web::Data::new(pool.clone())).await {
+        match signup_and_login(&pool).await {
             Ok(token_res) => {
                 let resp_missing_email = test::TestRequest::post()
                     .uri("/api/address-book")
@@ -401,7 +395,7 @@ mod tests {
                 assert_eq!(resp_empty.status(), StatusCode::BAD_REQUEST);
                 assert_eq!(resp_trash_value.status(), StatusCode::BAD_REQUEST);
                 assert_eq!(
-                    get_people_in_db(&web::Data::new(pool.clone()))
+                    get_people_in_db(&pool)
                         .await
                         .unwrap()
                         .len(),
@@ -430,8 +424,6 @@ mod tests {
         let manager = TenantPoolManager::new(pool.clone());
         manager.add_tenant_pool("tenant1".to_string(), pool.clone()).unwrap();
 
-        let pool_web_data = web::Data::new(pool.clone());
-
         let app = test::init_service(
             App::new()
                 .wrap(
@@ -450,7 +442,7 @@ mod tests {
         )
         .await;
 
-        insert_mock_data(1, &pool_web_data).await;
+        insert_mock_data(1, &pool).await;
 
         let update_request = json!({
             "email": "email1@example.com",
@@ -461,7 +453,7 @@ mod tests {
             "phone": "0123456781"
         });
 
-        match signup_and_login(&pool_web_data).await {
+        match signup_and_login(&pool).await {
             Ok(token_res) => {
                 let resp = test::TestRequest::put()
                     .uri("/api/address-book/1")
@@ -478,7 +470,7 @@ mod tests {
                     to_bytes(resp.into_body()).await.unwrap()
                 );
 
-                let data_in_db = get_people_in_db(&pool_web_data).await.unwrap();
+                let data_in_db = get_people_in_db(&pool).await.unwrap();
                 assert_eq!(data_in_db.len(), 1);
                 assert_eq!(data_in_db[0].name, "Nguyen Van Teo");
             }

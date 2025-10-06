@@ -45,6 +45,8 @@ struct PaginatedTenantResponse {
     total: i64,
     offset: i64,
     limit: i64,
+    count: i64,
+    next_cursor: Option<i64>,
 }
 
 /// Fetches system-wide statistics and per-tenant connection status.
@@ -257,17 +259,18 @@ pub async fn find_all(
     })?;
 
     let count = tenants.len();
-    let next_cursor = if offset + limit < total {
-        Some((offset + limit).to_string())
-    } else {
-        None
-    };
 
     let response = PaginatedTenantResponse {
         data: tenants,
         total,
         offset,
         limit,
+        count: count as i64,
+        next_cursor: if offset + limit < total {
+            Some(offset + limit)
+        } else {
+            None
+        },
     };
 
     info!("Returning {} tenants out of {} total", count, total);

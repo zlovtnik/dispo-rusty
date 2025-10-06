@@ -49,6 +49,7 @@ jobs:
       - name: Build frontend
         run: |
           cd frontend
+          bun install --frozen-lockfile
           bun run build
 
       - name: Build backend (release)
