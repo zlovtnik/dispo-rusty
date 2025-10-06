@@ -66,13 +66,14 @@ impl Tenant {
 
     /// Loads tenant records from the database with optional limit to prevent OOM.
     ///
-    /// # Parameters
-    ///
-    /// - `limit`: Optional maximum number of records to return (defaults to 1000).
-    ///
     /// # Returns
     ///
     /// A `Vec<Tenant>` containing up to the limit of records from the `tenants` table.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `DatabaseError` when the total tenant count exceeds MAX_LIMIT (10000).
+    /// In such cases, callers should use paginated methods like `filter` instead.
     ///
     /// # Examples
     ///
@@ -86,11 +87,24 @@ impl Tenant {
     ///
     /// # Warning
     ///
-    /// This method loads unlimited records by default for backwards compatibility,
-    /// but a hard maximum of 10000 records is enforced to prevent OOM. Consider
+    /// This method will error if tenant count exceeds 10000. Consider
     /// using paginated methods for better performance.
     pub fn list_all(conn: &mut crate::config::db::Connection) -> QueryResult<Vec<Tenant>> {
         const MAX_LIMIT: i64 = 10000;
+        
+        // Check total count first
+        let total_count: i64 = tenants.count().get_result(conn)?;
+        
+        if total_count > MAX_LIMIT {
+            return Err(diesel::result::Error::DatabaseError(
+                diesel::result::DatabaseErrorKind::Unknown,
+                Box::new(format!(
+                    "Tenant count ({}) exceeds maximum limit ({}). Use paginated methods instead.",
+                    total_count, MAX_LIMIT
+                )),
+            ));
+        }
+        
         tenants.limit(MAX_LIMIT).load::<Tenant>(conn)
     }
 

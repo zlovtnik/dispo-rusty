@@ -13,6 +13,7 @@ pub struct PersonFilter {
 
 #[derive(Deserialize)]
 pub struct TenantFilter {
+    #[serde(default)]
     pub filters: Vec<FieldFilter>,
     pub cursor: Option<i32>,
     pub page_size: Option<i64>,

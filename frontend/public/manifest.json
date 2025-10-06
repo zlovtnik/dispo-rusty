@@ -4,8 +4,8 @@
   "description": "TypeScript/Bun/React frontend for Actix Web REST API with JWT authentication and multi-tenant support - Natural Pharmacy Color System",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f8f9fa",
-  "theme_color": "#007bff",
+  "background_color": "#f7f8fa",
+  "theme_color": "#264653",
   "orientation": "portrait-primary",
   "scope": "/",
   "icons": [

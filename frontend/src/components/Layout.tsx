@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   Layout as AntLayout,
@@ -7,10 +7,10 @@ import {
   Dropdown,
   Avatar,
   Breadcrumb,
-  Typography,
   theme,
   Button,
   Modal,
+  Grid,
 } from 'antd';
 import {
   DashboardOutlined,
@@ -35,6 +35,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [collapsed, setCollapsed] = useState(false);
 
   const { token } = theme.useToken();
+  const screens = Grid.useBreakpoint();
 
   const layoutStyles = {
     siderHeader: {
@@ -42,10 +43,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       padding: token.paddingMD,
       textAlign: 'center' as const,
       color: token.colorTextLightSolid,
-      background: 'linear-gradient(135deg, #1a3037 0%, #203b45 100%)', // primary-700 to primary-600 gradient
+      background: `linear-gradient(135deg, #1a3037 0%, #203b45 100%)`,
     },
     sider: {
-      background: 'linear-gradient(135deg, #203b45 0%, #15262a 100%)', // primary-600 to primary-800 gradient
+      background: `linear-gradient(135deg, #203b45 0%, #15262a 100%)`,
     },
     header: {
       background: token.colorBgContainer,
@@ -142,7 +143,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
       <AntLayout>
         <AntLayout.Header style={layoutStyles.header}>
-          <Button type="text" icon={<MenuOutlined />} onClick={() => setCollapsed(!collapsed)} style={{ fontSize: token.fontSizeLG, color: 'var(--tertiary-500)' }} />
+          <Button type="text" icon={<MenuOutlined />} onClick={() => setCollapsed(!collapsed)} style={{ fontSize: token.fontSizeLG, color: token.colorTextSecondary }} />
           <Breadcrumb items={generateBreadcrumbs(location.pathname)} />
           <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
             <div style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
@@ -151,7 +152,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               </Avatar>
               <span style={{
                 marginLeft: 8,
-                display: window.innerWidth >= 768 ? 'inline' : 'none'
+                display: screens.md ? 'inline' : 'none'
               }}>
                 {user?.firstName || user?.username}
               </span>
@@ -165,9 +166,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
         <AntLayout.Footer style={{
           textAlign: 'center',
-          borderTop: '4px solid var(--secondary-200)',
+          borderTop: `4px solid ${token.colorBorderSecondary}`,
           padding: '20px 0',
-          background: 'var(--neutral-50)',
+          background: token.colorFill,
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',

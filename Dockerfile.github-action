@@ -1,7 +1,7 @@
 # Multi-stage build: Rust backend + Node.js frontend
 
 # Stage 1: Build Rust backend
-FROM rust:1.75-slim as rust-builder
+FROM rust:1.90.0-slim as rust-builder
 
 # Install required dependencies for diesel_cli (PostgreSQL client)
 RUN apt-get update && apt-get install -y \
@@ -46,6 +46,7 @@ FROM debian:bookworm-slim
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y \
     ca-certificates \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Create app directories
@@ -62,9 +63,6 @@ COPY --from=frontend-builder /app/dist/ /app/dist/
 # Copy wait-for-it script
 COPY wait-for-it.sh /app/wait-for-it.sh
 RUN chmod +x /app/wait-for-it.sh
-
-# Copy environment file (if needed for defaults)
-COPY .env* ./
 
 # Expose port
 EXPOSE 8000

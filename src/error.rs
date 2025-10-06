@@ -33,8 +33,9 @@ impl error::ResponseError for ServiceError {
     /// # Examples
     ///
     /// ```
-    /// use actix_web::http::StatusCode;
-    /// use crate::error::ServiceError;
+    /// # use actix_web::http::StatusCode;
+    /// # // Example assumes ServiceError is available in scope
+    /// # use actix_web_rest_api_with_jwt::error::ServiceError;
     ///
     /// let err = ServiceError::NotFound { error_message: "missing".into() };
     /// assert_eq!(err.status_code(), StatusCode::NOT_FOUND);
@@ -56,8 +57,10 @@ impl error::ResponseError for ServiceError {
     /// # Examples
     ///
     /// ```
-    /// use crate::error::ServiceError;
-    /// use actix_web::http::StatusCode;
+    /// # use actix_web::http::StatusCode;
+    /// # use actix_web::error::ResponseError;
+    /// # // Example assumes ServiceError is available in scope
+    /// # use actix_web_rest_api_with_jwt::error::ServiceError;
     ///
     /// let err = ServiceError::BadRequest { error_message: "invalid input".into() };
     /// let resp = err.error_response();
