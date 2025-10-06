@@ -4,6 +4,12 @@ import { useAuth } from '@/contexts/AuthContext';
 import type { LoginCredentials } from '@/types/auth';
 import { Card, Form, Input, Button, Checkbox, Typography, Alert, Flex } from 'antd';
 
+interface LoginFormValues {
+  usernameOrEmail: string;
+  password: string;
+  tenantId: string;
+}
+
 export const LoginPage: React.FC = () => {
   const { login, isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
@@ -16,7 +22,7 @@ export const LoginPage: React.FC = () => {
   // Get the intended destination
   const from = location.state?.from?.pathname || '/dashboard';
 
-  const onSubmit = async (values: any) => {
+  const onSubmit = async (values: LoginFormValues) => {
     setIsSubmitting(true);
     try {
       setSubmitError(null);
@@ -108,19 +114,7 @@ export const LoginPage: React.FC = () => {
           >
             <Input
               placeholder="Enter your username or email"
-              style={{
-                border: '2px solid var(--primary-200)',
-                borderRadius: '12px',
-                transition: 'all 0.3s ease'
-              }}
-              onFocus={(e) => {
-                e.target.style.borderColor = 'var(--primary-500)';
-                e.target.style.boxShadow = '0 0 0 3px rgba(38, 70, 83, 0.1)';
-              }}
-              onBlur={(e) => {
-                e.target.style.borderColor = 'var(--primary-200)';
-                e.target.style.boxShadow = 'none';
-              }}
+              className="login-input"
             />
           </Form.Item>
 
@@ -131,19 +125,7 @@ export const LoginPage: React.FC = () => {
           >
             <Input.Password
               placeholder="Enter your password"
-              style={{
-                border: '2px solid var(--primary-200)',
-                borderRadius: '12px',
-                transition: 'all 0.3s ease'
-              }}
-              onFocus={(e) => {
-                e.target.style.borderColor = 'var(--primary-500)';
-                e.target.style.boxShadow = '0 0 0 3px rgba(38, 70, 83, 0.1)';
-              }}
-              onBlur={(e) => {
-                e.target.style.borderColor = 'var(--primary-200)';
-                e.target.style.boxShadow = 'none';
-              }}
+              className="login-input"
             />
           </Form.Item>
 
@@ -154,19 +136,7 @@ export const LoginPage: React.FC = () => {
           >
             <Input
               placeholder="Enter your tenant ID"
-              style={{
-                border: '2px solid var(--primary-200)',
-                borderRadius: '12px',
-                transition: 'all 0.3s ease'
-              }}
-              onFocus={(e) => {
-                e.target.style.borderColor = 'var(--primary-500)';
-                e.target.style.boxShadow = '0 0 0 3px rgba(38, 70, 83, 0.1)';
-              }}
-              onBlur={(e) => {
-                e.target.style.borderColor = 'var(--primary-200)';
-                e.target.style.boxShadow = 'none';
-              }}
+              className="login-input"
             />
           </Form.Item>
 
@@ -209,25 +179,7 @@ export const LoginPage: React.FC = () => {
               htmlType="submit"
               block
               loading={isLoading || isSubmitting}
-              style={{
-                height: '48px',
-                borderRadius: '12px',
-                fontSize: '16px',
-                fontWeight: 600,
-                background: 'linear-gradient(135deg, var(--primary-600) 0%, var(--primary-700) 100%)',
-                border: 'none',
-                transition: 'all 0.3s ease'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'linear-gradient(135deg, var(--primary-700) 0%, var(--primary-800) 100%)';
-                e.currentTarget.style.transform = 'translateY(-1px)';
-                e.currentTarget.style.boxShadow = '0 8px 25px rgba(38, 70, 83, 0.3)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'linear-gradient(135deg, var(--primary-600) 0%, var(--primary-700) 100%)';
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = '0 4px 12px rgba(38, 70, 83, 0.15)';
-              }}
+              className="login-submit-button"
             >
               Sign In
             </Button>

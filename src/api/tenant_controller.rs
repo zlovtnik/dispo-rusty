@@ -423,7 +423,7 @@ pub async fn create(
     // Validate input data format and required fields
     if let Err(validation_error) = Tenant::validate_tenant_dto(&tenant_dto.0) {
         return Err(ServiceError::BadRequest {
-            error_message: validation_error,
+            error_message: validation_error.to_string(),
         });
     }
 

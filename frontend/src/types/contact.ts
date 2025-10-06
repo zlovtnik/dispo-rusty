@@ -24,6 +24,8 @@ export interface Contact {
   department?: string;
   // Health Information (Pharmacy Context)
   dateOfBirth?: Date;
+  gender?: 'male' | 'female';
+  age?: number;
   allergies?: string[];
   medications?: string[];
   medicalNotes?: string;

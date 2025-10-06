@@ -77,7 +77,7 @@ export const TenantsPage: React.FC = () => {
   // Load tenants on component mount
   useEffect(() => {
     loadTenants({ offset: 0, limit: pagination.pageSize });
-  }, []);
+  }, [pagination.pageSize]);
 
   // Handle pagination changes (page size and page number)
   const handlePaginationChange = async (page: number, pageSize: number) => {
@@ -110,7 +110,7 @@ export const TenantsPage: React.FC = () => {
         await loadTenants({ offset: (pagination.current - 1) * pagination.pageSize, limit: pagination.pageSize });
       } else {
         // Create new tenant
-        await tenantService.create({ id: crypto.randomUUID(), name: values.name, db_url: values.db_url });
+        const newTenant = await tenantService.create({ name: values.name, db_url: values.db_url });
         // Refresh the current page
         await loadTenants({ offset: (pagination.current - 1) * pagination.pageSize, limit: pagination.pageSize });
       }
@@ -208,10 +208,10 @@ export const TenantsPage: React.FC = () => {
       const data = response;
       if (Array.isArray(data)) {
         setTenants(data);
-        setPagination(prev => ({ ...prev, current: 1 })); // Reset to first page for filtered results
+        setPagination(prev => ({ ...prev, current: 1, total: data.length }));
       } else if (data && data.data && Array.isArray(data.data)) {
         setTenants(data.data);
-        setPagination(prev => ({ ...prev, current: 1 })); // Reset to first page for filtered results
+        setPagination(prev => ({ ...prev, current: 1, total: data.total ?? data.data.length ?? 0 }));
       } else {
         setTenants([]);
         setPagination(prev => ({ ...prev, current: 1, total: 0 }));

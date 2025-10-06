@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import React from 'react';
 import { Modal } from 'antd';
 
 interface ConfirmationModalProps {
@@ -11,8 +11,6 @@ interface ConfirmationModalProps {
   onCancel: () => void;
 }
 
-// MDC: Use only Ant Design components - replace all raw HTML, CSS classes, and custom styling with Ant Design equivalents.
-
 export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   isOpen,
   title = 'Confirm Action',
@@ -22,29 +20,17 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   onConfirm,
   onCancel,
 }) => {
-  useEffect(() => {
-    if (isOpen) {
-      const modal = Modal.confirm({
-        title,
-        content: message,
-        okText: confirmText,
-        cancelText: cancelText,
-        onOk: () => {
-          onConfirm();
-          modal.destroy();
-        },
-        onCancel: () => {
-          onCancel();
-          modal.destroy();
-        },
-        centered: true,
-      });
-
-      return () => {
-        modal.destroy();
-      };
-    }
-  }, [isOpen, title, message, confirmText, cancelText, onConfirm, onCancel]);
-
-  return null;
+  return (
+    <Modal
+      visible={isOpen}
+      title={title}
+      onOk={onConfirm}
+      onCancel={onCancel}
+      okText={confirmText}
+      cancelText={cancelText}
+      centered
+    >
+      {message}
+    </Modal>
+  );
 };

@@ -29,7 +29,7 @@ const theme = {
     colorBlack: '#161e26', // Neutral-900
     borderRadius: 8,
     borderRadiusLG: 12,
-    borderRadius外: 4,
+    borderRadiusSM: 4,
     fontFamily: 'Inter, system-ui, sans-serif',
   },
   components: {

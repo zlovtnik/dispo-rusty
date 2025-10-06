@@ -1,11 +1,12 @@
+use chrono::NaiveDateTime;
 use diesel::{prelude::*, Identifiable, Insertable, Queryable, AsChangeset, result};
 use serde::{Deserialize, Serialize};
+use url::Url;
 
 use crate::{
     schema::tenants::{self, dsl::*},
     models::filters::TenantFilter,
 };
-use chrono::NaiveDateTime;
 
 #[derive(Clone, Identifiable, Queryable, Serialize, Deserialize)]
 #[diesel(table_name = tenants)]
@@ -35,7 +36,7 @@ pub struct UpdateTenant {
 impl Tenant {
     pub fn validate_db_url(url: &str) -> QueryResult<()> {
         // Validate URL format
-        url::Url::parse(url).map_err(|_| result::Error::DatabaseError(
+        Url::parse(url).map_err(|_| result::Error::DatabaseError(
             result::DatabaseErrorKind::Unknown,
             Box::new("Invalid database URL format".to_string()),
         ))?;
@@ -63,20 +64,48 @@ impl Tenant {
         tenants.filter(id.eq(t_id)).get_result::<Tenant>(conn)
     }
 
-    /// Loads all tenant records from the database.
+    /// Loads tenant records from the database with optional limit to prevent OOM.
+    ///
+    /// # Parameters
+    ///
+    /// - `limit`: Optional maximum number of records to return (defaults to 1000).
     ///
     /// # Returns
     ///
-    /// A `Vec<Tenant>` containing every record from the `tenants` table.
+    /// A `Vec<Tenant>` containing up to the limit of records from the `tenants` table.
     ///
     /// # Examples
     ///
     /// ```
     /// let all = Tenant::list_all(&mut conn).unwrap();
     /// assert!(all.len() >= 0);
+    ///
+    /// // Limit to 100 records
+    /// let limited = Tenant::list_all_with_limit(Some(100), &mut conn).unwrap();
     /// ```
+    ///
+    /// # Warning
+    ///
+    /// This method loads unlimited records by default for backwards compatibility,
+    /// but a hard maximum of 10000 records is enforced to prevent OOM. Consider
+    /// using paginated methods for better performance.
     pub fn list_all(conn: &mut crate::config::db::Connection) -> QueryResult<Vec<Tenant>> {
-        tenants.load::<Tenant>(conn)
+        const MAX_LIMIT: i64 = 10000;
+        tenants.limit(MAX_LIMIT).load::<Tenant>(conn)
+    }
+
+    /// Loads tenant records from the database with a configurable limit.
+    ///
+    /// # Parameters
+    ///
+    /// - `limit`: Optional maximum number of records to return (defaults to 1000, max 10000).
+    ///
+    /// # Returns
+    ///
+    /// A `Vec<Tenant>` containing up to the limit of records from the `tenants` table.
+    pub fn list_all_with_limit(limit: Option<i64>, conn: &mut crate::config::db::Connection) -> QueryResult<Vec<Tenant>> {
+        let limit = limit.unwrap_or(1000).min(10000);
+        tenants.limit(limit).load::<Tenant>(conn)
     }
 
     /// Fetches a page of tenants and the total number of tenant records.
@@ -106,7 +135,7 @@ impl Tenant {
     ///
     /// # Returns
     ///
-    /// The matching `Tenant`.
+    /// The matching `Tenant`, if one exists.
     ///
     /// # Examples
     ///
@@ -116,7 +145,7 @@ impl Tenant {
     /// assert_eq!(tenant.name, "acme");
     /// ```
     pub fn find_by_name(name_: &str, conn: &mut crate::config::db::Connection) -> QueryResult<Tenant> {
-        tenants.filter(name.eq(name_)).get_result::<Tenant>(conn)
+        tenants.filter(name.eq(name_)).first::<Tenant>(conn)
     }
 
     /// Validates a TenantDTO's `id` and `name` according to application rules.
@@ -130,7 +159,7 @@ impl Tenant {
     ///
     /// # Returns
     ///
-    /// `Ok(())` if validation passes, `Err(String)` with a human-readable message describing the first
+    /// `Ok(())` if validation passes, `Err(diesel::result::Error)` with a human-readable message describing the first
     /// validation failure otherwise.
     ///
     /// # Examples
@@ -139,19 +168,28 @@ impl Tenant {
     /// let dto = TenantDTO { id: "tenant_1".into(), name: "Tenant One".into(), db_url: "postgres://user:pass@localhost/db".into() };
     /// assert!(Tenant::validate_tenant_dto(&dto).is_ok());
     /// ```
-    pub fn validate_tenant_dto(dto: &TenantDTO) -> Result<(), String> {
+    pub fn validate_tenant_dto(dto: &TenantDTO) -> QueryResult<()> {
         // Validate ID: non-empty, alphanumeric + dashes/underscores
         if dto.id.trim().is_empty() {
-            return Err("Tenant ID cannot be empty".to_string());
+            return Err(result::Error::DatabaseError(
+                result::DatabaseErrorKind::Unknown,
+                Box::new("Tenant ID cannot be empty".to_string()),
+            ));
         }
 
         if !dto.id.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
-            return Err("Tenant ID must contain only alphanumeric characters, dashes, and underscores".to_string());
+            return Err(result::Error::DatabaseError(
+                result::DatabaseErrorKind::Unknown,
+                Box::new("Tenant ID must contain only alphanumeric characters, dashes, and underscores".to_string()),
+            ));
         }
 
         // Validate name: non-empty
         if dto.name.trim().is_empty() {
-            return Err("Tenant name cannot be empty".to_string());
+            return Err(result::Error::DatabaseError(
+                result::DatabaseErrorKind::Unknown,
+                Box::new("Tenant name cannot be empty".to_string()),
+            ));
         }
 
         Ok(())
@@ -178,6 +216,7 @@ impl Tenant {
     pub fn batch_create(dtos: Vec<TenantDTO>, conn: &mut crate::config::db::Connection) -> QueryResult<usize> {
         conn.transaction(|tx_conn| {
             for dto in &dtos {
+                Self::validate_tenant_dto(dto)?;
                 Self::validate_db_url(&dto.db_url)?;
             }
             diesel::insert_into(tenants).values(&dtos).execute(tx_conn)
@@ -296,9 +335,41 @@ impl Tenant {
 
         // Apply pagination at DB level if specified
         if let Some(page_size) = &filter.page_size {
+            const MAX_PAGE_SIZE: i64 = 10000;
+            const MAX_CURSOR: i64 = i64::MAX / MAX_PAGE_SIZE;
+
             let cursor = filter.cursor.unwrap_or(0) as i64;
-            let offset = cursor * *page_size as i64;
-            query = query.limit((*page_size).into()).offset(offset.into());
+            let page_size = (*page_size as i64).min(MAX_PAGE_SIZE);
+
+            if cursor < 0 {
+                return Err(result::Error::DatabaseError(
+                    result::DatabaseErrorKind::Unknown,
+                    Box::new("Cursor cannot be negative".to_string()),
+                ));
+            }
+
+            if cursor > MAX_CURSOR {
+                return Err(result::Error::DatabaseError(
+                    result::DatabaseErrorKind::Unknown,
+                    Box::new(format!("Cursor too large, maximum allowed: {}", MAX_CURSOR)),
+                ));
+            }
+
+            let offset = cursor.checked_mul(page_size).ok_or_else(|| {
+                result::Error::DatabaseError(
+                    result::DatabaseErrorKind::Unknown,
+                    Box::new("Offset calculation would overflow".to_string()),
+                )
+            })?.min(i64::MAX - page_size); // Ensure offset doesn't cause issues with limit
+
+            if page_size == 0 {
+                return Err(result::Error::DatabaseError(
+                    result::DatabaseErrorKind::Unknown,
+                    Box::new("Page size cannot be zero".to_string()),
+                ));
+            }
+
+            query = query.limit(page_size as i64).offset(offset);
         }
 
         let results = query.load::<Tenant>(conn)?;

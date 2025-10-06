@@ -98,7 +98,7 @@ export const HomePage: React.FC = () => {
                       display: 'flex',
                       justifyContent: 'center',
                       alignItems: 'center',
-                      margin: '-24px -24px 24px -24px'
+                      margin: '0 0 24px 0'
                     }}>
                       {feature.icon}
                     </div>

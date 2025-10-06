@@ -149,7 +149,12 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               <Avatar style={{ backgroundColor: token.colorPrimary }}>
                 {(user?.firstName || user?.username || 'U').charAt(0).toUpperCase()}
               </Avatar>
-              <span style={{ marginLeft: 8, display: 'none' }}>{user?.firstName || user?.username}</span>
+              <span style={{
+                marginLeft: 8,
+                display: window.innerWidth >= 768 ? 'inline' : 'none'
+              }}>
+                {user?.firstName || user?.username}
+              </span>
             </div>
           </Dropdown>
         </AntLayout.Header>
