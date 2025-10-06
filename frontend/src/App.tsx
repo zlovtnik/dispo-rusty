@@ -13,16 +13,20 @@ const DashboardPage = lazy(() => import('./pages/DashboardPage').then(module => 
 const AddressBookPage = lazy(() => import('./pages/AddressBookPage').then(module => ({ default: module.AddressBookPage })));
 const TenantsPage = lazy(() => import('./pages/TenantsPage').then(module => ({ default: module.TenantsPage })));
 
+// Validate environment configuration at module load time
+let envError: Error | null = null;
+try {
+  getEnv();
+} catch (error) {
+  envError = error instanceof EnvironmentError
+    ? error
+    : new Error('Failed to initialize application configuration');
+}
+
 export const App: React.FC = () => {
-  // Validate environment configuration on app startup
-  try {
-    getEnv();
-  } catch (error) {
-    if (error instanceof EnvironmentError) {
-      return <EnvironmentErrorUI error={error} />;
-    }
-    // For unexpected errors, show generic message
-    return <EnvironmentErrorUI error={new Error('Failed to initialize application configuration')} />;
+  // Check for environment errors and render error UI if present
+  if (envError) {
+    return <EnvironmentErrorUI error={envError} />;
   }
 
   return (

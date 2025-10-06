@@ -17,6 +17,7 @@
 import { readFileSync, existsSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -31,15 +32,9 @@ function loadEnvFile(filePath, description) {
   if (existsSync(filePath)) {
     console.log(`📄 Loading: ${description}`);
     const content = readFileSync(filePath, 'utf-8');
-    content.split('\n').forEach(line => {
-      const match = line.match(/^([^=:#]+?)[=:](.*)$/);
-      if (match) {
-        const key = match[1].trim();
-        const value = match[2].trim();
-        // Allow overriding: later files take precedence
-        process.env[key] = value;
-      }
-    });
+    const parsed = dotenv.parse(content);
+    // Assign parsed values to process.env, allowing later files to override earlier ones
+    Object.assign(process.env, parsed);
   }
 }
 
@@ -99,7 +94,8 @@ function isValidUrl(string) {
   try {
     new URL(string);
     return true;
-  } catch (_) {
+  } catch {
+    // URL constructor throws if string is not a valid URL - we don't need the error details
     return false;
   }
 }
