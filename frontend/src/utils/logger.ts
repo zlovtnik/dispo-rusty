@@ -1,3 +1,9 @@
+interface LoggerConfig {
+  captureUserAgent?: boolean;
+  captureUrl?: boolean;
+  sensitiveParams?: string[];
+}
+
 interface LogEntry {
   level: 'info' | 'warn' | 'error';
   message: string;
@@ -10,16 +16,55 @@ interface LogEntry {
 class Logger {
   private isProduction = import.meta.env.PROD;
   private logs: LogEntry[] = [];
+  private config: LoggerConfig;
+
+  constructor(config: LoggerConfig = {}) {
+    this.config = {
+      captureUserAgent: false,
+      captureUrl: false,
+      sensitiveParams: ['token', 'session', 'api_key', 'password', 'secret'],
+      ...config,
+    };
+  }
+
+  private sanitizeUrl(url: string): string {
+    try {
+      const urlObj = new URL(url);
+      // Remove sensitive query params
+      this.config.sensitiveParams?.forEach(param => {
+        urlObj.searchParams.delete(param);
+      });
+      // Clear URL fragments
+      urlObj.hash = '';
+      return urlObj.toString();
+    } catch {
+      // If parsing fails, return a placeholder
+      return '<invalid-url>';
+    }
+  }
 
   private createLogEntry(level: LogEntry['level'], message: string, data?: any): LogEntry {
-    return {
+    // What is considered safe to log by default:
+    // - level and message (required)
+    // - timestamp (safe)
+    // - data (caller responsibility)
+    // - userAgent and url are opt-in and sanitized
+    const entry: LogEntry = {
       level,
       message,
       data,
       timestamp: new Date().toISOString(),
-      userAgent: navigator.userAgent,
-      url: window.location.href,
     };
+
+    if (this.config.captureUserAgent) {
+      entry.userAgent = navigator.userAgent;
+    }
+
+    if (this.config.captureUrl) {
+      entry.url = this.sanitizeUrl(window.location.href);
+    }
+
+    return entry;
   }
 
   private log(level: LogEntry['level'], message: string, data?: any) {
@@ -100,22 +145,48 @@ class Logger {
   }
 }
 
-// Global error handler
+// Global error handler - with reentrancy guard to prevent infinite loops
+let isLoggingError = false;
+
 window.addEventListener('error', (event) => {
-  logger.error('Global error', {
-    message: event.error?.message,
-    filename: event.filename,
-    lineno: event.lineno,
-    colno: event.colno,
-    stack: event.error?.stack,
-  });
+  if (isLoggingError) return; // Prevent reentrancy
+
+  isLoggingError = true;
+  try {
+    logger.error('Global error', {
+      message: event.error?.message,
+      filename: event.filename,
+      lineno: event.lineno,
+      colno: event.colno,
+      stack: event.error?.stack,
+    });
+  } catch (loggingError) {
+    // Fallback to console if logging itself fails
+    console.error('Global error:', event.error?.message, {
+      filename: event.filename,
+      lineno: event.lineno,
+      colno: event.colno,
+    });
+  } finally {
+    isLoggingError = false;
+  }
 });
 
 window.addEventListener('unhandledrejection', (event) => {
-  logger.error('Unhandled promise rejection', {
-    reason: event.reason,
-    promise: event.promise,
-  });
+  if (isLoggingError) return; // Prevent reentrancy
+
+  isLoggingError = true;
+  try {
+    logger.error('Unhandled promise rejection', {
+      reason: event.reason,
+      promise: event.promise,
+    });
+  } catch (loggingError) {
+    // Fallback to console if logging itself fails
+    console.error('Unhandled promise rejection:', event.reason);
+  } finally {
+    isLoggingError = false;
+  }
 });
 
 export const logger = new Logger();

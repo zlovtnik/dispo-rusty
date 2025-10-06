@@ -1,40 +1,77 @@
-# NOTE: This Dockerfile is only used for GitHub Actions. For local development, please use 'Dockerfile.local'
-# base image with Bun
-FROM oven/bun:1 as base
+# Multi-stage build: Rust backend + Node.js frontend
 
-# create app directory
+# Stage 1: Build Rust backend
+FROM rust:1.75-slim as rust-builder
+
+# Install required dependencies for diesel_cli (PostgreSQL client)
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
-# install dependencies
+# Copy Cargo files first for dependency caching
+COPY Cargo.toml Cargo.lock ./
+COPY diesel.toml ./
+COPY migrations/ ./migrations/
+
+# Copy source code
+COPY src/ ./src/
+
+# Build the application
+RUN cargo build --release
+
+# Stage 2: Frontend build
+FROM oven/bun:1-slim as frontend-builder
+
+WORKDIR /app
+
+# Copy frontend package files for dependency installation
 COPY frontend/package.json frontend/bun.lockb* ./
+
+# Install dependencies
 RUN bun install --frozen-lockfile
 
-# copy frontend source code and env
-COPY frontend/ .
-COPY .env ./
+# Copy frontend source code
+COPY frontend/ ./
 
-# generate Prisma client
-RUN bunx prisma generate
-
-# build application
+# Build the frontend
 RUN bun run build
 
-# production stage
-FROM oven/bun:1-slim as production
+# Stage 3: Runtime image
+FROM debian:bookworm-slim
 
-# create app directory
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create app directories
 WORKDIR /app
 
-# copy built application and dependencies
-COPY --from=base /app/dist ./dist
-COPY --from=base /app/node_modules ./node_modules
-COPY --from=base /app/package.json ./
-COPY --from=base /app/prisma ./prisma
-COPY ./.env* ./
-COPY ./wait-for-it.sh ./
+# Copy backend binary from rust-builder stage
+COPY --from=rust-builder /app/target/release/actix-web-rest-api-with-jwt /app/backend
+COPY --from=rust-builder /app/diesel.toml /app/diesel.toml
+COPY --from=rust-builder /app/migrations/ /app/migrations/
 
-# expose port
+# Copy frontend build files
+COPY --from=frontend-builder /app/dist/ /app/dist/
+
+# Copy wait-for-it script
+COPY wait-for-it.sh /app/wait-for-it.sh
+RUN chmod +x /app/wait-for-it.sh
+
+# Copy environment file (if needed for defaults)
+COPY .env* ./
+
+# Expose port
 EXPOSE 8000
 
-# run the application
-CMD ["bun", "run", "start"]
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Run the backend application
+CMD ["/app/backend"]

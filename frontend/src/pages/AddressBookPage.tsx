@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { ConfirmationModal } from '@/components/ConfirmationModal';
 import type { Contact } from '@/types/contact';
+import { Gender, genderToBoolean, booleanToGender } from '@/types/contact';
 import { addressBookService } from '@/services/api';
 import {
   Button,
@@ -16,6 +17,7 @@ import {
   Divider,
   App,
   Spin,
+  Select,
 } from 'antd';
 import {
   PlusOutlined,
@@ -29,7 +31,7 @@ interface AddressFormValues {
   lastName: string;
   email?: string;
   phone?: string;
-  gender: 'male' | 'female';
+  gender: Gender;
   age: number;
   street1: string;
   street2?: string;
@@ -71,6 +73,8 @@ export const AddressBookPage: React.FC = () => {
       fullName: person.name || '',
       email: person.email || '',
       phone: person.phone || '',
+      gender: typeof person.gender === 'boolean' ? booleanToGender(person.gender) : undefined,
+      age: typeof person.age === 'number' ? person.age : undefined,
       address: {
         street1: person.address || '',
         street2: '',
@@ -88,12 +92,14 @@ export const AddressBookPage: React.FC = () => {
   };
 
   // Helper function to transform frontend Contact to backend PersonDTO
-  const contactToPersonDTO = (contact: Contact) => {
+  const contactToPersonDTO = (name: string, address: string, phone: string, email: string, gender?: Gender, age?: number) => {
     return {
-      name: contact.fullName,
-      address: contact.address?.street1 || '',
-      phone: contact.phone || '',
-      email: contact.email || '',
+      name,
+      address,
+      phone,
+      email,
+      gender: gender ? genderToBoolean(gender) : false,
+      age: age || 25,
     };
   };
 
@@ -130,12 +136,20 @@ export const AddressBookPage: React.FC = () => {
     setIsSubmitting(true);
 
     try {
-      const genderBoolean = values.gender === 'male';
+      const dto = contactToPersonDTO(
+        `${values.firstName} ${values.lastName}`,
+        values.street1,
+        values.phone || '',
+        values.email || '',
+        values.gender,
+        values.age
+      );
+
       if (editingContact) {
         // Update existing contact
         await addressBookService.update(editingContact.id, {
           name: `${values.firstName} ${values.lastName}`,
-          gender: genderBoolean,
+          gender: genderToBoolean(values.gender),
           age: values.age,
           address: values.street1,
           phone: values.phone || '',
@@ -143,14 +157,7 @@ export const AddressBookPage: React.FC = () => {
         });
       } else {
         // Create new contact
-        await addressBookService.create({
-          name: `${values.firstName} ${values.lastName}`,
-          gender: genderBoolean,
-          age: values.age,
-          address: values.street1,
-          phone: values.phone || '',
-          email: values.email || '',
-        });
+        await addressBookService.create(dto);
       }
 
       // Reload contacts
@@ -181,7 +188,7 @@ export const AddressBookPage: React.FC = () => {
       lastName: contact.lastName,
       email: contact.email,
       phone: contact.phone,
-      gender: contact.gender || 'male', // Default if not available
+      gender: contact.gender as Gender || Gender.male, // Default if not available
       age: contact.age || 25, // Default if not available
       street1: contact.address?.street1,
       street2: contact.address?.street2,
@@ -379,7 +386,7 @@ export const AddressBookPage: React.FC = () => {
             lastName: '',
             email: '',
             phone: '',
-            gender: 'male',
+            gender: Gender.male,
             age: 25,
             street1: '',
             street2: '',
@@ -403,10 +410,10 @@ export const AddressBookPage: React.FC = () => {
           </Form.Item>
 
           <Form.Item name="gender" label="Gender" rules={[{ required: true, message: 'Please select gender' }]}>
-            <select style={{ width: '100%', padding: '8px', border: '1px solid #d9d9d9', borderRadius: '6px' }}>
-              <option value="male">Male</option>
-              <option value="female">Female</option>
-            </select>
+            <Select style={{ width: '100%' }}>
+              <Select.Option value="male">Male</Select.Option>
+              <Select.Option value="female">Female</Select.Option>
+            </Select>
           </Form.Item>
 
           <Form.Item name="age" label="Age" rules={[{ required: true, message: 'Please enter age' }, { type: 'number', min: 1, max: 120, message: 'Age must be between 1 and 120' }]}>

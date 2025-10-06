@@ -464,47 +464,105 @@ diesel migration redo
 
 ## 🐳 Docker Deployment
 
-### Backend Container
-```dockerfile
-FROM rust:1.70-slim AS builder
-WORKDIR /app
-COPY Cargo.toml Cargo.lock ./
-RUN cargo build --release
+The application supports multiple deployment configurations for different environments.
 
-FROM debian:bullseye-slim
-RUN apt-get update && apt-get install -y libpq5 ca-certificates
-COPY --from=builder /app/target/release/actix-web-rest-api-with-jwt /usr/local/bin/
-CMD ["/usr/local/bin/actix-web-rest-api-with-jwt"]
+### Multi-Stage Production Build
+
+The `Dockerfile.github-action` provides a complete multi-stage build that includes both backend and frontend:
+
+```dockerfile
+# Stage 1: Build Rust backend
+FROM rust:1.75-slim as rust-builder
+# ... Rust compilation
+
+# Stage 2: Build React frontend
+FROM oven/bun:1-slim as frontend-builder
+# ... Frontend build with Bun
+
+# Stage 3: Runtime image with compiled assets
+FROM debian:bookworm-slim
+# ... Production optimized image
 ```
 
-### Docker Compose
+### Local Development Setup
+
+For local development without requiring local database containers:
+
 ```yaml
-version: '3.8'
+version: '3'
+services:
+  address-book-api-local:
+    build:
+      context: .
+      dockerfile: Dockerfile.local
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env  # Contains remote DB connections
+    environment:
+      - APP_HOST=0.0.0.0
+      - APP_PORT=8000
+```
+
+### Remote Database Configuration
+
+The application is configured to use remote databases (PostgreSQL + Redis Cloud) instead of local containers:
+
+```env
+# Remote PostgreSQL (e.g., Neon, Supabase, AWS RDS)
+DATABASE_URL=postgres://user:pass@host/database
+
+# Remote Redis (e.g., Redis Cloud, AWS ElastiCache)
+REDIS_URL=redis://default:pass@host:port
+```
+
+### GitHub Actions CI/CD
+
+Automated builds are handled via GitHub Actions with caching and multi-platform support:
+
+- **Rust Backend**: Compiled with release optimizations
+- **React Frontend**: Built using Bun for fast compilation
+- **Docker Image**: Published to Docker Hub with metadata
+- **Security**: Build provenance attestation included
+
+### Production Deployment Options
+
+#### Option A: Docker Compose (Production)
+```yaml
+version: '3'
 services:
   api:
-    build: .
+    image: sakadream/actix-web-rest-api-with-jwt:latest
     ports:
-      - "8080:8080"
+      - "8000:8000"
+    env_file:
+      - .env
     environment:
-      - DATABASE_URL=postgres://user:pass@db/dbname
-      - REDIS_URL=redis://redis:6379
-    depends_on:
-      - db
-      - redis
-
-  frontend:
-    build: ./frontend
-    ports:
-      - "4321:4321"
-
-  db:
-    image: postgres:15
-    environment:
-      POSTGRES_DB: rust_rest_api_db
-
-  redis:
-    image: redis:7-alpine
+      - APP_ENV=production
 ```
+
+#### Option B: Kubernetes
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: actix-web-api
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: api
+        image: sakadream/actix-web-rest-api-with-jwt:latest
+        ports:
+        - containerPort: 8000
+        envFrom:
+        - configMapRef:
+            name: api-config
+```
+
+#### Option C: Cloud Platform (Railway, Render, Fly.io)
+Deploy the Docker image directly to your preferred cloud platform using the published Docker Hub image.
 
 ## 🤝 Contributing
 

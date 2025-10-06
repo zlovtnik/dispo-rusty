@@ -22,7 +22,7 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
 }) => {
   return (
     <Modal
-      visible={isOpen}
+      open={isOpen}
       title={title}
       onOk={onConfirm}
       onCancel={onCancel}

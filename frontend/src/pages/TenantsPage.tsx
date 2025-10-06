@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { ConfirmationModal } from '@/components/ConfirmationModal';
-import type { Tenant } from '@/types/tenant';
+import type { Tenant, PaginatedTenantResponse } from '@/types/tenant';
 import {
   Button,
   Input,
@@ -58,17 +58,13 @@ export const TenantsPage: React.FC = () => {
   const loadTenants = async (params?: { offset?: number; limit?: number }) => {
     try {
       setLoading(true);
-      const response = await tenantService.getAllWithPagination(params) as any;
-      const data = response.data;
-      if (data && data.data && Array.isArray(data.data)) {
-        setTenants(data.data);
-        setPagination(prev => ({ ...prev, total: data.total || data.data.length }));
-      } else {
-        setTenants([]);
-        setPagination(prev => ({ ...prev, total: 0 }));
-      }
+      const response = await tenantService.getAllWithPagination(params) as { data: PaginatedTenantResponse };
+      setTenants(response.data.data);
+      setPagination(prev => ({ ...prev, total: response.data.total }));
     } catch (error) {
       message.error(error instanceof Error ? error.message : 'Failed to load tenants');
+      setTenants([]);
+      setPagination(prev => ({ ...prev, total: 0 }));
     } finally {
       setLoading(false);
     }
@@ -77,7 +73,7 @@ export const TenantsPage: React.FC = () => {
   // Load tenants on component mount
   useEffect(() => {
     loadTenants({ offset: 0, limit: pagination.pageSize });
-  }, [pagination.pageSize]);
+  }, []);
 
   // Handle pagination changes (page size and page number)
   const handlePaginationChange = async (page: number, pageSize: number) => {
@@ -494,12 +490,21 @@ export const TenantsPage: React.FC = () => {
             rules={[
               { required: true, message: 'Please enter database URL' },
               {
-                pattern: /^postgres(?:ql)?:\/\/(?:[A-Za-z0-9._%+-]+(?::[A-Za-z0-9._%+-]+)?@)?(?:\[[0-9a-fA-F:]+\]|[A-Za-z0-9.-]+)(?::\d{1,5})?\/[A-Za-z0-9_\-]+(?:\?.*)?$/,
-                message: 'Please enter a valid PostgreSQL URL'
+                validator: (_rule, value) => {
+                  if (!value) return Promise.reject(new Error('Please enter database URL'));
+                  // Libpq connection string regex (simplified, supports key=value pairs)
+                  const libpqRegex = /^[^&=]+=[^&]*(&[^&=]+=[^&]*)*$/;
+                  // PostgreSQL URL regex (enhanced for multi-host, encoded, unix sockets, etc.)
+                  const urlRegex = /^postgres(?:ql)?:\/\/(?:[A-Za-z0-9._%+-]+(?::[A-Za-z0-9._%+-]+)?@)?(?:\[[^\]]+\]|[A-Za-z0-9.-]+(?:,[A-Za-z0-9.-]+)*(?::\d{1,5})*|\/[^/]+)?\/[A-Za-z0-9_\-]+(?:\?.*)?$/;
+                  if (libpqRegex.test(value) || urlRegex.test(value)) {
+                    return Promise.resolve();
+                  }
+                  return Promise.reject(new Error('Please enter a valid PostgreSQL URL or connection string'));
+                }
               }
             ]}
           >
-            <Input placeholder="postgresql://user:password@host:port/database" />
+            <Input placeholder="postgresql://user:password@host:port/database or host=localhost port=5432 dbname=mydb" />
           </Form.Item>
 
           <Form.Item>

@@ -7,7 +7,6 @@ export interface Tenant {
 }
 
 export interface CreateTenantDTO {
-  id: string;
   name: string;
   db_url: string;
 }
@@ -31,4 +30,11 @@ export interface TenantListResponse {
   page_size?: number;
   total_elements?: number;
   next_cursor?: number;
+}
+
+export interface PaginatedTenantResponse {
+  data: Tenant[];
+  total: number;
+  offset?: number;
+  limit?: number;
 }
