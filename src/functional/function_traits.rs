@@ -38,24 +38,13 @@ pub trait PureFunction<Input, Output>: Send + Sync + 'static {
     /// The category this function belongs to
     fn category(&self) -> FunctionCategory;
 
-    /// Determine whether this function can be composed with another `PureFunction` that accepts this
-    /// function's output.
+    /// Check if this function can be composed with another function.
+    ///
+    /// # Arguments
+    /// * `other` - The function to check composition compatibility with
     ///
     /// # Returns
-    ///
-    /// `true` if composition is allowed, `false` otherwise.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::sync::Arc;
-    /// # use crate::{FunctionWrapper, FunctionCategory, PureFunction};
-    /// let f = FunctionWrapper::new(|x: i32| x + 1, "inc", FunctionCategory::Mathematical);
-    /// let g = FunctionWrapper::new(|x: i32| x * 2, "mul", FunctionCategory::Mathematical);
-    /// let f_obj: &dyn PureFunction<i32, i32> = &f;
-    /// let g_obj: &dyn PureFunction<i32, i32> = &g;
-    /// assert!(f_obj.can_compose_with(g_obj));
-    /// ```
+    /// true if the functions can be composed, false otherwise
     fn can_compose_with(&self, _other: &dyn PureFunction<Output, Output>) -> bool
     where
         Output: Clone,
@@ -110,18 +99,15 @@ where
     Output: Send + Sync + 'static,
     F: Fn(Input) -> Output + Send + Sync + 'static,
 {
-    /// Constructs a FunctionWrapper that holds a pure function together with its signature and category.
+    /// Create a new function wrapper.
     ///
-    /// Returns a new `FunctionWrapper` configured with the provided function, signature, and category.
+    /// # Arguments
+    /// * `function` - The pure function to wrap
+    /// * `signature` - Function signature string
+    /// * `category` - Function category
     ///
-    /// # Examples
-    ///
-    /// ```
-    /// use crate::{FunctionWrapper, FunctionCategory, PureFunction};
-    ///
-    /// let wrapper = FunctionWrapper::new(|x: i32| x + 1, "inc(i32)->i32", FunctionCategory::Mathematical);
-    /// assert_eq!(wrapper.call(1), 2);
-    /// ```
+    /// # Returns
+    /// A new FunctionWrapper instance
     pub fn new(function: F, signature: &'static str, category: FunctionCategory) -> Self {
         Self {
             function,
@@ -138,56 +124,14 @@ where
     Output: Send + Sync + 'static,
     F: Fn(Input) -> Output + Send + Sync + 'static,
 {
-    /// Invokes the wrapped pure function with the provided input and returns its output.
-    ///
-    /// # Returns
-    ///
-    /// The output produced by applying the wrapped function to `input`.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::sync::Arc;
-    /// // Construct a simple wrapper for a closure that doubles an i32.
-    /// let wrapper = crate::FunctionWrapper::new(|x: i32| x * 2, "double_i32", crate::FunctionCategory::Mathematical);
-    /// let result = wrapper.call(3);
-    /// assert_eq!(result, 6);
-    /// ```
     fn call(&self, input: Input) -> Output {
         (self.function)(input)
     }
 
-    /// Returns the stored function signature string.
-    ///
-    /// # Returns
-    ///
-    /// The signature associated with this container (a `'static` string).
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use crate::{FunctionWrapper, FunctionContainer, FunctionCategory};
-    ///
-    /// let wrapper = FunctionWrapper::new(|x: i32| x + 1, "inc", FunctionCategory::Transformation);
-    /// let container = FunctionContainer::new(wrapper, "inc", FunctionCategory::Transformation);
-    /// assert_eq!(container.signature(), "inc");
-    /// ```
     fn signature(&self) -> &'static str {
         self.signature
     }
 
-    /// Gets the function's category used for organization and lookup.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let wrapper = FunctionWrapper::new(|x: i32| x + 1, "inc", FunctionCategory::Transformation);
-    /// assert_eq!(wrapper.category(), FunctionCategory::Transformation);
-    /// ```
-    ///
-    /// # Returns
-    ///
-    /// The `FunctionCategory` value representing this function's category.
     fn category(&self) -> FunctionCategory {
         self.category
     }
@@ -210,26 +154,15 @@ pub struct FunctionContainer {
 }
 
 impl FunctionContainer {
-    /// Constructs a type-erased container holding a pure function along with its signature and category.
+    /// Create a new function container.
     ///
-    /// The `signature` should uniquely identify the function for registration and lookup; `category` is used for organization.
+    /// # Arguments
+    /// * `function` - The pure function implementation
+    /// * `signature` - Unique function signature for identification
+    /// * `category` - Function category for organization
     ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::any::Any;
-    ///
-    /// // Create a FunctionWrapper from a closure using the provided macro,
-    /// // then wrap it in a FunctionContainer.
-    /// let func = pure_closure!("add_one", crate::FunctionCategory::Mathematical, |x: i32| x + 1);
-    /// let container = crate::FunctionContainer::new(func, "add_one", crate::FunctionCategory::Mathematical);
-    ///
-    /// // Call with the correct input type
-    /// let input: Box<dyn Any> = Box::new(5i32);
-    /// let output = container.try_call(input).expect("type matched");
-    /// let result = *output.downcast::<i32>().unwrap();
-    /// assert_eq!(result, 6);
-    /// ```
+    /// # Returns
+    /// A new FunctionContainer instance
     pub fn new<Input, Output, F>(
         function: F,
         signature: &'static str,
@@ -252,94 +185,33 @@ impl FunctionContainer {
         }
     }
 
-    /// Return the stored signature for the wrapped function.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let wrapper = FunctionWrapper::new(|x: i32| x + 1, "inc", FunctionCategory::Transformation);
-    /// assert_eq!(wrapper.signature(), "inc");
-    /// ```
+    /// Get the function signature.
     pub fn signature(&self) -> &'static str {
         self.signature
     }
 
-    /// Retrieves the function's category used for organization and lookup.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use crate::{FunctionWrapper, FunctionCategory};
-    ///
-    /// let wrapper = FunctionWrapper::new(|x: i32| x + 1, "inc", FunctionCategory::Transformation);
-    /// assert_eq!(wrapper.category(), FunctionCategory::Transformation);
-    /// ```
+    /// Get the function category.
     pub fn category(&self) -> FunctionCategory {
         self.category
     }
 
-    /// The `TypeId` of the container's input type.
-    
-    ///
-    
-    /// # Examples
-    
-    ///
-    
-    /// ```
-    
-    /// use std::any::TypeId;
-    
-    /// // Construct a wrapper and container for a simple i32 -> i32 function.
-    
-    /// let wrapper = crate::FunctionWrapper::new(|x: i32| x + 1, "inc", crate::FunctionCategory::Transformation);
-    
-    /// let container = crate::FunctionContainer::new::<i32, i32, _>(wrapper, "inc", crate::FunctionCategory::Transformation);
-    
-    /// let id = container.input_type_id();
-    
-    /// assert_eq!(id, TypeId::of::<i32>());
-    
-    /// ```
+    /// Get the input type ID for composition checking.
     pub fn input_type_id(&self) -> std::any::TypeId {
         self.input_type_id
     }
 
-    /// Returns the stored output TypeId used for runtime composition checks.
-    ///
-    /// The returned `TypeId` identifies the function's output type.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::any::TypeId;
-    /// // `container` is a FunctionContainer created elsewhere for a function that returns `i32`.
-    /// // assert_eq!(container.output_type_id(), TypeId::of::<i32>());
-    /// ```
+    /// Get the output type ID for composition checking.
     pub fn output_type_id(&self) -> std::any::TypeId {
         self.output_type_id
     }
 
-    /// Invoke the stored callable with a type-erased input if the input's runtime type matches this container's expected input type.
+    /// Try to call the function with type-erased input/output.
+    ///
+    /// # Arguments
+    /// * `input` - The input value as Any
     ///
     /// # Returns
-    ///
-    /// `Some(Box<dyn Any>)` containing the boxed output when the input's TypeId equals the container's input type id, `None` otherwise.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::any::Any;
-    /// use your_crate::function_module::{FunctionContainer, FunctionCategory};
-    ///
-    /// // Create a container for a function that increments an i32
-    /// let container = FunctionContainer::new(|x: i32| x + 1, "inc_i32", FunctionCategory::Mathematical);
-    ///
-    /// let input: Box<dyn Any> = Box::new(41i32);
-    /// let output_any = container.try_call(input).expect("type should match");
-    /// let output = output_any.downcast::<i32>().expect("downcast to i32");
-    /// assert_eq!(*output, 42);
-    /// ```
+    /// Some(output) if the types match, None otherwise
     pub fn try_call(&self, input: Box<dyn std::any::Any>) -> Option<Box<dyn std::any::Any>> {
         // Check if the input type matches by checking the inner type
         if (*input).type_id() != self.input_type_id {
@@ -364,22 +236,6 @@ where
     Output: Send + Sync + 'static,
     F: Fn(Input) -> Output + Send + Sync + 'static,
 {
-    /// Calls the wrapped function using a type-erased input and returns the result boxed as `Any`.
-    ///
-    /// Panics if the provided input's concrete type does not match the function's expected input type.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::any::Any;
-    /// use std::any::TypeId;
-    /// // Construct a FunctionWrapper directly for the example
-    /// let f = |x: i32| x + 1;
-    /// let wrapper = crate::FunctionWrapper::new(f, "inc", crate::FunctionCategory::Mathematical);
-    /// let boxed_in: Box<dyn Any> = Box::new(41i32);
-    /// let boxed_out = wrapper.call_boxed(boxed_in);
-    /// assert_eq!(*boxed_out.downcast::<i32>().unwrap(), 42);
-    /// ```
     fn call_boxed(&self, input: Box<dyn std::any::Any>) -> Box<dyn std::any::Any> {
         // Check type before downcast
         if (*input).type_id() != std::any::TypeId::of::<Input>() {
@@ -400,38 +256,10 @@ where
         }
     }
 
-    /// Get the `TypeId` corresponding to the wrapper's input type.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::any::TypeId;
-    /// use your_crate::{FunctionWrapper, FunctionCategory};
-    ///
-    /// let wrapper = FunctionWrapper::new(|x: i32| x + 1, "inc", FunctionCategory::Transformation);
-    /// let id = wrapper.input_type_id();
-    /// assert_eq!(id, TypeId::of::<i32>());
-    /// ```
-    ///
-    /// # Returns
-    ///
-    /// The `TypeId` for `Input`.
     fn input_type_id(&self) -> std::any::TypeId {
         std::any::TypeId::of::<Input>()
     }
 
-    /// Get the TypeId for the function's output type.
-    ///
-    /// The returned `TypeId` corresponds to the concrete `Output` type parameter of this wrapper.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::any::TypeId;
-    /// // assume FunctionWrapper and FunctionCategory are in scope
-    /// let wrapper = FunctionWrapper::new(|x: i32| x * 2, "double_i32", FunctionCategory::Mathematical);
-    /// assert_eq!(wrapper.output_type_id(), TypeId::of::<i32>());
-    /// ```
     fn output_type_id(&self) -> std::any::TypeId {
         std::any::TypeId::of::<Output>()
     }
@@ -463,4 +291,373 @@ macro_rules! pure_closure {
     ($signature:expr, $category:expr, $closure:expr) => {
         $crate::functional::function_traits::FunctionWrapper::new($closure, $signature, $category)
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Test helper struct
+    struct AddOne;
+    impl PureFunction<i32, i32> for AddOne {
+        fn call(&self, input: i32) -> i32 {
+            input + 1
+        }
+
+        fn signature(&self) -> &'static str {
+            "add_one"
+        }
+
+        fn category(&self) -> FunctionCategory {
+            FunctionCategory::Mathematical
+        }
+    }
+
+    struct Double;
+    impl PureFunction<i32, i32> for Double {
+        fn call(&self, input: i32) -> i32 {
+            input * 2
+        }
+
+        fn signature(&self) -> &'static str {
+            "double"
+        }
+
+        fn category(&self) -> FunctionCategory {
+            FunctionCategory::Mathematical
+        }
+    }
+
+    struct ToString;
+    impl PureFunction<i32, String> for ToString {
+        fn call(&self, input: i32) -> String {
+            input.to_string()
+        }
+
+        fn signature(&self) -> &'static str {
+            "to_string"
+        }
+
+        fn category(&self) -> FunctionCategory {
+            FunctionCategory::Transformation
+        }
+    }
+
+    #[test]
+    fn test_pure_function_trait() {
+        let add_one = AddOne;
+        assert_eq\!(add_one.call(5), 6);
+        assert_eq\!(add_one.call(5), 6); // Deterministic
+        assert_eq\!(add_one.signature(), "add_one");
+        assert_eq\!(add_one.category(), FunctionCategory::Mathematical);
+    }
+
+    #[test]
+    fn test_function_category_equality() {
+        assert_eq\!(FunctionCategory::Mathematical, FunctionCategory::Mathematical);
+        assert_ne\!(FunctionCategory::Mathematical, FunctionCategory::Validation);
+        assert_ne\!(FunctionCategory::Transformation, FunctionCategory::Aggregation);
+    }
+
+    #[test]
+    fn test_function_category_debug() {
+        let cat = FunctionCategory::Transformation;
+        let debug_str = format\!("{:?}", cat);
+        assert\!(debug_str.contains("Transformation"));
+    }
+
+    #[test]
+    fn test_function_wrapper_creation() {
+        let wrapper = FunctionWrapper::new(
+            |x: i32| x + 10,
+            "add_ten",
+            FunctionCategory::Mathematical,
+        );
+
+        assert_eq\!(wrapper.call(5), 15);
+        assert_eq\!(wrapper.signature(), "add_ten");
+        assert_eq\!(wrapper.category(), FunctionCategory::Mathematical);
+    }
+
+    #[test]
+    fn test_function_wrapper_with_string() {
+        let wrapper = FunctionWrapper::new(
+            |s: String| s.to_uppercase(),
+            "to_upper",
+            FunctionCategory::StringProcessing,
+        );
+
+        assert_eq\!(wrapper.call("hello".to_string()), "HELLO");
+        assert_eq\!(wrapper.signature(), "to_upper");
+        assert_eq\!(wrapper.category(), FunctionCategory::StringProcessing);
+    }
+
+    #[test]
+    fn test_function_wrapper_determinism() {
+        let wrapper = FunctionWrapper::new(
+            |x: i32| x * x,
+            "square",
+            FunctionCategory::Mathematical,
+        );
+
+        // Test determinism by calling multiple times
+        let input = 7;
+        let result1 = wrapper.call(input);
+        let result2 = wrapper.call(input);
+        let result3 = wrapper.call(input);
+
+        assert_eq\!(result1, 49);
+        assert_eq\!(result1, result2);
+        assert_eq\!(result2, result3);
+    }
+
+    #[test]
+    fn test_function_container_creation() {
+        let func = AddOne;
+        let container = FunctionContainer::new(func, "add_one", FunctionCategory::Mathematical);
+
+        assert_eq\!(container.signature(), "add_one");
+        assert_eq\!(container.category(), FunctionCategory::Mathematical);
+        assert_eq\!(container.input_type_id(), std::any::TypeId::of::<i32>());
+        assert_eq\!(container.output_type_id(), std::any::TypeId::of::<i32>());
+    }
+
+    #[test]
+    fn test_function_container_type_ids() {
+        let func = ToString;
+        let container = FunctionContainer::new(func, "to_string", FunctionCategory::Transformation);
+
+        assert_eq\!(container.input_type_id(), std::any::TypeId::of::<i32>());
+        assert_eq\!(container.output_type_id(), std::any::TypeId::of::<String>());
+        assert_ne\!(container.input_type_id(), container.output_type_id());
+    }
+
+    #[test]
+    fn test_function_container_try_call_success() {
+        let func = AddOne;
+        let container = FunctionContainer::new(func, "add_one", FunctionCategory::Mathematical);
+
+        let input: Box<dyn std::any::Any> = Box::new(10);
+        let result = container.try_call(input);
+
+        assert\!(result.is_some());
+        let output = result.unwrap();
+        let value = output.downcast::<i32>().unwrap();
+        assert_eq\!(*value, 11);
+    }
+
+    #[test]
+    fn test_function_container_try_call_type_mismatch() {
+        let func = AddOne;
+        let container = FunctionContainer::new(func, "add_one", FunctionCategory::Mathematical);
+
+        // Try to call with wrong type (String instead of i32)
+        let input: Box<dyn std::any::Any> = Box::new("wrong".to_string());
+        let result = container.try_call(input);
+
+        assert\!(result.is_none());
+    }
+
+    #[test]
+    fn test_function_wrapper_with_complex_type() {
+        #[derive(Debug, Clone, PartialEq)]
+        struct Person {
+            name: String,
+            age: i32,
+        }
+
+        let wrapper = FunctionWrapper::new(
+            |p: Person| Person {
+                name: p.name.to_uppercase(),
+                age: p.age + 1,
+            },
+            "transform_person",
+            FunctionCategory::Transformation,
+        );
+
+        let input = Person {
+            name: "alice".to_string(),
+            age: 30,
+        };
+
+        let output = wrapper.call(input);
+        assert_eq\!(output.name, "ALICE");
+        assert_eq\!(output.age, 31);
+    }
+
+    #[test]
+    fn test_all_function_categories() {
+        let categories = vec\![
+            FunctionCategory::Transformation,
+            FunctionCategory::Aggregation,
+            FunctionCategory::Validation,
+            FunctionCategory::Filtering,
+            FunctionCategory::Sorting,
+            FunctionCategory::Grouping,
+            FunctionCategory::Mathematical,
+            FunctionCategory::StringProcessing,
+            FunctionCategory::BusinessLogic,
+        ];
+
+        // Test that all categories are unique
+        for (i, cat1) in categories.iter().enumerate() {
+            for (j, cat2) in categories.iter().enumerate() {
+                if i == j {
+                    assert_eq\!(cat1, cat2);
+                } else {
+                    assert_ne\!(cat1, cat2);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_function_categories_hash() {
+        use std::collections::HashSet;
+
+        let mut set = HashSet::new();
+        set.insert(FunctionCategory::Mathematical);
+        set.insert(FunctionCategory::Transformation);
+        set.insert(FunctionCategory::Mathematical); // Duplicate
+
+        assert_eq\!(set.len(), 2); // Should only have 2 unique categories
+        assert\!(set.contains(&FunctionCategory::Mathematical));
+        assert\!(set.contains(&FunctionCategory::Transformation));
+    }
+
+    #[test]
+    fn test_can_compose_with_default() {
+        let func1 = AddOne;
+        let func2 = Double;
+
+        // Default implementation should allow composition
+        assert\!(func1.can_compose_with(&func2));
+        assert\!(func2.can_compose_with(&func1));
+    }
+
+    #[test]
+    fn test_callable_trait_type_ids() {
+        let wrapper = FunctionWrapper::new(
+            |x: i32| x * 3,
+            "triple",
+            FunctionCategory::Mathematical,
+        );
+
+        assert_eq\!(wrapper.input_type_id(), std::any::TypeId::of::<i32>());
+        assert_eq\!(wrapper.output_type_id(), std::any::TypeId::of::<i32>());
+    }
+
+    #[test]
+    fn test_function_wrapper_edge_cases() {
+        // Test with zero
+        let wrapper = FunctionWrapper::new(
+            |x: i32| x * 2,
+            "double",
+            FunctionCategory::Mathematical,
+        );
+        assert_eq\!(wrapper.call(0), 0);
+
+        // Test with negative numbers
+        assert_eq\!(wrapper.call(-5), -10);
+
+        // Test with max value edge case
+        let max_half = i32::MAX / 2;
+        assert_eq\!(wrapper.call(max_half), max_half * 2);
+    }
+
+    #[test]
+    fn test_function_wrapper_with_option() {
+        let wrapper = FunctionWrapper::new(
+            |x: Option<i32>| x.unwrap_or(0) * 2,
+            "double_option",
+            FunctionCategory::Mathematical,
+        );
+
+        assert_eq\!(wrapper.call(Some(5)), 10);
+        assert_eq\!(wrapper.call(None), 0);
+    }
+
+    #[test]
+    fn test_function_wrapper_with_result() {
+        let wrapper = FunctionWrapper::new(
+            |x: i32| -> Result<i32, String> {
+                if x > 0 {
+                    Ok(x * 2)
+                } else {
+                    Err("Input must be positive".to_string())
+                }
+            },
+            "safe_double",
+            FunctionCategory::Mathematical,
+        );
+
+        assert_eq\!(wrapper.call(5), Ok(10));
+        assert\!(wrapper.call(-1).is_err());
+        assert_eq\!(wrapper.call(0), Err("Input must be positive".to_string()));
+    }
+
+    #[test]
+    fn test_function_container_with_different_types() {
+        // Test i32 -> String transformation
+        let to_string = FunctionWrapper::new(
+            |x: i32| format\!("Number: {}", x),
+            "format_number",
+            FunctionCategory::StringProcessing,
+        );
+
+        let container = FunctionContainer::new(
+            to_string,
+            "format_number",
+            FunctionCategory::StringProcessing,
+        );
+
+        let input: Box<dyn std::any::Any> = Box::new(42);
+        let result = container.try_call(input);
+        assert\!(result.is_some());
+
+        let output = result.unwrap().downcast::<String>().unwrap();
+        assert_eq\!(*output, "Number: 42");
+    }
+
+    #[test]
+    fn test_multiple_function_wrappers() {
+        let add = FunctionWrapper::new(
+            |x: i32| x + 5,
+            "add_five",
+            FunctionCategory::Mathematical,
+        );
+
+        let mult = FunctionWrapper::new(
+            |x: i32| x * 3,
+            "triple",
+            FunctionCategory::Mathematical,
+        );
+
+        let sub = FunctionWrapper::new(
+            |x: i32| x - 2,
+            "sub_two",
+            FunctionCategory::Mathematical,
+        );
+
+        let input = 10;
+        let result1 = add.call(input);  // 15
+        let result2 = mult.call(result1);  // 45
+        let result3 = sub.call(result2);  // 43
+
+        assert_eq\!(result3, 43);
+    }
+
+    #[test]
+    fn test_function_category_clone() {
+        let cat1 = FunctionCategory::Validation;
+        let cat2 = cat1.clone();
+        assert_eq\!(cat1, cat2);
+    }
+
+    #[test]
+    fn test_function_category_copy() {
+        let cat1 = FunctionCategory::BusinessLogic;
+        let cat2 = cat1; // Copy semantics
+        assert_eq\!(cat1, cat2);
+    }
 }

@@ -63,3 +63,4 @@ panic = "abort"        # Smaller binary, faster panics
 
 [profile.release.package."*"]
 opt-level = 3
+toml = "0.8"

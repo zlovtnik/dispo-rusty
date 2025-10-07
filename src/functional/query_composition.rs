@@ -47,24 +47,6 @@ pub struct LazyEvaluationConfig {
 }
 
 impl Default for LazyEvaluationConfig {
-    /// Provides the default configuration for lazy evaluation of large result sets.
-    ///
-    /// The default values are:
-    /// - `chunk_size = 1000`
-    /// - `max_total_records = Some(100_000)`
-    /// - `chunk_timeout = 30s`
-    /// - `parallel_processing = true`
-    /// - `max_concurrent_chunks = 4`
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let cfg = LazyEvaluationConfig::default();
-    /// assert_eq!(cfg.chunk_size, 1000);
-    /// assert_eq!(cfg.max_total_records, Some(100_000));
-    /// assert_eq!(cfg.parallel_processing, true);
-    /// assert_eq!(cfg.max_concurrent_chunks, 4);
-    /// ```
     fn default() -> Self {
         Self {
             chunk_size: 1000,
@@ -137,23 +119,14 @@ impl<T> ComposablePredicate<T>
 where
     T: Clone + Send + Sync + 'static,
 {
-    /// Wraps a `Predicate` with composition and optimization metadata for functional chaining.
+    /// Create a new composable predicate.
     ///
-    /// # Examples
+    /// # Arguments
+    /// * `predicate` - The base predicate
+    /// * `metadata` - Metadata for composition and optimization
     ///
-    /// ```
-    /// use crate::functional::query_builder::{Predicate, PredicateMetadata, ComposablePredicate, Operator};
-    /// use std::time::Duration;
-    ///
-    /// let pred = Predicate::new("users.id".into(), Operator::Equals, Some("42".into()), "id".into());
-    /// let meta = PredicateMetadata {
-    ///     selectivity: 0.1,
-    ///     cost_estimate: Duration::from_millis(5),
-    ///     pushdown_capable: true,
-    ///     dependencies: vec![],
-    /// };
-    /// let cp = ComposablePredicate::new(pred, meta);
-    /// ```
+    /// # Returns
+    /// A new ComposablePredicate instance
     pub fn new(predicate: Predicate<T>, metadata: PredicateMetadata) -> Self {
         Self {
             predicate,
@@ -161,25 +134,13 @@ where
         }
     }
 
-    /// Applies a transformation to the inner `Predicate` and returns a new `ComposablePredicate` with the mapped predicate and the original metadata.
+    /// Map operation for functional composition.
     ///
-    /// # Parameters
-    /// - `f`: A function that converts the contained `Predicate<T>` into a `Predicate<U>`.
+    /// # Arguments
+    /// * `f` - Mapping function
     ///
     /// # Returns
-    /// A `ComposablePredicate<U>` containing the transformed predicate and the preserved `PredicateMetadata`.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// use crate::functional::query_builder::Predicate;
-    /// use crate::functional::query_composition::ComposablePredicate;
-    ///
-    /// // given an existing composable predicate `cp` of type `ComposablePredicate<T>`:
-    /// // let cp: ComposablePredicate<T> = ...;
-    /// // apply a mapping that converts the inner predicate type
-    /// // let mapped: ComposablePredicate<U> = cp.map(|p| /* produce Predicate<U> from p */ p);
-    /// ```
+    /// A new ComposablePredicate with transformed predicate
     pub fn map<F, U>(self, f: F) -> ComposablePredicate<U>
     where
         F: FnOnce(Predicate<T>) -> Predicate<U>,
@@ -192,17 +153,13 @@ where
         }
     }
 
-    /// Applies a flat-mapping function to the underlying predicate and returns the iterator produced by that function.
+    /// Flat map operation for complex predicate composition.
     ///
-    /// The provided function receives the inner `Predicate<T>` and must return an iterator of `ComposablePredicate<U>`.
-    ///
-    /// # Parameters
-    ///
-    /// * `f` - A function that takes the inner `Predicate<T>` and returns an `Iterator` yielding `ComposablePredicate<U>` items.
+    /// # Arguments
+    /// * `f` - Flat mapping function
     ///
     /// # Returns
-    ///
-    /// An iterator of `ComposablePredicate<U>` produced by the provided mapping function.
+    /// Iterator of new ComposablePredicates
     pub fn flat_map<F, U, I>(self, f: F) -> I
     where
         F: FnOnce(Predicate<T>) -> I,
@@ -212,29 +169,13 @@ where
         f(self.predicate)
     }
 
-    /// Return the composable predicate when it satisfies the given test.
+    /// Filter operation for predicate composition.
     ///
     /// # Arguments
-    ///
-    /// * `f` - A function that inspects the inner `Predicate<T>` and returns `true` to keep the predicate.
+    /// * `f` - Filter function
     ///
     /// # Returns
-    ///
-    /// `Some(self)` if `f(&self.predicate)` returns `true`, `None` otherwise.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use crate::functional::query_builder::{Predicate, Operator};
-    /// use crate::functional::query_composition::ComposablePredicate;
-    ///
-    /// let pred = Predicate::new("users.id", Operator::Equals, Some("42".to_string()), "id");
-    /// let composed = ComposablePredicate::new(pred, Default::default());
-    ///
-    /// // Keep only predicates that reference the "id" field
-    /// let kept = composed.filter(|p| p.field_name() == "id");
-    /// assert!(kept.is_some());
-    /// ```
+    /// Option containing the predicate if it passes the filter
     pub fn filter<F>(self, f: F) -> Option<Self>
     where
         F: FnOnce(&Predicate<T>) -> bool,
@@ -277,32 +218,15 @@ where
     T: Send + Sync + 'static,
     U: Clone + Send + Sync + 'static,
 {
-    /// Create a lazy streaming iterator that loads query results in configurable chunks.
+    /// Create a new lazy query iterator.
     ///
-    /// Constructs a new `LazyQueryIterator` configured from the provided query composer, concurrency
-    /// semaphore, and performance metrics tracker.
-    ///
-    /// # Parameters
-    ///
-    /// - `composer` — The functional query composer that supplies the base query and lazy configuration.
-    /// - `semaphore` — Concurrency control semaphore used to limit parallel chunk processing.
-    /// - `metrics` — Initial performance metrics to be attached and updated during iteration.
+    /// # Arguments
+    /// * `composer` - The query composer to use
+    /// * `semaphore` - Semaphore for concurrency control
+    /// * `metrics` - Performance metrics tracker
     ///
     /// # Returns
-    ///
-    /// A `LazyQueryIterator` ready to stream results according to the composer's `lazy_config`.
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// use std::sync::Arc;
-    /// use tokio::sync::Semaphore;
-    /// // Assume `FunctionalQueryComposer` and `QueryPerformanceMetrics` are available in scope.
-    /// let composer: Arc<FunctionalQueryComposer<_, _>> = /* obtain or construct composer */ Arc::new(/* ... */);
-    /// let semaphore = Arc::new(Semaphore::new(4));
-    /// let metrics = QueryPerformanceMetrics::default();
-    /// let iterator = LazyQueryIterator::new(composer, semaphore, metrics);
-    /// ```
+    /// A new LazyQueryIterator instance
     pub fn new(
         composer: Arc<FunctionalQueryComposer<T, U>>,
         semaphore: Arc<Semaphore>,
@@ -330,26 +254,6 @@ where
 {
     type Item = U;
 
-    /// Advances the iterator and yields the next item from the current chunk, loading the next chunk when needed.
-    ///
-    /// If the iterator is exhausted, returns `None`. When the current in-memory chunk is depleted the implementation
-    /// attempts to load the next chunk; in this stubbed implementation chunk loading is not performed and the
-    /// iterator will be marked exhausted instead. Each returned item increments the iterator's `total_processed` count.
-    ///
-    /// # Returns
-    ///
-    /// `Some(item)` with the next element from the current chunk, `None` when the iterator is exhausted.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// // Given a LazyQueryIterator whose current_chunk contains [1, 2]
-    /// // the first two calls yield the elements and the third returns None (stubbed chunk loading).
-    /// // let mut it = /* LazyQueryIterator::new(...) with current_chunk = vec![1, 2] */ ;
-    /// // assert_eq!(it.next(), Some(1));
-    /// // assert_eq!(it.next(), Some(2));
-    /// // assert_eq!(it.next(), None);
-    /// ```
     fn next(&mut self) -> Option<Self::Item> {
         if self.exhausted {
             return None;
@@ -430,17 +334,10 @@ pub struct SanitizationRule {
 }
 
 impl ParameterSanitizer {
-    /// Constructs a new ParameterSanitizer with default sanitization rules and no bindings.
+    /// Create a new parameter sanitizer.
     ///
-    /// The sanitizer starts with the module's default rules and an empty binding map.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let s = crate::functional::query_composition::ParameterSanitizer::new();
-    /// assert!(s.bindings().is_empty());
-    /// assert!(!s.rules.is_empty());
-    /// ```
+    /// # Returns
+    /// A new ParameterSanitizer instance
     pub fn new() -> Self {
         Self {
             bindings: HashMap::new(),
@@ -448,31 +345,15 @@ impl ParameterSanitizer {
         }
     }
 
-    /// Bind a parameter after validating it with the sanitizer's rules.
+    /// Add a parameter binding with automatic sanitization.
     ///
-    /// Validates `value` against the configured sanitization rules and, on success,
-    /// stores a validated `ParameterBinding` under `name` with the provided `sql_type`.
-    ///
-    /// # Parameters
-    ///
-    /// - `name`: The parameter's binding name used in queries.
-    /// - `value`: The parameter value to sanitize and bind (converted with `ToString`).
-    /// - `sql_type`: A textual representation of the SQL type for the bound parameter.
+    /// # Arguments
+    /// * `name` - Parameter name
+    /// * `value` - Parameter value
+    /// * `sql_type` - SQL type of the parameter
     ///
     /// # Returns
-    ///
-    /// `Ok(())` if the value passed all sanitization rules and was stored;
-    /// `Err(SanitizationError::ValidationFailed { .. })` if any rule rejected the value.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let mut sanitizer = ParameterSanitizer::new();
-    /// sanitizer
-    ///     .bind_parameter("user_id".to_string(), 123i32, "INTEGER".to_string())
-    ///     .unwrap();
-    /// assert!(sanitizer.bindings().contains_key("user_id"));
-    /// ```
+    /// Result indicating success or sanitization failure
     pub fn bind_parameter<T>(
         &mut self,
         name: String,
@@ -509,28 +390,14 @@ impl ParameterSanitizer {
         Ok(())
     }
 
-    /// Apply a single sanitization rule to a string value.
+    /// Apply a single sanitization rule.
     ///
-    /// Recognizes at least two rule names:
-    /// - `"no_sql_injection"`: rejects SQL comment tokens, common statement keywords at word boundaries (case-insensitive), percent-encoding hints, and semicolon-based terminators according to the rule's `pattern`.
-    /// - `"reasonable_length"`: enforces a maximum length of 255 characters.
-    /// Unknown rule names pass by default.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let sanitizer = ParameterSanitizer::new();
-    /// let rule = SanitizationRule {
-    ///     name: "reasonable_length".to_string(),
-    ///     pattern: "".to_string(),
-    ///     error_message: "too long".to_string(),
-    /// };
-    /// assert!(sanitizer.apply_rule("short value", &rule));
-    /// ```
+    /// # Arguments
+    /// * `value` - The value to validate
+    /// * `rule` - The sanitization rule to apply
     ///
     /// # Returns
-    ///
-    /// `true` if the value passes the given sanitization rule, `false` otherwise.
+    /// true if validation passes, false otherwise
     fn apply_rule(&self, value: &str, rule: &SanitizationRule) -> bool {
         // Defense-in-depth validation:
         // Primary defense is Diesel's parameterized queries
@@ -578,20 +445,10 @@ impl ParameterSanitizer {
         }
     }
 
-    /// Provide the module's default sanitization rules.
+    /// Get default sanitization rules.
     ///
-    /// The returned vector contains two rules:
-    /// - `"no_sql_injection"`: flags common SQL-injection characters/patterns.
-    /// - `"reasonable_length"`: enforces a max-length constraint.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let rules = default_rules();
-    /// assert_eq!(rules.len(), 2);
-    /// assert_eq!(rules[0].name, "no_sql_injection");
-    /// assert_eq!(rules[1].name, "reasonable_length");
-    /// ```
+    /// # Returns
+    /// A vector of default sanitization rules
     fn default_rules() -> Vec<SanitizationRule> {
         vec![
             SanitizationRule {
@@ -608,19 +465,7 @@ impl ParameterSanitizer {
         ]
     }
 
-    /// Access the map of validated parameter bindings.
-    ///
-    /// Returns a reference to the internal HashMap that stores bound parameters keyed by their parameter name.
-    /// The map contains `ParameterBinding` values that have passed sanitization and are marked as validated.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let mut sanitizer = ParameterSanitizer::new();
-    /// sanitizer.bind_parameter("user_id", 42, "INTEGER").unwrap();
-    /// let bindings = sanitizer.bindings();
-    /// assert!(bindings.contains_key("user_id"));
-    /// ```
+    /// Get all validated bindings.
     pub fn bindings(&self) -> &HashMap<String, ParameterBinding> {
         &self.bindings
     }
@@ -643,30 +488,6 @@ pub enum SanitizationError {
 }
 
 impl std::fmt::Display for SanitizationError {
-    /// Formats a `SanitizationError` into a human-readable message.
-    ///
-    /// Validation failures are rendered as
-    /// `Parameter '<name>' failed rule '<rule>': <message>`, while other errors are
-    /// rendered as `Sanitization error: <message>`.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use crate::functional::query_composition::SanitizationError;
-    ///
-    /// let v = SanitizationError::ValidationFailed {
-    ///     parameter: "id".to_string(),
-    ///     rule: "no_sql_injection".to_string(),
-    ///     message: "contains forbidden sequence".to_string(),
-    /// };
-    /// assert_eq!(
-    ///     format!("{}", v),
-    ///     "Parameter 'id' failed rule 'no_sql_injection': contains forbidden sequence"
-    /// );
-    ///
-    /// let o = SanitizationError::Other("unexpected".to_string());
-    /// assert_eq!(format!("{}", o), "Sanitization error: unexpected");
-    /// ```
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             SanitizationError::ValidationFailed {
@@ -719,14 +540,10 @@ pub struct ComplexityAnalyzer {
 }
 
 impl QueryOptimizationEngine {
-    /// Constructs a query optimization engine initialized with the default optimization rules
-    /// and a complexity analyzer.
+    /// Create a new query optimization engine.
     ///
-    /// # Examples
-    ///
-    /// ```
-    /// let _engine = QueryOptimizationEngine::new();
-    /// ```
+    /// # Returns
+    /// A new QueryOptimizationEngine instance
     pub fn new() -> Self {
         Self {
             rules: Self::default_rules(),
@@ -734,29 +551,13 @@ impl QueryOptimizationEngine {
         }
     }
 
-    /// Optimize a functional query composition and produce updated composition metrics.
+    /// Analyze and optimize a query composition.
     ///
-    /// Applies the engine's optimization rules to the provided `FunctionalQueryComposer` (currently a pass-through),
-    /// computes a complexity score for the resulting composition, and returns the (possibly optimized) composer
-    /// together with updated `QueryPerformanceMetrics` that include `composition_time` and `complexity_score`.
+    /// # Arguments
+    /// * `composer` - The query composer to optimize
     ///
     /// # Returns
-    ///
-    /// A tuple containing the optimized `FunctionalQueryComposer` and its `QueryPerformanceMetrics` with an updated
-    /// `composition_time` and `complexity_score`.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// use crate::functional::query_composition::{QueryOptimizationEngine, FunctionalQueryComposer};
-    ///
-    /// let engine = QueryOptimizationEngine::new();
-    /// // Construct or obtain a FunctionalQueryComposer...
-    /// let composer: FunctionalQueryComposer<(), ()> = /* build composer */ unimplemented!();
-    ///
-    /// let (optimized, metrics) = engine.optimize(composer);
-    /// println!("composition_time: {:?}", metrics.composition_time);
-    /// ```
+    /// Optimized query composition with metrics
     pub fn optimize<T, U>(
         &self,
         composer: FunctionalQueryComposer<T, U>,
@@ -781,18 +582,7 @@ impl QueryOptimizationEngine {
         (optimized_composer, metrics)
     }
 
-    /// Provides the default set of optimization rules used by the query optimization engine.
-    ///
-    /// The returned vector contains predefined `OptimizationRule` entries (filter_pushdown,
-    /// index_utilization, lazy_evaluation) with their descriptions, conditions, and improvement factors.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let rules = default_rules();
-    /// assert_eq!(rules.len(), 3);
-    /// assert_eq!(rules[0].name, "filter_pushdown");
-    /// ```
+    /// Get default optimization rules.
     fn default_rules() -> Vec<OptimizationRule> {
         vec![
             OptimizationRule {
@@ -818,18 +608,10 @@ impl QueryOptimizationEngine {
 }
 
 impl ComplexityAnalyzer {
-    /// Constructs a ComplexityAnalyzer preconfigured with a default base score and operation multipliers.
+    /// Create a new complexity analyzer.
     ///
     /// # Returns
-    ///
-    /// A ComplexityAnalyzer initialized with a base score of 10 and multipliers for the operations
-    /// "join", "subquery", "aggregation", and "ordering".
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let _analyzer = ComplexityAnalyzer::new();
-    /// ```
+    /// A new ComplexityAnalyzer instance
     pub fn new() -> Self {
         let mut multipliers = HashMap::new();
         multipliers.insert("join".to_string(), 2.0);
@@ -843,26 +625,13 @@ impl ComplexityAnalyzer {
         }
     }
 
-    /// Compute a bounded complexity score for a query composition.
+    /// Analyze the complexity of a query composition.
     ///
-    /// The score is computed from a base score and increased by fixed amounts for
-    /// filters and ordering specifications present in the composer's query builder.
-    /// The result is capped at 100.
+    /// # Arguments
+    /// * `composer` - The composer to analyze
     ///
     /// # Returns
-    ///
-    /// A complexity score from 0 to 100, where higher values indicate greater complexity.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// # // Example usage (ignored for doc tests): analyze a composer's complexity.
-    /// # use crate::functional::query_composition::ComplexityAnalyzer;
-    /// # use crate::functional::query_composition::FunctionalQueryComposer;
-    /// # // let composer: FunctionalQueryComposer<_, _> = /* build composer */ unimplemented!();
-    /// # let analyzer = ComplexityAnalyzer::new();
-    /// # let _score = analyzer.analyze(&composer);
-    /// ```
+    /// Complexity score from 0-100
     pub fn analyze<T, U>(&self, composer: &FunctionalQueryComposer<T, U>) -> u32
     where
         T: Send + Sync + 'static,
@@ -881,24 +650,17 @@ impl ComplexityAnalyzer {
     }
 }
 
-/// Creates a ComposablePredicate for the given column with associated predicate metadata.
+/// Helper function to create composable predicates with metadata.
 ///
-/// The returned ComposablePredicate wraps a Predicate constructed from the provided column,
-/// operator, value, and field name, and attaches a PredicateMetadata record containing the
-/// given selectivity, a cost estimate derived from the operator, pushdown capability set to
-/// true, and an empty dependency list.
+/// # Arguments
+/// * `column` - The column to filter on
+/// * `operator` - The comparison operator
+/// * `value` - The value to compare
+/// * `field_name` - Human-readable field name
+/// * `selectivity` - Estimated selectivity (0.0-1.0)
 ///
-/// # Examples
-///
-/// ```
-/// use crate::functional::query_builder::{Column, Operator};
-/// use crate::functional::query_composition::composable_predicate;
-///
-/// // Construct a column for demonstration — adjust to your Column constructor.
-/// let col = Column::new("users", "age");
-/// let cp = composable_predicate(col, Operator::GreaterThan, Some(30), "age".to_string(), 0.5);
-/// assert_eq!(cp.metadata.selectivity, 0.5);
-/// ```
+/// # Returns
+/// A new ComposablePredicate
 pub fn composable_predicate<T>(
     column: Column<T, T>,
     operator: Operator,
@@ -928,23 +690,14 @@ where
     ComposablePredicate::new(predicate, metadata)
 }
 
-/// Convert a FieldFilter into a ComposablePredicate<String> for backward compatibility.
+/// Convert a FieldFilter to a ComposablePredicate for backward compatibility.
 ///
-/// # Examples
+/// # Arguments
+/// * `filter` - The field filter to convert
+/// * `table_name` - The table name to use for the column reference
 ///
-/// ```
-/// use crate::models::filters::FieldFilter;
-/// use crate::functional::query_composition::field_filter_to_composable;
-///
-/// let filter = FieldFilter {
-///     field: "name".into(),
-///     operator: "contains".into(),
-///     value: "alice".into(),
-/// };
-///
-/// let comp = field_filter_to_composable(&filter, "users");
-/// let _: crate::functional::query_composition::ComposablePredicate<String> = comp;
-/// ```
+/// # Returns
+/// A ComposablePredicate equivalent
 pub fn field_filter_to_composable(
     filter: &crate::models::filters::FieldFilter,
     table_name: &str,
@@ -972,4 +725,468 @@ pub fn field_filter_to_composable(
         field_name,
         0.5, // Default selectivity
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::functional::query_builder::{Column, LogicOperator, Operator, Predicate, QueryFilter};
+
+    fn create_test_column() -> Column<String, String> {
+        Column::new("users".to_string(), "name".to_string())
+    }
+
+    fn create_test_predicate() -> Predicate<String> {
+        Predicate::new(
+            create_test_column(),
+            Operator::Equals,
+            Some("test".to_string()),
+            "name".to_string(),
+        )
+    }
+
+    #[test]
+    fn test_lazy_evaluation_config_default() {
+        let config = LazyEvaluationConfig::default();
+        assert_eq\!(config.chunk_size, 1000);
+        assert_eq\!(config.max_total_records, Some(100_000));
+        assert_eq\!(config.chunk_timeout, Duration::from_secs(30));
+        assert\!(config.parallel_processing);
+        assert_eq\!(config.max_concurrent_chunks, 4);
+    }
+
+    #[test]
+    fn test_lazy_evaluation_config_custom() {
+        let config = LazyEvaluationConfig {
+            chunk_size: 500,
+            max_total_records: Some(50_000),
+            chunk_timeout: Duration::from_secs(60),
+            parallel_processing: false,
+            max_concurrent_chunks: 2,
+        };
+
+        assert_eq\!(config.chunk_size, 500);
+        assert_eq\!(config.max_total_records, Some(50_000));
+        assert_eq\!(config.chunk_timeout, Duration::from_secs(60));
+        assert\!(\!config.parallel_processing);
+        assert_eq\!(config.max_concurrent_chunks, 2);
+    }
+
+    #[test]
+    fn test_lazy_evaluation_config_unlimited_records() {
+        let config = LazyEvaluationConfig {
+            chunk_size: 100,
+            max_total_records: None,
+            chunk_timeout: Duration::from_secs(10),
+            parallel_processing: true,
+            max_concurrent_chunks: 8,
+        };
+
+        assert\!(config.max_total_records.is_none());
+        assert_eq\!(config.max_concurrent_chunks, 8);
+    }
+
+    #[test]
+    fn test_query_performance_metrics_default() {
+        let metrics = QueryPerformanceMetrics {
+            composition_time: Duration::from_millis(10),
+            execution_time: Duration::from_millis(100),
+            records_processed: 1000,
+            complexity_score: 50,
+            memory_usage: 1024 * 1024,
+            round_trips: 1,
+        };
+
+        assert_eq\!(metrics.records_processed, 1000);
+        assert_eq\!(metrics.complexity_score, 50);
+        assert_eq\!(metrics.round_trips, 1);
+    }
+
+    #[test]
+    fn test_predicate_metadata_creation() {
+        let metadata = PredicateMetadata {
+            selectivity: 0.1,
+            cost_estimate: Duration::from_millis(5),
+            pushdown_capable: true,
+            dependencies: vec\!["id".to_string(), "status".to_string()],
+        };
+
+        assert_eq\!(metadata.selectivity, 0.1);
+        assert_eq\!(metadata.cost_estimate, Duration::from_millis(5));
+        assert\!(metadata.pushdown_capable);
+        assert_eq\!(metadata.dependencies.len(), 2);
+    }
+
+    #[test]
+    fn test_composable_predicate_creation() {
+        let predicate = create_test_predicate();
+        let metadata = PredicateMetadata {
+            selectivity: 0.5,
+            cost_estimate: Duration::from_millis(1),
+            pushdown_capable: true,
+            dependencies: Vec::new(),
+        };
+
+        let composable = ComposablePredicate::new(predicate, metadata);
+        assert_eq\!(composable.metadata.selectivity, 0.5);
+        assert\!(composable.metadata.pushdown_capable);
+    }
+
+    #[test]
+    fn test_composable_predicate_map() {
+        let predicate = Predicate::new(
+            Column::new("users".to_string(), "age".to_string()),
+            Operator::GreaterThan,
+            Some(18),
+            "age".to_string(),
+        );
+
+        let metadata = PredicateMetadata {
+            selectivity: 0.3,
+            cost_estimate: Duration::from_millis(2),
+            pushdown_capable: true,
+            dependencies: Vec::new(),
+        };
+
+        let composable = ComposablePredicate::new(predicate, metadata);
+
+        // Map to a different type
+        let mapped = composable.map(|p| {
+            Predicate::new(
+                Column::new("users".to_string(), p.field_name.clone()),
+                p.operator,
+                Some("transformed".to_string()),
+                p.field_name,
+            )
+        });
+
+        assert_eq\!(mapped.predicate.value, Some("transformed".to_string()));
+        assert_eq\!(mapped.metadata.selectivity, 0.3);
+    }
+
+    #[test]
+    fn test_composable_predicate_filter_pass() {
+        let predicate = create_test_predicate();
+        let metadata = PredicateMetadata {
+            selectivity: 0.2,
+            cost_estimate: Duration::from_millis(1),
+            pushdown_capable: true,
+            dependencies: Vec::new(),
+        };
+
+        let composable = ComposablePredicate::new(predicate, metadata);
+
+        let result = composable.filter(|p| p.operator == Operator::Equals);
+        assert\!(result.is_some());
+    }
+
+    #[test]
+    fn test_composable_predicate_filter_fail() {
+        let predicate = create_test_predicate();
+        let metadata = PredicateMetadata {
+            selectivity: 0.2,
+            cost_estimate: Duration::from_millis(1),
+            pushdown_capable: true,
+            dependencies: Vec::new(),
+        };
+
+        let composable = ComposablePredicate::new(predicate, metadata);
+
+        let result = composable.filter(|p| p.operator == Operator::GreaterThan);
+        assert\!(result.is_none());
+    }
+
+    #[test]
+    fn test_composable_predicate_helper() {
+        let column = Column::new("users".to_string(), "email".to_string());
+        let composable = composable_predicate(
+            column,
+            Operator::Contains,
+            Some("@example.com".to_string()),
+            "email".to_string(),
+            0.4,
+        );
+
+        assert_eq\!(composable.metadata.selectivity, 0.4);
+        assert_eq\!(composable.predicate.operator, Operator::Contains);
+        assert\!(composable.metadata.pushdown_capable);
+    }
+
+    #[test]
+    fn test_composable_predicate_cost_estimates() {
+        // Test different operators have different cost estimates
+        let col = Column::new("test".to_string(), "field".to_string());
+
+        let equals = composable_predicate(col.clone(), Operator::Equals, Some("val".to_string()), "field".to_string(), 0.5);
+        let contains = composable_predicate(col.clone(), Operator::Contains, Some("val".to_string()), "field".to_string(), 0.5);
+        let gt = composable_predicate(col, Operator::GreaterThan, Some("val".to_string()), "field".to_string(), 0.5);
+
+        assert_eq\!(equals.metadata.cost_estimate, Duration::from_millis(1));
+        assert_eq\!(contains.metadata.cost_estimate, Duration::from_millis(5));
+        assert_eq\!(gt.metadata.cost_estimate, Duration::from_millis(2));
+    }
+
+    #[test]
+    fn test_optimization_rule_creation() {
+        let rule = OptimizationRule {
+            name: "test_rule".to_string(),
+            description: "Test optimization rule".to_string(),
+            condition: "test condition".to_string(),
+            improvement_factor: 2.5,
+        };
+
+        assert_eq\!(rule.name, "test_rule");
+        assert_eq\!(rule.improvement_factor, 2.5);
+    }
+
+    #[test]
+    fn test_complexity_analyzer_creation() {
+        let analyzer = ComplexityAnalyzer::new();
+        assert_eq\!(analyzer.base_score, 10);
+        assert\!(analyzer.multipliers.contains_key("join"));
+        assert\!(analyzer.multipliers.contains_key("subquery"));
+        assert_eq\!(analyzer.multipliers.get("join"), Some(&2.0));
+    }
+
+    #[test]
+    fn test_query_optimization_engine_creation() {
+        let engine = QueryOptimizationEngine::new();
+        assert\!(\!engine.rules.is_empty());
+        assert_eq\!(engine.complexity_analyzer.base_score, 10);
+    }
+
+    #[test]
+    fn test_query_optimization_engine_default_rules() {
+        let engine = QueryOptimizationEngine::new();
+        
+        // Check that default rules exist
+        assert\!(engine.rules.iter().any(|r| r.name == "filter_pushdown"));
+        assert\!(engine.rules.iter().any(|r| r.name == "index_utilization"));
+        assert\!(engine.rules.iter().any(|r| r.name == "lazy_evaluation"));
+    }
+
+    #[test]
+    fn test_predicate_metadata_high_selectivity() {
+        let metadata = PredicateMetadata {
+            selectivity: 0.9,
+            cost_estimate: Duration::from_millis(10),
+            pushdown_capable: false,
+            dependencies: Vec::new(),
+        };
+
+        assert\!(metadata.selectivity > 0.5);
+        assert\!(\!metadata.pushdown_capable);
+    }
+
+    #[test]
+    fn test_predicate_metadata_low_selectivity() {
+        let metadata = PredicateMetadata {
+            selectivity: 0.01,
+            cost_estimate: Duration::from_millis(1),
+            pushdown_capable: true,
+            dependencies: Vec::new(),
+        };
+
+        assert\!(metadata.selectivity < 0.1);
+        assert\!(metadata.pushdown_capable);
+    }
+
+    #[test]
+    fn test_composable_predicate_metadata_preservation() {
+        let predicate = create_test_predicate();
+        let original_metadata = PredicateMetadata {
+            selectivity: 0.25,
+            cost_estimate: Duration::from_millis(3),
+            pushdown_capable: true,
+            dependencies: vec\!["dep1".to_string()],
+        };
+
+        let composable = ComposablePredicate::new(predicate, original_metadata.clone());
+
+        // Check metadata is preserved
+        assert_eq\!(composable.metadata.selectivity, 0.25);
+        assert_eq\!(composable.metadata.cost_estimate, Duration::from_millis(3));
+        assert_eq\!(composable.metadata.dependencies.len(), 1);
+    }
+
+    #[test]
+    fn test_lazy_evaluation_config_edge_cases() {
+        // Test with very small chunk size
+        let config = LazyEvaluationConfig {
+            chunk_size: 1,
+            max_total_records: Some(10),
+            chunk_timeout: Duration::from_millis(1),
+            parallel_processing: false,
+            max_concurrent_chunks: 1,
+        };
+
+        assert_eq\!(config.chunk_size, 1);
+        assert_eq\!(config.max_concurrent_chunks, 1);
+
+        // Test with very large chunk size
+        let config2 = LazyEvaluationConfig {
+            chunk_size: 1_000_000,
+            max_total_records: None,
+            chunk_timeout: Duration::from_secs(3600),
+            parallel_processing: true,
+            max_concurrent_chunks: 100,
+        };
+
+        assert_eq\!(config2.chunk_size, 1_000_000);
+        assert_eq\!(config2.max_concurrent_chunks, 100);
+    }
+
+    #[test]
+    fn test_query_performance_metrics_zero_values() {
+        let metrics = QueryPerformanceMetrics {
+            composition_time: Duration::from_millis(0),
+            execution_time: Duration::from_millis(0),
+            records_processed: 0,
+            complexity_score: 0,
+            memory_usage: 0,
+            round_trips: 0,
+        };
+
+        assert_eq\!(metrics.records_processed, 0);
+        assert_eq\!(metrics.complexity_score, 0);
+        assert_eq\!(metrics.memory_usage, 0);
+    }
+
+    #[test]
+    fn test_query_performance_metrics_large_values() {
+        let metrics = QueryPerformanceMetrics {
+            composition_time: Duration::from_secs(60),
+            execution_time: Duration::from_secs(300),
+            records_processed: 1_000_000,
+            complexity_score: 100,
+            memory_usage: 1024 * 1024 * 1024, // 1GB
+            round_trips: 50,
+        };
+
+        assert_eq\!(metrics.records_processed, 1_000_000);
+        assert_eq\!(metrics.complexity_score, 100);
+        assert_eq\!(metrics.round_trips, 50);
+    }
+
+    #[test]
+    fn test_predicate_metadata_with_dependencies() {
+        let metadata = PredicateMetadata {
+            selectivity: 0.5,
+            cost_estimate: Duration::from_millis(2),
+            pushdown_capable: true,
+            dependencies: vec\![
+                "user_id".to_string(),
+                "tenant_id".to_string(),
+                "status".to_string(),
+            ],
+        };
+
+        assert_eq\!(metadata.dependencies.len(), 3);
+        assert\!(metadata.dependencies.contains(&"user_id".to_string()));
+    }
+
+    #[test]
+    fn test_composable_predicate_all_operators() {
+        let col = Column::new("test".to_string(), "field".to_string());
+
+        let operators = vec\![
+            Operator::Equals,
+            Operator::NotEquals,
+            Operator::GreaterThan,
+            Operator::LessThan,
+            Operator::GreaterThanEqual,
+            Operator::LessThanEqual,
+            Operator::Contains,
+            Operator::NotContains,
+            Operator::IsNull,
+            Operator::IsNotNull,
+        ];
+
+        for op in operators {
+            let pred = composable_predicate(
+                col.clone(),
+                op,
+                Some("value".to_string()),
+                "field".to_string(),
+                0.5,
+            );
+            assert_eq\!(pred.predicate.operator, op);
+        }
+    }
+
+    #[test]
+    fn test_complexity_analyzer_multipliers() {
+        let analyzer = ComplexityAnalyzer::new();
+
+        assert_eq\!(analyzer.multipliers.get("join"), Some(&2.0));
+        assert_eq\!(analyzer.multipliers.get("subquery"), Some(&3.0));
+        assert_eq\!(analyzer.multipliers.get("aggregation"), Some(&1.5));
+        assert_eq\!(analyzer.multipliers.get("ordering"), Some(&1.2));
+    }
+
+    #[test]
+    fn test_optimization_rule_high_improvement() {
+        let rule = OptimizationRule {
+            name: "major_optimization".to_string(),
+            description: "Major performance improvement".to_string(),
+            condition: "applicable".to_string(),
+            improvement_factor: 10.0,
+        };
+
+        assert\!(rule.improvement_factor >= 10.0);
+    }
+
+    #[test]
+    fn test_optimization_rule_low_improvement() {
+        let rule = OptimizationRule {
+            name: "minor_optimization".to_string(),
+            description: "Minor performance improvement".to_string(),
+            condition: "sometimes applicable".to_string(),
+            improvement_factor: 1.1,
+        };
+
+        assert\!(rule.improvement_factor > 1.0);
+        assert\!(rule.improvement_factor < 2.0);
+    }
+
+    #[test]
+    fn test_lazy_evaluation_config_clone() {
+        let config1 = LazyEvaluationConfig::default();
+        let config2 = config1.clone();
+
+        assert_eq\!(config1.chunk_size, config2.chunk_size);
+        assert_eq\!(config1.max_total_records, config2.max_total_records);
+        assert_eq\!(config1.parallel_processing, config2.parallel_processing);
+    }
+
+    #[test]
+    fn test_query_performance_metrics_clone() {
+        let metrics1 = QueryPerformanceMetrics {
+            composition_time: Duration::from_millis(5),
+            execution_time: Duration::from_millis(50),
+            records_processed: 100,
+            complexity_score: 30,
+            memory_usage: 1024,
+            round_trips: 2,
+        };
+
+        let metrics2 = metrics1.clone();
+        assert_eq\!(metrics1.records_processed, metrics2.records_processed);
+        assert_eq\!(metrics1.complexity_score, metrics2.complexity_score);
+    }
+
+    #[test]
+    fn test_predicate_metadata_clone() {
+        let metadata1 = PredicateMetadata {
+            selectivity: 0.3,
+            cost_estimate: Duration::from_millis(4),
+            pushdown_capable: true,
+            dependencies: vec\!["dep".to_string()],
+        };
+
+        let metadata2 = metadata1.clone();
+        assert_eq\!(metadata1.selectivity, metadata2.selectivity);
+        assert_eq\!(metadata1.pushdown_capable, metadata2.pushdown_capable);
+        assert_eq\!(metadata1.dependencies.len(), metadata2.dependencies.len());
+    }
 }
