@@ -21,6 +21,21 @@ mod models;
 mod schema;
 mod services;
 mod utils;
+/// Application entry point that configures logging and environment, initializes the database and Redis,
+/// registers tenant pools, configures CORS and middleware, and starts the Actix HTTP server.
+///
+/// This function reads required environment variables (APP_HOST, APP_PORT, DATABASE_URL, REDIS_URL),
+/// sets up logging (optionally to a file if LOG_FILE is provided), initializes the main DB pool and
+/// Redis client, registers a demonstration tenant, builds the Actix App with CORS and middleware, binds
+/// to the configured address, and runs the server until shutdown.
+///
+/// # Examples
+///
+/// ```no_run
+/// // Start the application (requires appropriate environment variables).
+/// // Typically invoked by the runtime; shown here for illustrative purposes only.
+/// let _ = futures::executor::block_on(crate::main());
+/// ```
 #[actix_rt::main]
 async fn main() -> io::Result<()> {
     dotenv::dotenv().map_err(|e| {

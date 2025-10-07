@@ -52,6 +52,18 @@ where
 
     forward_ready!(service);
 
+    /// Authenticate the incoming request and either forward it to the inner service or return a 401 Unauthorized response.
+    ///
+    /// On success the request is forwarded to the wrapped service and its response body is preserved as the left variant; on failure an Unauthorized response with a JSON error payload is returned as the right variant.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // Given `middleware` that wraps an inner service and a `req: ServiceRequest`:
+    /// // let fut = middleware.call(req);
+    /// // let result = futures::executor::block_on(fut);
+    /// // `result` will be `Ok(ServiceResponse)` containing either the inner response (left) or a 401 JSON response (right).
+    /// ```
     fn call(&self, req: ServiceRequest) -> Self::Future {
         let mut authenticate_pass: bool = false;
 

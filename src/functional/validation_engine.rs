@@ -20,6 +20,21 @@ pub struct ValidationConfig {
 }
 
 impl Default for ValidationConfig {
+    /// Creates a ValidationConfig populated with sensible defaults.
+    ///
+    /// The defaults are:
+    /// - `fail_fast = true`
+    /// - `max_errors = Some(10)`
+    /// - `parallel_validation = false`
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let cfg = ValidationConfig::default();
+    /// assert!(cfg.fail_fast);
+    /// assert_eq!(cfg.max_errors, Some(10));
+    /// assert!(!cfg.parallel_validation);
+    /// ```
     fn default() -> Self {
         Self {
             fail_fast: true,
@@ -39,6 +54,15 @@ pub struct ValidationContext {
 }
 
 impl ValidationContext {
+    /// Creates a new ValidationContext for a given field path with no metadata.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let ctx = ValidationContext::new("user.address.street");
+    /// assert_eq!(ctx.field_path, "user.address.street");
+    /// assert!(ctx.metadata.is_empty());
+    /// ```
     pub fn new(field_path: &str) -> Self {
         Self {
             field_path: field_path.to_string(),
@@ -46,11 +70,39 @@ impl ValidationContext {
         }
     }
 
+    /// Adds a metadata key-value pair to the validation context and returns the updated context.
+    ///
+    /// The provided key and value are stored as UTF-8 strings in the context's metadata map,
+    /// replacing any existing value for the same key.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let ctx = ValidationContext::new("user.email")
+    ///     .with_metadata("source", "signup_form");
+    /// assert_eq!(ctx.metadata.get("source"), Some(&"signup_form".to_string()));
+    /// ```
     pub fn with_metadata(mut self, key: &str, value: &str) -> Self {
         self.metadata.insert(key.to_string(), value.to_string());
         self
     }
 
+    /// Extends the current context with a nested field name using dot notation.
+    ///
+    /// If the current `field_path` is empty, the returned context's `field_path` is
+    /// set to `field_name`; otherwise the new path is `"{current}.{field_name}"`.
+    /// The `metadata` is cloned into the new context.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let ctx = ValidationContext::new("user");
+    /// let child = ctx.child("address");
+    /// assert_eq!(child.field_path, "user.address");
+    /// let root = ValidationContext::new("");
+    /// let direct = root.child("id");
+    /// assert_eq!(direct.field_path, "id");
+    /// ```
     pub fn child(&self, field_name: &str) -> Self {
         let new_path = if self.field_path.is_empty() {
             field_name.to_string()
@@ -77,6 +129,18 @@ pub struct ValidationOutcome<T> {
 }
 
 impl<T> ValidationOutcome<T> {
+    /// Creates a successful validation outcome containing the provided value.
+    ///
+    /// The returned outcome has `value` set to the given value, an empty `errors` vector, and `is_valid` set to `true`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let o = ValidationOutcome::success(42);
+    /// assert!(o.is_valid);
+    /// assert_eq!(o.value, Some(42));
+    /// assert!(o.errors.is_empty());
+    /// ```
     pub fn success(value: T) -> Self {
         Self {
             value: Some(value),
@@ -85,6 +149,19 @@ impl<T> ValidationOutcome<T> {
         }
     }
 
+    /// Creates a failed validation outcome containing the provided errors and no value.
+    ///
+    /// The returned outcome has `is_valid` set to `false`, `value` set to `None`, and `errors` set
+    /// to the given vector.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let outcome = ValidationOutcome::<i32>::failure(vec![]);
+    /// assert!(!outcome.is_valid);
+    /// assert!(outcome.value.is_none());
+    /// assert_eq!(outcome.errors.len(), 0);
+    /// ```
     pub fn failure(errors: Vec<ValidationError>) -> Self {
         Self {
             value: None,
@@ -93,6 +170,22 @@ impl<T> ValidationOutcome<T> {
         }
     }
 
+    /// Marks the outcome as failed by appending the provided error and clearing any successful value.
+    ///
+    /// The returned `ValidationOutcome` will have the error appended to its `errors` vector,
+    /// `is_valid` set to `false`, and `value` set to `None`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // Construct a successful outcome, then add an error to it.
+    /// let outcome = ValidationOutcome::success(42);
+    /// let err = ValidationError { code: "E001".into(), message: "Invalid value".into(), field: "age".into() };
+    /// let failed = outcome.add_error(err);
+    /// assert!(!failed.is_valid);
+    /// assert!(failed.value.is_none());
+    /// assert_eq!(failed.errors.len(), 1);
+    /// ```
     pub fn add_error(mut self, error: ValidationError) -> Self {
         self.errors.push(error);
         self.is_valid = false;
@@ -100,6 +193,20 @@ impl<T> ValidationOutcome<T> {
         self
     }
 
+    /// Merges another `ValidationOutcome` into this one, combining errors and updating validity and value.
+    ///
+    /// The resulting outcome contains all errors from both operands. If `other` is invalid, the result is marked invalid and its stored value is cleared.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let a = ValidationOutcome::success(42);
+    /// let b: ValidationOutcome<i32> = ValidationOutcome::failure(vec![]);
+    /// let combined = a.combine(b);
+    /// assert!(!combined.is_valid);
+    /// assert!(combined.value.is_none());
+    /// assert_eq!(combined.errors.len(), 0);
+    /// ```
     pub fn combine(mut self, other: ValidationOutcome<T>) -> Self {
         self.errors.extend(other.errors);
         if !other.is_valid {
@@ -117,7 +224,15 @@ pub struct ValidationEngine<T> {
 }
 
 impl<T> ValidationEngine<T> {
-    /// Create a new validation engine with default configuration
+    /// Constructs a ValidationEngine using the default ValidationConfig.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let engine = ValidationEngine::<i32>::new();
+    /// // default configuration is applied (fail_fast = true by default)
+    /// assert!(engine.config.fail_fast);
+    /// ```
     pub fn new() -> Self {
         Self {
             config: ValidationConfig::default(),
@@ -125,7 +240,19 @@ impl<T> ValidationEngine<T> {
         }
     }
 
-    /// Create a validation engine with custom configuration
+    /// Constructs a ValidationEngine using the provided configuration.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let cfg = ValidationConfig {
+    ///     fail_fast: false,
+    ///     max_errors: Some(5),
+    ///     parallel_validation: true,
+    /// };
+    /// let engine: ValidationEngine<String> = ValidationEngine::with_config(cfg);
+    /// assert_eq!(engine.config.fail_fast, false);
+    /// ```
     pub fn with_config(config: ValidationConfig) -> Self {
         Self {
             config,
@@ -133,7 +260,25 @@ impl<T> ValidationEngine<T> {
         }
     }
 
-    /// Validate a single field using an iterator of validation rules
+    /// Validate a single field against an iterator of validation rules and collect any errors.
+    ///
+    /// This applies each provided rule to `value` using a context for `field_name`. Collected errors
+    /// are returned if any rules fail; validation honors the engine configuration (stopping early if
+    /// `fail_fast` is true and respecting `max_errors` when set).
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// let engine = ValidationEngine::<String>::new();
+    /// let value = "example".to_string();
+    /// // `rules` would be an iterable of objects implementing `ValidationRule<String>`.
+    /// let outcome = engine.validate_field(&value, "username", Vec::<Box<dyn ValidationRule<String>>>::new());
+    /// if outcome.is_valid {
+    ///     println!("field valid: {}", outcome.value.unwrap());
+    /// } else {
+    ///     println!("errors: {:?}", outcome.errors);
+    /// }
+    /// ```
     pub fn validate_field<'a, I, R>(
         &self,
         value: &'a T,
@@ -177,7 +322,20 @@ impl<T> ValidationEngine<T> {
         }
     }
 
-    /// Validate multiple fields using a map of field names to rule iterators
+    /// Validate multiple named fields and aggregate their outcomes.
+    ///
+    /// Iterates the provided (field_name, value, rules) tuples, validating each field with the given rules.
+    /// On success returns a map of field names to their validated references; on any failures returns all collected validation errors.
+    /// If the engine is configured with `fail_fast`, validation stops after the first failing field.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let engine = validator::<i32>();
+    /// let inputs = vec![(String::from("age"), &42, Vec::new::<()>())];
+    /// let outcome = engine.validate_fields(inputs);
+    /// assert!(outcome.is_valid);
+    /// ```
     pub fn validate_fields<'a, I, R>(
         &self,
         field_validators: I,
@@ -214,9 +372,39 @@ impl<T> ValidationEngine<T> {
     }
 }
 
-/// Higher-order validation functions for complex validation scenarios
-
-/// Chain validation rules with conditional application
+/// Creates a validation rule that applies the provided rules only when a predicate is true.
+///
+/// When `condition` returns `true` for a value, each rule in `rules` is evaluated; the combined rule
+/// fails if any of those rules fail. When `condition` returns `false`, the combined rule succeeds
+/// (validation is skipped).
+///
+/// # Parameters
+///
+/// - `condition`: Predicate that decides whether the supplied rules should be applied to a value.
+/// - `rules`: Collection of validation rules to apply when the predicate is true.
+///
+/// # Returns
+///
+/// An `impl ValidationRule<T>` that performs conditional validation: it fails when the condition is
+/// true and any of the provided rules produce an error, and succeeds otherwise.
+///
+/// # Examples
+///
+/// ```
+/// # use crate::functional::validation_rules::Custom;
+/// # use crate::functional::validation_engine::conditional_validate;
+/// // A simple rule that fails for empty strings
+/// let non_empty_rule = Custom::new(|v: &String| !v.is_empty(), "EMPTY", "Value is empty");
+/// // Apply `non_empty_rule` only when the string starts with 'A'
+/// let rule = conditional_validate(|s: &String| s.starts_with('A'), vec![non_empty_rule]);
+///
+/// let val = "Apple".to_string();
+/// assert!(rule.validate(&val, "").is_ok());
+///
+/// let val2 = "Banana".to_string();
+/// // Condition false -> validation skipped -> succeeds
+/// assert!(rule.validate(&val2, "").is_ok());
+/// ```
 pub fn conditional_validate<T, C, R>(condition: C, rules: Vec<R>) -> impl ValidationRule<T>
 where
     C: Fn(&T) -> bool,
@@ -246,7 +434,31 @@ where
     )
 }
 
-/// Validate collections with rules applied to each element
+/// Creates a validation rule that applies the provided element rules to each item in a collection.
+///
+/// The returned rule validates a `Vec<T>` by running every `element_rule` against each element (with the
+/// element's index included in the field path as `item[index]`). The collection rule fails if any element
+/// fails any of the element rules. On failure the rule uses the code `"COLLECTION_VALIDATION_FAILED"`.
+///
+/// # Examples
+///
+/// ```
+/// use std::vec::Vec;
+/// // Build a simple element rule that requires a non-empty string.
+/// let elem_rule = crate::functional::validation_rules::Custom::new(
+///     |s: &String| !s.is_empty(),
+///     "REQUIRED",
+///     "must not be empty",
+/// );
+///
+/// let rule = crate::functional::validation_engine::validate_collection(vec![elem_rule]);
+///
+/// let good = vec!["a".to_string(), "b".to_string()];
+/// assert!(rule.validate(&good, "items").is_ok());
+///
+/// let bad = vec!["a".to_string(), "".to_string()];
+/// assert!(rule.validate(&bad, "items").is_err());
+/// ```
 pub fn validate_collection<T, R>(element_rules: Vec<R>) -> impl ValidationRule<Vec<T>>
 where
     R: ValidationRule<T> + Clone,
@@ -267,7 +479,33 @@ where
     )
 }
 
-/// Cross-field validation using multiple fields
+/// Creates a validation rule that ensures a set of keys exist in a map and then applies a cross-field predicate.
+///
+/// The produced rule fails if any required key from `fields` is missing from the input map, or if `validator`
+/// returns `false` when invoked with the full map.
+///
+/// # Parameters
+/// - `fields`: list of keys that must be present in the map for the rule to run the predicate.
+/// - `validator`: predicate invoked with the map when all required keys are present; returning `true` means the map passes.
+///
+/// # Returns
+/// A `ValidationRule<HashMap<String, T>>` that enforces presence of the specified keys and the provided predicate.
+/// The rule uses the error code `CROSS_FIELD_VALIDATION_FAILED` when it fails.
+///
+/// # Examples
+///
+/// ```no_run
+/// use std::collections::HashMap;
+/// // Require "start" and "end" keys and ensure start <= end
+/// let rule = cross_field_validate(vec!["start".to_string(), "end".to_string()], |m: &HashMap<String, i32>| {
+///     m.get("start").zip(m.get("end")).map_or(false, |(s, e)| s <= e)
+/// });
+///
+/// let mut map = HashMap::new();
+/// map.insert("start".to_string(), 1);
+/// map.insert("end".to_string(), 3);
+/// // `rule` should consider `map` valid (implementation-specific invocation omitted)
+/// ```
 pub fn cross_field_validate<T, F>(
     fields: Vec<String>,
     validator: F,
@@ -306,7 +544,17 @@ impl<T, I> ValidationPipeline<T, I>
 where
     I: Iterator<Item = T>,
 {
-    /// Create a new validation pipeline
+    /// Constructs a new ValidationPipeline that will iterate over the provided iterator.
+    ///
+    /// The pipeline is initialized with no validators and uses the default ValidationConfig.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let data = vec!["a", "b", "c"];
+    /// let result = ValidationPipeline::new(data.into_iter()).validate();
+    /// assert_eq!(result.valid_items.len(), 3);
+    /// ```
     pub fn new(iterator: I) -> Self {
         Self {
             iterator,
@@ -315,7 +563,35 @@ where
         }
     }
 
-    /// Add a validator function to the pipeline
+    /// Adds a validator to the pipeline and returns the pipeline for chaining.
+    
+    ///
+    
+    /// The provided `validator` will be invoked for each item when the pipeline is executed.
+    
+    /// The validator must accept a reference to an item of type `T` and return a `ValidationResult<()>`.
+    
+    ///
+    
+    /// # Examples
+    
+    ///
+    
+    /// ```no_run
+    
+    /// let data = vec!["a", "b", "c"];
+    
+    /// let pipeline = ValidationPipeline::new(data.into_iter())
+    
+    ///     .add_validator(|item: &str| {
+    
+    ///         // return Ok(()) for valid, or an Err(...) with validation errors
+    
+    ///         Ok(())
+    
+    ///     });
+    
+    /// ```
     pub fn add_validator<F>(mut self, validator: F) -> Self
     where
         F: Fn(&T) -> ValidationResult<()> + 'static,
@@ -324,13 +600,42 @@ where
         self
     }
 
-    /// Set pipeline configuration
+    /// Applies the given validation configuration to the pipeline and returns the updated pipeline.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let data = vec![1, 2, 3].into_iter();
+    /// let config = ValidationConfig { fail_fast: false, max_errors: Some(5), parallel_validation: false };
+    /// let pipeline = ValidationPipeline::new(data).with_config(config);
+    /// ```
     pub fn with_config(mut self, config: ValidationConfig) -> Self {
         self.config = config;
         self
     }
 
-    /// Execute the validation pipeline and collect results
+    /// Runs the pipeline over the input iterator, applying each validator to every item and collecting valid items, invalid items with their errors, and totals.
+    ///
+    /// Returns a ValidationPipelineResult containing:
+    /// - `valid_items`: items that passed all validators,
+    /// - `invalid_items`: items paired with the validation errors that failed them,
+    /// - `total_processed`: number of items examined,
+    /// - `total_errors`: total number of validation errors encountered.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // Example validators: here using simple closures that always succeed or fail.
+    /// let data = vec![1, 2, 3];
+    /// let pipeline = ValidationPipeline::new(data.into_iter())
+    ///     .add_validator(|v: &i32| {
+    ///         if *v > 0 { Ok(()) } else { Err(ValidationError::new("non_positive")) }
+    ///     });
+    ///
+    /// let result = pipeline.validate();
+    /// assert_eq!(result.total_processed, 3);
+    /// assert!(result.is_all_valid());
+    /// ```
     pub fn validate(self) -> ValidationPipelineResult<T> {
         let mut valid_items = Vec::new();
         let mut invalid_items = Vec::new();
@@ -383,7 +688,20 @@ where
         }
     }
 
-    /// Validate with itertools operations for advanced processing
+    /// Run the pipeline over the iterator using an itertools-style grouping and collect valid and invalid items.
+    ///
+    /// Returns a ValidationPipelineResult containing items that passed all validators, items that failed with their errors, the total processed count, and the total error count.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let pipeline = ValidationPipeline::new(vec![1, 2, 3].into_iter())
+    ///     .add_validator(|_| Ok(()));
+    ///
+    /// let result = pipeline.validate_with_itertools();
+    /// assert_eq!(result.valid_items.len(), 3);
+    /// assert_eq!(result.total_errors, 0);
+    /// ```
     pub fn validate_with_itertools(self) -> ValidationPipelineResult<T>
     where
         T: Clone + Eq + std::hash::Hash,
@@ -437,12 +755,43 @@ pub struct ValidationPipelineResult<T> {
 }
 
 impl<T> ValidationPipelineResult<T> {
-    /// Check if all items passed validation
+    /// Determines whether every processed item passed validation.
+    ///
+    /// # Returns
+    ///
+    /// `true` if there are no invalid items, `false` otherwise.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let result = ValidationPipelineResult {
+    ///     valid_items: vec![1i32],
+    ///     invalid_items: Vec::new(),
+    ///     total_processed: 1,
+    ///     total_errors: 0,
+    /// };
+    /// assert!(result.is_all_valid());
+    /// ```
     pub fn is_all_valid(&self) -> bool {
         self.invalid_items.is_empty()
     }
 
-    /// Get validation success rate as a percentage
+    /// Compute the percentage of items that passed validation.
+    ///
+    /// Returns a value between `0.0` and `100.0` representing the share of processed
+    /// items that are valid. If no items were processed, returns `0.0`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let result = ValidationPipelineResult {
+    ///     valid_items: vec![1, 2],
+    ///     invalid_items: vec![],
+    ///     total_processed: 2,
+    ///     total_errors: 0,
+    /// };
+    /// assert_eq!(result.success_rate(), 100.0);
+    /// ```
     pub fn success_rate(&self) -> f64 {
         if self.total_processed == 0 {
             0.0
@@ -451,7 +800,21 @@ impl<T> ValidationPipelineResult<T> {
         }
     }
 
-    /// Get all validation errors across all items
+    /// Collects references to every `ValidationError` contained in the result's invalid items.
+    ///
+    /// Returns a vector of references to all errors from `invalid_items`, preserving iteration order.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let result = ValidationPipelineResult {
+    ///     valid_items: Vec::<i32>::new(),
+    ///     invalid_items: vec![(1, Vec::<ValidationError>::new())],
+    ///     total_processed: 1,
+    ///     total_errors: 0,
+    /// };
+    /// assert!(result.all_errors().is_empty());
+    /// ```
     pub fn all_errors(&self) -> Vec<&ValidationError> {
         self.invalid_items
             .iter()
@@ -459,7 +822,19 @@ impl<T> ValidationPipelineResult<T> {
             .collect()
     }
 
-    /// Group errors by error code
+    /// Group collected validation errors by their error code.
+    ///
+    /// Returns a map from error code to a list of references to `ValidationError`
+    /// instances that share that code.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // given a `result: ValidationPipelineResult<_>` with collected errors:
+    /// let grouped = result.errors_by_code();
+    /// // `grouped` maps error codes (String) to Vec<&ValidationError>
+    /// assert!(grouped.is_empty() || grouped.values().next().is_some());
+    /// ```
     pub fn errors_by_code(&self) -> HashMap<String, Vec<&ValidationError>> {
         let mut grouped = HashMap::new();
 
@@ -487,6 +862,18 @@ impl<T, I> LazyValidationIterator<T, I>
 where
     I: Iterator<Item = T>,
 {
+    /// Creates a new LazyValidationIterator wrapping the given iterator with no validators.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let it = vec![1, 2, 3].into_iter();
+    /// let mut lazy = LazyValidationIterator::new(it);
+    /// // Add a no-op validator that always succeeds
+    /// lazy = lazy.add_validator(|_: &i32| Ok(()));
+    /// let results: Vec<_> = lazy.collect();
+    /// assert_eq!(results.len(), 3);
+    /// ```
     pub fn new(iterator: I) -> Self {
         Self {
             iterator,
@@ -494,6 +881,35 @@ where
         }
     }
 
+    /// Adds a validator to the pipeline and returns the pipeline for chaining.
+    
+    ///
+    
+    /// The provided `validator` will be invoked for each item when the pipeline is executed.
+    
+    /// The validator must accept a reference to an item of type `T` and return a `ValidationResult<()>`.
+    
+    ///
+    
+    /// # Examples
+    
+    ///
+    
+    /// ```no_run
+    
+    /// let data = vec!["a", "b", "c"];
+    
+    /// let pipeline = ValidationPipeline::new(data.into_iter())
+    
+    ///     .add_validator(|item: &str| {
+    
+    ///         // return Ok(()) for valid, or an Err(...) with validation errors
+    
+    ///         Ok(())
+    
+    ///     });
+    
+    /// ```
     pub fn add_validator<F>(mut self, validator: F) -> Self
     where
         F: Fn(&T) -> ValidationResult<()> + 'static,
@@ -509,6 +925,20 @@ where
 {
     type Item = ValidationOutcome<T>;
 
+    /// Advances the underlying iterator, validates the next item with all configured validators, and yields a `ValidationOutcome` describing success or collected errors.
+    ///
+    /// The method returns `None` when the underlying iterator is exhausted.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let data = vec![1, 2, 3];
+    /// let mut iter = LazyValidationIterator::new(data.into_iter())
+    ///     .add_validator(|_: &i32| Ok(()));
+    ///
+    /// let first = iter.next().unwrap();
+    /// assert!(first.is_valid);
+    /// ```
     fn next(&mut self) -> Option<Self::Item> {
         self.iterator.next().map(|item| {
             let mut errors = Vec::new();
@@ -528,19 +958,60 @@ where
     }
 }
 
-/// Utility functions for common validation patterns
+/// Creates a default ValidationEngine for type `T`.
 
-/// Create a validation engine for a specific type
+///
+
+/// Returns a `ValidationEngine<T>` configured with the library's default `ValidationConfig`.
+
+///
+
+/// # Examples
+
+///
+
+/// ```
+
+/// let engine = validator::<i32>();
+
+/// // default configuration applies (fail_fast = true, max_errors = Some(10), parallel_validation = false)
+
+/// assert!(engine.config.fail_fast);
+
+/// ```
 pub fn validator<T>() -> ValidationEngine<T> {
     ValidationEngine::new()
 }
 
-/// Create a validation engine with custom configuration
+/// Creates a ValidationEngine configured with the given ValidationConfig.
+///
+/// # Examples
+///
+/// ```
+/// let config = ValidationConfig { fail_fast: false, max_errors: Some(5), parallel_validation: false };
+/// let engine: ValidationEngine<String> = validator_with_config(config);
+/// ```
 pub fn validator_with_config<T>(config: ValidationConfig) -> ValidationEngine<T> {
     ValidationEngine::with_config(config)
 }
 
-/// Validate a struct field with multiple rules
+/// Validate a single struct field using the provided validation rules.
+///
+/// # Returns
+///
+/// A `ValidationOutcome` that contains the original field reference when validation succeeds, or the collected `ValidationError` entries when validation fails.
+///
+/// # Examples
+///
+/// ```
+/// // Assume `MyType` and a set of rules implementing `ValidationRule<MyType>` exist.
+/// // This demonstrates calling `validate_struct_field` with an engine and rules.
+/// let engine = validator::<MyType>();
+/// let value = MyType::default();
+/// let rules = vec![]; // populate with rules implementing `ValidationRule<MyType>`
+/// let outcome = validate_struct_field(&engine, &value, "my_field", rules);
+/// // `outcome` carries the validated reference on success or errors on failure.
+/// ```
 pub fn validate_struct_field<'a, T, R>(
     engine: &ValidationEngine<T>,
     value: &'a T,

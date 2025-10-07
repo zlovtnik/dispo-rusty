@@ -5,8 +5,28 @@ use crate::functional::validation_engine::{ValidationEngine, ValidationOutcome};
 use crate::functional::validation_rules::{Email, Length, Phone, Range, Required};
 use crate::models::person::PersonDTO;
 
-/// Example validation function for PersonDTO that demonstrates
-/// the iterator-based validation engine integration
+/// Validate a PersonDTO by applying field-specific rules and aggregating all validation errors.
+///
+/// Runs required and format/constraint validations for each field (name, email, age, address, phone)
+/// and returns a single outcome containing all discovered errors.
+///
+/// Returns `ValidationOutcome::success(())` when no field errors are present, or
+/// `ValidationOutcome::failure` with a vector of all collected `ValidationError`s otherwise.
+///
+/// # Examples
+///
+/// ```
+/// let person = PersonDTO {
+///     name: "Alice".into(),
+///     email: "alice@example.com".into(),
+///     age: 30,
+///     address: "123 Main St".into(),
+///     phone: "+1234567890".into(),
+/// };
+///
+/// let outcome = validate_person_dto(&person);
+/// assert!(outcome.is_valid());
+/// ```
 pub fn validate_person_dto(person: &PersonDTO) -> ValidationOutcome<()> {
     let engine = ValidationEngine::new();
 
@@ -65,7 +85,28 @@ pub fn validate_person_dto(person: &PersonDTO) -> ValidationOutcome<()> {
     }
 }
 
-/// Example of using higher-order validation functions for complex rules
+/// Validates a PersonDTO with composite rules: name presence/length and a required valid contact (email or phone).
+///
+/// Performs the following checks:
+/// - `name` is present and its length is between 1 and 100 characters.
+/// - At least one valid contact is provided: a non-empty, valid `email` or a non-empty, valid `phone`.
+///
+/// On failure, returns a `ValidationOutcome::failure` containing the collected validation errors; on success, returns `ValidationOutcome::success(())`.
+///
+/// # Examples
+///
+/// ```
+/// let person = PersonDTO {
+///     name: "Alice".into(),
+///     email: "alice@example.com".into(),
+///     phone: "".into(),
+///     age: Some(30),
+///     address: "123 Main St".into(),
+/// };
+///
+/// let outcome = validate_person_with_complex_rules(&person);
+/// assert!(outcome.is_valid);
+/// ```
 pub fn validate_person_with_complex_rules(person: &PersonDTO) -> ValidationOutcome<()> {
     let engine = ValidationEngine::new();
 
@@ -106,7 +147,24 @@ pub fn validate_person_with_complex_rules(person: &PersonDTO) -> ValidationOutco
     ValidationOutcome::success(())
 }
 
-/// Example of using validation pipelines for batch processing
+/// Validates a collection of PersonDTO values lazily and produces a per-item ValidationOutcome.
+///
+/// Each input element is validated when iterated; valid items are represented as `ValidationOutcome::success(())`
+/// and invalid items carry their collected validation errors in `ValidationOutcome::failure`.
+///
+/// # Returns
+///
+/// A `Vec<ValidationOutcome<()>>` where each entry is `success(())` for a valid person or `failure(errors)` for an invalid one.
+///
+/// # Examples
+///
+/// ```
+/// # use crate::models::person::PersonDTO;
+/// # use crate::functional::validation_integration::validate_person_batch;
+/// let people = vec![PersonDTO::default()];
+/// let results = validate_person_batch(people);
+/// assert_eq!(results.len(), 1);
+/// ```
 pub fn validate_person_batch(people: Vec<PersonDTO>) -> Vec<ValidationOutcome<()>> {
     use crate::functional::validation_engine::LazyValidationIterator;
 
