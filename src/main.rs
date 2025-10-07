@@ -15,6 +15,7 @@ mod api;
 mod config;
 mod constants;
 mod error;
+mod functional;
 mod middleware;
 mod models;
 mod schema;

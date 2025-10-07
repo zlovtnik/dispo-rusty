@@ -16,6 +16,8 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.63"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
