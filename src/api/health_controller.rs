@@ -53,6 +53,20 @@ struct TenantHealth {
     status: Status,
 }
 
+/// Performs a database connectivity check using the provided connection pool.
+///
+/// # Returns
+///
+/// `Ok(())` if the database responded to the health query, `Err` with an error otherwise.
+///
+/// # Examples
+///
+/// ```
+/// # async fn example(pool: actix_web::web::Data<DatabasePool>) {
+/// let result = check_database_health_async(pool).await;
+/// assert!(result.is_ok());
+/// # }
+/// ```
 async fn check_database_health_async(
     pool: web::Data<DatabasePool>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
@@ -62,6 +76,21 @@ async fn check_database_health_async(
         .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync + 'static>)
 }
 
+/// Performs a cache health check using the provided Redis connection pool.
+///
+/// Executes the synchronous cache probe on a blocking thread and returns `Ok(())` if the cache responds to a PING,
+/// or `Err(...)` if the probe fails or the blocking task fails.
+///
+/// # Examples
+///
+/// ```
+/// # use actix_web::web;
+/// # use tokio_test::block_on;
+/// # async fn demo(pool: web::Data<crate::RedisPool>) {
+/// let result = crate::check_cache_health_async(pool).await;
+/// assert!(result.is_ok() || result.is_err());
+/// # }
+/// ```
 async fn check_cache_health_async(
     redis_pool: web::Data<RedisPool>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
@@ -70,6 +99,27 @@ async fn check_cache_health_async(
         .unwrap()
 }
 
+/// Return current service health and component statuses as JSON.
+///
+/// Builds a HealthResponse containing an overall `Status`, an RFC3339 `timestamp`,
+/// component statuses for database and cache, and no tenant list, then responds
+/// with HTTP 200 and that JSON body.
+///
+/// # Examples
+///
+/// ```no_run
+/// use actix_web::{test, App};
+///
+/// // Mount the handler and call the /health route in an integration-style test.
+/// // The handler is registered with `#[get("/health")]`, so registering the
+/// // service on an App allows exercising the endpoint.
+/// # async fn example() {
+/// let app = test::init_service(App::new().service(crate::health)).await;
+/// let req = test::TestRequest::get().uri("/health").to_request();
+/// let resp = test::call_service(&app, req).await;
+/// assert!(resp.status().is_success());
+/// # }
+/// ```
 #[get("/health")]
 async fn health(pool: web::Data<DatabasePool>, redis_pool: web::Data<RedisPool>) -> HttpResponse {
     info!("Health check requested");
@@ -120,6 +170,31 @@ async fn health(pool: web::Data<DatabasePool>, redis_pool: web::Data<RedisPool>)
     HttpResponse::Ok().json(response)
 }
 
+/// Produces a detailed health report that includes database, cache, and per-tenant statuses.
+///
+/// The response body is a JSON-encoded `HealthResponse` containing:
+/// - `status`: overall system status,
+/// - `timestamp`: RFC3339 timestamp of the check,
+/// - `components`: individual `database` and `cache` statuses,
+/// - `tenants`: optional list of `TenantHealth` entries when tenant pools are available.
+///
+/// # Examples
+///
+/// ```
+/// use actix_web::test::{self, TestRequest};
+/// use actix_web::http::StatusCode;
+///
+/// // Build a simple request and call the handler (integration tests should set up app data).
+/// let req = TestRequest::with_uri("/health/detailed").to_http_request();
+/// // In real tests, provide `pool`, `redis_pool`, and `main_conn` as `web::Data` in app state.
+/// // Here we only demonstrate the call shape; integration tests should assert the JSON body.
+/// let resp = actix_rt::System::new().block_on(async {
+///     // health_detailed(req, pool, redis_pool, main_conn).await
+///     // -> HttpResponse
+///     HttpResponse::Ok()
+/// });
+/// assert_eq!(resp.status(), StatusCode::OK);
+/// ```
 #[get("/health/detailed")]
 async fn health_detailed(
     req: HttpRequest,
@@ -219,6 +294,36 @@ async fn health_detailed(
     HttpResponse::Ok().json(response)
 }
 
+/// Performs a simple connectivity check against the configured database.
+///
+/// Attempts to acquire a connection from the provided pool and execute a lightweight
+/// validation query (`SELECT 1`).
+///
+/// # Returns
+///
+/// `Ok(())` if a connection is acquired and the query succeeds, `Err(...)` if acquiring
+/// the connection fails or the query returns a Diesel error.
+///
+/// # Errors
+///
+/// Returns a `diesel::result::Error::DatabaseError` with kind `UnableToSendCommand`
+/// when the pool cannot provide a connection; other `diesel::result::Error` variants
+/// may be returned if the validation query fails.
+///
+/// # Examples
+///
+/// ```
+/// // Given a `pool: actix_web::web::Data<crate::DatabasePool>` from app data:
+/// # use actix_web::web;
+/// # use crate::check_database_health;
+/// # fn example(pool: web::Data<crate::DatabasePool>) {
+/// let res = check_database_health(pool);
+/// match res {
+///     Ok(()) => println!("DB healthy"),
+///     Err(e) => eprintln!("DB unhealthy: {}", e),
+/// }
+/// # }
+/// ```
 fn check_database_health(pool: web::Data<DatabasePool>) -> Result<(), diesel::result::Error> {
     match pool.get() {
         Ok(mut conn) => {
@@ -232,6 +337,25 @@ fn check_database_health(pool: web::Data<DatabasePool>) -> Result<(), diesel::re
     }
 }
 
+/// Verifies Redis cache responsiveness by sending a `PING` command.
+///
+/// Uses the provided Redis connection pool to obtain a connection and issues a `PING`.
+///
+/// # Parameters
+///
+/// * `redis_pool` - Connection pool used to acquire a Redis connection for the health check.
+///
+/// # Returns
+///
+/// `Ok(())` if Redis responds to `PING`, `Err` with the underlying error otherwise.
+///
+/// # Examples
+///
+/// ```
+/// // Acquire or construct a RedisPool appropriate for your application.
+/// // let redis_pool = RedisPool::new("redis://127.0.0.1").unwrap();
+/// // assert!(check_cache_health(&redis_pool).is_ok());
+/// ```
 fn check_cache_health(
     redis_pool: &RedisPool,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {

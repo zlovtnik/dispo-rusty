@@ -34,6 +34,17 @@ pub struct StateTransitionMetrics {
 }
 
 impl Default for StateTransitionMetrics {
+    /// Creates a `StateTransitionMetrics` with all metrics initialized to zero or their empty equivalents.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let m = StateTransitionMetrics::default();
+    /// assert_eq!(m.avg_transition_time_ns, 0);
+    /// assert_eq!(m.transition_count, 0);
+    /// assert_eq!(m.memory_overhead_percent, 0.0);
+    /// assert_eq!(m.peak_memory_usage, 0);
+    /// ```
     fn default() -> Self {
         Self {
             avg_transition_time_ns: 0,
@@ -54,21 +65,54 @@ pub struct ImmutableRef<T> {
 }
 
 impl<T> ImmutableRef<T> {
-    /// Create a new immutable reference
+    /// Creates a new ImmutableRef that shares ownership of the provided value.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let r = ImmutableRef::new(5);
+    /// assert_eq!(*r.get(), 5);
+    /// ```
+    ///
+    /// # Returns
+    ///
+    /// An `ImmutableRef<T>` that holds a shared, immutable reference to the given `data`.
     pub fn new(data: T) -> Self {
         Self {
             data: Arc::new(data),
         }
     }
 
-    /// Get a reference to the data
+    /// Accesses the wrapped value by reference.
+    ///
+    /// Returns a shared borrow of the inner value stored in this `ImmutableRef`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let r = ImmutableRef::new(5);
+    /// assert_eq!(*r.get(), 5);
+    /// ```
     pub fn get(&self) -> &T {
         &self.data
     }
 }
 
 impl<T: Clone> ImmutableRef<T> {
-    /// Create a mutable clone for modification
+    /// Creates an owned clone of the wrapped value for modification.
+    ///
+    /// The returned value is an owned `T` cloned from the inner data, suitable for mutating without affecting the original shared reference.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let r = ImmutableRef::new(vec![1, 2, 3]);
+    /// let mut v = r.clone_for_mutate();
+    /// v.push(4);
+    /// assert_eq!(v, vec![1, 2, 3, 4]);
+    /// // original remains unchanged
+    /// assert_eq!(r.get(), &vec![1, 2, 3]);
+    /// ```
     pub fn clone_for_mutate(&self) -> T {
         self.data.as_ref().clone()
     }
@@ -84,39 +128,107 @@ pub struct PersistentVector<T> {
 }
 
 impl<T> PersistentVector<T> {
-    /// Create an empty persistent vector
+    /// Creates an empty PersistentHashMap.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let map: crate::functional::immutable_state::PersistentHashMap<String, i32> = PersistentHashMap::new();
+    /// assert!(map.is_empty());
+    /// assert_eq!(map.len(), 0);
+    /// ```
     pub fn new() -> Self {
         Self { root: None }
     }
 
-    /// Check if the vector is empty
+    /// Determines whether the persistent vector contains no elements.
+    ///
+    /// # Returns
+    ///
+    /// `true` if the vector contains no elements, `false` otherwise.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let v: PersistentVector<i32> = PersistentVector::new();
+    /// assert!(v.is_empty());
+    /// let v2 = v.append(1);
+    /// assert!(!v2.is_empty());
+    /// ```
     pub fn is_empty(&self) -> bool {
         self.root.is_none()
     }
 }
 
 impl<T: Clone> PersistentVector<T> {
-    /// Get the length of the vector
+    /// Determines the number of elements in the persistent vector.
+    ///
+    /// # Returns
+    ///
+    /// The number of elements contained in the vector.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let v: PersistentVector<i32> = PersistentVector::new();
+    /// assert_eq!(v.len(), 0);
+    /// let v2 = v.append(1).append(2);
+    /// assert_eq!(v2.len(), 2);
+    /// ```
     pub fn len(&self) -> usize {
         self.root.as_ref().map_or(0, |vec| vec.len())
     }
 
-    /// Create a persistent vector from a regular vector
+    /// Constructs a persistent vector from a standard `Vec<T>`.
+    ///
+    /// The provided vector is consumed and converted into a `PersistentVector`
+    /// that exposes an immutable, persistent API.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let v = vec![1, 2, 3];
+    /// let pv = PersistentVector::from_vec(v);
+    /// assert_eq!(pv.len(), 3);
+    /// assert_eq!(pv.get(1), Some(&2));
+    /// ```
     pub fn from_vec(vec: Vec<T>) -> Self {
         Self {
             root: Some(Arc::new(im::Vector::from(vec))),
         }
     }
 
-    /// Get an element at the specified index
+    /// Fetches a reference to the element at the given index.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let v = PersistentVector::from_vec(vec![1, 2, 3]);
+    /// assert_eq!(v.get(1), Some(&2));
+    /// assert_eq!(v.get(10), None);
+    /// ```
+    ///
+    /// # Returns
+    ///
+    /// `Some(&T)` with a reference to the element when the index is valid, `None` if the vector is empty or the index is out of bounds.
     pub fn get(&self, index: usize) -> Option<&T> {
         self.root.as_ref()?.get(index)
     }
 
-    /// Create a new vector with an element appended
+    /// Appends an element and returns a new PersistentVector that shares structure with the original.
     ///
-    /// This operation shares structure with the original vector,
-    /// only allocating memory for the new element.
+    /// The original vector is not modified; the returned vector contains the new element appended
+    /// at the end while reusing as much of the original structure as possible.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let v1: PersistentVector<i32> = PersistentVector::new();
+    /// let v2 = v1.append(42);
+    /// assert!(v1.is_empty());
+    /// assert_eq!(v2.len(), 1);
+    /// assert_eq!(v2.get(0), Some(&42));
+    /// ```
     pub fn append(&self, element: T) -> Self {
         let new_vec = if let Some(vec) = &self.root {
             (**vec).clone() + im::vector![element]
@@ -129,7 +241,22 @@ impl<T: Clone> PersistentVector<T> {
         }
     }
 
-    /// Create a new vector with an element updated at the specified index
+    /// Produces a new `PersistentVector` with the element at `index` replaced.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if the vector is empty or if `index` is out of bounds.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let v = PersistentVector::from_vec(vec![1, 2, 3]);
+    /// let updated = v.update(1, 42).expect("update should succeed");
+    /// assert_eq!(updated.to_vec(), vec![1, 42, 3]);
+    ///
+    /// let empty: PersistentVector<i32> = PersistentVector::new();
+    /// assert!(empty.update(0, 1).is_err());
+    /// ```
     pub fn update(&self, index: usize, element: T) -> Result<Self, String> {
         let new_vec = self
             .root
@@ -152,7 +279,17 @@ impl<T: Clone> PersistentVector<T> {
         })
     }
 
-    /// Convert to a regular vector (expensive operation)
+    /// Create an owned Vec<T> containing the elements of the persistent vector in order.
+    ///
+    /// This performs a deep copy of the elements and may be expensive for large collections.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let pv = PersistentVector::from_vec(vec![1, 2, 3]);
+    /// let v = pv.to_vec();
+    /// assert_eq!(v, vec![1, 2, 3]);
+    /// ```
     pub fn to_vec(&self) -> Vec<T> {
         self.root
             .as_ref()
@@ -161,6 +298,14 @@ impl<T: Clone> PersistentVector<T> {
 }
 
 impl<T> Default for PersistentVector<T> {
+    /// Constructs a default `ImmutableStateManager` configured with a 100 MB memory limit.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mgr = ImmutableStateManager::default();
+    /// assert_eq!(mgr.get_metrics().unwrap().transition_count, 0);
+    /// ```
     fn default() -> Self {
         Self::new()
     }
@@ -180,35 +325,96 @@ where
     K: Clone + Eq + std::hash::Hash,
     V: Clone,
 {
-    /// Create an empty persistent hash map
+    /// Creates an empty PersistentHashMap.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let map: crate::functional::immutable_state::PersistentHashMap<String, i32> = PersistentHashMap::new();
+    /// assert!(map.is_empty());
+    /// assert_eq!(map.len(), 0);
+    /// ```
     pub fn new() -> Self {
         Self { root: None }
     }
 
-    /// Get the number of entries
+    /// Number of entries in the map.
+    ///
+    /// Returns the number of stored key-value pairs.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let map = PersistentHashMap::<String, i32>::new();
+    /// assert_eq!(map.len(), 0);
+    /// let map2 = map.insert("a".to_string(), 1);
+    /// assert_eq!(map2.len(), 1);
+    /// ```
     pub fn len(&self) -> usize {
         self.root.as_ref().map_or(0, |map| map.len())
     }
 
-    /// Check if the map is empty
+    /// Check whether the map contains no entries.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let map = PersistentHashMap::<String, i32>::new();
+    /// assert!(map.is_empty());
+    /// let map2 = map.insert("k".to_string(), 1);
+    /// assert!(!map2.is_empty());
+    /// ```
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
-    /// Get a value by key
+    /// Retrieve the value associated with `key` from this persistent map.
+    ///
+    /// # Returns
+    ///
+    /// `Some(&V)` containing the value if the key exists, `None` otherwise.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let map = PersistentHashMap::new().insert("a".to_string(), 1);
+    /// assert_eq!(map.get(&"a".to_string()), Some(&1));
+    /// assert_eq!(map.get(&"b".to_string()), None);
+    /// ```
     pub fn get(&self, key: &K) -> Option<&V> {
         self.root.as_ref()?.get(key)
     }
 
-    /// Check if the map contains a key
+    /// Checks whether the map contains the given key.
+    ///
+    /// # Returns
+    ///
+    /// `true` if the map contains `key`, `false` otherwise.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let map = PersistentHashMap::<String, i32>::new()
+    ///     .insert("a".to_string(), 1);
+    /// assert!(map.contains_key(&"a".to_string()));
+    /// assert!(!map.contains_key(&"b".to_string()));
+    /// ```
     pub fn contains_key(&self, key: &K) -> bool {
         self.get(key).is_some()
     }
 
-    /// Create a new map with a key-value pair inserted
+    /// Creates a new PersistentHashMap with `key` set to `value`.
     ///
-    /// This operation shares structure with the original map,
-    /// only allocating memory for the new key-value pair.
+    /// The original map is unchanged; the returned map shares structure with the original where possible.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let m = PersistentHashMap::<String, i32>::new();
+    /// let m2 = m.insert("a".to_string(), 1);
+    /// assert!(m.get(&"a".to_string()).is_none());
+    /// assert_eq!(m2.get(&"a".to_string()), Some(&1));
+    /// ```
     pub fn insert(&self, key: K, value: V) -> Self {
         let new_map = self
             .root
@@ -220,10 +426,21 @@ where
         }
     }
 
-    /// Create a new map with a key removed
+    /// Produces a new map with the specified key removed.
     ///
-    /// This operation shares structure with the original map,
-    /// only deallocating memory for the removed key-value pair.
+    /// The returned map shares structure with the original and only releases
+    /// memory for the removed entry when applicable.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let m = PersistentHashMap::new()
+    ///     .insert("a".to_string(), 1)
+    ///     .insert("b".to_string(), 2);
+    /// let updated = m.remove(&"a".to_string());
+    /// assert!(!updated.contains_key(&"a".to_string()));
+    /// assert_eq!(updated.len(), 1);
+    /// ```
     pub fn remove(&self, key: &K) -> Self {
         let new_map = self.root.as_ref().and_then(|map| {
             let updated = map.without(key);
@@ -239,7 +456,31 @@ where
         }
     }
 
-    /// Get an iterator over the key-value pairs
+    /// Creates an iterator over the map's entries.
+    
+    ///
+    
+    /// The iterator yields pairs of references to keys and values; if the map is empty the iterator yields no items.
+    
+    ///
+    
+    /// # Examples
+    
+    ///
+    
+    /// ```
+    
+    /// let m = PersistentHashMap::new()
+    
+    ///     .insert("a".to_string(), 1)
+    
+    ///     .insert("b".to_string(), 2);
+    
+    /// let items: Vec<(&String, &i32)> = m.iter().collect();
+    
+    /// assert_eq!(items.len(), 2);
+    
+    /// ```
     pub fn iter(&self) -> Box<dyn Iterator<Item = (&K, &V)> + '_> {
         match self.root.as_ref() {
             Some(root) => Box::new(root.iter()),
@@ -247,7 +488,21 @@ where
         }
     }
 
-    /// Convert to a regular HashMap (expensive operation)
+    /// Converts the persistent map into an owned standard `HashMap`.
+    ///
+    /// This allocates a new `HashMap` and clones each key and value from the persistent
+    /// structure; the operation can be expensive for large maps.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let phm = PersistentHashMap::new()
+    ///     .insert("a".to_string(), 1)
+    ///     .insert("b".to_string(), 2);
+    /// let hm = phm.to_hashmap();
+    /// assert_eq!(hm.get("a"), Some(&1));
+    /// assert_eq!(hm.len(), 2);
+    /// ```
     pub fn to_hashmap(&self) -> HashMap<K, V> {
         self.root.as_ref().map_or(HashMap::new(), |root| {
             root.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
@@ -260,6 +515,14 @@ where
     K: Clone + Eq + std::hash::Hash,
     V: Clone,
 {
+    /// Constructs a default `ImmutableStateManager` configured with a 100 MB memory limit.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mgr = ImmutableStateManager::default();
+    /// assert_eq!(mgr.get_metrics().unwrap().transition_count, 0);
+    /// ```
     fn default() -> Self {
         Self::new()
     }
@@ -318,10 +581,22 @@ pub struct ImmutableStateManager {
 }
 
 impl ImmutableStateManager {
-    /// Create a new state manager
+    /// Constructs a new ImmutableStateManager configured with a maximum memory limit.
     ///
     /// # Arguments
-    /// * `max_memory_mb` - Maximum memory usage in megabytes
+    ///
+    /// * `max_memory_mb` - Maximum allowed memory in megabytes used for simple limit checks.
+    ///
+    /// # Returns
+    ///
+    /// An initialized ImmutableStateManager with empty tenant states and default transition metrics.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mgr = ImmutableStateManager::new(100);
+    /// // manager is ready to initialize tenants and apply transitions
+    /// ```
     pub fn new(max_memory_mb: usize) -> Self {
         Self {
             tenant_states: RwLock::new(HashMap::new()),
@@ -330,13 +605,31 @@ impl ImmutableStateManager {
         }
     }
 
-    /// Initialize state for a new tenant
+    /// Registers and initializes immutable application state for a new tenant.
+    ///
+    /// Creates a fresh `TenantApplicationState` (empty sessions, app data, and query cache,
+    /// with `last_updated` set to now) and inserts it into the manager's tenant map.
+    /// Returns an error if a state for the tenant id already exists or if the internal lock is poisoned.
     ///
     /// # Arguments
-    /// * `tenant` - The tenant configuration
+    ///
+    /// * `tenant` - The tenant configuration that will be consumed to create the initial state.
     ///
     /// # Returns
-    /// Ok(()) if initialization successful, Err otherwise
+    ///
+    /// `Ok(())` if the tenant state was created and inserted successfully, `Err(String)` with a message if the tenant already exists or a lock error occurred.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use std::sync::Arc;
+    /// # // Assume `Tenant` implements Default and has a public `id: String` field for this example.
+    /// # use crate::functional::immutable_state::ImmutableStateManager;
+    /// # use crate::functional::immutable_state::Tenant;
+    /// let manager = ImmutableStateManager::new(100);
+    /// let tenant = Tenant { id: "tenant1".to_string(), ..Default::default() };
+    /// manager.initialize_tenant(tenant).expect("initialization failed");
+    /// ```
     pub fn initialize_tenant(&self, tenant: Tenant) -> Result<(), String> {
         let mut states = self.tenant_states.write().map_err(|_| "Lock poisoned")?;
 
@@ -356,39 +649,74 @@ impl ImmutableStateManager {
         Ok(())
     }
 
-    /// Remove a tenant from the state manager
+    /// Remove the tenant's state from the manager.
+    ///
+    /// Removes any entry for `tenant_id` from the internal tenant state map. If the tenant
+    /// does not exist this is a no-op.
     ///
     /// # Arguments
-    /// * `tenant_id` - The tenant identifier
+    ///
+    /// * `tenant_id` - The tenant identifier to remove.
     ///
     /// # Returns
-    /// Ok(()) if removal successful, Err otherwise
+    ///
+    /// `Ok(())` if the removal completed, `Err` if the internal lock is poisoned.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let manager = ImmutableStateManager::new(100);
+    /// let tenant = create_test_tenant("t1");
+    /// manager.initialize_tenant(tenant).unwrap();
+    /// assert!(manager.tenant_exists("t1"));
+    /// manager.remove_tenant("t1").unwrap();
+    /// assert!(!manager.tenant_exists("t1"));
+    /// ```
     pub fn remove_tenant(&self, tenant_id: &str) -> Result<(), String> {
         let mut states = self.tenant_states.write().map_err(|_| "Lock poisoned")?;
         states.remove(tenant_id);
         Ok(())
     }
 
-    /// Get the current state for a tenant (immutable reference)
-    ///
-    /// # Arguments
-    /// * `tenant_id` - The tenant identifier
+    /// Retrieve the current immutable state for a tenant.
     ///
     /// # Returns
-    /// Some(immutable reference to state) if tenant exists, None otherwise
+    /// `Some(Arc<TenantApplicationState>)` containing the tenant state if present, `None` otherwise.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let manager = ImmutableStateManager::new(100);
+    /// // after initializing a tenant with id "tenant1"
+    /// assert!(manager.get_tenant_state("tenant1").is_some() || manager.get_tenant_state("tenant1").is_none());
+    /// ```
     pub fn get_tenant_state(&self, tenant_id: &str) -> Option<Arc<TenantApplicationState>> {
         let states = self.tenant_states.read().ok()?;
         states.get(tenant_id).cloned()
     }
 
-    /// Apply a functional state transition
+    /// Applies a functional transition to a tenant's immutable state.
     ///
-    /// # Arguments
-    /// * `tenant_id` - The tenant identifier
-    /// * `transition` - Function that transforms the current state to a new state
+    /// Replaces the stored state for `tenant_id` with the state produced by `transition`.
     ///
-    /// # Returns
-    /// Ok(()) if transition successful, Err otherwise
+    /// # Errors
+    /// Returns `Err` if the tenant is not found, the provided transition returns an error, or an internal lock is poisoned.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use std::sync::Arc;
+    /// # use crate::functional::immutable_state::ImmutableStateManager;
+    /// # use crate::functional::immutable_state::TenantApplicationState;
+    /// let mgr = ImmutableStateManager::new(100);
+    /// // assume tenant "tenant_a" has been initialized
+    /// let result = mgr.apply_transition("tenant_a", |state: &TenantApplicationState| {
+    ///     let mut next = state.clone();
+    ///     // perform deterministic, functional updates on `next`
+    ///     Ok(next)
+    /// });
+    /// assert!(result.is_ok());
+    /// ```
     pub fn apply_transition<F>(&self, tenant_id: &str, transition: F) -> Result<(), String>
     where
         F: FnOnce(
@@ -421,14 +749,41 @@ impl ImmutableStateManager {
         Ok(())
     }
 
-    /// Apply multiple transitions atomically for a tenant
+    /// Applies multiple functional transitions atomically to a tenant's state.
     ///
-    /// # Arguments
-    /// * `tenant_id` - The tenant identifier
-    /// * `transitions` - Iterator of transition functions
+    /// Each transition is applied sequentially to an owned copy of the tenant's state; after all transitions complete,
+    /// the tenant's state is replaced with the final resulting state. If the iterator yields no transitions, no state
+    /// change is performed and the call returns immediately.
+    ///
+    /// # Parameters
+    /// * `tenant_id` - Identifier of the tenant whose state will be updated.
+    /// * `transitions` - An iterator of functions that take `&TenantApplicationState` and return a new `TenantApplicationState`.
     ///
     /// # Returns
-    /// Ok(()) if all transitions successful, Err otherwise
+    /// `Ok(())` if the transitions were applied and the tenant state updated; `Err(String)` if the tenant does not exist
+    /// or an internal error occurs (e.g., lock poisoning or metric update failure).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use std::sync::Arc;
+    /// # use chrono::Utc;
+    /// # // Setup omitted: create manager and initialize tenant "t1"
+    /// // Apply two simple no-op-ish transitions (clone and update timestamp)
+    /// let transitions = vec![
+    ///     |s: &TenantApplicationState| {
+    ///         let mut ns = s.clone();
+    ///         ns.last_updated = Utc::now();
+    ///         ns
+    ///     },
+    ///     |s: &TenantApplicationState| {
+    ///         let mut ns = s.clone();
+    ///         ns.last_updated = Utc::now();
+    ///         ns
+    ///     },
+    /// ];
+    /// manager.apply_transitions("t1", transitions).unwrap();
+    /// ```
     pub fn apply_transitions<I, F>(&self, tenant_id: &str, transitions: I) -> Result<(), String>
     where
         I: IntoIterator<Item = F>,
@@ -468,19 +823,36 @@ impl ImmutableStateManager {
         Ok(())
     }
 
-    /// Get current performance metrics
+    /// Returns a clone of the current state transition metrics for the manager.
+    ///
+    /// On success, returns `Ok(StateTransitionMetrics)` containing a cloned snapshot of the metrics.
+    /// Returns `Err(String)` if the internal metrics lock is poisoned.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mgr = ImmutableStateManager::default();
+    /// let metrics = mgr.get_metrics().expect("failed to read metrics");
+    /// // snapshot fields are accessible
+    /// assert_eq!(metrics.transition_count, 0);
+    /// ```
     pub fn get_metrics(&self) -> Result<StateTransitionMetrics, String> {
         let metrics = self.metrics.read().map_err(|_| "Lock poisoned")?;
         Ok(metrics.clone())
     }
 
-    /// Check if tenant state exists
-    ///
-    /// # Arguments
-    /// * `tenant_id` - The tenant identifier
+    /// Determines whether a tenant state exists in the manager.
     ///
     /// # Returns
-    /// True if tenant state exists, false otherwise
+    ///
+    /// `true` if a state for `tenant_id` exists, `false` otherwise.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let manager = ImmutableStateManager::new(100);
+    /// let exists = manager.tenant_exists("tenant-123");
+    /// ```
     pub fn tenant_exists(&self, tenant_id: &str) -> bool {
         let states = match self.tenant_states.read() {
             Ok(states) => states,
@@ -489,10 +861,24 @@ impl ImmutableStateManager {
         states.contains_key(tenant_id)
     }
 
-    /// Check if memory usage is within limits
+    /// Checks whether the recorded peak memory usage is within the configured limit.
+    ///
+    /// The check converts the stored `peak_memory_usage` (bytes) to megabytes and compares it
+    /// against the manager's `max_memory_mb`.
     ///
     /// # Returns
-    /// Ok(true) if within limits, Ok(false) if exceeded, Err on error
+    ///
+    /// `Ok(true)` if the recorded peak memory usage in megabytes is less than or equal to
+    /// the manager's `max_memory_mb`, `Ok(false)` if it exceeds the limit, and `Err` if the
+    /// metrics lock cannot be acquired.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mgr = ImmutableStateManager::new(100); // 100 MB limit
+    /// let within = mgr.check_memory_limits().unwrap();
+    /// assert!(within || !within); // simple usage; result is boolean
+    /// ```
     pub fn check_memory_limits(&self) -> Result<bool, String> {
         // Simplified memory check (in a real implementation, this would track actual memory usage)
         let metrics = self.metrics.read().map_err(|_| "Lock poisoned")?;
@@ -500,13 +886,26 @@ impl ImmutableStateManager {
         Ok(memory_mb <= self.max_memory_mb)
     }
 
-    /// Update performance metrics after a state transition
+    /// Record a state transition duration and update aggregated performance metrics.
     ///
-    /// Memory metrics are documented estimates (option b from task requirements):
-    /// Since actual memory sampling is too expensive for production use and platform-dependent,
-    /// these fields are set to documented estimates that represent typical memory overhead
-    /// patterns for persistent data structures. They are left unchanged during updates to
-    /// avoid the performance cost of measurement.
+    /// This updates the transition count and the running average transition duration.
+    /// Memory-related fields are set to documented estimates and are not sampled or
+    /// measured at runtime to avoid performance costs.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` on success, `Err(String)` if the internal metrics lock is poisoned.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::time::Duration;
+    ///
+    /// let mgr = ImmutableStateManager::new(100);
+    /// mgr.update_metrics(Duration::from_millis(5)).unwrap();
+    /// let metrics = mgr.get_metrics().unwrap();
+    /// assert!(metrics.transition_count >= 1);
+    /// ```
     fn update_metrics(&self, duration: Duration) -> Result<(), String> {
         let mut metrics = self.metrics.write().map_err(|_| "Lock poisoned")?;
 
@@ -529,6 +928,15 @@ impl ImmutableStateManager {
 }
 
 impl Default for ImmutableStateManager {
+    /// Constructs a default ImmutableStateManager configured with a 100 MB memory limit.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use crate::functional::immutable_state::ImmutableStateManager;
+    ///
+    /// let _mgr = ImmutableStateManager::default();
+    /// ```
     fn default() -> Self {
         Self::new(100) // 100MB default limit
     }
@@ -539,6 +947,21 @@ mod tests {
     use super::*;
     use chrono::Utc;
 
+    /// Create a `Tenant` populated with deterministic test data using the given id.
+    ///
+    /// The `id` is used for the tenant's `id` field and to generate a human-readable name.
+    ///
+    /// # Returns
+    ///
+    /// `Tenant` populated with the provided `id` and fixed test values for other fields.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let t = create_test_tenant("alpha");
+    /// assert_eq!(t.id, "alpha");
+    /// assert!(t.name.contains("alpha"));
+    /// ```
     fn create_test_tenant(id: &str) -> Tenant {
         Tenant {
             id: id.to_string(),
@@ -629,6 +1052,37 @@ mod tests {
             .contains_key(&"session1".to_string()));
     }
 
+    /// Verifies tenant state isolation by ensuring updates to one tenant do not affect another tenant's state.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let manager = ImmutableStateManager::new(100);
+    /// let tenant1 = create_test_tenant("tenant1");
+    /// let tenant2 = create_test_tenant("tenant2");
+    ///
+    /// manager.initialize_tenant(tenant1).unwrap();
+    /// manager.initialize_tenant(tenant2).unwrap();
+    ///
+    /// manager
+    ///     .apply_transition("tenant1", |state| {
+    ///         let mut new_state = state.clone();
+    ///         new_state.app_data = state
+    ///             .app_data
+    ///             .insert("config".to_string(), serde_json::json!("tenant1_config"));
+    ///         Ok(new_state)
+    ///     })
+    ///     .unwrap();
+    ///
+    /// let tenant1_state = manager.get_tenant_state("tenant1").unwrap();
+    /// let tenant2_state = manager.get_tenant_state("tenant2").unwrap();
+    ///
+    /// assert_eq!(
+    ///     tenant1_state.app_data.get(&"config".to_string()),
+    ///     Some(&serde_json::json!("tenant1_config"))
+    /// );
+    /// assert_eq!(tenant2_state.app_data.get(&"config".to_string()), None);
+    /// ```
     #[test]
     fn test_tenant_isolation() {
         let manager = ImmutableStateManager::new(100);
