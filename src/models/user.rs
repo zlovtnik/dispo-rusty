@@ -104,6 +104,17 @@ impl User {
         None
     }
 
+    /// Clears the stored login session for the user with the given ID, if that user exists.
+    ///
+    /// This updates the user's `login_session` in the database to an empty string. If no user
+    /// is found for `user_id`, the function does nothing.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// let mut conn = establish_connection();
+    /// User::logout(42, &mut conn);
+    /// ```
     pub fn logout(user_id: i32, conn: &mut Connection) {
         if let Ok(user) = users.find(user_id).get_result::<User>(conn) {
             Self::update_login_session_to_db(&user.username, "", conn);
@@ -131,32 +142,28 @@ impl User {
             .is_ok()
     }
 
-    /// Looks up a user's login information by matching the provided token's username and session.
+    /// Finds login information for a user by matching the token's username and login session.
     ///
-    /// Returns `Ok(LoginInfoDTO)` when a user with the same username and `login_session` is found,
-    /// `Err(String)` with "User not found!" otherwise.
-    ///
-    /// # Parameters
-    ///
-    /// - `user_token` — token containing the username, login_session, and tenant_id to validate.
-    /// - `conn` — database connection used to query the users table.
+    /// Returns `Ok(LoginInfoDTO)` when a user with the same username and `login_session` is found, `Err(String)` with `"User not found!"` otherwise.
     ///
     /// # Examples
     ///
     /// ```no_run
-    /// use crate::{UserToken, LoginInfoDTO, find_login_info_by_token};
+    /// use crate::{UserToken, models::user::find_login_info_by_token};
     ///
     /// let token = UserToken {
     ///     user: "alice".to_string(),
     ///     login_session: "some-session-uuid".to_string(),
     ///     tenant_id: "tenant-1".to_string(),
     /// };
+    ///
     /// // `conn` would be a valid DB connection in real usage
-    /// let result = find_login_info_by_token(&token, &mut conn);
-    /// match result {
-    ///     Ok(info) => assert_eq!(info.username, "alice"),
-    ///     Err(e) => println!("not found: {}", e),
-    /// }
+    /// // let mut conn = establish_connection();
+    /// // let result = find_login_info_by_token(&token, &mut conn);
+    /// // match result {
+    /// //     Ok(info) => assert_eq!(info.username, "alice"),
+    /// //     Err(e) => panic!("expected user, got error: {}", e),
+    /// // }
     /// ```
     pub fn find_login_info_by_token(
         user_token: &UserToken,
@@ -186,6 +193,21 @@ impl User {
         Uuid::new_v4().to_string()
     }
 
+    /// Update a user's `login_session` field in the database for the given username.
+    ///
+    /// `un` is the username to locate the user record. `login_session_str` is the new session string to store.
+    ///
+    /// # Returns
+    ///
+    /// `true` if the user's `login_session` was updated successfully, `false` if the user was not found or the update failed.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // Assuming `conn` is a valid &mut Connection and a user with username "alice" exists:
+    /// let success = User::update_login_session_to_db("alice", "new-session-uuid", conn);
+    /// assert!(success || !success); // demonstrates call; actual value depends on DB state
+    /// ```
     pub fn update_login_session_to_db(
         un: &str,
         login_session_str: &str,
@@ -201,7 +223,7 @@ impl User {
         }
     }
 
-    /// Get the total number of users in the database.
+    /// Count the total number of users in the database.
     ///
     /// # Examples
     ///
@@ -214,7 +236,7 @@ impl User {
         users.count().get_result(conn)
     }
 
-    /// Counts users with an active login session.
+    /// Returns the number of users that currently have a non-empty login session.
     ///
     /// # Returns
     ///

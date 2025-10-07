@@ -23,13 +23,9 @@ pub struct UserToken {
 }
 
 impl UserToken {
-    /// Creates a signed JWT containing issued-at, expiration, and the provided login information.
+    /// Generates a signed JWT containing issued-at (`iat`), expiration (`exp`), and the provided login information (`user`, `login_session`, `tenant_id`).
     ///
-    /// The token's lifetime is determined by the `MAX_AGE` environment variable (seconds). If `MAX_AGE` is not set or cannot be parsed as an integer, a default of `ONE_WEEK` is used.
-    ///
-    /// # Returns
-    ///
-    /// A JWT encoded as a `String`.
+    /// The token lifetime is controlled by the `MAX_AGE` environment variable (in seconds); if `MAX_AGE` is not set or cannot be parsed as an integer, `ONE_WEEK` is used.
     ///
     /// # Examples
     ///

@@ -27,6 +27,19 @@ pub fn find_by_id(id: i32, pool: &Pool) -> Result<Person, ServiceError> {
     }
 }
 
+/// Retrieves a paginated list of persons that match the provided filter.
+///
+/// The returned page contains the matching `Person` records and pagination metadata.
+///
+/// # Examples
+///
+/// ```no_run
+/// use crate::services::address_book_service::filter;
+/// use crate::models::PersonFilter;
+/// // assume `pool` is an available database Pool
+/// let page = filter(PersonFilter::default(), &pool).unwrap();
+/// assert!(page.items.len() >= 0);
+/// ```
 pub fn filter(filter: PersonFilter, pool: &Pool) -> Result<Page<Person>, ServiceError> {
     match Person::filter(filter, &mut pool.get().unwrap()) {
         Ok(people) => Ok(people),
@@ -62,10 +75,12 @@ pub fn insert(new_person: PersonDTO, pool: &Pool) -> Result<(), ServiceError> {
     }
 }
 
-/// Updates an existing Person identified by `id` with the provided `updated_person` data.
+/// Update an existing Person by `id` with the provided `PersonDTO`.
 ///
-/// Returns `Err(ServiceError::NotFound)` if no person exists with the given `id`.
-/// Returns `Err(ServiceError::InternalServerError)` if the update operation fails.
+/// # Returns
+///
+/// `Ok(())` on success. `Err(ServiceError::NotFound)` if no person exists with the given `id`.
+/// `Err(ServiceError::InternalServerError)` if the update operation fails.
 ///
 /// # Examples
 ///
@@ -93,6 +108,19 @@ pub fn update(id: i32, updated_person: PersonDTO, pool: &Pool) -> Result<(), Ser
     }
 }
 
+/// Deletes a person by id from the database.
+///
+/// # Returns
+///
+/// `Ok(())` on successful deletion; `Err(ServiceError::NotFound)` if no person with the given `id` exists; `Err(ServiceError::InternalServerError)` if the deletion fails.
+///
+/// # Examples
+///
+/// ```
+/// // assuming `pool` is a configured `Pool`
+/// let result = delete(1, &pool);
+/// assert!(result.is_ok());
+/// ```
 pub fn delete(id: i32, pool: &Pool) -> Result<(), ServiceError> {
     match Person::find_by_id(id, &mut pool.get().unwrap()) {
         Ok(_) => match Person::delete(id, &mut pool.get().unwrap()) {

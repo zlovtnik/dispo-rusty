@@ -38,18 +38,23 @@ pub trait PureFunction<Input, Output>: Send + Sync + 'static {
     /// The category this function belongs to
     fn category(&self) -> FunctionCategory;
 
-    /// Determine whether this function can be composed with another `PureFunction` that accepts this
-    /// function's output.
+    /// Determines whether this function may be composed with another function that accepts this function's output.
+    ///
+    /// The default implementation permits composition for any compatible types.
+    ///
+    /// # Parameters
+    ///
+    /// * `other` - The candidate function to compose after this one.
     ///
     /// # Returns
     ///
-    /// `true` if composition is allowed, `false` otherwise.
+    /// `true` if this function may be composed with `other`, `false` otherwise.
     ///
     /// # Examples
     ///
     /// ```
-    /// use std::sync::Arc;
-    /// # use crate::{FunctionWrapper, FunctionCategory, PureFunction};
+    /// use crate::{FunctionWrapper, FunctionCategory, PureFunction};
+    ///
     /// let f = FunctionWrapper::new(|x: i32| x + 1, "inc", FunctionCategory::Mathematical);
     /// let g = FunctionWrapper::new(|x: i32| x * 2, "mul", FunctionCategory::Mathematical);
     /// let f_obj: &dyn PureFunction<i32, i32> = &f;
@@ -110,14 +115,14 @@ where
     Output: Send + Sync + 'static,
     F: Fn(Input) -> Output + Send + Sync + 'static,
 {
-    /// Constructs a FunctionWrapper that holds a pure function together with its signature and category.
+    /// Create a FunctionWrapper that wraps a pure function together with its signature and category.
     ///
-    /// Returns a new `FunctionWrapper` configured with the provided function, signature, and category.
+    /// The wrapper stores the provided function and its associated metadata for registration and type-erased invocation.
     ///
     /// # Examples
     ///
     /// ```
-    /// use crate::{FunctionWrapper, FunctionCategory, PureFunction};
+    /// use crate::{FunctionWrapper, FunctionCategory};
     ///
     /// let wrapper = FunctionWrapper::new(|x: i32| x + 1, "inc(i32)->i32", FunctionCategory::Mathematical);
     /// assert_eq!(wrapper.call(1), 2);
@@ -138,11 +143,11 @@ where
     Output: Send + Sync + 'static,
     F: Fn(Input) -> Output + Send + Sync + 'static,
 {
-    /// Invokes the wrapped pure function with the provided input and returns its output.
+    /// Calls the wrapped pure function with the given input.
     ///
     /// # Returns
     ///
-    /// The output produced by applying the wrapped function to `input`.
+    /// The value produced by applying the wrapped function to `input`.
     ///
     /// # Examples
     ///
@@ -157,11 +162,11 @@ where
         (self.function)(input)
     }
 
-    /// Returns the stored function signature string.
+    /// Get the container's stored function signature.
     ///
     /// # Returns
     ///
-    /// The signature associated with this container (a `'static` string).
+    /// The signature associated with this container.
     ///
     /// # Examples
     ///
@@ -176,7 +181,7 @@ where
         self.signature
     }
 
-    /// Gets the function's category used for organization and lookup.
+    /// Retrieve the function's category for organization and lookup.
     ///
     /// # Examples
     ///
@@ -187,7 +192,7 @@ where
     ///
     /// # Returns
     ///
-    /// The `FunctionCategory` value representing this function's category.
+    /// The `FunctionCategory` value for this function.
     fn category(&self) -> FunctionCategory {
         self.category
     }
@@ -210,7 +215,7 @@ pub struct FunctionContainer {
 }
 
 impl FunctionContainer {
-    /// Constructs a type-erased container holding a pure function along with its signature and category.
+    /// Create a type-erased container that holds a pure function together with its signature and category.
     ///
     /// The `signature` should uniquely identify the function for registration and lookup; `category` is used for organization.
     ///
@@ -252,7 +257,10 @@ impl FunctionContainer {
         }
     }
 
-    /// Return the stored signature for the wrapped function.
+    /// Get the stored signature of the wrapped function.
+    ///
+    /// The returned string is the static signature that was provided when the
+    /// FunctionWrapper was constructed.
     ///
     /// # Examples
     ///
@@ -278,28 +286,20 @@ impl FunctionContainer {
         self.category
     }
 
-    /// The `TypeId` of the container's input type.
-    
+    /// Gets the TypeId of the container's input type.
     ///
-    
     /// # Examples
-    
     ///
-    
     /// ```
-    
     /// use std::any::TypeId;
-    
+    ///
     /// // Construct a wrapper and container for a simple i32 -> i32 function.
-    
     /// let wrapper = crate::FunctionWrapper::new(|x: i32| x + 1, "inc", crate::FunctionCategory::Transformation);
-    
     /// let container = crate::FunctionContainer::new::<i32, i32, _>(wrapper, "inc", crate::FunctionCategory::Transformation);
-    
+    ///
     /// let id = container.input_type_id();
-    
+    ///
     /// assert_eq!(id, TypeId::of::<i32>());
-    
     /// ```
     pub fn input_type_id(&self) -> std::any::TypeId {
         self.input_type_id
@@ -312,25 +312,33 @@ impl FunctionContainer {
     /// # Examples
     ///
     /// ```
-    /// use std::any::TypeId;
-    /// // `container` is a FunctionContainer created elsewhere for a function that returns `i32`.
-    /// // assert_eq!(container.output_type_id(), TypeId::of::<i32>());
+    /// let wrapper = crate::functional::function_traits::FunctionWrapper::new(
+    ///     |x: i32| x + 1,
+    ///     "add_i32",
+    ///     crate::functional::function_traits::FunctionCategory::Mathematical,
+    /// );
+    /// let container = crate::functional::function_traits::FunctionContainer::new(
+    ///     wrapper,
+    ///     "add_i32",
+    ///     crate::functional::function_traits::FunctionCategory::Mathematical,
+    /// );
+    /// assert_eq!(container.output_type_id(), std::any::TypeId::of::<i32>());
     /// ```
     pub fn output_type_id(&self) -> std::any::TypeId {
         self.output_type_id
     }
 
-    /// Invoke the stored callable with a type-erased input if the input's runtime type matches this container's expected input type.
+    /// Attempts to invoke the container's callable with a type-erased input when the input's runtime
+    /// type matches the container's expected input type.
     ///
-    /// # Returns
-    ///
-    /// `Some(Box<dyn Any>)` containing the boxed output when the input's TypeId equals the container's input type id, `None` otherwise.
+    /// Returns `Some(Box<dyn Any>)` containing the boxed output when the input's TypeId equals the
+    /// container's input TypeId, `None` otherwise.
     ///
     /// # Examples
     ///
     /// ```
     /// use std::any::Any;
-    /// use your_crate::function_module::{FunctionContainer, FunctionCategory};
+    /// use crate::functional::function_traits::{FunctionContainer, FunctionCategory};
     ///
     /// // Create a container for a function that increments an i32
     /// let container = FunctionContainer::new(|x: i32| x + 1, "inc_i32", FunctionCategory::Mathematical);
@@ -364,7 +372,9 @@ where
     Output: Send + Sync + 'static,
     F: Fn(Input) -> Output + Send + Sync + 'static,
 {
-    /// Calls the wrapped function using a type-erased input and returns the result boxed as `Any`.
+    /// Calls the wrapped function with a type-erased input and returns the result boxed as `Any`.
+    ///
+    /// # Panics
     ///
     /// Panics if the provided input's concrete type does not match the function's expected input type.
     ///
@@ -372,10 +382,11 @@ where
     ///
     /// ```
     /// use std::any::Any;
-    /// use std::any::TypeId;
+    ///
     /// // Construct a FunctionWrapper directly for the example
     /// let f = |x: i32| x + 1;
     /// let wrapper = crate::FunctionWrapper::new(f, "inc", crate::FunctionCategory::Mathematical);
+    ///
     /// let boxed_in: Box<dyn Any> = Box::new(41i32);
     /// let boxed_out = wrapper.call_boxed(boxed_in);
     /// assert_eq!(*boxed_out.downcast::<i32>().unwrap(), 42);
@@ -400,7 +411,7 @@ where
         }
     }
 
-    /// Get the `TypeId` corresponding to the wrapper's input type.
+    /// Get the `TypeId` for the wrapper's input type.
     ///
     /// # Examples
     ///
@@ -415,12 +426,12 @@ where
     ///
     /// # Returns
     ///
-    /// The `TypeId` for `Input`.
+    /// The `TypeId` of `Input`.
     fn input_type_id(&self) -> std::any::TypeId {
         std::any::TypeId::of::<Input>()
     }
 
-    /// Get the TypeId for the function's output type.
+    /// Get the `TypeId` of the wrapper's output type.
     ///
     /// The returned `TypeId` corresponds to the concrete `Output` type parameter of this wrapper.
     ///

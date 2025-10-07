@@ -43,6 +43,19 @@ impl Person {
         people.order(id.asc()).load::<Person>(conn)
     }
 
+    /// Fetches the person with the given primary key.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // assuming `conn` is a mutable database connection:
+    /// let person = find_by_id(1, &mut conn).unwrap();
+    /// assert_eq!(person.id, 1);
+    /// ```
+    ///
+    /// # Returns
+    ///
+    /// `Ok(Person)` containing the matching record, `Err` with the query error (for example `NotFound`) otherwise.
     pub fn find_by_id(i: i32, conn: &mut Connection) -> QueryResult<Person> {
         people.find(i).get_result::<Person>(conn)
     }
@@ -52,14 +65,19 @@ impl Person {
     /// Applies the following optional filters from `PersonFilter`:
     /// - `age`: exact match.
     /// - `email`, `name`, `phone`: partial match using SQL `LIKE` with surrounding `%` wildcards (case-sensitive).
-    /// - `gender`: accepts `"male"` or `"female"` (case-insensitive) and maps to the stored boolean.
+    /// - `gender`: accepts `"male"` or `"female"` (case-insensitive) and maps to the stored boolean (`"male"` → `true`, `"female"` → `false`).
     ///
-    /// Pagination uses `filter.cursor` as the page cursor (defaults to `0`) and `filter.page_size` as items per page (defaults to `crate::constants::DEFAULT_PER_PAGE`).
+    /// Pagination uses `filter.cursor` as the page cursor (defaults to `0`) and `filter.page_size` as items per page
+    /// (defaults to `crate::constants::DEFAULT_PER_PAGE`).
+    ///
+    /// Returns a `Page<Person>` containing the matching records, the provided cursor and page size, the total number
+    /// of matching elements, and the next cursor when available.
     ///
     /// # Examples
     ///
-    /// ```
-    /// // Construct a filter to find people with "example" in their email and use a DB connection.
+    /// ```rust,no_run
+    /// use crate::{Person, PersonFilter, Connection};
+    ///
     /// let filter = PersonFilter {
     ///     email: Some("example".into()),
     ///     age: None,
@@ -71,7 +89,6 @@ impl Person {
     /// };
     ///
     /// let mut conn: Connection = /* obtain connection */;
-    ///
     /// let page = Person::filter(filter, &mut conn).expect("query failed");
     /// assert!(page.items.len() <= crate::constants::DEFAULT_PER_PAGE);
     /// ```
@@ -151,6 +168,24 @@ impl Person {
             .execute(conn)
     }
 
+    /// Deletes the person row with the given primary key.
+    ///
+    /// # Parameters
+    ///
+    /// - `i`: The primary key id of the person to delete.
+    ///
+    /// # Returns
+    ///
+    /// The number of rows deleted (`0` if no row matched, `1` if deletion succeeded).
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// // Acquire a mutable database connection before calling.
+    /// let mut conn = /* obtain Connection */ unimplemented!();
+    /// let deleted = crate::models::person::delete(1, &mut conn).unwrap();
+    /// assert_eq!(deleted, 1);
+    /// ```
     pub fn delete(i: i32, conn: &mut Connection) -> QueryResult<usize> {
         diesel::delete(people.find(i)).execute(conn)
     }

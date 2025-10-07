@@ -68,13 +68,12 @@ pub struct TenantPoolManager {
 
 #[allow(dead_code)]
 impl TenantPoolManager {
-    /// Creates a TenantPoolManager that uses `main_pool` as the primary connection pool and
-    /// initializes an empty, thread-safe map for tenant-specific pools.
+    /// Constructs a TenantPoolManager that uses the provided `main_pool` as the primary connection pool
+    /// and initializes an empty, thread-safe map for tenant-specific pools.
     ///
     /// # Examples
     ///
     /// ```rust,no_run
-    /// use std::sync::Arc;
     /// // let main_pool = init_db_pool("postgres://user:pass@localhost/db");
     /// // let manager = TenantPoolManager::new(main_pool);
     /// ```
@@ -107,20 +106,26 @@ impl TenantPoolManager {
         }
     }
 
+    /// Return a clone of the manager's main database connection pool.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// let manager = TenantPoolManager::new(main_pool);
+    /// let pool = manager.get_main_pool();
+    /// // `pool` is a `Pool` cloned from the manager's main_pool.
+    /// ```
     pub fn get_main_pool(&self) -> Pool {
         self.main_pool.clone()
     }
 
-    /// Removes and returns the connection pool associated with a tenant ID, if present.
-    ///
-    /// If the internal tenant pools lock is poisoned, returns a `ServiceError::InternalServerError`
-    /// with the message "Tenant pools lock was poisoned".
+    /// Remove and return the connection pool for a tenant ID, if present.
     ///
     /// # Returns
     ///
-    /// `Ok(Some(pool))` with the removed pool if a pool existed for `tenant_id`, `Ok(None)` if no
-    /// pool was found for `tenant_id`, or `Err(ServiceError::InternalServerError { ... })` if the
-    /// tenant pools lock is poisoned.
+    /// `Ok(Some(pool))` with the removed pool if a pool existed for `tenant_id`,
+    /// `Ok(None)` if no pool was found for `tenant_id`,
+    /// or `Err(ServiceError::InternalServerError { .. })` if the tenant pools lock is poisoned.
     ///
     /// # Examples
     ///
@@ -129,15 +134,12 @@ impl TenantPoolManager {
     /// # use your_crate::errors::ServiceError;
     /// # let main_pool = init_db_pool("postgres://user:pass@localhost/db");
     /// let manager = TenantPoolManager::new(main_pool.clone());
-    /// // Add a tenant pool elsewhere...
-    /// let removed = manager.remove_tenant_pool("tenant_a");
-    /// match removed {
-    ///     Ok(Some(pool)) => println!("Removed tenant pool"),
+    /// // Assume a tenant pool was previously inserted...
+    /// match manager.remove_tenant_pool("tenant_a") {
+    ///     Ok(Some(_pool)) => println!("Removed tenant pool"),
     ///     Ok(None) => println!("No pool for given tenant"),
-    ///     Err(e) => match e {
-    ///         ServiceError::InternalServerError { error_message } => eprintln!("{}", error_message),
-    ///         _ => (),
-    ///     },
+    ///     Err(ServiceError::InternalServerError { error_message }) => eprintln!("{}", error_message),
+    ///     _ => {}
     /// }
     /// ```
     pub fn remove_tenant_pool(&self, tenant_id: &str) -> Result<Option<Pool>, ServiceError> {

@@ -53,7 +53,10 @@ struct TenantHealth {
     status: Status,
 }
 
-/// Performs a database connectivity check using the provided connection pool.
+/// Checks database connectivity using the provided connection pool.
+///
+/// Performs the health check on a blocking thread and returns success if the
+/// database responded to a lightweight query.
 ///
 /// # Returns
 ///
@@ -61,9 +64,10 @@ struct TenantHealth {
 ///
 /// # Examples
 ///
-/// ```
-/// # async fn example(pool: actix_web::web::Data<DatabasePool>) {
-/// let result = check_database_health_async(pool).await;
+/// ```rust
+/// # use actix_web::web;
+/// # async fn example(pool: web::Data<crate::DatabasePool>) {
+/// let result = crate::check_database_health_async(pool).await;
 /// assert!(result.is_ok());
 /// # }
 /// ```
@@ -76,10 +80,9 @@ async fn check_database_health_async(
         .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync + 'static>)
 }
 
-/// Performs a cache health check using the provided Redis connection pool.
+/// Performs an asynchronous cache health check using the provided Redis pool.
 ///
-/// Executes the synchronous cache probe on a blocking thread and returns `Ok(())` if the cache responds to a PING,
-/// or `Err(...)` if the probe fails or the blocking task fails.
+/// Runs the synchronous cache probe on a blocking thread and returns `Ok(())` if the cache responds to `PING`, `Err(...)` otherwise.
 ///
 /// # Examples
 ///
@@ -337,17 +340,9 @@ fn check_database_health(pool: web::Data<DatabasePool>) -> Result<(), diesel::re
     }
 }
 
-/// Verifies Redis cache responsiveness by sending a `PING` command.
+/// Sends a `PING` to Redis to verify cache responsiveness.
 ///
-/// Uses the provided Redis connection pool to obtain a connection and issues a `PING`.
-///
-/// # Parameters
-///
-/// * `redis_pool` - Connection pool used to acquire a Redis connection for the health check.
-///
-/// # Returns
-///
-/// `Ok(())` if Redis responds to `PING`, `Err` with the underlying error otherwise.
+/// Returns `Ok(())` if a connection is acquired from the pool and Redis responds to `PING`, `Err` with the underlying error otherwise.
 ///
 /// # Examples
 ///
@@ -368,18 +363,18 @@ fn check_cache_health(
     Ok(())
 }
 
-/// Streams server logs over Server-Sent Events (SSE) when log streaming is enabled.
+/// Streams server logs to the client using Server-Sent Events (SSE).
 ///
-/// When enabled via the `ENABLE_LOG_STREAM` environment variable and a valid log file
-/// exists at `LOG_FILE` (defaults to `/var/log/app.log`), this handler returns an
-/// `HttpResponse` that streams new log lines as SSE `data:` frames. If streaming is
-/// disabled, the handler responds with `405 MethodNotAllowed`. If the configured log
-/// file does not exist, the handler responds with `404 NotFound`.
+/// If the `ENABLE_LOG_STREAM` environment variable is not set to `"true"`, the handler
+/// responds with `405 MethodNotAllowed`. If the configured log file (from `LOG_FILE`,
+/// defaulting to `/var/log/app.log`) does not exist, the handler responds with
+/// `404 NotFound`. When streaming, each new log line is emitted as an SSE `data:` frame,
+/// and periodic keep-alive frames are sent.
 ///
 /// # Examples
 ///
 /// ```
-/// use actix_web::{App, test};
+/// use actix_web::{test, App};
 /// use std::env;
 /// use std::fs;
 ///
@@ -391,7 +386,7 @@ fn check_cache_health(
 /// let app = test::init_service(App::new().service(crate::logs)).await;
 /// let req = test::TestRequest::get().uri("/logs").to_request();
 /// let resp = test::call_service(&app, req).await;
-/// assert!(resp.status().is_success() || resp.status() == actix_web::http::StatusCode::OK);
+/// assert!(resp.status().is_success());
 /// # }
 /// ```
 #[get("/logs")]

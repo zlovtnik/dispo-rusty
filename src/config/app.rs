@@ -164,9 +164,10 @@ fn configure_admin_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(web::scope("/tenant").configure(configure_tenant_admin_routes));
 }
 
-/// Register tenant administration endpoints under the tenant admin scope.
+/// Registers tenant administration endpoints under the tenant admin scope.
 ///
 /// The configured routes (relative to the scope) are:
+///
 /// - GET `/stats` -> `tenant_controller::get_system_stats`
 /// - GET `/health` -> `tenant_controller::get_tenant_health`
 /// - GET `/status` -> `tenant_controller::get_tenant_status`
@@ -188,17 +189,17 @@ fn configure_tenant_admin_routes(cfg: &mut web::ServiceConfig) {
     );
 }
 
-/// Register tenant-related HTTP routes on the provided ServiceConfig.
+/// Configure tenant-related HTTP routes on the provided `ServiceConfig`.
 ///
-/// This configures handlers for the tenant collection (GET list, POST create),
-/// a filtered listing (GET /filter), and per-tenant operations by `id` (GET, PUT, DELETE).
+/// Adds routes for listing tenants (GET), creating a tenant (POST),
+/// a filtered listing at `/filter` (GET), and per-tenant operations by `{id}` (GET, PUT, DELETE).
 ///
 /// # Examples
 ///
 /// ```
 /// use actix_web::web;
 ///
-/// // Attach the tenant routes under the `/tenants` scope.
+/// // Mount the tenant routes under the `/tenants` scope.
 /// let scope = web::scope("/tenants").configure(configure_tenant_routes);
 /// ```
 fn configure_tenant_routes(cfg: &mut web::ServiceConfig) {

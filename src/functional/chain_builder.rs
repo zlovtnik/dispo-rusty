@@ -31,7 +31,9 @@ where
         Self { iterator }
     }
 
-    /// Applies a predicate filter to the wrapped iterator and returns a new ChainBuilder that yields only items for which the predicate returns `true`.
+    /// Filters items using the provided predicate.
+    ///
+    /// Returns a `ChainBuilder` that yields only items for which `predicate` returns `true`.
     ///
     /// # Examples
     ///
@@ -51,9 +53,9 @@ where
         }
     }
 
-    /// Applies a mapping function to each item of the underlying iterator.
+    /// Maps each element of the builder's iterator using the provided function.
     ///
-    /// Returns a `ChainBuilder` wrapping the iterator after applying `f`.
+    /// Returns a new ChainBuilder that yields the mapped values.
     ///
     /// # Examples
     ///
@@ -94,32 +96,19 @@ where
         }
     }
 
-    /// Maps each item to an iterable and flattens the produced iterators into a single sequence.
-    
+    /// Maps each element to an iterable and flattens the resulting iterators into a single sequence.
     ///
-    
-    /// The provided closure `f` is called for each item and should return a value that implements
-    
-    /// `IntoIterator`; the resulting iterators are concatenated (flattened) into the returned chain.
-    
+    /// The provided closure is invoked for each item and should return a value that implements
+    /// `IntoIterator`; the produced iterators are concatenated (flattened) in order.
     ///
-    
     /// # Examples
-    
     ///
-    
     /// ```
-    
     /// let data = vec![1, 2, 3];
-    
     /// let result: Vec<_> = ChainBuilder::from_vec(data)
-    
     ///     .flat_map(|x| vec![x, x * 2])
-    
     ///     .collect();
-    
     /// assert_eq!(result, vec![1, 2, 2, 4, 3, 6]);
-    
     /// ```
     pub fn flat_map<J, U, F>(self, f: F) -> ChainBuilder<FlatMap<I, J, F>>
     where
@@ -150,7 +139,7 @@ where
         }
     }
 
-    /// Creates a ChainBuilder that skips the first `n` items of the underlying iterator.
+    /// Skips the first `n` items of the underlying iterator and returns a ChainBuilder over the remainder.
     ///
     /// # Examples
     ///
@@ -159,20 +148,16 @@ where
     /// let v: Vec<_> = builder.collect();
     /// assert_eq!(v, vec![3, 4]);
     /// ```
-    ///
-    /// # Returns
-    ///
-    /// A `ChainBuilder` that yields the original iterator's items after skipping the first `n`.
     pub fn skip(self, n: usize) -> ChainBuilder<Skip<I>> {
         ChainBuilder {
             iterator: self.iterator.skip(n),
         }
     }
 
-    /// Produces a ChainBuilder that yields each distinct item, keeping the first occurrence.
+    /// Yields each distinct item from the stream, preserving the first occurrence of each value.
     ///
-    /// The returned builder wraps an iterator adapter that filters out duplicates seen earlier
-    /// in the stream. Item types must implement `Clone`, `Eq`, and `Hash`.
+    /// The returned builder wraps an iterator adapter that filters out items already seen.
+    /// Requires the iterator's `Item` to implement `Clone`, `Eq`, and `Hash`.
     ///
     /// # Examples
     ///
@@ -194,8 +179,8 @@ where
 
     /// Removes consecutive duplicate items from the iterator.
     ///
-    /// Returns a new ChainBuilder wrapping an iterator that yields the same items
-    /// but with consecutive equal elements collapsed into a single occurrence.
+    /// Produces a `ChainBuilder` that yields the same sequence with consecutive equal elements collapsed into a single occurrence.
+    /// Requires `I::Item: PartialEq`.
     ///
     /// # Examples
     ///
@@ -233,7 +218,7 @@ where
         self.iterator.collect()
     }
 
-    /// Counts the remaining items in the wrapped iterator.
+    /// Counts the number of items remaining in the builder's iterator.
     ///
     /// # Examples
     ///
@@ -290,6 +275,10 @@ where
 
     /// Determines whether every item produced by the builder satisfies a predicate.
     ///
+    /// # Returns
+    ///
+    /// `true` if every item satisfies the predicate, `false` otherwise.
+    ///
     /// # Examples
     ///
     /// ```
@@ -303,10 +292,9 @@ where
         self.iterator.all(f)
     }
 
-    /// Accumulates the remaining items of the iterator into a single value using a provided closure.
+    /// Reduces the remaining items of the builder into a single accumulator value using a provided function.
     ///
-    /// The `init` value is used as the starting accumulator and `f` is applied for each item
-    /// to produce the next accumulator value.
+    /// Consumes the ChainBuilder, using `init` as the starting accumulator and applying `f` to each item to produce the next accumulator.
     ///
     /// # Examples
     ///
@@ -323,6 +311,8 @@ where
 
     /// Retrieve the underlying iterator wrapped by this ChainBuilder.
     ///
+    /// Consumes the builder and returns the wrapped iterator.
+    ///
     /// # Examples
     ///
     /// ```
@@ -337,7 +327,7 @@ where
 }
 
 impl<T> ChainBuilder<std::vec::IntoIter<T>> {
-    /// Creates a ChainBuilder from a vector by consuming the vector and using its iterator.
+    /// Creates a ChainBuilder that iterates over the elements of the given vector.
     ///
     /// # Examples
     ///
@@ -357,7 +347,9 @@ impl<T> ChainBuilder<std::vec::IntoIter<T>> {
 pub mod patterns {
     use super::*;
 
-    /// Builds a processing pipeline from a vector, filters items with `filter_fn`, transforms them with `transform_fn`, and returns the collected results.
+    /// Builds a pipeline from a vector that filters elements and transforms the survivors.
+    ///
+    /// Returns a `Vec<U>` containing the transformed items that satisfy `filter_fn`.
     ///
     /// # Examples
     ///
@@ -377,24 +369,15 @@ pub mod patterns {
             .collect()
     }
 
-    /// Creates a processing pipeline that applies `process_fn` to each item and returns the results.
+    /// Processes each element with the provided function and returns the collected results.
     ///
     /// This function is intended for parallel processing of large datasets; currently it executes
-    /// the processing sequentially (placeholder for a parallel implementation).
-    ///
-    /// # Parameters
-    ///
-    /// - `data`: input vector of items to process.
-    /// - `process_fn`: function applied to each item to produce an output value. It must be `Send + Sync`.
-    ///
-    /// # Returns
-    ///
-    /// A `Vec<U>` containing the processed results, in the same order as the input.
+    /// sequentially and serves as a placeholder for a parallel implementation.
     ///
     /// # Examples
     ///
     /// ```
-    /// let out = parallel_process(vec![1, 2, 3], |x| x * 2);
+    /// let out = crate::functional::chain_builder::patterns::parallel_process(vec![1, 2, 3], |x| x * 2);
     /// assert_eq!(out, vec![2, 4, 6]);
     /// ```
     pub fn parallel_process<T, U>(data: Vec<T>, process_fn: impl Fn(T) -> U + Send + Sync) -> Vec<U>
@@ -407,7 +390,7 @@ pub mod patterns {
         ChainBuilder::from_vec(data).map(process_fn).collect()
     }
 
-    /// Builds a memory-efficient pipeline that processes each element of the input vector and collects the results.
+    /// Process elements of a vector through a memory-efficient pipeline and collect the transformed results.
     ///
     /// Returns a `Vec<U>` containing the processed items in order.
     ///

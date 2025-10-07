@@ -11,17 +11,17 @@ use crate::{
     services::account_service,
 };
 // POST api/auth/signup
-/// Processes a tenant-scoped user signup and returns an HTTP response.
+/// Handle signup for a user scoped to a tenant.
 ///
-/// On success returns an `HttpResponse::Ok` with a JSON `ResponseBody` containing the signup message and an empty payload.
-/// On failure returns a `ServiceError` (e.g., tenant not found or account service error).
+/// # Returns
+/// `Ok(HttpResponse)` with a JSON `ResponseBody` containing the signup message and an empty payload on success; `Err(ServiceError)` on failure (for example, tenant not found or an account service error).
 ///
 /// # Examples
 ///
 /// ```no_run
 /// use actix_web::web;
-///
-/// // Assume `signup_dto` and `manager` are prepared appropriately in an async context.
+/// use crate::api::account_controller::signup;
+/// // In an async test or handler context:
 /// // let resp = signup(web::Json(signup_dto), web::Data::new(manager)).await;
 /// ```
 pub async fn signup(
@@ -68,6 +68,29 @@ pub async fn login(
 }
 
 // POST api/auth/logout
+/// Invalidate the current authentication token and return a logout response.
+///
+/// This handler requires an `Authorization` header and a `Pool` available in the request
+/// extensions. If both are present, the token is invalidated and a success response is returned.
+///
+/// # Returns
+///
+/// `Ok` with an HTTP 200 response containing the logout success message and an empty payload,
+/// `Err(ServiceError)` when the authorization header is missing or the pool cannot be found.
+///
+/// # Examples
+///
+/// ```
+/// use actix_web::{test, http::header, HttpRequest};
+/// use std::sync::Arc;
+/// // Build a request with an Authorization header and a Pool in extensions.
+/// let req = test::TestRequest::default()
+///     .insert_header((header::AUTHORIZATION, "Bearer token"))
+///     // .app_data(...) or .extensions_mut().insert(pool) as needed to add a Pool
+///     .to_http_request();
+/// // Call the handler (in async context)
+/// // let resp = actix_rt::System::new().block_on(async { logout(req).await }).unwrap();
+/// ```
 pub async fn logout(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
     if let Some(authen_header) = req.headers().get(constants::AUTHORIZATION) {
         if let Some(pool) = req.extensions().get::<Pool>() {
@@ -88,17 +111,17 @@ pub async fn logout(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
     }
 }
 
-/// Refreshes authentication and returns updated login information.
+/// Refreshes authentication and returns the refreshed login information.
 ///
-/// Expects an `Authorization` header on `req` and a `Pool` stored in the request's extensions.
-/// Returns an HTTP 200 response with `constants::MESSAGE_OK` and the refreshed login info on success.
-/// Returns `ServiceError::BadRequest` when the authorization header is missing,
-/// `ServiceError::InternalServerError` when the pool is not found, or propagates other `ServiceError`s returned by the refresh operation.
+/// Requires an `Authorization` header and a `Pool` stored in the request's extensions.
+/// On success returns an HTTP 200 response with `constants::MESSAGE_OK` and the refreshed login info.
+/// Returns `ServiceError::BadRequest` when the authorization header is missing, `ServiceError::InternalServerError` when the pool is not found, or propagates other `ServiceError`s returned by the refresh operation.
 ///
 /// # Examples
 ///
 /// ```
 /// use actix_web::test::TestRequest;
+///
 /// # async fn run() {
 /// let req = TestRequest::default().to_http_request();
 /// let _ = crate::handlers::refresh(req).await;
@@ -127,20 +150,19 @@ pub async fn refresh(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
 }
 
 // GET api/auth/me
-/// Returns the authenticated user's information based on the request's authorization header and tenant pool.
+/// Retrieve the authenticated user's login information from the request.
 ///
-/// # Returns
-///
-/// `Ok(HttpResponse)` with status 200 and a `ResponseBody` containing `constants::MESSAGE_OK` and the user's login information on success; `Err(ServiceError)` when the authorization token is missing, the tenant pool is not found, or the account service returns an error.
+/// On success returns an `HttpResponse` with status 200 containing `constants::MESSAGE_OK` and the user's login information. Returns a `ServiceError` when the Authorization header is missing, the tenant pool is not present in the request extensions, or the account service returns an error.
 ///
 /// # Examples
 ///
 /// ```no_run
 /// use actix_web::HttpRequest;
 ///
-/// // Construct an HttpRequest containing the Authorization header and a tenant Pool in extensions,
+/// // Prepare an HttpRequest containing an Authorization header and a tenant Pool in extensions,
 /// // then call `me(req).await` to retrieve the current user's info.
-/// // (Test setup is omitted for brevity.)
+/// // (Test setup omitted.)
+///
 /// // let resp = me(req).await?;
 /// ```
 pub async fn me(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
@@ -345,6 +367,15 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::OK);
     }
 
+    /// Verifies that a user can sign up and then log in using their email for the configured tenant.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// // Sets up a Postgres test container, initializes the DB, registers a tenant,
+    /// // performs signup, and then posts to /api/auth/login using the user's email.
+    /// // Asserts that the login endpoint returns HTTP 200 OK.
+    /// ```
     #[actix_web::test]
     async fn test_login_ok_with_email() {
         let docker = clients::Cli::default();
@@ -515,6 +546,13 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
     }
 
+    /// Verifies that logging in with a username that does not exist returns HTTP 401 Unauthorized.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// // Integration test: POST /api/auth/login with a non-existent username should return 401.
+    /// ```
     #[actix_web::test]
     async fn test_login_user_not_found_with_username() {
         let docker = clients::Cli::default();

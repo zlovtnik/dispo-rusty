@@ -21,13 +21,12 @@ mod models;
 mod schema;
 mod services;
 mod utils;
-/// Application entry point that configures logging and environment, initializes the database and Redis,
-/// registers tenant pools, configures CORS and middleware, and starts the Actix HTTP server.
+/// Start the Actix HTTP server after configuring environment, logging, database, cache, tenancy, CORS, and middleware.
 ///
-/// This function reads required environment variables (APP_HOST, APP_PORT, DATABASE_URL, REDIS_URL),
-/// sets up logging (optionally to a file if LOG_FILE is provided), initializes the main DB pool and
-/// Redis client, registers a demonstration tenant, builds the Actix App with CORS and middleware, binds
-/// to the configured address, and runs the server until shutdown.
+/// Reads required environment variables (APP_HOST, APP_PORT, DATABASE_URL, REDIS_URL), initializes logging
+/// (optionally to the file specified by LOG_FILE), sets up the primary database pool and runs migrations,
+/// initializes the Redis client, registers a demonstration tenant pool, builds the Actix App with configured CORS
+/// and middleware, binds to APP_HOST:APP_PORT, and runs the server until shutdown.
 ///
 /// # Examples
 ///

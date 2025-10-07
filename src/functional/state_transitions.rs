@@ -182,28 +182,25 @@ pub fn remove_user_session(
     }
 }
 
-/// Create a transition that sets or updates an application configuration entry.
+/// Creates a transition that inserts or replaces an application configuration entry.
 ///
-/// The returned transition, when applied to a `TenantApplicationState`, inserts or replaces
-/// `app_data[key]` with the provided JSON `value` and updates the state's `last_updated` timestamp.
+/// The transition, when applied to a `TenantApplicationState`, sets `app_data[key]` to `value` and updates `last_updated`.
 ///
 /// # Returns
 ///
-/// `Ok(transition)` with a closure that applies the configuration change and updates `last_updated`.
-/// `Err(TransitionError::InvalidParameters)` if `key` is empty.
-/// `Err(TransitionError::ValidationFailed)` if a provided `validate` function returns `false`.
+/// - `Ok(transition)` — a closure that applies the configuration change.
+/// - `Err(TransitionError::InvalidParameters)` — if `key` is empty.
+/// - `Err(TransitionError::ValidationFailed)` — if a provided `validate` function returns `false`.
 ///
 /// # Examples
 ///
 /// ```
 /// use serde_json::json;
 ///
-/// // prepare a transition
 /// let transition = set_app_config("theme", json!("dark"), None).unwrap();
-///
-/// // apply it to an existing state (assumes `state` is a TenantApplicationState)
-/// let new_state = transition(&state);
-/// assert_eq!(new_state.app_data.get("theme").unwrap(), &json!("dark"));
+/// // assuming `state` is a TenantApplicationState available in scope:
+/// // let new_state = transition(&state);
+/// // assert_eq!(new_state.app_data.get("theme").unwrap(), &json!("dark"));
 /// ```
 pub fn set_app_config<F>(
     key: impl Into<String>,
@@ -240,7 +237,7 @@ where
     })
 }
 
-/// Removes a configuration entry identified by `key` from the application's data and updates `last_updated`.
+/// Removes the configuration entry for `key` from application data and updates `last_updated`.
 ///
 /// # Examples
 ///
@@ -334,12 +331,11 @@ where
     })
 }
 
-/// Appends a query result entry with an expiration to the tenant's query cache.
+/// Appends a time-limited query result to the tenant's query cache.
 ///
-/// Validates that `query_id` is not empty and `data` is not empty; on success returns a transition
-/// closure that, when applied to a `TenantApplicationState`, clones the state, appends a
-/// `QueryResult` containing the provided `query_id`, `data`, and an `expires_at` computed as
-/// now + `ttl_seconds`, updates `last_updated`, and returns the new state.
+/// Returns a transition closure that, when applied to a `TenantApplicationState`, clones the state,
+/// appends a `QueryResult` with the given `query_id`, `data`, and `expires_at = now + ttl_seconds`,
+/// updates `last_updated`, and returns the new state.
 ///
 /// # Errors
 ///
@@ -347,16 +343,17 @@ where
 ///
 /// # Returns
 ///
-/// `Ok(transition)` where `transition` is a function that applies the described caching change;
-/// `Err(TransitionError::InvalidParameters)` on invalid input.
+/// `Ok(transition)` where `transition` applies the described caching change; `Err(TransitionError::InvalidParameters)` on invalid input.
 ///
 /// # Examples
 ///
 /// ```
 /// // Construct initial state (example placeholder — replace with real initializer)
 /// let state = TenantApplicationState::default();
+///
 /// let transition = cache_query_result("search:users?page=1", vec![1, 2, 3], 60).unwrap();
 /// let new_state = transition(&state);
+///
 /// assert!(new_state
 ///     .query_cache
 ///     .iter()
@@ -443,14 +440,15 @@ pub fn clean_expired_cache(
     }
 }
 
-/// Builds a sequence of state transitions to perform a user login.
+/// Builds a sequence of state transitions that perform a user login.
 ///
-/// The returned transitions, applied in order, will clean expired query-cache entries,
-/// create a new user session with a generated session ID, and record the user's last-login timestamp.
+/// The transitions, applied in order, clean expired query-cache entries, create a new user session
+/// with a generated session ID, and record the user's last-login timestamp in app data.
 ///
 /// # Returns
 ///
-/// A vector of boxed transition functions that, when applied to a tenant state, perform the three login-related updates.
+/// A `Vec` of boxed transition functions that each accept a `&TenantApplicationState` and return a
+/// new `TenantApplicationState` with the corresponding login-related update applied.
 ///
 /// # Examples
 ///
@@ -500,9 +498,9 @@ pub fn build_login_transitions(
 
 /// Creates a sequence of state transitions that perform logout for the given session.
 ///
-/// The returned transitions, when applied in order, remove the specified user session and then
-/// clean expired entries from the query cache. Returns an `InvalidParameters` `TransitionError`
-/// if `session_id` is empty or only whitespace.
+/// The returned transitions, applied in order, remove the specified user session and then
+/// clean expired entries from the query cache. Returns `TransitionError::InvalidParameters` if
+/// `session_id` is empty or contains only whitespace.
 ///
 /// # Examples
 ///
@@ -540,6 +538,11 @@ pub fn build_logout_transitions(
 /// # Errors
 ///
 /// Returns `Err(TransitionError::InvalidParameters)` if any configuration key is empty.
+///
+/// # Returns
+///
+/// `Ok` with a vector of boxed transitions (one per entry in `config_updates`) that apply the
+/// provided key/value pairs; `Err(TransitionError::InvalidParameters)` if any key is empty.
 ///
 /// # Examples
 ///
@@ -588,10 +591,9 @@ mod tests {
     use crate::models::tenant::Tenant;
     use std::collections::HashMap;
 
-    /// Creates a Tenant populated with deterministic test values for use in unit tests.
+    /// Create a deterministic Tenant instance for unit tests.
     ///
-    /// The returned Tenant uses fixed identifiers and local test database URL and sets
-    /// `created_at` and `updated_at` to the current UTC timestamp.
+    /// The Tenant uses fixed identifiers and a local test database URL; `created_at` and `updated_at` are set to the current UTC timestamp at construction.
     ///
     /// # Examples
     ///
@@ -599,6 +601,7 @@ mod tests {
     /// let t = create_test_tenant();
     /// assert_eq!(t.id, "test_tenant");
     /// assert!(t.name.contains("Test"));
+    /// assert!(t.db_url.starts_with("postgres://"));
     /// ```
     fn create_test_tenant() -> Tenant {
         Tenant {

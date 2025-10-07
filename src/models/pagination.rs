@@ -66,38 +66,34 @@ where
     Col: diesel::Expression + QueryFragment<Pg> + Copy,
     i32: diesel::serialize::ToSql<Col::SqlType, Pg>,
 {
-    /// Set the number of items to return per page for this paginated query.
+    /// Sets the number of items returned per page for this paginated query.
     ///
     /// # Examples
     ///
     /// ```no_run
-    /// // Adjust the page size to 50 items
     /// let paginated = some_query.paginate(cursor_column, 0).per_page(50);
     /// ```
+    ///
+    /// Returns an updated `SortedAndPaginated` with the page size set to `per_page`.
     pub fn per_page(self, per_page: i64) -> Self {
         SortedAndPaginated { per_page, ..self }
     }
 
-    /// Loads a page of records from the underlying query using the configured cursor and page size.
+    /// Loads a page of records from the query using the configured cursor and page size.
     ///
-    /// The method executes the inner query, returns the loaded records wrapped in a `Page<U>`,
-    /// sets `current_cursor` to the `cursor` stored on `self`, and sets `next_cursor` to the `id`
-    /// of the last record if any were returned. No total count is computed.
-    ///
-    /// # Returns
-    ///
-    /// A `QueryResult<Page<U>>` containing the fetched records, pagination metadata, and an optional
-    /// `next_cursor` which is the `id` of the last returned record.
+    /// The returned `Page` contains the fetched records, `current_cursor` set to the `cursor` stored on
+    /// the requester, `per_page` as configured, no total count, and `next_cursor` set to the `id` of
+    /// the last record when any records are returned.
     ///
     /// # Examples
     ///
-    /// ```
-    /// # use diesel::prelude::*;
-    /// # use crate::{SortedAndPaginated, HasId};
-    /// # let mut conn: diesel::pg::PgConnection = unimplemented!();
-    /// # let col = unimplemented!();
-    /// // `query` is any Diesel query that loads items of a type implementing `HasId`.
-    /// let paginated = SortedAndPaginated { query: /* query */ unimplemented!(), cursor_column: col, cursor: 0, per_page: 10 };
+    /// ```no_run
+    /// use diesel::prelude::*;
+    /// use crate::{SortedAndPaginated, HasId};
+    ///
+    /// let mut conn: diesel::pg::PgConnection = unimplemented!();
+    /// let col = unimplemented!();
+    /// let paginated = SortedAndPaginated { query: unimplemented!(), cursor_column: col, cursor: 0, per_page: 10 };
     /// let page = paginated.load_items::<YourModel>(&mut conn).expect("load page");
     /// println!("Loaded {} records, next cursor: {:?}", page.records.len(), page.next_cursor);
     /// ```
@@ -138,6 +134,15 @@ where
     i32: diesel::serialize::ToSql<Col::SqlType, Pg>,
     Pg: diesel::sql_types::HasSqlType<Col::SqlType>,
 {
+    /// Builds the SQL AST for the cursor-based paginated query.
+    ///
+    /// This writes a SELECT wrapper around the inner query that filters rows
+    /// where the cursor column is greater than the provided cursor value,
+    /// orders by the cursor column, and applies a LIMIT using `per_page`.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` if the AST was written successfully, otherwise returns the propagated `QueryResult` error.
     fn walk_ast<'b>(&'b self, mut out: AstPass<'_, 'b, Pg>) -> QueryResult<()> {
         out.push_sql("SELECT * FROM (");
         self.query.walk_ast(out.reborrow())?;

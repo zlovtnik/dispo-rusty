@@ -137,13 +137,13 @@ impl<T> ComposablePredicate<T>
 where
     T: Clone + Send + Sync + 'static,
 {
-    /// Wraps a `Predicate` with composition and optimization metadata for functional chaining.
+    /// Create a ComposablePredicate from a `Predicate` and its `PredicateMetadata`.
     ///
     /// # Examples
     ///
     /// ```
-    /// use crate::functional::query_builder::{Predicate, PredicateMetadata, ComposablePredicate, Operator};
     /// use std::time::Duration;
+    /// use crate::functional::query_composition::{Predicate, PredicateMetadata, ComposablePredicate, Operator};
     ///
     /// let pred = Predicate::new("users.id".into(), Operator::Equals, Some("42".into()), "id".into());
     /// let meta = PredicateMetadata {
@@ -153,6 +153,7 @@ where
     ///     dependencies: vec![],
     /// };
     /// let cp = ComposablePredicate::new(pred, meta);
+    /// assert!(cp.metadata.selectivity > 0.0);
     /// ```
     pub fn new(predicate: Predicate<T>, metadata: PredicateMetadata) -> Self {
         Self {
@@ -161,13 +162,9 @@ where
         }
     }
 
-    /// Applies a transformation to the inner `Predicate` and returns a new `ComposablePredicate` with the mapped predicate and the original metadata.
+    /// Transforms the inner `Predicate` into a new predicate type while preserving the predicate metadata.
     ///
-    /// # Parameters
-    /// - `f`: A function that converts the contained `Predicate<T>` into a `Predicate<U>`.
-    ///
-    /// # Returns
-    /// A `ComposablePredicate<U>` containing the transformed predicate and the preserved `PredicateMetadata`.
+    /// Returns a `ComposablePredicate<U>` containing the transformed predicate and the original `PredicateMetadata`.
     ///
     /// # Examples
     ///
@@ -175,10 +172,13 @@ where
     /// use crate::functional::query_builder::Predicate;
     /// use crate::functional::query_composition::ComposablePredicate;
     ///
-    /// // given an existing composable predicate `cp` of type `ComposablePredicate<T>`:
+    /// // Assume `cp` is an existing ComposablePredicate<T>.
     /// // let cp: ComposablePredicate<T> = ...;
-    /// // apply a mapping that converts the inner predicate type
-    /// // let mapped: ComposablePredicate<U> = cp.map(|p| /* produce Predicate<U> from p */ p);
+    /// // Map its inner predicate to a different predicate type `U`.
+    /// // let mapped: ComposablePredicate<U> = cp.map(|p: Predicate<T>| {
+    /// //     // produce a Predicate<U> from `p`
+    /// //     p.into() // placeholder for an actual transformation
+    /// // });
     /// ```
     pub fn map<F, U>(self, f: F) -> ComposablePredicate<U>
     where
@@ -212,15 +212,9 @@ where
         f(self.predicate)
     }
 
-    /// Return the composable predicate when it satisfies the given test.
+    /// Keeps the composable predicate when the provided test returns true.
     ///
-    /// # Arguments
-    ///
-    /// * `f` - A function that inspects the inner `Predicate<T>` and returns `true` to keep the predicate.
-    ///
-    /// # Returns
-    ///
-    /// `Some(self)` if `f(&self.predicate)` returns `true`, `None` otherwise.
+    /// The closure is given a reference to the inner `Predicate<T>` and should return `true` to retain this `ComposablePredicate`.
     ///
     /// # Examples
     ///
@@ -235,6 +229,10 @@ where
     /// let kept = composed.filter(|p| p.field_name() == "id");
     /// assert!(kept.is_some());
     /// ```
+    ///
+    /// # Returns
+    ///
+    /// `Some(self)` if `f(&self.predicate)` returns `true`, `None` otherwise.
     pub fn filter<F>(self, f: F) -> Option<Self>
     where
         F: FnOnce(&Predicate<T>) -> bool,
@@ -277,30 +275,22 @@ where
     T: Send + Sync + 'static,
     U: Clone + Send + Sync + 'static,
 {
-    /// Create a lazy streaming iterator that loads query results in configurable chunks.
+    /// Creates a lazy streaming iterator that loads query results in configurable chunks.
     ///
-    /// Constructs a new `LazyQueryIterator` configured from the provided query composer, concurrency
-    /// semaphore, and performance metrics tracker.
-    ///
-    /// # Parameters
-    ///
-    /// - `composer` — The functional query composer that supplies the base query and lazy configuration.
-    /// - `semaphore` — Concurrency control semaphore used to limit parallel chunk processing.
-    /// - `metrics` — Initial performance metrics to be attached and updated during iteration.
-    ///
-    /// # Returns
-    ///
-    /// A `LazyQueryIterator` ready to stream results according to the composer's `lazy_config`.
+    /// The iterator's page size is initialized from `composer.lazy_config.chunk_size` and the
+    /// provided `semaphore` controls concurrent chunk processing.
     ///
     /// # Examples
     ///
     /// ```rust,no_run
     /// use std::sync::Arc;
     /// use tokio::sync::Semaphore;
+    ///
     /// // Assume `FunctionalQueryComposer` and `QueryPerformanceMetrics` are available in scope.
     /// let composer: Arc<FunctionalQueryComposer<_, _>> = /* obtain or construct composer */ Arc::new(/* ... */);
     /// let semaphore = Arc::new(Semaphore::new(4));
     /// let metrics = QueryPerformanceMetrics::default();
+    ///
     /// let iterator = LazyQueryIterator::new(composer, semaphore, metrics);
     /// ```
     pub fn new(
@@ -330,15 +320,9 @@ where
 {
     type Item = U;
 
-    /// Advances the iterator and yields the next item from the current chunk, loading the next chunk when needed.
+    /// Advances the iterator and yields the next item from the current in-memory chunk, loading the next chunk when needed.
     ///
-    /// If the iterator is exhausted, returns `None`. When the current in-memory chunk is depleted the implementation
-    /// attempts to load the next chunk; in this stubbed implementation chunk loading is not performed and the
-    /// iterator will be marked exhausted instead. Each returned item increments the iterator's `total_processed` count.
-    ///
-    /// # Returns
-    ///
-    /// `Some(item)` with the next element from the current chunk, `None` when the iterator is exhausted.
+    /// Returns `Some(item)` with the next element from the current chunk, or `None` when the iterator is exhausted. When the current chunk is depleted the iterator attempts to load the next chunk; in this implementation chunk loading is stubbed and the iterator will be marked exhausted instead. Each returned item increments the iterator's `total_processed` counter.
     ///
     /// # Examples
     ///
@@ -430,9 +414,7 @@ pub struct SanitizationRule {
 }
 
 impl ParameterSanitizer {
-    /// Constructs a new ParameterSanitizer with default sanitization rules and no bindings.
-    ///
-    /// The sanitizer starts with the module's default rules and an empty binding map.
+    /// Creates a new ParameterSanitizer initialized with default sanitization rules and an empty binding map.
     ///
     /// # Examples
     ///
@@ -448,16 +430,16 @@ impl ParameterSanitizer {
         }
     }
 
-    /// Bind a parameter after validating it with the sanitizer's rules.
+    /// Validate a value against the sanitizer's rules and store it as a named `ParameterBinding`.
     ///
-    /// Validates `value` against the configured sanitization rules and, on success,
-    /// stores a validated `ParameterBinding` under `name` with the provided `sql_type`.
+    /// Validates `value` (converted via `ToString`) against all configured `SanitizationRule`s and,
+    /// if every rule passes, inserts a `ParameterBinding` into the sanitizer's bindings under `name`.
     ///
-    /// # Parameters
+    /// # Arguments
     ///
-    /// - `name`: The parameter's binding name used in queries.
-    /// - `value`: The parameter value to sanitize and bind (converted with `ToString`).
-    /// - `sql_type`: A textual representation of the SQL type for the bound parameter.
+    /// * `name` - The binding name to use in queries.
+    /// * `value` - The parameter value to sanitize (will be converted to `String`).
+    /// * `sql_type` - A textual representation of the SQL type associated with the parameter.
     ///
     /// # Returns
     ///
@@ -610,8 +592,12 @@ impl ParameterSanitizer {
 
     /// Access the map of validated parameter bindings.
     ///
-    /// Returns a reference to the internal HashMap that stores bound parameters keyed by their parameter name.
-    /// The map contains `ParameterBinding` values that have passed sanitization and are marked as validated.
+    /// Each entry maps a parameter name to its validated `ParameterBinding`. Bindings are populated by
+    /// `bind_parameter` and represent values that passed sanitization and have `validated = true`.
+    ///
+    /// # Returns
+    ///
+    /// A reference to the internal `HashMap<String, ParameterBinding>` holding the validated bindings.
     ///
     /// # Examples
     ///
@@ -734,16 +720,15 @@ impl QueryOptimizationEngine {
         }
     }
 
-    /// Optimize a functional query composition and produce updated composition metrics.
+    /// Optimize a functional query composition and return the updated composer and metrics.
     ///
-    /// Applies the engine's optimization rules to the provided `FunctionalQueryComposer` (currently a pass-through),
-    /// computes a complexity score for the resulting composition, and returns the (possibly optimized) composer
-    /// together with updated `QueryPerformanceMetrics` that include `composition_time` and `complexity_score`.
+    /// Applies the engine's optimization rules to the provided `FunctionalQueryComposer`, computes a complexity
+    /// score for the resulting composition, and updates composition-related metrics.
     ///
     /// # Returns
     ///
-    /// A tuple containing the optimized `FunctionalQueryComposer` and its `QueryPerformanceMetrics` with an updated
-    /// `composition_time` and `complexity_score`.
+    /// A tuple containing the (possibly optimized) `FunctionalQueryComposer` and its `QueryPerformanceMetrics`
+    /// with `composition_time` and `complexity_score` updated.
     ///
     /// # Examples
     ///
@@ -756,6 +741,7 @@ impl QueryOptimizationEngine {
     ///
     /// let (optimized, metrics) = engine.optimize(composer);
     /// println!("composition_time: {:?}", metrics.composition_time);
+    /// println!("complexity_score: {}", metrics.complexity_score);
     /// ```
     pub fn optimize<T, U>(
         &self,
@@ -781,10 +767,9 @@ impl QueryOptimizationEngine {
         (optimized_composer, metrics)
     }
 
-    /// Provides the default set of optimization rules used by the query optimization engine.
+    /// Returns the default optimization rules used by the query optimization engine.
     ///
-    /// The returned vector contains predefined `OptimizationRule` entries (filter_pushdown,
-    /// index_utilization, lazy_evaluation) with their descriptions, conditions, and improvement factors.
+    /// The vector contains three predefined rules—`filter_pushdown`, `index_utilization`, and `lazy_evaluation`—each with a name, description, condition, and improvement_factor.
     ///
     /// # Examples
     ///
@@ -818,17 +803,16 @@ impl QueryOptimizationEngine {
 }
 
 impl ComplexityAnalyzer {
-    /// Constructs a ComplexityAnalyzer preconfigured with a default base score and operation multipliers.
+    /// Creates a ComplexityAnalyzer configured with a base score of 10 and default operation multipliers.
     ///
-    /// # Returns
-    ///
-    /// A ComplexityAnalyzer initialized with a base score of 10 and multipliers for the operations
-    /// "join", "subquery", "aggregation", and "ordering".
+    /// The analyzer provides multipliers for common query operations used when computing a bounded complexity score.
     ///
     /// # Examples
     ///
     /// ```
-    /// let _analyzer = ComplexityAnalyzer::new();
+    /// let analyzer = ComplexityAnalyzer::new();
+    /// assert_eq!(analyzer.base_score, 10);
+    /// assert_eq!(*analyzer.multipliers.get("join").unwrap(), 2.0);
     /// ```
     pub fn new() -> Self {
         let mut multipliers = HashMap::new();

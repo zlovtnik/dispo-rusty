@@ -34,15 +34,17 @@ pub struct UpdateTenant {
 }
 
 impl Tenant {
-    /// Validates that the provided string is a well-formed URL suitable for a database connection.
+    /// Verify that `url` is a syntactically valid URL suitable for a database connection.
+    ///
+    /// Returns a `DatabaseError` with message "Invalid database URL format" if parsing fails.
     ///
     /// # Examples
     ///
     /// ```
-    /// // Check a valid URL
+    /// // Valid URL
     /// assert!(Tenant::validate_db_url("postgres://user:pass@localhost/db").is_ok());
     ///
-    /// // Check an invalid URL
+    /// // Invalid URL
     /// assert!(Tenant::validate_db_url("not-a-valid-url").is_err());
     /// ```
     pub fn validate_db_url(url: &str) -> QueryResult<()> {
@@ -57,15 +59,14 @@ impl Tenant {
         Ok(())
     }
 
-    /// Creates a new tenant from the provided DTO after validating its database URL.
+    /// Create a tenant record after validating the tenant's database URL.
     ///
-    /// Returns the inserted `Tenant` as stored in the database.
+    /// Returns the inserted `Tenant` row as stored in the database.
     ///
     /// # Examples
     ///
     /// ```no_run
-    /// # use crate::models::TenantDTO;
-    /// # use crate::models::Tenant;
+    /// # use crate::models::{Tenant, TenantDTO};
     /// let dto = TenantDTO {
     ///     id: "tenant_1".into(),
     ///     name: "Tenant One".into(),
@@ -80,10 +81,10 @@ impl Tenant {
         diesel::insert_into(tenants).values(&dto).get_result(conn)
     }
 
-    /// Updates the tenant identified by `id_` with the provided fields.
+    /// Update fields of an existing tenant identified by `id_`.
     ///
-    /// If `dto.db_url` is `Some`, the URL is validated before applying the update.
-    /// `dto`'s `None` fields are left unchanged.
+    /// If `dto.db_url` is `Some`, the URL is validated before the update. Fields left as `None` in `dto` are not modified.
+    /// On success this returns the updated `Tenant`; on failure it returns a Diesel `DatabaseError` for validation or query errors.
     ///
     /// # Examples
     ///
@@ -91,9 +92,8 @@ impl Tenant {
     /// let dto = UpdateTenant { name: Some("New Name".into()), db_url: None };
     /// let updated = Tenant::update("tenant-123", dto, &mut conn).unwrap();
     /// assert_eq!(updated.id, "tenant-123");
+    /// assert_eq!(updated.name, "New Name");
     /// ```
-    ///
-    /// Returns the updated `Tenant` on success.
     pub fn update(
         id_: &str,
         dto: UpdateTenant,
@@ -109,19 +109,30 @@ impl Tenant {
         diesel::delete(tenants.find(id_)).execute(conn)
     }
 
+    /// Retrieves a tenant by its identifier.
+    ///
+    /// # Returns
+    ///
+    /// The `Tenant` record that matches `t_id`, or a Diesel `QueryResult` error if no matching row is found or the query fails.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // `conn` is a mutable database connection: &mut crate::config::db::Connection
+    /// let tenant = find_by_id("tenant_123", &mut conn).unwrap();
+    /// assert_eq!(tenant.id, "tenant_123");
+    /// ```
     pub fn find_by_id(t_id: &str, conn: &mut crate::config::db::Connection) -> QueryResult<Tenant> {
         tenants.filter(id.eq(t_id)).get_result::<Tenant>(conn)
     }
 
-    /// Loads tenants up to an enforced maximum; errors if the total tenant count exceeds 10,000.
+    /// Loads all tenants when the total tenant count does not exceed 10,000.
     ///
-    /// This function first counts tenants and returns an error if the total exceeds the hard limit
-    /// of 10,000. If the total is within the limit, it loads and returns up to 10,000 tenant records.
+    /// Counts tenants and returns an error suggesting pagination if the total is greater than 10,000; otherwise returns up to 10,000 tenant records.
     ///
     /// # Errors
     ///
-    /// Returns a `DatabaseError` when the total tenant count is greater than 10,000 and suggests
-    /// using paginated methods instead.
+    /// Returns a `DatabaseError` if the tenant count is greater than 10,000, advising to use paginated methods instead.
     ///
     /// # Examples
     ///
@@ -270,21 +281,23 @@ impl Tenant {
 
     /// Inserts multiple tenants in a single database transaction after validating each DTO.
     ///
-    /// Each `TenantDTO` is validated (ID and name) and its `db_url` is validated; if any validation or insertion fails, the entire transaction is rolled back.
+    /// Each `TenantDTO` is validated for `id` and `name`, and its `db_url` is validated; if any validation or insertion fails, the entire transaction is rolled back.
     ///
     /// # Returns
     ///
-    /// Number of rows inserted.
+    /// The number of rows successfully inserted.
     ///
     /// # Examples
     ///
     /// ```no_run
     /// use crate::models::tenant::{Tenant, TenantDTO};
+    ///
     /// let dtos = vec![TenantDTO {
     ///     id: "t1".into(),
     ///     name: "Tenant 1".into(),
     ///     db_url: "postgres://user:pass@localhost/db".into(),
     /// }];
+    ///
     /// let mut conn = crate::config::db::establish_connection();
     /// let inserted = Tenant::batch_create(dtos, &mut conn).unwrap();
     /// assert_eq!(inserted, 1);

@@ -8,22 +8,21 @@ use crate::{
     services::address_book_service,
 };
 // GET api/address-book
-/// Retrieve all people from the address book and return them in a standard JSON response.
+/// Retrieves all people from the address book and returns them in a standard JSON response.
 ///
 /// # Returns
 ///
-/// `HttpResponse` containing a JSON `ResponseBody` with the list of people and an OK message,
-/// or a `ServiceError` if the database pool is missing or the service call fails.
+/// `HttpResponse` with a JSON `ResponseBody` containing the list of people and an OK message on success; a `ServiceError` if the database pool is missing or the service call fails.
 ///
 /// # Examples
 ///
 /// ```
 /// use actix_web::HttpRequest;
-/// // Construct a request with a Pool placed into its extensions before calling.
-/// // Here we show the call shape; setting up a real Pool is omitted for brevity.
+/// use crate::api::address_book_controller::find_all;
+///
+/// // In real usage, a database `Pool` must be inserted into the request extensions before calling.
 /// let req = HttpRequest::default();
-/// let result = actix_rt::System::new().block_on(crate::api::address_book_controller::find_all(req));
-/// // `result` will be `Ok(HttpResponse)` on success or `Err(ServiceError)` on failure.
+/// let result = actix_rt::System::new().block_on(find_all(req));
 /// ```
 pub async fn find_all(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
     if let Some(pool) = req.extensions().get::<Pool>() {
@@ -41,10 +40,10 @@ pub async fn find_all(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
 }
 
 // GET api/address-book/{id}
-/// Retrieve a person by ID and return an HTTP 200 response containing the person as JSON.
+/// Retrieve a person by ID.
 ///
-/// On success returns an `HttpResponse::Ok` whose JSON body is a `ResponseBody` wrapping the found person.
-/// On failure returns a `ServiceError` (for example when the DB pool is missing or the service reports an error).
+/// # Returns
+/// `HttpResponse` with status 200 whose JSON body is a `ResponseBody` containing the found person on success; returns a `ServiceError` if the DB pool is missing or the service reports an error.
 ///
 /// # Examples
 ///
@@ -92,6 +91,33 @@ pub async fn filter(
 }
 
 // POST api/address-book
+/// Create a new person record in the address book.
+///
+/// Inserts the provided `PersonDTO` into the configured database pool and returns a Created response when insertion succeeds.
+///
+/// # Parameters
+///
+/// - `new_person` — Payload containing the person fields to persist.
+///
+/// # Returns
+///
+/// `HttpResponse` with HTTP 201 and a JSON `ResponseBody` containing an OK message and empty payload on success; a `ServiceError` on failure.
+///
+/// # Examples
+///
+/// ```
+/// use actix_web::{test, web, HttpRequest};
+///
+/// #[actix_web::test]
+/// async fn example_insert() {
+///     let person = PersonDTO { name: "Alice".into(), email: "alice@example.com".into(), ..Default::default() };
+///     let req = test::TestRequest::default().to_http_request();
+///     let resp = insert(web::Json(person), req).await;
+///     assert!(resp.is_ok());
+///     let http = resp.unwrap();
+///     assert_eq!(http.status(), actix_web::http::StatusCode::CREATED);
+/// }
+/// ```
 pub async fn insert(
     new_person: web::Json<PersonDTO>,
     req: HttpRequest,
@@ -110,24 +136,28 @@ pub async fn insert(
 }
 
 // PUT api/address-book/{id}
-/// Updates an existing person identified by `id` with the provided `updated_person` data.
+/// Update an existing person identified by `id` with the provided `updated_person` data.
 ///
-/// On success returns an HTTP 200 response with a `ResponseBody` containing an OK message and an empty payload.
-/// Returns a `ServiceError::InternalServerError` with message "Pool not found" if the database pool is missing from the request extensions.
-/// Any service-layer error from `address_book_service::update` is propagated as the `Err` variant.
+/// Returns an HTTP 200 response with a `ResponseBody` containing an OK message and an empty payload on success.
+///
+/// # Returns
+///
+/// - `Ok(HttpResponse)` with status 200 and a `ResponseBody` containing `constants::MESSAGE_OK` and `constants::EMPTY` on success.
+/// - `Err(ServiceError::InternalServerError)` with `error_message` "Pool not found" if the database pool is missing from the request extensions.
+/// - Any `ServiceError` produced by `address_book_service::update` is propagated as `Err`.
 ///
 /// # Examples
 ///
 /// ```no_run
 /// use actix_web::{HttpRequest, web};
 ///
-/// // Assume `PersonDTO` can be constructed like this in your codebase.
+/// // Construct inputs as appropriate for your codebase
 /// let id = web::Path::from(1);
 /// let updated = web::Json(PersonDTO { /* fields */ });
 /// let req = HttpRequest::default();
 ///
-/// // Call from an async context
-/// let result = update(id, updated, req).await;
+/// // Call from an async context:
+/// // let result = update(id, updated, req).await;
 /// ```
 pub async fn update(
     id: web::Path<i32>,
@@ -152,19 +182,19 @@ pub async fn update(
 // DELETE api/address-book/{id}
 /// Deletes the person with the given ID from the address book.
 ///
-/// On success returns an HTTP 200 response with a JSON `ResponseBody` containing an OK message and an empty payload.
-/// If the database pool is missing or the service fails, a `ServiceError` is returned (missing pool yields an InternalServerError with message "Pool not found").
+/// On success, returns an HTTP 200 response whose JSON body is a `ResponseBody` with an OK message and an empty payload.
+/// If the database pool is missing, returns `ServiceError::InternalServerError` with message "Pool not found". Other service failures return the corresponding `ServiceError`.
 ///
 /// # Examples
 ///
 /// ```no_run
-/// # use actix_web::{web, HttpRequest};
-/// # use crate::api::address_book_controller::delete;
-/// # async fn run() -> Result<(), ()> {
-/// let req = HttpRequest::default(); // example placeholder
+/// use actix_web::{web, HttpRequest};
+/// use crate::api::address_book_controller::delete;
+///
+/// # async fn example() {
+/// let req = HttpRequest::default();
 /// let id = web::Path::from(1);
-/// let _res = delete(id, req).await;
-/// # Ok(())
+/// let _ = delete(id, req).await;
 /// # }
 /// ```
 pub async fn delete(id: web::Path<i32>, req: HttpRequest) -> Result<HttpResponse, ServiceError> {
@@ -310,6 +340,19 @@ mod tests {
         assert_eq!(get_people_in_db(&pool).await.unwrap().len(), 1);
     }
 
+    /// Verifies that inserting a valid person via POST /api/address-book returns HTTP 201 and persists the record.
+    ///
+    /// This integration test boots a temporary PostgreSQL instance, initializes the DB and tenant pool,
+    /// starts the Actix app with authentication and CORS middleware, signs up/logs in an admin user,
+    /// sends a POST request with a valid person payload, and asserts the response status is Created and
+    /// that exactly one person exists in the database afterwards.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// // The test itself runs the full flow: start DB, run migrations, start app, authenticate, POST payload.
+    /// // Running the test verifies the endpoint returns `201 Created` and the person is persisted.
+    /// ```
     #[actix_web::test]
     async fn test_insert_ok() {
         let docker = clients::Cli::default();
@@ -478,6 +521,18 @@ mod tests {
         };
     }
 
+    /// Verifies that updating an existing person via PUT returns OK and persists the changes.
+    ///
+    /// This integration test boots a PostgreSQL test container, initializes the database and tenant
+    /// manager, inserts a mock person, performs an authenticated PUT to update that person, and
+    /// asserts the response is 200 OK and the database record reflects the updated values.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // Runs the integration scenario: start DB, insert one person, update via PUT and assert.
+    /// // See `test_update_ok` in tests for the full setup and assertions.
+    /// ```
     #[actix_web::test]
     async fn test_update_ok() {
         let docker = clients::Cli::default();

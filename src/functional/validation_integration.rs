@@ -5,13 +5,10 @@ use crate::functional::validation_engine::{ValidationEngine, ValidationOutcome};
 use crate::functional::validation_rules::{Email, Length, Phone, Range, Required};
 use crate::models::person::PersonDTO;
 
-/// Validate a PersonDTO by applying field-specific rules and aggregating all validation errors.
+/// Validates the fields of a PersonDTO and aggregates any discovered validation errors.
 ///
-/// Runs required and format/constraint validations for each field (name, email, age, address, phone)
-/// and returns a single outcome containing all discovered errors.
-///
-/// Returns `ValidationOutcome::success(())` when no field errors are present, or
-/// `ValidationOutcome::failure` with a vector of all collected `ValidationError`s otherwise.
+/// Performs required, format, and constraint checks for name, email, age, address, and phone.
+/// Returns `ValidationOutcome::success(())` if no errors were found, or `ValidationOutcome::failure` with a vector of `ValidationError`s otherwise.
 ///
 /// # Examples
 ///
@@ -85,13 +82,9 @@ pub fn validate_person_dto(person: &PersonDTO) -> ValidationOutcome<()> {
     }
 }
 
-/// Validates a PersonDTO with composite rules: name presence/length and a required valid contact (email or phone).
+/// Validate a PersonDTO using composite rules: name must be present and within length limits, and at least one valid contact (email or phone) must be provided.
 ///
-/// Performs the following checks:
-/// - `name` is present and its length is between 1 and 100 characters.
-/// - At least one valid contact is provided: a non-empty, valid `email` or a non-empty, valid `phone`.
-///
-/// On failure, returns a `ValidationOutcome::failure` containing the collected validation errors; on success, returns `ValidationOutcome::success(())`.
+/// On failure, returns a `ValidationOutcome::failure` containing one or more `ValidationError` entries; on success, returns `ValidationOutcome::success(())`.
 ///
 /// # Examples
 ///

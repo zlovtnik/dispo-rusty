@@ -58,7 +58,7 @@ impl<T, I> IteratorChain<T, I>
 where
     I: Iterator<Item = T>,
 {
-    /// Constructs a new IteratorChain from an existing iterator with the default configuration.
+    /// Create an IteratorChain that wraps an existing iterator and uses the default configuration.
     ///
     /// # Examples
     ///
@@ -116,18 +116,18 @@ where
         }
     }
 
-    /// Filters items in the chain using the provided predicate and returns a new chain with the filter operation recorded.
+    /// Create a new IteratorChain containing only items that satisfy the given predicate.
     ///
-    /// The predicate is applied to a reference to each item; items for which the predicate returns `true` are retained.
-    /// This method appends "filter" to the chain's operations log.
+    /// The predicate is applied to a reference to each item. Records `"filter"` in the chain's operations log.
     ///
     /// # Examples
     ///
     /// ```
-    /// let chain = IteratorChain::new(vec![1, 2, 3, 4].into_iter())
+    /// let result = IteratorChain::new(vec![1, 2, 3, 4].into_iter())
     ///     .filter(|&x| x % 2 == 0)
     ///     .collect();
-    /// assert_eq!(chain, vec![2, 4]);
+    ///
+    /// assert_eq!(result, vec![2, 4]);
     /// ```
     pub fn filter<F>(self, f: F) -> IteratorChain<T, std::iter::Filter<I, F>>
     where
@@ -208,16 +208,13 @@ where
 
     /// Join two sequences by key, emitting every matching pair of left and right items.
     ///
-    /// The right-hand sequence is collected into a map keyed by `other_key`. For each item from
-    /// the left iterator, this returns a pair for every right-hand item whose key equals the
-    /// left item's `self_key`. Both left and right items are cloned as required by the API.
+    /// The right-hand sequence is collected into a map keyed by `other_key`. For each item from the
+    /// left iterator, this produces a pair for every right-hand item whose key equals the left
+    /// item's `self_key`. Left and right items are cloned as required to yield `(T, V)` pairs.
     ///
     /// # Examples
     ///
     /// ```
-    /// // left: [1, 2, 3]
-    /// // right: [(1, 10), (2, 20), (1, 11)]
-    /// // result: [(1, 10), (1, 11), (2, 20)]
     /// let left_chain = IteratorChain::new(vec![1, 2, 3].into_iter());
     /// let joined: Vec<_> = left_chain
     ///     .join(
@@ -292,14 +289,15 @@ where
     //     }
     // }
 
-    /// Collects all items from the chain into a `Vec`.
+    /// Collects all remaining items from the chain into a `Vec`.
     ///
-    /// Returns a `Vec<T>` containing every item produced by the chain's iterator.
+    /// The returned `Vec<T>` contains every item produced by the chain's iterator.
     ///
     /// # Examples
     ///
     /// ```
-    /// # use crate::functional::iterator_engine::IteratorChain;
+    /// use crate::functional::iterator_engine::IteratorChain;
+    ///
     /// let chain = IteratorChain::new(vec![1, 2, 3].into_iter());
     /// let v = chain.collect();
     /// assert_eq!(v, vec![1, 2, 3]);
@@ -308,7 +306,7 @@ where
         self.iterator.collect()
     }
 
-    /// Counts the remaining elements in the chain.
+    /// Consume the chain and count its remaining items.
     ///
     /// Returns the number of remaining elements.
     ///
@@ -322,7 +320,9 @@ where
         self.iterator.count()
     }
 
-    /// Retrieve the first element of the chain, consuming the chain.
+    /// Get the first element of the chain, consuming the chain.
+    ///
+    /// Returns `Some(item)` if the chain yields an element, or `None` if it is empty.
     ///
     /// # Examples
     ///
@@ -334,11 +334,9 @@ where
         self.iterator.next()
     }
 
-    /// Reduces the iterator's items into a single value by applying an accumulator function.
+    /// Accumulates the chain's items into a single value by repeatedly applying `f`.
     ///
-    /// # Returns
-    ///
-    /// The final accumulated value after processing all items.
+    /// Consumes the iterator chain.
     ///
     /// # Examples
     ///
@@ -354,10 +352,9 @@ where
         self.iterator.fold(init, f)
     }
 
-    /// Returns a slice of operation names recorded by this iterator chain.
+    /// A slice of recorded operation names in the order they were applied to the chain.
     ///
-    /// The slice reflects the sequence of transformation names (e.g., "map", "filter", "join")
-    /// that have been applied to the chain for debugging or monitoring purposes.
+    /// The slice contains transformation names (for example `"map"`, `"filter"`, `"join"`) recorded for debugging or monitoring.
     ///
     /// # Examples
     ///
@@ -442,7 +439,7 @@ impl IteratorEngine {
         }
     }
 
-    /// Create an IteratorChain from an existing iterator using this engine's configuration.
+    /// Creates an IteratorChain from an existing iterator using the engine's configuration.
     ///
     /// # Examples
     ///
@@ -482,11 +479,12 @@ impl IteratorEngine {
     //     self.from_iter(slice.iter())
     // }
 
-    /// Applies `transform` to each element of `data` by reference and returns a `Vec` of the results.
+    /// Apply a transform to each element of a slice by reference.
     ///
-    /// This function borrows each input (`&T`) so elements are not cloned; when the engine's
-    /// `config.enable_parallel` is true and the crate is built with the `"parallel"` feature,
-    /// processing may run in parallel for large inputs, otherwise it runs sequentially.
+    /// When the crate is built with the `"parallel"` feature and the engine's
+    /// `config.enable_parallel` is true and the slice length exceeds `config.buffer_size`,
+    /// processing is performed in parallel; otherwise processing is sequential.
+    /// The returned `Vec` contains the transformed elements in the same order as the input.
     ///
     /// # Examples
     ///

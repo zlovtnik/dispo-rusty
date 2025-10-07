@@ -19,7 +19,7 @@ pub struct ValidationError {
 }
 
 impl ValidationError {
-    /// Creates a ValidationError with the provided field name, error code, and message.
+    /// Constructs a ValidationError for the specified field, code, and message.
     ///
     /// # Examples
     ///
@@ -92,19 +92,12 @@ pub struct Length {
 }
 
 impl ValidationRule<String> for Length {
-    /// Validates that a string's length falls within the rule's optional minimum and maximum bounds.
+    /// Validates that the string's length is within the optional `min` and `max` bounds.
     ///
-    /// If `min` is set and the string has fewer than `min` characters, validation fails with code
-    /// `TOO_SHORT`. If `max` is set and the string has more than `max` characters, validation fails
-    /// with code `TOO_LONG`. Error messages include `field_name`.
-    ///
-    /// # Parameters
-    ///
-    /// - `field_name`: Name of the field used in the returned `ValidationError`'s `field` and message.
-    ///
-    /// # Returns
-    ///
-    /// `Ok(())` if the string length satisfies the configured bounds, `Err(ValidationError)` otherwise.
+    /// If `min` is set and the value's length is less than `min`, validation fails with code
+    /// `TOO_SHORT` and message "`<field_name>` must be at least <min> characters". If `max` is set and
+    /// the value's length is greater than `max`, validation fails with code `TOO_LONG` and message
+    /// "`<field_name>` must be at most <max> characters".
     ///
     /// # Examples
     ///
@@ -147,11 +140,11 @@ impl ValidationRule<String> for Length {
 pub struct Email;
 
 impl ValidationRule<String> for Email {
-    /// Validates that a string is a well-formed email address using a simple pattern.
+    /// Determines whether a string is a valid email address according to a simple pattern.
     ///
     /// # Returns
     ///
-    /// `Ok(())` when the value matches a simple email pattern; `Err(ValidationError)` with code `INVALID_EMAIL` otherwise.
+    /// `Ok(())` if the value matches the simple email pattern, `Err(ValidationError)` with code `"INVALID_EMAIL"` otherwise.
     ///
     /// # Examples
     ///
@@ -228,9 +221,9 @@ impl ValidationRule<i32> for Range {
 pub struct Phone;
 
 impl ValidationRule<String> for Phone {
-    /// Validates that a string is a phone number containing only digits, spaces, dashes, parentheses, or `+`, with length between 7 and 20 characters.
+    /// Validates a string as a phone number allowing digits, spaces, dashes, parentheses, and `+` with length between 7 and 20 characters.
     ///
-    /// Returns an `Err(ValidationError)` with code `"INVALID_PHONE"` when the value does not match the expected phone format.
+    /// Returns a `ValidationError` with code `INVALID_PHONE` and a message of the form `"<field_name> must be a valid phone number"` when the value does not match the expected format.
     ///
     /// # Examples
     ///
@@ -289,19 +282,22 @@ impl<F, T> ValidationRule<T> for Custom<F>
 where
     F: Fn(&T) -> bool,
 {
-    /// Validates a value with the rule's predicate and produces a ValidationError when the predicate fails.
+    /// Validates a value using the rule's predicate and yields either success or a validation error.
     ///
-    /// The `field_name` is interpolated into the rule's error message where `{}` appears.
+    /// The `field_name` is substituted for the first `{}` occurrence in the rule's error message
+    /// when constructing the `ValidationError`.
     ///
     /// # Returns
     ///
-    /// `Ok(())` if the predicate returns `true`, `Err(ValidationError)` with the rule's code and interpolated message otherwise.
+    /// `Ok(())` if the predicate returns `true`, `Err(ValidationError)` with the rule's code and
+    /// the error message (with `{}` replaced by `field_name`) otherwise.
     ///
     /// # Examples
     ///
     /// ```
     /// let rule = Custom::new(|s: &str| !s.is_empty(), "REQUIRED", "{} is required");
     /// assert!(rule.validate(&"value", "field").is_ok());
+    ///
     /// let err = rule.validate(&"", "field").unwrap_err();
     /// assert!(err.message.contains("field"));
     /// ```
@@ -323,7 +319,7 @@ pub struct OneOf<T: Clone + PartialEq> {
 }
 
 impl<T: Clone + PartialEq> OneOf<T> {
-    /// Creates a `OneOf` validation rule that accepts only the provided allowed values.
+    /// Constructs a `OneOf` rule that validates a value is one of the provided allowed values.
     ///
     /// # Examples
     ///
@@ -340,10 +336,10 @@ impl<T: Clone + PartialEq> OneOf<T> {
 }
 
 impl<T: Clone + PartialEq> ValidationRule<T> for OneOf<T> {
-    /// Validates that the provided value is contained in the rule's allowed values.
+    /// Checks that a value is one of the rule's allowed values.
     ///
-    /// Returns `Ok(())` if `value` is equal to one of the allowed values, `Err(ValidationError)` with code
-    /// `"INVALID_VALUE"` and a message indicating the field otherwise.
+    /// Returns `Ok(())` if `value` is equal to one of the allowed values, `Err(ValidationError)` with
+    /// code `INVALID_VALUE` and message "`<field_name>` must be one of the allowed values" otherwise.
     ///
     /// # Examples
     ///
@@ -370,18 +366,17 @@ impl<T: Clone + PartialEq> ValidationRule<T> for OneOf<T> {
 pub struct Unique;
 
 impl<T: Clone + Eq + std::hash::Hash> ValidationRule<Vec<T>> for Unique {
-    /// Validates that a vector contains no duplicate values.
+    /// Ensures a vector contains no duplicate elements.
     ///
-    /// On success returns `Ok(())`. If any duplicate is found returns `Err(ValidationError)`
-    /// with code `DUPLICATE_VALUES` and a message indicating which field contains duplicates.
+    /// If a duplicate is found, returns a `ValidationError` with code `"DUPLICATE_VALUES"` and a
+    /// message indicating which field contains duplicates.
     ///
     /// # Examples
     ///
     /// ```
-    /// use std::collections::HashSet;
-    ///
     /// // Assuming `Unique` implements `ValidationRule<Vec<T>>`
     /// let rule = Unique;
+    ///
     /// let ok = rule.validate(&vec![1, 2, 3], "numbers");
     /// assert!(ok.is_ok());
     ///
@@ -444,10 +439,10 @@ impl ValidationRule<String> for Url {
 pub struct MustBeTrue;
 
 impl ValidationRule<bool> for MustBeTrue {
-    /// Ensures the boolean value is true.
+    /// Validates that a field is enabled.
     ///
-    /// Returns `Ok(())` if `value` is `true`, `Err(ValidationError)` with code
-    /// `"MUST_BE_TRUE"` and a message "<field_name> must be true" if `value` is `false`.
+    /// Returns `Ok(())` if the value is `true`, `Err(ValidationError)` with code
+    /// `"MUST_BE_TRUE"` and message `"<field_name> must be true"` if the value is `false`.
     ///
     /// # Examples
     ///
@@ -472,19 +467,16 @@ impl ValidationRule<bool> for MustBeTrue {
     }
 }
 
-/// Creates a composite validation rule that requires every provided rule to succeed.
+/// Creates a composite validation rule that succeeds only if every provided rule succeeds.
 ///
-/// The returned rule applies all given rules to a value and fails if any single rule fails.
-/// This is useful to combine multiple constraints using logical AND semantics.
+/// The returned rule applies each rule to the value and returns a `ValidationError` if any rule fails.
 ///
 /// # Examples
 ///
 /// ```
 /// let rule = all(vec![Required, Length { min: Some(2), max: Some(10) }]);
-/// let ok = rule.validate(&"hello".to_string(), "name").is_ok();
-/// assert!(ok);
-/// let err = rule.validate(&"a".to_string(), "name").is_err();
-/// assert!(err);
+/// assert!(rule.validate(&"hello".to_string(), "name").is_ok());
+/// assert!(rule.validate(&"a".to_string(), "name").is_err());
 /// ```
 pub fn all<T, R: ValidationRule<T>>(rules: Vec<R>) -> impl ValidationRule<T> {
     Custom::new(
@@ -499,20 +491,24 @@ pub fn all<T, R: ValidationRule<T>>(rules: Vec<R>) -> impl ValidationRule<T> {
     )
 }
 
-/// Creates a composite validation rule that passes when at least one of the provided rules succeeds.
+/// Creates a composite validation rule that succeeds if any of the provided rules succeeds.
 ///
-/// The returned rule validates the value against each rule in `rules` and succeeds if any rule returns `Ok(())`; if none pass it produces a `ValidationError` with code `"VALIDATION_FAILED"`.
+/// If none of the rules pass, the returned rule fails with a `ValidationError` having code
+/// `"VALIDATION_FAILED"` and message `"None of the validation rules passed"`.
 ///
 /// # Examples
 ///
 /// ```
-/// let r1 = crate::Custom::new(|s: &String| s.contains('a'), "HAS_A", "must contain an 'a'");
-/// let r2 = crate::Custom::new(|s: &String| s.contains('b'), "HAS_B", "must contain a 'b'");
+/// use crate::Custom;
+/// use crate::ValidationRule;
+///
+/// let r1 = Custom::new(|s: &String| s.contains('a'), "HAS_A", "{} must contain an 'a'");
+/// let r2 = Custom::new(|s: &String| s.contains('b'), "HAS_B", "{} must contain a 'b'");
 /// let rule = crate::any(vec![r1, r2]);
 ///
-/// assert!(rule.validate(&"apple".to_string(), "field").is_ok()); // contains 'a'
-/// assert!(rule.validate(&"cherry".to_string(), "field").is_ok()); // contains 'b'
-/// assert!(rule.validate(&"zzz".to_string(), "field").is_err());   // contains neither
+/// assert!(rule.validate(&"apple".to_string(), "field").is_ok());
+/// assert!(rule.validate(&"cherry".to_string(), "field").is_ok());
+/// assert!(rule.validate(&"zzz".to_string(), "field").is_err());
 /// ```
 pub fn any<T, R: ValidationRule<T>>(rules: Vec<R>) -> impl ValidationRule<T> {
     Custom::new(
