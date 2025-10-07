@@ -21,6 +21,21 @@ mod models;
 mod schema;
 mod services;
 mod utils;
+/// Application entry point that initializes environment, logging, database and cache connections,
+/// configures tenant pools, CORS, and middlewares, then starts the Actix HTTP server.
+///
+/// # Examples
+///
+/// ```no_run
+/// // Set required environment variables before running the application:
+/// // APP_HOST, APP_PORT, DATABASE_URL, REDIS_URL
+/// // Then run the binary; this will start the Actix web server.
+/// ```
+///
+/// # Returns
+///
+/// `Ok(())` when the server runs successfully, or an `io::Error` if initialization, binding,
+/// or runtime setup fails.
 #[actix_rt::main]
 async fn main() -> io::Result<()> {
     dotenv::dotenv().map_err(|e| {

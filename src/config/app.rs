@@ -65,14 +65,14 @@ pub fn config_services(cfg: &mut web::ServiceConfig) {
     cfg.service(web::scope("/api").configure(configure_api_routes));
 }
 
-/// Registers API endpoints and sub-scopes used under the `/api` path.
+/// Register API endpoints and mount sub-scopes under the `/api` path.
 ///
-/// This function adds standalone routes (ping and health endpoints) and configures the
+/// Adds standalone routes (ping and health endpoints) and configures the
 /// `/auth`, `/address-book`, `/admin`, and `/tenants` sub-scopes.
 ///
 /// # Examples
 ///
-/// ```
+/// ```rust
 /// use actix_web::{App, web};
 ///
 /// let app = App::new().service(web::scope("/api").configure(crate::config::configure_api_routes));
@@ -97,14 +97,18 @@ fn configure_api_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(web::scope("/tenants").configure(configure_tenant_routes));
 }
 
-/// Register authentication-related HTTP routes on the provided ServiceConfig.
+/// Registers authentication HTTP routes on the given ServiceConfig.
 ///
-/// The function adds routes for signup, login, logout, token refresh, and retrieving
-/// the current authenticated user's information under the configured scope.
+/// Adds the following routes (expected to be mounted under an authentication scope):
+/// - POST `/signup` -> account_controller::signup
+/// - POST `/login` -> account_controller::login
+/// - POST `/logout` -> account_controller::logout
+/// - POST `/refresh` -> account_controller::refresh
+/// - GET `/me` -> account_controller::me
 ///
 /// # Examples
 ///
-/// ```
+/// ```rust
 /// use actix_web::{App, web};
 ///
 /// let app = App::new().service(
@@ -119,6 +123,23 @@ fn configure_auth_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(web::resource("/me").route(web::get().to(account_controller::me)));
 }
 
+/// Registers address-book HTTP routes on the provided service configuration.
+///
+/// Routes registered:
+/// - GET  /            -> address_book_controller::find_all
+/// - POST /            -> address_book_controller::insert
+/// - GET  /{id}        -> address_book_controller::find_by_id
+/// - PUT  /{id}        -> address_book_controller::update
+/// - DELETE /{id}      -> address_book_controller::delete
+/// - GET  /filter      -> address_book_controller::filter
+///
+/// # Examples
+///
+/// ```
+/// use actix_web::web;
+/// let app = actix_web::App::new()
+///     .service(web::scope("/address-book").configure(configure_address_book_routes));
+/// ```
 fn configure_address_book_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::resource("")
@@ -134,16 +155,28 @@ fn configure_address_book_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(web::resource("/filter").route(web::get().to(address_book_controller::filter)));
 }
 
+/// Registers admin-related subroutes by mounting tenant administration endpoints at `/tenant`.
+///
+/// This configures the `/tenant` sub-scope and delegates its route registration to
+/// `configure_tenant_admin_routes`.
+///
+/// # Examples
+///
+/// ```
+/// use actix_web::web;
+///
+/// web::scope("/admin").configure(configure_admin_routes);
+/// ```
 fn configure_admin_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(web::scope("/tenant").configure(configure_tenant_admin_routes));
 }
 
-/// Configure tenant-related admin routes under the tenant admin scope.
+/// Configure tenant-related administrative routes under the `/admin/tenant` scope.
 ///
 /// Registers the following routes (relative to the scope):
-/// - GET `/stats` -> `tenant_controller::get_system_stats`
-/// - GET `/health` -> `tenant_controller::get_tenant_health`
-/// - GET `/status` -> `tenant_controller::get_tenant_status`
+/// - `GET /stats` -> `tenant_controller::get_system_stats`
+/// - `GET /health` -> `tenant_controller::get_tenant_health`
+/// - `GET /status` -> `tenant_controller::get_tenant_status`
 ///
 /// # Examples
 ///

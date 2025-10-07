@@ -15,18 +15,23 @@ pub type Connection = PgConnection;
 
 pub type Pool = r2d2::Pool<ConnectionManager<Connection>>;
 
-/// Create and configure a new database connection pool from the given database URL.
+/// Create and configure an r2d2 PostgreSQL connection pool for the given database URL.
 ///
 /// # Examples
 ///
 /// ```no_run
 /// let pool = init_db_pool("postgres://user:password@localhost/mydb");
-/// // Acquire a connection: `let conn = pool.get().unwrap();`
+/// // Acquire a connection:
+/// let _conn = pool.get().unwrap();
 /// ```
 ///
 /// # Returns
 ///
-/// A configured r2d2 connection pool connected to the specified database URL.
+/// The configured r2d2 connection pool connected to the specified database URL.
+///
+/// # Panics
+///
+/// Panics if the pool cannot be created.
 pub fn init_db_pool(url: &str) -> Pool {
     use log::info;
 
@@ -67,6 +72,17 @@ pub struct TenantPoolManager {
 
 #[allow(dead_code)]
 impl TenantPoolManager {
+    /// Creates a TenantPoolManager that owns the provided main connection pool and an empty map for per-tenant pools.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use crate::config::db::{TenantPoolManager, Pool};
+    ///
+    /// // Acquire or construct a `Pool` appropriate for your application.
+    /// let main_pool: Pool = /* create pool */ unimplemented!();
+    /// let manager = TenantPoolManager::new(main_pool);
+    /// ```
     pub fn new(main_pool: Pool) -> Self {
         TenantPoolManager {
             main_pool,
@@ -100,6 +116,33 @@ impl TenantPoolManager {
         self.main_pool.clone()
     }
 
+    /// Removes and returns the connection pool registered for a tenant, if any.
+    ///
+    /// Attempts to acquire a write lock on the internal tenant pool map and remove the
+    /// entry for `tenant_id`.
+    ///
+    /// # Parameters
+    ///
+    /// - `tenant_id`: Identifier of the tenant whose pool should be removed.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(Some(pool))` with the removed pool if a pool was present for `tenant_id`,
+    /// `Ok(None)` if no pool existed for `tenant_id`, or `Err(ServiceError::InternalServerError)`
+    /// if the tenant pools lock is poisoned.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use crate::config::db::{TenantPoolManager, Pool};
+    ///
+    /// // Construct a dummy Pool for example purposes (unsafe placeholder to allow compilation).
+    /// let main_pool: Pool = unsafe { std::mem::MaybeUninit::zeroed().assume_init() };
+    /// let manager = TenantPoolManager::new(main_pool);
+    ///
+    /// // Removing a non-existent tenant returns Ok(None).
+    /// assert_eq!(manager.remove_tenant_pool("no-such-tenant").unwrap(), None);
+    /// ```
     pub fn remove_tenant_pool(&self, tenant_id: &str) -> Result<Option<Pool>, ServiceError> {
         match self.tenant_pools.write() {
             Ok(mut pools) => Ok(pools.remove(tenant_id)),

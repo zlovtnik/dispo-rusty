@@ -38,13 +38,33 @@ pub trait PureFunction<Input, Output>: Send + Sync + 'static {
     /// The category this function belongs to
     fn category(&self) -> FunctionCategory;
 
-    /// Check if this function can be composed with another function.
+    /// Determines whether this function can be composed with another function.
+    ///
+    /// The default implementation allows composition and may be overridden by implementations
+    /// that enforce additional compatibility rules.
     ///
     /// # Arguments
-    /// * `other` - The function to check composition compatibility with
+    ///
+    /// * `other` - the function to test composition compatibility with
     ///
     /// # Returns
-    /// true if the functions can be composed, false otherwise
+    ///
+    /// `true` if the functions can be composed, `false` otherwise.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// struct Id;
+    /// impl PureFunction<i32, i32> for Id {
+    ///     fn call(&self, input: i32) -> i32 { input }
+    ///     fn signature(&self) -> &'static str { "Id" }
+    ///     fn category(&self) -> FunctionCategory { FunctionCategory::Transformation }
+    /// }
+    ///
+    /// let a = Id;
+    /// let b = Id;
+    /// assert!(a.can_compose_with(&b));
+    /// ```
     fn can_compose_with(&self, _other: &dyn PureFunction<Output, Output>) -> bool
     where
         Output: Clone,
@@ -99,15 +119,19 @@ where
     Output: Send + Sync + 'static,
     F: Fn(Input) -> Output + Send + Sync + 'static,
 {
-    /// Create a new function wrapper.
+    /// Constructs a FunctionWrapper that wraps a pure function together with its signature and category.
     ///
-    /// # Arguments
-    /// * `function` - The pure function to wrap
-    /// * `signature` - Function signature string
-    /// * `category` - Function category
+    /// The `function` is the pure callable to be wrapped. The `signature` is a static string used to describe
+    /// the function's signature for composition and lookup. The `category` classifies the function for organization.
     ///
-    /// # Returns
-    /// A new FunctionWrapper instance
+    /// # Examples
+    ///
+    /// ```
+    /// use crate::functional::function_traits::{FunctionWrapper, FunctionCategory};
+    ///
+    /// let wrapped = FunctionWrapper::new(|x: i32| x + 1, "i32 -> i32", FunctionCategory::Transformation);
+    /// assert_eq!(wrapped.call(1), 2);
+    /// ```
     pub fn new(function: F, signature: &'static str, category: FunctionCategory) -> Self {
         Self {
             function,
@@ -124,14 +148,52 @@ where
     Output: Send + Sync + 'static,
     F: Fn(Input) -> Output + Send + Sync + 'static,
 {
+    /// Invokes the wrapped pure function with the provided input.
+    ///
+    /// # Returns
+    ///
+    /// `Output` — the result of applying the wrapped function to `input`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use crate::functional::function_traits::{FunctionWrapper, FunctionCategory};
+    ///
+    /// let fw = FunctionWrapper::new(|x: i32| x + 1, "increment", FunctionCategory::Mathematical);
+    /// let result = fw.call(1);
+    /// assert_eq!(result, 2);
+    /// ```
     fn call(&self, input: Input) -> Output {
         (self.function)(input)
     }
 
+    /// Get the stored signature of the contained function.
+    ///
+    /// # Returns
+    ///
+    /// The stored signature string for the contained function.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use crate::functional::function_traits::{FunctionContainer, FunctionCategory};
+    ///
+    /// let container = FunctionContainer::new(|x: i32| x + 1, "add_one", FunctionCategory::Transformation);
+    /// assert_eq!(container.signature(), "add_one");
+    /// ```
     fn signature(&self) -> &'static str {
         self.signature
     }
 
+    /// Returns the category assigned to this function container.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let wrapper = FunctionWrapper::new(|x: i32| x + 1, "inc", FunctionCategory::Transformation);
+    /// let container = FunctionContainer::new(wrapper, "inc", FunctionCategory::Transformation);
+    /// assert_eq!(container.category(), FunctionCategory::Transformation);
+    /// ```
     fn category(&self) -> FunctionCategory {
         self.category
     }
@@ -154,15 +216,19 @@ pub struct FunctionContainer {
 }
 
 impl FunctionContainer {
-    /// Create a new function container.
+    /// Constructs a type-erased container that holds a pure function together with its signature,
+    /// category, and input/output type IDs.
     ///
-    /// # Arguments
-    /// * `function` - The pure function implementation
-    /// * `signature` - Unique function signature for identification
-    /// * `category` - Function category for organization
+    /// The container can be stored in heterogeneous registries and invoked via type-erased values.
     ///
-    /// # Returns
-    /// A new FunctionContainer instance
+    /// # Examples
+    ///
+    /// ```
+    /// // Create a FunctionWrapper from a closure, then wrap it in a FunctionContainer.
+    /// let wrapper = pure_closure!("inc_i32", FunctionCategory::Transformation, |x: i32| x + 1);
+    /// let container = FunctionContainer::new(wrapper, "inc_i32", FunctionCategory::Transformation);
+    /// // `container` now holds a callable with recorded input/output TypeIds.
+    /// ```
     pub fn new<Input, Output, F>(
         function: F,
         signature: &'static str,
@@ -185,33 +251,95 @@ impl FunctionContainer {
         }
     }
 
-    /// Get the function signature.
+    /// Retrieve the stored static signature for this function.
+    ///
+    /// # Returns
+    ///
+    /// The stored `&'static str` signature.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use crate::functional::{FunctionContainer, FunctionCategory};
+    /// let cont = FunctionContainer::new(|x: i32| x + 1, "inc", FunctionCategory::Transformation);
+    /// assert_eq!(cont.signature(), "inc");
+    /// ```
     pub fn signature(&self) -> &'static str {
         self.signature
     }
 
-    /// Get the function category.
+    /// Returns the function's assigned category.
+    ///
+    /// # Returns
+    ///
+    /// The FunctionCategory value associated with this function.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use crate::functional::function_traits::{FunctionWrapper, FunctionCategory, pure_closure};
+    ///
+    /// let wrapper = pure_closure!("sig", FunctionCategory::Transformation, |x: i32| x + 1);
+    /// let category = wrapper.category();
+    /// assert_eq!(category, FunctionCategory::Transformation);
+    /// ```
     pub fn category(&self) -> FunctionCategory {
         self.category
     }
 
-    /// Get the input type ID for composition checking.
+    /// Provides the TypeId of the container's input type.
+    ///
+    /// # Returns
+    ///
+    /// The TypeId corresponding to the stored input type.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::any::TypeId;
+    /// // Construct a container holding a function from i32 to i32
+    /// let container = FunctionContainer::new::<i32, i32, _>(|x| x + 1, "inc_i32", FunctionCategory::Transformation);
+    /// let id = container.input_type_id();
+    /// assert_eq!(id, TypeId::of::<i32>());
+    /// ```
     pub fn input_type_id(&self) -> std::any::TypeId {
         self.input_type_id
     }
 
-    /// Get the output type ID for composition checking.
+    /// The `TypeId` of the function's output type.
+    ///
+    /// # Returns
+    ///
+    /// `TypeId` representing the function's output type.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let wrapper = FunctionWrapper::new(|x: i32| x.to_string(), "to_string", FunctionCategory::Transformation);
+    /// let container = FunctionContainer::new(wrapper, "to_string", FunctionCategory::Transformation);
+    /// assert_eq!(container.output_type_id(), std::any::TypeId::of::<String>());
+    /// ```
     pub fn output_type_id(&self) -> std::any::TypeId {
         self.output_type_id
     }
 
-    /// Try to call the function with type-erased input/output.
+    /// Attempt to invoke the contained function with a type-erased input.
     ///
-    /// # Arguments
-    /// * `input` - The input value as Any
+    /// If the boxed input's concrete type matches the function's expected input type, the function is called and its boxed output is returned; otherwise `None` is returned.
     ///
-    /// # Returns
-    /// Some(output) if the types match, None otherwise
+    /// # Examples
+    ///
+    /// ```
+    /// use std::any::Any;
+    /// // Assuming `FunctionContainer` and `FunctionCategory` are in scope:
+    /// let container = FunctionContainer::new(|x: i32| x + 1, "inc", FunctionCategory::Mathematical);
+    /// let res = container.try_call(Box::new(1i32));
+    /// assert_eq!(res.unwrap().downcast::<i32>().map(|b| *b).ok(), Some(2));
+    ///
+    /// // Type mismatch yields None
+    /// let none = container.try_call(Box::new("not an i32"));
+    /// assert!(none.is_none());
+    /// ```
     pub fn try_call(&self, input: Box<dyn std::any::Any>) -> Option<Box<dyn std::any::Any>> {
         // Check if the input type matches by checking the inner type
         if (*input).type_id() != self.input_type_id {
@@ -236,6 +364,21 @@ where
     Output: Send + Sync + 'static,
     F: Fn(Input) -> Output + Send + Sync + 'static,
 {
+    /// Invoke the wrapped function using a type-erased boxed input and return the result as a boxed `Any`.
+    ///
+    /// Panics if the provided `input` does not have the expected concrete type for this callable.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::any::Any;
+    /// // Construct a FunctionWrapper that adds 1 to an i32
+    /// let wrapper = FunctionWrapper::new(|x: i32| x + 1, "inc", FunctionCategory::Mathematical);
+    /// let input: Box<dyn Any> = Box::new(41i32);
+    /// let output = wrapper.call_boxed(input);
+    /// let result = *output.downcast::<i32>().unwrap();
+    /// assert_eq!(result, 42);
+    /// ```
     fn call_boxed(&self, input: Box<dyn std::any::Any>) -> Box<dyn std::any::Any> {
         // Check type before downcast
         if (*input).type_id() != std::any::TypeId::of::<Input>() {
@@ -256,10 +399,32 @@ where
         }
     }
 
+    /// Gets the TypeId for the callable's input type.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::any::TypeId;
+    /// let fw = FunctionWrapper::new(|x: i32| x, "id", FunctionCategory::Transformation);
+    /// assert_eq!(fw.input_type_id(), TypeId::of::<i32>());
+    /// ```
     fn input_type_id(&self) -> std::any::TypeId {
         std::any::TypeId::of::<Input>()
     }
 
+    /// Get the TypeId for the callable's output type.
+    ///
+    /// Returns the `TypeId` corresponding to the callable's output type.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::any::TypeId;
+    /// use crate::functional::function_traits::{FunctionWrapper, FunctionCategory};
+    ///
+    /// let wrapper = FunctionWrapper::new(|x: i32| x + 1, "add_one", FunctionCategory::Transformation);
+    /// assert_eq!(wrapper.output_type_id(), TypeId::of::<i32>());
+    /// ```
     fn output_type_id(&self) -> std::any::TypeId {
         std::any::TypeId::of::<Output>()
     }

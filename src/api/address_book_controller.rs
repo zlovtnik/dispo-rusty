@@ -8,6 +8,26 @@ use crate::{
     services::address_book_service,
 };
 // GET api/address-book
+/// Retrieve all address-book entries and return them as a JSON HTTP response.
+///
+/// On success, responds with HTTP 200 and a JSON body containing a `ResponseBody` with a success
+/// message and the list of people. If the request is missing the database pool, returns a
+/// `ServiceError::InternalServerError`.
+///
+/// # Examples
+///
+/// ```
+/// use actix_web::test::TestRequest;
+/// use actix_web::HttpRequest;
+///
+/// // Assume `pool` is a previously created `Pool` and inserted into the request extensions.
+/// let mut req = TestRequest::default().to_http_request();
+/// req.extensions_mut().insert(pool);
+///
+/// // Call the handler (within an async context)
+/// let resp = actix_rt::System::new().block_on(async { find_all(req).await }).unwrap();
+/// assert_eq!(resp.status(), actix_web::http::StatusCode::OK);
+/// ```
 pub async fn find_all(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
     if let Some(pool) = req.extensions().get::<Pool>() {
         match address_book_service::find_all(pool) {
@@ -24,6 +44,30 @@ pub async fn find_all(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
 }
 
 // GET api/address-book/{id}
+/// Fetches a single person by ID and returns an HTTP response containing the person on success.
+///
+/// Attempts to retrieve the database pool from the request extensions; if found, queries the address
+/// book service for the person with the provided `id` and returns an `HttpResponse::Ok` with a
+/// JSON body wrapping the person. If the pool is missing or the service returns an error, a
+/// corresponding `ServiceError` is returned.
+///
+/// # Returns
+///
+/// `Ok(HttpResponse)` with status 200 and a JSON `ResponseBody` containing the person on success,
+/// or `Err(ServiceError)` when the pool is not found or the service reports an error.
+///
+/// # Examples
+///
+/// ```no_run
+/// use actix_web::{HttpRequest, web};
+///
+/// // Create a request and an id, then call the handler (actual pool setup omitted).
+/// # async fn _example() {
+/// let id = web::Path::from(1);
+/// let req = HttpRequest::default(); // In real code attach a DB pool to req.extensions()
+/// let _ = crate::api::address_book_controller::find_by_id(id, req).await;
+/// # }
+/// ```
 pub async fn find_by_id(
     id: web::Path<i32>,
     req: HttpRequest,
@@ -78,6 +122,25 @@ pub async fn insert(
 }
 
 // PUT api/address-book/{id}
+/// Updates the person with the given `id` using the supplied `PersonDTO`.
+///
+/// # Examples
+///
+/// ```no_run
+/// # use actix_web::{HttpRequest, web};
+/// # use your_crate::dto::PersonDTO;
+/// # use your_crate::api::address_book_controller::update;
+/// # async fn example() {
+/// let id = web::Path::from(1);
+/// let updated = web::Json(PersonDTO { /* fields */ });
+/// let req = HttpRequest::default();
+/// let resp = update(id, updated, req).await;
+/// # }
+/// ```
+///
+/// # Returns
+///
+/// `Ok(HttpResponse)` with a success `ResponseBody` on successful update, `Err(ServiceError)` otherwise.
 pub async fn update(
     id: web::Path<i32>,
     updated_person: web::Json<PersonDTO>,
@@ -99,6 +162,26 @@ pub async fn update(
 }
 
 // DELETE api/address-book/{id}
+/// Deletes the person with the given ID from the address book.
+///
+/// Returns an HTTP 200 response with a JSON body containing `MESSAGE_OK` and `EMPTY` when the deletion succeeds;
+/// returns a `ServiceError::InternalServerError` with message "Pool not found" if the DB pool is missing,
+/// or propagates service errors from the delete operation.
+///
+/// # Examples
+///
+/// ```no_run
+/// use actix_web::{HttpRequest, web};
+/// // In real usage the request must include a `Pool` in its extensions.
+/// # async fn example() {
+/// let req = HttpRequest::default();
+/// let result = crate::api::address_book_controller::delete(web::Path::from(1), req).await;
+/// match result {
+///     Ok(resp) => println!("deleted: {:?}", resp),
+///     Err(err) => eprintln!("error: {:?}", err),
+/// }
+/// # }
+/// ```
 pub async fn delete(id: web::Path<i32>, req: HttpRequest) -> Result<HttpResponse, ServiceError> {
     if let Some(pool) = req.extensions().get::<Pool>() {
         match address_book_service::delete(id.into_inner(), pool) {

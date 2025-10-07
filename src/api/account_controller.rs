@@ -11,6 +11,36 @@ use crate::{
     services::account_service,
 };
 // POST api/auth/signup
+/// Handle user signup for a tenant and return a standardized JSON response on success.
+///
+/// Attempts to locate the tenant's database pool using the provided TenantPoolManager and
+/// creates a new user account from the supplied signup data. On success returns an HTTP 200
+/// response with a `ResponseBody` containing the success message and an empty payload;
+/// if the tenant is not found or the service layer fails, returns the corresponding `ServiceError`.
+///
+/// # Returns
+///
+/// An `HttpResponse` with a JSON `ResponseBody` containing the success message and an empty payload on success; a `ServiceError` describing the failure otherwise.
+///
+/// # Examples
+///
+/// ```
+/// # use actix_web::{web, HttpResponse};
+/// # use your_crate::{signup, SignupDTO, TenantPoolManager};
+/// # // The following is illustrative and omits setup for a real TenantPoolManager.
+/// # async fn _example() -> Result<HttpResponse, ()> {
+/// let dto = SignupDTO {
+///     tenant_id: "test".to_string(),
+///     username: "alice".to_string(),
+///     email: "alice@example.com".to_string(),
+///     password: "s3cret".to_string(),
+/// };
+/// // `manager` would be created and populated in application setup.
+/// // let manager = web::Data::new(TenantPoolManager::new(...));
+/// // let res = signup(web::Json(dto), manager).await?;
+/// # Ok(HttpResponse::Ok().finish())
+/// # }
+/// ```
 pub async fn signup(
     user_dto: web::Json<SignupDTO>,
     manager: web::Data<TenantPoolManager>,
@@ -75,6 +105,28 @@ pub async fn logout(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
     }
 }
 
+/// Refreshes the authentication session using the request's Authorization header and tenant DB pool.
+///
+/// On success returns an HTTP 200 response containing `MESSAGE_OK` and the refreshed login information.
+/// If the Authorization header is missing, returns `ServiceError::BadRequest` with `MESSAGE_TOKEN_MISSING`.
+/// If the tenant pool is missing from request extensions, returns `ServiceError::InternalServerError` with "Pool not found".
+///
+/// # Examples
+///
+/// ```
+/// # use actix_web::HttpRequest;
+/// # async fn example(req: HttpRequest) {
+/// let result = crate::handlers::refresh(req).await;
+/// match result {
+///     Ok(resp) => {
+///         // `resp` is an HttpResponse with MESSAGE_OK and refreshed login info in the body
+///     }
+///     Err(err) => {
+///         // `err` is a ServiceError describing why the refresh failed
+///     }
+/// }
+/// # }
+/// ```
 pub async fn refresh(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
     if let Some(authen_header) = req.headers().get(constants::AUTHORIZATION) {
         if let Some(pool) = req.extensions().get::<Pool>() {
@@ -98,6 +150,25 @@ pub async fn refresh(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
 }
 
 // GET api/auth/me
+/// Fetches the authenticated user's account information.
+///
+/// On success, returns an HTTP 200 response with `MESSAGE_OK` and the user's login information; on failure returns a `ServiceError`.
+///
+/// # Examples
+///
+/// ```no_run
+/// use actix_web::test::TestRequest;
+/// use actix_web::http::header;
+///
+/// // Build a request with an Authorization header and any required extensions (e.g., a DB pool).
+/// let req = TestRequest::default()
+///     .insert_header((constants::AUTHORIZATION, "Bearer <token>"))
+///     // .insert_extension(pool) // attach a `Pool` extension as required by your app
+///     .to_http_request();
+///
+/// // Call the handler (async)
+/// let _ = futures::executor::block_on(me(req));
+/// ```
 pub async fn me(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
     if let Some(authen_header) = req.headers().get(constants::AUTHORIZATION) {
         if let Some(pool) = req.extensions().get::<Pool>() {

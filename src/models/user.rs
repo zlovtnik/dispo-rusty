@@ -110,6 +110,21 @@ impl User {
         }
     }
 
+    /// Checks whether a user token matches a stored login session.
+    ///
+    /// # Returns
+    ///
+    /// `true` if a user with the token's `username` and `login_session` exists, `false` otherwise.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // assuming `token` and `conn` are available in scope
+    /// // let token = UserToken { user: "alice".into(), login_session: "..." .into() };
+    /// // let mut conn = establish_connection();
+    /// let valid = is_valid_login_session(&token, &mut conn);
+    /// // `valid` will be `true` when the token matches a stored session
+    /// ```
     pub fn is_valid_login_session(user_token: &UserToken, conn: &mut Connection) -> bool {
         users
             .filter(username.eq(&user_token.user))
@@ -118,6 +133,33 @@ impl User {
             .is_ok()
     }
 
+    /// Retrieve login information for a user matching the provided session token.
+    ///
+    /// If a user exists whose `username` and `login_session` match the values in
+    /// `user_token`, returns a `LoginInfoDTO` populated from the stored user and
+    /// the token's `tenant_id`. Otherwise returns an `Err` with the message
+    /// "User not found!".
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use crate::models::{UserToken, LoginInfoDTO};
+    /// use crate::db::Connection;
+    ///
+    /// let token = UserToken {
+    ///     user: "alice".to_string(),
+    ///     login_session: "some-session-uuid".to_string(),
+    ///     tenant_id: "tenant-x".to_string(),
+    /// };
+    ///
+    /// // `conn` should be an active database connection.
+    /// let mut conn: Connection = /* obtain connection */;
+    ///
+    /// match crate::models::User::find_login_info_by_token(&token, &mut conn) {
+    ///     Ok(info) => println!("Logged in as: {}", info.username),
+    ///     Err(e) => println!("Error: {}", e),
+    /// }
+    /// ```
     pub fn find_login_info_by_token(
         user_token: &UserToken,
         conn: &mut Connection,
@@ -161,10 +203,35 @@ impl User {
         }
     }
 
+    /// Get the total number of users in the `users` table.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // Acquire a database connection appropriate for your environment.
+    /// let mut conn = /* get a Connection */ unimplemented!();
+    /// let total = crate::models::User::count_all(&mut conn).unwrap();
+    /// assert!(total >= 0);
+    /// ```
+    ///
+    /// @returns The total number of user records as `i64`.
     pub fn count_all(conn: &mut Connection) -> QueryResult<i64> {
         users.count().get_result(conn)
     }
 
+    /// Counts users who currently have a stored login session.
+    ///
+    /// Returns the number of user rows where `login_session` is not null and not an empty string.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use crate::db::Connection;
+    /// # use crate::models::user::User;
+    /// let mut conn = /* obtain a mutable Connection */;
+    /// let logged_in = User::count_logged_in(&mut conn).unwrap();
+    /// assert!(logged_in >= 0);
+    /// ```
     pub fn count_logged_in(conn: &mut Connection) -> QueryResult<i64> {
         users
             .filter(login_session.is_not_null().and(login_session.ne("")))

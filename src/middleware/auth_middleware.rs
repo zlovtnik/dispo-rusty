@@ -52,6 +52,23 @@ where
 
     forward_ready!(service);
 
+    /// Authenticates an incoming ServiceRequest, injects the resolved tenant pool into the request extensions on success, or produces a 401 Unauthorized response on failure.
+    ///
+    /// This method bypasses authentication for OPTIONS requests and for paths listed in `constants::IGNORE_ROUTES`. When a Bearer token is present in the `Authorization` header, it is decoded and verified against the tenant pool obtained from `TenantPoolManager`; on successful verification the tenant pool is inserted into the request's extensions and the inner service is invoked. If authentication does not pass, the method returns a 401 response with a standardized JSON error body.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(ServiceResponse)` containing the inner service response (left body) when authentication succeeds; otherwise a 401 Unauthorized `ServiceResponse` (right body) with a standardized JSON error.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use actix_web::dev::ServiceRequest;
+    /// // Assume `auth_middleware` is an instance of the Authentication Transform produced middleware
+    /// // and `req` is a constructed ServiceRequest.
+    /// // let fut = auth_middleware.call(req);
+    /// // let res = futures::executor::block_on(fut).unwrap();
+    /// ```
     fn call(&self, req: ServiceRequest) -> Self::Future {
         let mut authenticate_pass: bool = false;
 

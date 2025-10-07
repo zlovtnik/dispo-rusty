@@ -53,6 +53,23 @@ struct TenantHealth {
     status: Status,
 }
 
+/// Execute the database health check using a blocking task.
+///
+/// This runs the synchronous `check_database_health` on a blocking thread to avoid blocking the async runtime.
+///
+/// # Examples
+///
+/// ```
+/// # use actix_web::web;
+/// # use std::sync::Arc;
+/// # async fn example(pool: web::Data<crate::DatabasePool>) {
+/// crate::check_database_health_async(pool).await.unwrap();
+/// # }
+/// ```
+///
+/// # Returns
+///
+/// `Ok(())` if the database responded to a simple query, `Err` with a boxed error otherwise.
 async fn check_database_health_async(
     pool: web::Data<DatabasePool>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
@@ -62,6 +79,27 @@ async fn check_database_health_async(
         .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync + 'static>)
 }
 
+/// Perform a cache health check using the provided Redis connection pool.
+///
+/// Executes the synchronous cache check in a blocking task and returns the result of that check.
+///
+/// # Returns
+///
+/// `Ok(())` if the cache responded successfully, `Err` with an error boxed as `Box<dyn std::error::Error + Send + Sync>` otherwise.
+///
+/// # Examples
+///
+/// ```no_run
+/// use actix_web::web;
+/// # use crate::RedisPool;
+/// # async fn example(pool: web::Data<RedisPool>) {
+/// let result = crate::check_cache_health_async(pool).await;
+/// match result {
+///     Ok(()) => println!("Cache is healthy"),
+///     Err(e) => eprintln!("Cache health check failed: {}", e),
+/// }
+/// # }
+/// ```
 async fn check_cache_health_async(
     redis_pool: web::Data<RedisPool>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
@@ -70,6 +108,23 @@ async fn check_cache_health_async(
         .unwrap()
 }
 
+/// Handle GET /health by checking database and cache components and returning a JSON `HealthResponse`.
+///
+/// The handler runs bounded-time health checks for the database (5s) and cache (3s). Each component is
+/// marked `Healthy` on a successful check and `Unhealthy` on error or timeout. The overall response
+/// `status` is `Healthy` only when both components are healthy. The response includes a timestamp and
+/// the per-component statuses; tenant details are omitted.
+///
+/// # Examples
+///
+/// ```
+/// use actix_web::{test, App};
+/// // Assuming `health`, `DatabasePool`, `RedisPool` and appropriate factory functions exist in scope.
+/// let app = test::init_service(App::new().service(crate::handlers::health));
+/// let req = test::TestRequest::get().uri("/health").to_request();
+/// let resp = test::call_service(&app, req);
+/// assert!(resp.await.status().is_success());
+/// ```
 #[get("/health")]
 async fn health(pool: web::Data<DatabasePool>, redis_pool: web::Data<RedisPool>) -> HttpResponse {
     info!("Health check requested");
@@ -120,6 +175,34 @@ async fn health(pool: web::Data<DatabasePool>, redis_pool: web::Data<RedisPool>)
     HttpResponse::Ok().json(response)
 }
 
+/// Return detailed service health including database, cache, and per-tenant statuses.
+///
+/// Performs timed health checks for the main database and cache, optionally queries per-tenant
+/// databases when a TenantPoolManager is registered, and computes an overall status that is
+/// Healthy only if all checked components (and listed tenants) are healthy. The response body
+/// is a JSON-serialized HealthResponse containing `status`, `timestamp`, `components`, and an
+/// optional `tenants` list.
+///
+/// # Returns
+///
+/// `HttpResponse` with status 200 and a JSON body describing overall health, individual component
+/// statuses, optional per-tenant health entries, and an ISO 8601 timestamp.
+///
+/// # Examples
+///
+/// ```no_run
+/// use actix_web::{test, web, App};
+///
+/// // Configure and run an Actix test server that exposes the handler at the route.
+/// let app = test::init_service(
+///     App::new()
+///         .service(crate::handlers::health_detailed) // register the handler
+/// ).await;
+///
+/// let req = test::TestRequest::get().uri("/health/detailed").to_request();
+/// let resp = test::call_service(&app, req).await;
+/// assert!(resp.status().is_success());
+/// ```
 #[get("/health/detailed")]
 async fn health_detailed(
     req: HttpRequest,
@@ -219,6 +302,22 @@ async fn health_detailed(
     HttpResponse::Ok().json(response)
 }
 
+/// Checks database responsiveness by executing a simple `SELECT 1` query.
+///
+/// Attempts to obtain a connection from the provided pool and run a lightweight query to verify the database is reachable and responsive.
+///
+/// # Returns
+///
+/// `Ok(())` if the database responds to the query, `Err(diesel::result::Error)` if acquiring a connection or executing the query fails.
+///
+/// # Examples
+///
+/// ```no_run
+/// use actix_web::web;
+/// // let pool: web::Data<DatabasePool> = /* obtain pool */ ;
+/// // let result = check_database_health(pool);
+/// // assert!(result.is_ok());
+/// ```
 fn check_database_health(pool: web::Data<DatabasePool>) -> Result<(), diesel::result::Error> {
     match pool.get() {
         Ok(mut conn) => {
@@ -232,6 +331,24 @@ fn check_database_health(pool: web::Data<DatabasePool>) -> Result<(), diesel::re
     }
 }
 
+/// Checks Redis responsiveness by issuing a PING using the provided Redis connection pool.
+///
+/// # Parameters
+///
+/// - `redis_pool`: Redis connection pool used to obtain a connection for the health check.
+///
+/// # Returns
+///
+/// `Ok(())` if Redis responds to `PING`, `Err` with a boxed error otherwise.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// // Obtain a RedisPool from your application's initialization code.
+/// let pool: RedisPool = /* create or fetch pool */ unimplemented!();
+/// let result = check_cache_health(&pool);
+/// assert!(result.is_ok());
+/// ```
 fn check_cache_health(
     redis_pool: &RedisPool,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
@@ -444,10 +561,10 @@ mod tests {
     use tempfile::NamedTempFile;
     use tokio::time::{timeout, Duration};
 
-    /// Verifies that the /api/health endpoint returns HTTP 200 when PostgreSQL and Redis are available.
+    /// Integration test that verifies the `/api/health` endpoint responds with HTTP 200 when PostgreSQL and Redis are available.
     ///
-    /// Spawns PostgreSQL and Redis test containers, initializes the database and cache clients, mounts the application,
-    /// and asserts the health endpoint responds with status 200.
+    /// This test starts Postgres and Redis test containers, initializes the database and cache clients, mounts the application,
+    /// and asserts that a GET request to `/api/health` returns status 200.
     ///
     /// # Examples
     ///

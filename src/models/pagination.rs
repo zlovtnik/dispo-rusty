@@ -66,10 +66,39 @@ where
     Col: diesel::Expression + QueryFragment<Pg> + Copy,
     i32: diesel::serialize::ToSql<Col::SqlType, Pg>,
 {
+    /// Set the number of items returned per page for this paginated query.
+    ///
+    /// # Parameters
+    ///
+    /// * `per_page` - Maximum number of records to return for each page.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // Given a `sorted_and_paginated` value produced by `paginate(...)`,
+    /// // update its per-page limit:
+    /// let updated = sorted_and_paginated.per_page(50);
+    /// ```
     pub fn per_page(self, per_page: i64) -> Self {
         SortedAndPaginated { per_page, ..self }
     }
 
+    /// Loads a page of items from the wrapped query and assembles pagination metadata.
+    ///
+    /// The returned Page contains the fetched records, the current cursor, the per-page limit, no total count (None), and a `next_cursor` set to the `id` of the last record when present.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use diesel::prelude::*;
+    /// # use crate::{Page, HasId};
+    /// # struct MyModel { id: i32 }
+    /// # impl HasId for MyModel { fn id(&self) -> i32 { self.id } }
+    /// # let mut conn: diesel::pg::PgConnection = unimplemented!();
+    /// // `my_query` must implement LoadQuery<PgConnection, MyModel>
+    /// // let page = my_query.paginate(my_table::id, 0).per_page(10).load_items::<MyModel>(&mut conn)?;
+    /// // assert!(page.records.len() <= 10);
+    /// ```
     pub fn load_items<'a, U>(self, conn: &mut PgConnection) -> QueryResult<Page<U>>
     where
         Self: LoadQuery<'a, PgConnection, U>,

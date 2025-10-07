@@ -32,14 +32,17 @@ pub struct Column<T, C> {
 }
 
 impl<T, C> Column<T, C> {
-    /// Create a new column reference.
+    /// Constructs a type-safe reference to a database column for use in predicates and query builders.
     ///
-    /// # Arguments
-    /// * `table` - The table name
-    /// * `column` - The column name
+    /// # Examples
     ///
-    /// # Returns
-    /// A new Column instance
+    /// ```
+    /// use crate::functional::query_builder::Column;
+    ///
+    /// let col = Column::<(), ()>::new("users".to_string(), "id".to_string());
+    /// assert_eq!(col.table, "users");
+    /// assert_eq!(col.column, "id");
+    /// ```
     pub fn new(table: String, column: String) -> Self {
         Self {
             table,
@@ -94,16 +97,21 @@ impl<T> Predicate<T>
 where
     T: Clone + Send + Sync + 'static,
 {
-    /// Create a new predicate.
+    /// Constructs a predicate for a specific column using the provided operator and optional value.
     ///
-    /// # Arguments
-    /// * `column` - The column to filter on
-    /// * `operator` - The comparison operator
-    /// * `value` - The value to compare (None for NULL operations)
-    /// * `field_name` - Human-readable field name
+    /// `value` should be `None` for NULL / IS NULL checks. `field_name` is a human‑readable name used for error messages or display.
     ///
     /// # Returns
-    /// A new Predicate instance
+    ///
+    /// The constructed `Predicate`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let col = Column::<(), String>::new("users".to_string(), "email".to_string());
+    /// let p = Predicate::new(col, Operator::Contains, Some("example".to_string()), "email".to_string());
+    /// assert_eq!(p.field_name, "email");
+    /// ```
     pub fn new(
         column: Column<T, T>,
         operator: Operator,
@@ -134,6 +142,15 @@ pub struct QueryFilter<T> {
 }
 
 impl<T> Default for QueryFilter<T> {
+    /// Creates an empty QueryFilter with the combining logic initialized to `And`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let f = QueryFilter::<i32>::default();
+    /// assert!(f.predicates().is_empty());
+    /// assert_eq!(f.logic(), LogicOperator::And);
+    /// ```
     fn default() -> Self {
         Self {
             predicates: Vec::new(),
@@ -156,41 +173,84 @@ impl<T> QueryFilter<T>
 where
     T: Clone + Send + Sync + 'static,
 {
-    /// Create a new empty query filter.
+    /// Create a new, empty QueryFilter with the default logic operator (And).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let filter: crate::functional::query_builder::QueryFilter<i32> = QueryFilter::new();
+    /// assert!(filter.predicates().is_empty());
+    /// assert_eq!(filter.logic(), crate::functional::query_builder::LogicOperator::And);
+    /// ```
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Add a predicate to the filter.
-    ///
-    /// # Arguments
-    /// * `predicate` - The predicate to add
+    /// Append a predicate to the filter and return the updated filter.
     ///
     /// # Returns
-    /// The modified QueryFilter
+    ///
+    /// The `QueryFilter` with the provided predicate appended.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use crate::functional::query_builder::*;
+    ///
+    /// let col = Column::<i32, i32>::new("users".into(), "age".into());
+    /// let pred = Predicate::new(col, Operator::Equals, Some(30), "age".into());
+    /// let filter = QueryFilter::<i32>::new().with_predicate(pred);
+    /// assert_eq!(filter.predicates().len(), 1);
+    /// ```
     pub fn with_predicate(mut self, predicate: Predicate<T>) -> Self {
         self.predicates.push(predicate);
         self
     }
 
-    /// Set the logic operator for combining predicates.
+    /// Set the logic operator used to combine the filter's predicates.
     ///
-    /// # Arguments
-    /// * `logic` - The logic operator to use
+    /// # Parameters
+    ///
+    /// * `logic` - The logic operator that determines how the filter's predicates are combined (e.g., `LogicOperator::And` or `LogicOperator::Or`).
     ///
     /// # Returns
-    /// The modified QueryFilter
+    ///
+    /// The updated `QueryFilter` with the specified logic operator.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let filter = QueryFilter::<i32>::new().with_logic(LogicOperator::Or);
+    /// assert_eq!(filter.logic(), LogicOperator::Or);
+    /// ```
     pub fn with_logic(mut self, logic: LogicOperator) -> Self {
         self.logic = logic;
         self
     }
 
-    /// Get the predicates.
+    /// Accesses the predicates stored in the filter.
+    ///
+    /// Returns a slice containing the filter's predicates.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let filter: crate::functional::query_builder::QueryFilter<i32> = crate::functional::query_builder::QueryFilter::new();
+    /// assert!(filter.predicates().is_empty());
+    /// ```
     pub fn predicates(&self) -> &[Predicate<T>] {
         &self.predicates
     }
 
-    /// Get the logic operator.
+    /// Retrieves the logic operator used to combine predicates.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use crate::functional::query_builder::{QueryFilter, LogicOperator};
+    /// let filter = QueryFilter::<i32>::new();
+    /// assert_eq!(filter.logic(), LogicOperator::And);
+    /// ```
     pub fn logic(&self) -> LogicOperator {
         self.logic
     }
@@ -208,26 +268,56 @@ impl<T> PredicateComposer<T>
 where
     T: Clone + Send + Sync + 'static,
 {
-    /// Create a new predicate composer.
+    /// Create a predicate composer from an initial query filter.
+    ///
+    /// The composer will wrap the provided `QueryFilter` and preserve its logic and predicates.
     ///
     /// # Arguments
-    /// * `initial_filter` - The initial query filter
+    ///
+    /// * `initial_filter` - The `QueryFilter` whose predicates and logic will be wrapped by the composer.
     ///
     /// # Returns
-    /// A new PredicateComposer instance
+    ///
+    /// `PredicateComposer<T>` wrapping the provided filter.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let filter = QueryFilter::<i32>::new();
+    /// let composer = PredicateComposer::new(filter);
+    /// assert_eq!(composer.filter.predicates().len(), 0);
+    /// ```
     pub fn new(initial_filter: QueryFilter<T>) -> Self {
         Self {
             filter: initial_filter,
         }
     }
 
-    /// Compose predicates using functional composition.
+    /// Concatenates the predicates from two `PredicateComposer` values into a new composer.
     ///
-    /// # Arguments
-    /// * `other` - Another predicate composer to compose with
+    /// The returned `PredicateComposer<T>` contains predicates from `self` followed by those from
+    /// `other`. The combined filter uses the logic operator from `self`.
     ///
-    /// # Returns
-    /// A new composed PredicateComposer
+    /// # Examples
+    ///
+    /// ```
+    /// use crate::functional::query_builder::{PredicateComposer, QueryFilter, Predicate, Column, Operator, LogicOperator};
+    ///
+    /// // construct simple filters (types elided for brevity)
+    /// let f1: QueryFilter<i32> = QueryFilter::new().with_predicate(
+    ///     Predicate::new(Column::new("users".into(), "id".into()), Operator::Equals, Some(1), "id".into())
+    /// );
+    /// let f2: QueryFilter<i32> = QueryFilter::new().with_predicate(
+    ///     Predicate::new(Column::new("users".into(), "age".into()), Operator::GreaterThan, Some(18), "age".into())
+    /// );
+    ///
+    /// let c1 = PredicateComposer::new(f1);
+    /// let c2 = PredicateComposer::new(f2);
+    /// let combined = c1.compose(c2);
+    ///
+    /// assert_eq!(combined.filter.predicates.len(), 2);
+    /// assert_eq!(combined.filter.logic, LogicOperator::And);
+    /// ```
     pub fn compose(self, other: Self) -> Self {
         let mut new_predicates = self.filter.predicates.clone();
         new_predicates.extend(other.filter.predicates);
@@ -241,13 +331,35 @@ where
         }
     }
 
-    /// Filter out predicates based on a pure function.
+    /// Create a new PredicateComposer with only the predicates that satisfy `f`.
+    ///
+    /// The provided function `f` is applied to each predicate; predicates for which
+    /// `f` returns `true` are kept, others are discarded. The resulting composer
+    /// preserves the original filter's logic operator.
     ///
     /// # Arguments
-    /// * `f` - Pure function that determines which predicates to keep
+    ///
+    /// * `f` - Function applied to each `Predicate<T>` to decide whether it should be kept.
     ///
     /// # Returns
-    /// A new PredicateComposer with filtered predicates
+    ///
+    /// A `PredicateComposer<T>` containing only the predicates for which `f` returned `true`.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use crate::functional::query_builder::{
+    ///     PredicateComposer, QueryFilter, Column, Predicate, Operator,
+    /// };
+    ///
+    /// // Create an initial empty filter and composer (types elided for brevity)
+    /// let initial = QueryFilter::new();
+    /// let composer = PredicateComposer::new(initial);
+    ///
+    /// // Keep only predicates matching some condition (example predicate inspector)
+    /// let filtered = composer.filter(|_pred| true);
+    /// // `filtered` is a new composer containing only the predicates that passed the closure.
+    /// ```
     pub fn filter<F>(self, f: F) -> Self
     where
         F: Fn(&Predicate<T>) -> bool,
@@ -273,6 +385,22 @@ impl<T> PureFunction<QueryFilter<T>, QueryFilter<T>> for PredicateComposer<T>
 where
     T: Clone + Send + Sync + 'static,
 {
+    /// Combines an input `QueryFilter` with this composer's filter, producing a new filter that
+    /// contains predicates from both sources.
+    ///
+    /// The resulting `QueryFilter` contains the input's predicates followed by this composer's
+    /// predicates and uses this composer's logic operator.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use std::marker::PhantomData;
+    /// # use crate::functional::query_builder::{QueryFilter, PredicateComposer};
+    /// let base: QueryFilter<i32> = QueryFilter::new();
+    /// let composer = PredicateComposer::new(QueryFilter::new());
+    /// let result = composer.call(base);
+    /// assert_eq!(result.predicates().len(), 0);
+    /// ```
     fn call(&self, input: QueryFilter<T>) -> QueryFilter<T> {
         // Compose the input filter with this composer's filter
         let mut new_predicates = input.predicates().to_vec();
@@ -285,10 +413,30 @@ where
         }
     }
 
+    /// Returns the static signature identifier for this composer implementation.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let composer = crate::functional::query_builder::PredicateComposer::new(crate::functional::query_builder::QueryFilter::new());
+    /// assert_eq!(composer.signature(), "PredicateComposer::compose");
+    /// ```
     fn signature(&self) -> &'static str {
         "PredicateComposer::compose"
     }
 
+    /// Categorizes this pure function as business logic.
+    ///
+    /// # Returns
+    ///
+    /// `FunctionCategory::BusinessLogic`
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let composer = PredicateComposer::new(QueryFilter::<i32>::new());
+    /// assert_eq!(composer.category(), FunctionCategory::BusinessLogic);
+    /// ```
     fn category(&self) -> FunctionCategory {
         FunctionCategory::BusinessLogic
     }
@@ -326,7 +474,17 @@ impl<T, U> TypeSafeQueryBuilder<T, U>
 where
     U: Clone + Send + Sync + 'static,
 {
-    /// Create a new query builder.
+    /// Creates a new, empty TypeSafeQueryBuilder.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let builder = TypeSafeQueryBuilder::<(), ()>::new();
+    /// assert!(builder.filters().is_empty());
+    /// assert!(builder.order_by_specs().is_empty());
+    /// assert_eq!(builder.limit_value(), None);
+    /// assert_eq!(builder.offset_value(), None);
+    /// ```
     pub fn new() -> Self {
         Self {
             _table_marker: PhantomData,
@@ -338,71 +496,161 @@ where
         }
     }
 
-    /// Add a filter to the query.
+    /// Appends a query filter to the builder and returns the updated builder.
     ///
-    /// # Arguments
-    /// * `filter` - The query filter to add
+    /// `filter` is added to the builder's internal filter list; the builder's
+    /// combining logic and other state are preserved.
+    ///
+    /// # Parameters
+    ///
+    /// - `filter`: the `QueryFilter` to append to the builder.
     ///
     /// # Returns
-    /// The modified TypeSafeQueryBuilder
+    ///
+    /// The `TypeSafeQueryBuilder` with `filter` appended.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let builder: TypeSafeQueryBuilder<MyTable, MyRow> = TypeSafeQueryBuilder::new();
+    /// let f = QueryFilter::new().with_predicate(equals(Column::new("my_table".into(), "id".into()), 1, "id".into()));
+    /// let new_builder = builder.filter(f);
+    /// assert_eq!(new_builder.filters().len(), 1);
+    /// ```
     pub fn filter(mut self, filter: QueryFilter<U>) -> Self {
         self.filters.push(filter);
         self
     }
 
-    /// Add ordering to the query.
+    /// Append an ordering specification to the builder.
     ///
-    /// # Arguments
-    /// * `column` - Column name to order by
-    /// * `ascending` - Whether to order ascending
+    /// Adds an ORDER BY specification for the given column with the specified direction.
+    /// Returns the builder with the new order specification appended.
     ///
-    /// # Returns
-    /// The modified TypeSafeQueryBuilder
+    /// # Examples
+    ///
+    /// ```
+    /// let builder = TypeSafeQueryBuilder::<(), ()>::new()
+    ///     .order_by("name".to_string(), true);
+    /// assert_eq!(builder.order_by_specs().len(), 1);
+    /// assert_eq!(builder.order_by_specs()[0].column, "name");
+    /// assert!(builder.order_by_specs()[0].ascending);
+    /// ```
     pub fn order_by(mut self, column: String, ascending: bool) -> Self {
         self.order_by.push(OrderSpec { column, ascending });
         self
     }
 
-    /// Set the limit for the query.
+    /// Sets the maximum number of rows the query should return.
     ///
     /// # Arguments
-    /// * `limit` - Maximum number of records to return
+    ///
+    /// * `limit` - Maximum number of rows to return.
     ///
     /// # Returns
-    /// The modified TypeSafeQueryBuilder
+    ///
+    /// The builder with the specified limit applied.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let builder = TypeSafeQueryBuilder::<(), ()>::new().limit(10);
+    /// assert_eq!(builder.limit_value(), Some(10));
+    /// ```
     pub fn limit(mut self, limit: i64) -> Self {
         self.limit = Some(limit);
         self
     }
 
-    /// Set the offset for the query (for pagination).
+    /// Set the number of rows to skip for pagination on the builder.
     ///
     /// # Arguments
-    /// * `offset` - Number of records to skip
+    ///
+    /// * `offset` - Number of rows to skip when executing the query.
     ///
     /// # Returns
-    /// The modified TypeSafeQueryBuilder
+    ///
+    /// The updated `TypeSafeQueryBuilder` with the offset applied.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// struct MyTable;
+    /// struct MyModel;
+    ///
+    /// let builder = TypeSafeQueryBuilder::<MyTable, MyModel>::new().offset(25);
+    /// assert_eq!(builder.offset_value(), Some(25));
+    /// ```
     pub fn offset(mut self, offset: i64) -> Self {
         self.offset = Some(offset);
         self
     }
 
-    /// Get the current filters for inspection.
+    /// Get the configured query filters for the builder.
+    ///
+    /// The returned slice contains the builder's `QueryFilter` entries in the order they were added.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use crate::functional::query_builder::{TypeSafeQueryBuilder, QueryFilter};
+    /// // using placeholder types for demonstration
+    /// struct TableMarker;
+    /// struct RowType;
+    ///
+    /// let builder: TypeSafeQueryBuilder<TableMarker, RowType> = TypeSafeQueryBuilder::new();
+    /// assert!(builder.filters().is_empty());
+    /// let filter: QueryFilter<RowType> = QueryFilter::new();
+    /// let builder = builder.filter(filter);
+    /// assert_eq!(builder.filters().len(), 1);
+    /// ```
     pub fn filters(&self) -> &[QueryFilter<U>] {
         &self.filters
     }
 
-    /// Get the ordering specifications.
+    /// Accesses the builder's ordering specifications.
+    ///
+    /// Returns a slice of `OrderSpec` entries in the order they were added.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let b = TypeSafeQueryBuilder::<(), ()>::new().order_by("name".into(), true);
+    /// let specs = b.order_by_specs();
+    /// assert_eq!(specs.len(), 1);
+    /// assert_eq!(specs[0].column, "name");
+    /// assert!(specs[0].ascending);
+    /// ```
     pub fn order_by_specs(&self) -> &[OrderSpec] {
         &self.order_by
     }
 
-    /// Get the current limit.
+    /// Return the configured row limit for this builder.
+    ///
+    /// If a limit was set, returns `Some(value)`; otherwise returns `None`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let b = crate::functional::query_builder::TypeSafeQueryBuilder::<(), i32>::new().limit(10);
+    /// assert_eq!(b.limit_value(), Some(10));
+    /// ```
     pub fn limit_value(&self) -> Option<i64> {
         self.limit
     }
 
-    /// Get the current offset.
+    /// Retrieve the configured result offset for the query.
+    ///
+    /// # Returns
+    ///
+    /// `Some(n)` containing the offset in rows, or `None` if no offset is set.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let builder = TypeSafeQueryBuilder::<(), ()>::new().offset(10);
+    /// assert_eq!(builder.offset_value(), Some(10));
+    /// ```
     pub fn offset_value(&self) -> Option<i64> {
         self.offset
     }
@@ -414,17 +662,25 @@ where
     T: Table + Send + Sync + 'static,
     U: Clone + Send + Sync + 'static,
 {
-    /// Build the final Diesel query.
+    /// Constructs a Diesel query fragment from the builder's filters, ordering, limit, and offset.
     ///
-    /// This method applies all filters, ordering, limits, and offsets
-    /// to create a parameterized Diesel query that's safe from SQL injection.
-    ///
-    /// Note: This is a placeholder implementation. Actual query building
-    /// would depend on the specific Diesel table schema and would involve
-    /// mapping predicates to actual Diesel expressions.
+    /// The returned fragment represents the parameterized SQL expression built from the accumulated
+    /// filters, ordering, limit, and offset. In the current implementation this is a static placeholder
+    /// SQL fragment; a full implementation would map predicates and ordering to Diesel expressions
+    /// based on the target table schema.
     ///
     /// # Returns
-    /// A parameterized Diesel query
+    ///
+    /// A `Box<dyn QueryFragment<Pg> + Send>` containing the generated query fragment.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// // Create a builder, configure it, and build the Diesel query fragment.
+    /// let builder = TypeSafeQueryBuilder::<(), ()>::new();
+    /// let query_fragment = builder.build();
+    /// // `query_fragment` can be passed to Diesel execution APIs that accept QueryFragment<Pg>.
+    /// ```
     pub fn build(self) -> Box<dyn QueryFragment<Pg> + Send> {
         // Placeholder implementation - in a real scenario, this would
         // construct the actual Diesel query based on the filters and table
@@ -434,15 +690,22 @@ where
     }
 }
 
-/// Helper function to create equality predicates.
+/// Create a predicate that tests a column for equality against a value.
 ///
-/// # Arguments
-/// * `column` - The column to filter on
-/// * `value` - The value to match
-/// * `field_name` - Human-readable field name
+/// # Examples
+///
+/// ```
+/// use crate::functional::query_builder::{Column, equals, Operator, Predicate};
+///
+/// let col = Column::new("users".to_string(), "id".to_string());
+/// let pred = equals(col, 42, "id".to_string());
+/// assert_eq!(pred.operator, Operator::Equals);
+/// assert_eq!(pred.field_name, "id");
+/// ```
 ///
 /// # Returns
-/// A new Predicate for equality matching
+///
+/// `Predicate<T>` that uses `Operator::Equals` and contains the provided value.
 pub fn equals<T>(column: Column<T, T>, value: T, field_name: String) -> Predicate<T>
 where
     T: Clone + Send + Sync + 'static,
@@ -450,15 +713,25 @@ where
     Predicate::new(column, Operator::Equals, Some(value), field_name)
 }
 
-/// Helper function to create "contains" predicates for LIKE operations.
+/// Creates a predicate that matches rows where the specified column contains the provided substring.
 ///
 /// # Arguments
-/// * `column` - The column to filter on
-/// * `value` - The value to search for
-/// * `field_name` - Human-readable field name
+///
+/// * `table` - Name of the table containing the column.
+/// * `column_name` - Name of the column to perform the substring match on.
+/// * `value` - Substring to search for.
+/// * `field_name` - Human-readable name for the field (used for errors or display).
 ///
 /// # Returns
-/// A new Predicate for substring matching
+///
+/// `Predicate<String>` configured to perform a substring (SQL LIKE) match on the given column.
+///
+/// # Examples
+///
+/// ```
+/// let pred = contains("users".into(), "name".into(), "alice".into(), "name".into());
+/// // `pred` can be composed into a QueryFilter or passed to the type-safe query builder.
+/// ```
 pub fn contains(
     table: String,
     column_name: String,
@@ -469,16 +742,21 @@ pub fn contains(
     Predicate::new(column, Operator::Contains, Some(value), field_name)
 }
 
-/// Helper function to create comparison predicates.
+/// Create a comparison predicate for a column using the specified operator and value.
 ///
-/// # Arguments
-/// * `column` - The column to filter on
-/// * `operator` - The comparison operator
-/// * `value` - The value to compare against
-/// * `field_name` - Human-readable field name
+/// The `field_name` is a human-readable name used for error messages and display.
 ///
 /// # Returns
-/// A new Predicate for comparison operations
+///
+/// A `Predicate` that compares the given column to the provided value using `operator`.
+///
+/// # Examples
+///
+/// ```
+/// let col = Column::<i32, i32>::new("users".to_string(), "age".to_string());
+/// let p = compare(col, Operator::GreaterThan, 21, "age".to_string());
+/// assert_eq!(p.field_name, "age");
+/// ```
 pub fn compare<T>(
     column: Column<T, T>,
     operator: Operator,
@@ -491,15 +769,24 @@ where
     Predicate::new(column, operator, Some(value), field_name)
 }
 
-/// Helper function to create NULL check predicates.
+/// Create a predicate that checks whether a column is NULL or NOT NULL.
 ///
-/// # Arguments
-/// * `column` - The column to check
-/// * `is_null` - Whether to check for NULL (true) or NOT NULL (false)
-/// * `field_name` - Human-readable field name
+/// # Parameters
+///
+/// - `is_null`: `true` to create an `IS NULL` predicate, `false` to create an `IS NOT NULL` predicate.
+/// - `field_name`: Human-readable name for the field used in error messages and display.
 ///
 /// # Returns
-/// A new Predicate for NULL checking
+///
+/// A `Predicate` representing a NULL or NOT NULL check for the given column.
+///
+/// # Examples
+///
+/// ```
+/// let col = Column::new("users".to_string(), "email".to_string());
+/// let p = null_check(col, true, "email".to_string());
+/// assert!(p.value.is_none());
+/// ```
 pub fn null_check<T>(column: Column<T, T>, is_null: bool, field_name: String) -> Predicate<T>
 where
     T: Clone + Send + Sync + 'static,

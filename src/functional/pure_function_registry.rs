@@ -35,6 +35,17 @@ pub struct RegistryMetrics {
 }
 
 impl Default for RegistryMetrics {
+    /// Creates a `RegistryMetrics` with all counters initialized to zero.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let m = RegistryMetrics::default();
+    /// assert_eq!(m.avg_lookup_time_ns, 0);
+    /// assert_eq!(m.total_functions, 0);
+    /// assert_eq!(m.lookup_count, 0);
+    /// assert_eq!(m.composition_count, 0);
+    /// ```
     fn default() -> Self {
         Self {
             avg_lookup_time_ns: 0,
@@ -54,7 +65,15 @@ pub struct PureFunctionRegistry {
 }
 
 impl PureFunctionRegistry {
-    /// Create a new empty function registry.
+    /// Creates a new, empty PureFunctionRegistry with initialized metrics.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let reg = PureFunctionRegistry::new();
+    /// let metrics = reg.get_metrics().unwrap();
+    /// assert_eq!(metrics.total_functions, 0);
+    /// ```
     pub fn new() -> Self {
         Self {
             functions: RwLock::new(HashMap::new()),
@@ -62,16 +81,31 @@ impl PureFunctionRegistry {
         }
     }
 
-    /// Register a pure function in the registry.
+    /// Registers a pure function under its category and signature in the registry.
     ///
-    /// # Arguments
-    /// * `function` - The pure function to register
+    /// On success the function is stored and the registry's total function count is incremented.
     ///
-    /// # Returns
-    /// Ok(()) if registration successful, Err if function already exists
+    /// # Errors
     ///
-    /// # Performance
-    /// O(1) average case for HashMap operations
+    /// Returns `RegistryError::FunctionAlreadyExists` if a function with the same category and signature is already registered.
+    /// Returns `RegistryError::LockPoisoned` if an internal lock has been poisoned.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use std::sync::Arc;
+    /// # use functional::pure_function_registry::{PureFunctionRegistry, RegistryError};
+    /// # // The following is illustrative; `MyPureFn` must implement the `PureFunction` trait.
+    /// # struct MyPureFn;
+    /// # impl MyPureFn {
+    /// #     fn new() -> Self { MyPureFn }
+    /// # }
+    /// # // Assume `MyPureFn` implements `PureFunction<Input=i32, Output=i32>`
+    /// let registry = PureFunctionRegistry::new();
+    /// let my_fn = MyPureFn::new();
+    /// let result: Result<(), RegistryError> = registry.register(my_fn);
+    /// assert!(result.is_ok());
+    /// ```
     pub fn register<Input, Output, F>(&self, function: F) -> Result<(), RegistryError>
     where
         Input: Send + Sync + 'static,
@@ -112,17 +146,24 @@ impl PureFunctionRegistry {
         Ok(())
     }
 
-    /// Look up a function by category and signature.
-    ///
-    /// # Arguments
-    /// * `category` - The function category
-    /// * `signature` - The function signature
+    /// Retrieve metadata for a registered function by category and signature.
     ///
     /// # Returns
-    /// Some function info if found, None otherwise
     ///
-    /// # Performance
-    /// O(1) average case lookup time
+    /// `Some(FunctionInfo)` for the matching function, `None` if no function with the given
+    /// category and signature is registered.
+    ///
+    /// # Errors
+    ///
+    /// Returns `RegistryError::LockPoisoned` if the registry's internal lock is poisoned.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let registry = PureFunctionRegistry::new();
+    /// let info = registry.lookup(FunctionCategory::Transformation, "identity").unwrap();
+    /// assert!(info.is_none());
+    /// ```
     pub fn lookup(
         &self,
         category: FunctionCategory,
@@ -150,13 +191,19 @@ impl PureFunctionRegistry {
         Ok(result)
     }
 
-    /// Get all functions in a specific category.
+    /// Lists all registered function signatures for the given category.
     ///
-    /// # Arguments
-    /// * `category` - The category to search
+    /// Returns an empty vector if no functions are registered under that category.
     ///
-    /// # Returns
-    /// Vector of function signatures in the category
+    /// # Examples
+    ///
+    /// ```
+    /// use crate::functional::pure_function_registry::{PureFunctionRegistry, FunctionCategory};
+    ///
+    /// let registry = PureFunctionRegistry::new();
+    /// let funcs = registry.get_category_functions(FunctionCategory::Transformation).unwrap();
+    /// assert!(funcs.is_empty());
+    /// ```
     pub fn get_category_functions(
         &self,
         category: FunctionCategory,
@@ -172,20 +219,28 @@ impl PureFunctionRegistry {
             .unwrap_or_default())
     }
 
-    /// Compose two functions from the registry.
+    /// Attempts to create a new function by composing two registered functions in the same category.
     ///
-    /// # Arguments
-    /// * `first_sig` - Signature of the first function (applied second)
-    /// * `second_sig` - Signature of the second function (applied first)
-    /// * `category` - Category of both functions
-    /// * `composed_sig` - Signature for the composed function
+    /// Currently composition is not implemented; this method always returns an `IncompatibleComposition` error that includes the attempted signatures and a reason.
+    ///
+    /// # Parameters
+    ///
+    /// - `first_sig` — Signature of the first function (applied second).
+    /// - `second_sig` — Signature of the second function (applied first).
+    /// - `category` — Category shared by both functions.
+    /// - `composed_sig` — Signature to assign to the composed function.
     ///
     /// # Returns
-    /// Ok(()) if composition successful, Err otherwise
     ///
-    /// # Note
-    /// This is a simplified implementation. Full composition support
-    /// will be added in a future iteration.
+    /// `Ok(())` if composition succeeds; currently this method returns `Err(RegistryError::IncompatibleComposition)`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let registry = PureFunctionRegistry::new();
+    /// let res = registry.compose_functions("first", "second", FunctionCategory::Transformation, "first_then_second");
+    /// assert!(res.is_err());
+    /// ```
     pub fn compose_functions(
         &self,
         _first_sig: &str,
@@ -202,19 +257,23 @@ impl PureFunctionRegistry {
         })
     }
 
-    /// Execute a registered function with type-safe input/output.
-    ///
-    /// # Arguments
-    /// * `category` - Function category
-    /// * `signature` - Function signature
-    /// * `input` - Input value
+    /// Executes a registered function with the provided input and returns its output if available.
     ///
     /// # Returns
-    /// Some(output) if function found and types match, None otherwise
     ///
-    /// # Type Parameters
-    /// * `Input` - Input type
-    /// * `Output` - Output type
+    /// `Ok(Some(output))` if a function matching the category and signature is found and its output
+    /// can be downcast to the requested `Output` type; `Ok(None)` if no such function is registered;
+    /// `Err(RegistryError)` if a locking or metrics update error occurs.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use std::sync::Arc;
+    /// # use crate::functional::pure_function_registry::{PureFunctionRegistry, FunctionCategory, prelude::create_standard_registry};
+    /// let registry = create_standard_registry().unwrap();
+    /// let result: Option<i32> = registry.execute(FunctionCategory::Mathematical, "double", 3).unwrap();
+    /// assert_eq!(result, Some(6));
+    /// ```
     pub fn execute<Input, Output>(
         &self,
         category: FunctionCategory,
@@ -244,20 +303,36 @@ impl PureFunctionRegistry {
         Ok(result)
     }
 
-    /// Validate function purity by executing with same input multiple times.
+    /// Checks whether a registered function produces the same output for the same input across multiple executions.
     ///
-    /// # Arguments
-    /// * `category` - Function category
-    /// * `signature` - Function signature
-    /// * `input` - Test input value
-    /// * `iterations` - Number of times to execute (default: 100)
+    /// The registry will execute the function identified by `category` and `signature` `iterations` times (100 if `None`)
+    /// with clones of `input` and return `Ok(true)` if every invocation produced an equal `Output`, `Ok(false)` if any
+    /// output differed, or an error if the function cannot be found or a lock error occurs.
+    ///
+    /// # Parameters
+    ///
+    /// - `category`: function category used to locate the registered function.
+    /// - `signature`: function signature used to locate the registered function.
+    /// - `input`: value to pass to the function on each invocation (must be `Clone`).
+    /// - `iterations`: number of repetitions to perform; defaults to 100 when `None`.
     ///
     /// # Returns
-    /// Ok(true) if function appears pure, Err if validation fails
     ///
-    /// # Type Parameters
-    /// * `Input` - Input type (must be Clone)
-    /// * `Output` - Output type (must be Eq)
+    /// `Ok(true)` if all outputs across the runs are equal, `Ok(false)` if any output differs, or `Err(RegistryError)` on failure.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use crate::functional::pure_function_registry::prelude::create_standard_registry;
+    /// use crate::functional::pure_function_registry::FunctionCategory;
+    ///
+    /// let registry = create_standard_registry().expect("failed to create registry");
+    /// // `identity` in the standard registry is deterministic for `i32`
+    /// let is_pure = registry
+    ///     .validate_purity::<i32, i32>(FunctionCategory::Transformation, "identity", 7, Some(10))
+    ///     .expect("validation failed");
+    /// assert!(is_pure);
+    /// ```
     pub fn validate_purity<Input, Output>(
         &self,
         category: FunctionCategory,
@@ -297,7 +372,20 @@ impl PureFunctionRegistry {
         Ok(results.iter().all(|r| r == first_result))
     }
 
-    /// Get current performance metrics.
+    /// Returns a clone of the registry's current performance metrics.
+    ///
+    /// # Returns
+    ///
+    /// `RegistryMetrics` containing the current average lookup time, total functions,
+    /// lookup count, and composition count.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let registry = PureFunctionRegistry::new();
+    /// let metrics = registry.get_metrics().unwrap();
+    /// assert_eq!(metrics.total_functions, 0);
+    /// ```
     pub fn get_metrics(&self) -> Result<RegistryMetrics, RegistryError> {
         let metrics = self
             .metrics
@@ -306,7 +394,18 @@ impl PureFunctionRegistry {
         Ok(metrics.clone())
     }
 
-    /// Clear all registered functions and reset metrics.
+    /// Clears all registered functions and resets metrics to default values.
+    ///
+    /// Clears the internal function store and resets RegistryMetrics to its default state.
+    /// Returns `Err(RegistryError::LockPoisoned)` if a synchronization primitive has been poisoned.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let registry = PureFunctionRegistry::new();
+    /// registry.clear().unwrap();
+    /// assert_eq!(registry.get_metrics().unwrap().total_functions, 0);
+    /// ```
     pub fn clear(&self) -> Result<(), RegistryError> {
         let mut functions = self
             .functions
@@ -323,7 +422,29 @@ impl PureFunctionRegistry {
         Ok(())
     }
 
-    /// Update lookup performance metrics.
+    /// Update the registry's lookup performance metrics with a new measurement.
+    ///
+    /// Updates the running average lookup time (in nanoseconds) and increments the lookup count using the provided duration measurement. If this is the first measurement, the average is set to the measurement value.
+    ///
+    /// # Parameters
+    ///
+    /// - `duration`: elapsed time of a lookup to incorporate into the metrics.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` on success, or `Err(RegistryError::LockPoisoned)` if the metrics lock is poisoned.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::time::Duration;
+    /// let registry = PureFunctionRegistry::new();
+    /// // record a 100 ns lookup measurement
+    /// registry.update_lookup_metrics(Duration::from_nanos(100)).unwrap();
+    /// let metrics = registry.get_metrics().unwrap();
+    /// assert!(metrics.lookup_count >= 1);
+    /// assert!(metrics.avg_lookup_time_ns >= 100);
+    /// ```
     fn update_lookup_metrics(&self, duration: Duration) -> Result<(), RegistryError> {
         let mut metrics = self
             .metrics
@@ -361,6 +482,21 @@ where
     Input: 'static,
     Output: 'static,
 {
+    /// Creates a ComposableFunction wrapper after validating the container's input and output TypeIds
+    /// match the provided `Input` and `Output` generic types.
+    ///
+    /// # Errors
+    ///
+    /// Returns `RegistryError::TypeMismatch` if the container's recorded input or output type does not
+    /// match `Input` or `Output`, respectively.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// // Assuming `container` is a valid FunctionContainer whose input/output types are i32 -> i32:
+    /// let container: FunctionContainer = /* obtain or construct container */ unimplemented!();
+    /// let composable = ComposableFunction::<i32, i32>::new(&container)?;
+    /// ```
     fn new(container: &'a FunctionContainer) -> Result<Self, RegistryError> {
         if container.input_type_id() != std::any::TypeId::of::<Input>()
             || container.output_type_id() != std::any::TypeId::of::<Output>()
@@ -408,7 +544,16 @@ pub enum RegistryError {
 pub type SharedRegistry = Arc<PureFunctionRegistry>;
 
 impl PureFunctionRegistry {
-    /// Create a new shared registry instance.
+    /// Create a thread-safe shared registry instance.
+    ///
+    /// Returns an Arc-wrapped PureFunctionRegistry (`SharedRegistry`).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let registry = PureFunctionRegistry::shared();
+    /// // `registry` is a SharedRegistry (Arc<PureFunctionRegistry>) ready for concurrent use
+    /// ```
     pub fn shared() -> SharedRegistry {
         Arc::new(Self::new())
     }
@@ -418,7 +563,24 @@ impl PureFunctionRegistry {
 pub mod prelude {
     use super::*;
 
-    /// Create a registry with common pure functions pre-registered.
+    /// Creates a shared registry pre-populated with a small set of common pure functions.
+    ///
+    /// The registry will include:
+    /// - "identity" (Transformation): identity for `i32`
+    /// - "double" (Mathematical): multiplies an `i32` by 2
+    /// - "string_length" (StringProcessing): returns the length of a `String`
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing the `SharedRegistry` on success, or a `RegistryError` if any registration fails.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let registry = create_standard_registry().unwrap();
+    /// let metrics = registry.get_metrics().unwrap();
+    /// assert!(metrics.total_functions >= 3);
+    /// ```
     pub fn create_standard_registry() -> Result<SharedRegistry, RegistryError> {
         let registry = PureFunctionRegistry::shared();
 

@@ -20,6 +20,19 @@ pub struct IteratorConfig {
 }
 
 impl Default for IteratorConfig {
+    /// Creates a default `IteratorConfig` with conservative performance settings.
+    ///
+    /// The default configuration disables parallel processing, uses a buffer size of 1024,
+    /// and sets a memory limit of 10 MB (10 * 1024 * 1024).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let cfg = IteratorConfig::default();
+    /// assert_eq!(cfg.enable_parallel, false);
+    /// assert_eq!(cfg.buffer_size, 1024);
+    /// assert_eq!(cfg.memory_limit, 10 * 1024 * 1024);
+    /// ```
     fn default() -> Self {
         Self {
             enable_parallel: false,
@@ -43,7 +56,18 @@ impl<T, I> IteratorChain<T, I>
 where
     I: Iterator<Item = T>,
 {
-    /// Create a new iterator chain
+    /// Constructs a new IteratorChain that wraps the given iterator with the default configuration and no recorded operations.
+    ///
+    /// # Returns
+    ///
+    /// A new `IteratorChain` containing the provided iterator, `IteratorConfig::default()`, and an empty operations log.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let chain = IteratorChain::new(vec![1, 2, 3].into_iter());
+    /// assert_eq!(chain.count(), 3);
+    /// ```
     pub fn new(iterator: I) -> Self {
         Self {
             iterator,
@@ -52,13 +76,35 @@ where
         }
     }
 
-    /// Configure the iterator chain
+    /// Set the iterator chain's configuration.
+    ///
+    /// Replaces the chain's `config` with the provided `config` and returns the updated chain.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let chain = IteratorChain::new(vec![1, 2, 3].into_iter());
+    /// let cfg = IteratorConfig { enable_parallel: true, buffer_size: 2048, memory_limit: 5 * 1024 * 1024 };
+    /// let updated = chain.with_config(cfg.clone());
+    /// assert_eq!(updated.operations(), &Vec::<String>::new());
+    /// ```
     pub fn with_config(mut self, config: IteratorConfig) -> Self {
         self.config = config;
         self
     }
 
-    /// Apply a transformation function
+    /// Applies a mapping function to each item in the chain.
+    ///
+    /// The returned chain yields the results of applying `f` to every element produced by this chain,
+    /// and records the `"map"` operation in the chain's operation log.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let chain = crate::functional::iterator_engine::IteratorChain::new(vec![1, 2, 3].into_iter());
+    /// let doubled = chain.map(|x| x * 2).collect();
+    /// assert_eq!(doubled, vec![2, 4, 6]);
+    /// ```
     pub fn map<U, F>(self, f: F) -> IteratorChain<U, std::iter::Map<I, F>>
     where
         F: FnMut(T) -> U,
@@ -73,7 +119,19 @@ where
         }
     }
 
-    /// Filter elements based on a predicate
+    /// Create a new IteratorChain that yields elements satisfying the predicate.
+    ///
+    /// The returned chain records the "filter" operation and produces only items for which `f` returns `true`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let v = vec![1, 2, 3, 4];
+    /// let result = crate::functional::iterator_engine::IteratorChain::new(v.into_iter())
+    ///     .filter(|&x| x % 2 == 0)
+    ///     .collect();
+    /// assert_eq!(result, vec![2, 4]);
+    /// ```
     pub fn filter<F>(self, f: F) -> IteratorChain<T, std::iter::Filter<I, F>>
     where
         F: FnMut(&T) -> bool,
@@ -151,7 +209,24 @@ where
     //     }
     // }
 
-    /// Join two iterators based on keys to return all matching pairs
+    /// Produce pairs of left and right items whose keys are equal.
+    ///
+    /// Matches each item from the left iterator with all items from `other` that produce the same key,
+    /// emitting one `(left, right)` pair for every match. The right-hand side is collected for lookup,
+    /// and both `T` and `V` must implement `Clone` so matched pairs can be produced.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let left = vec![1, 2];
+    /// let right = vec![(1, "a"), (1, "b"), (2, "c")];
+    ///
+    /// let result: Vec<(i32, (&'static str))> = IteratorChain::new(left.into_iter())
+    ///     .join(right, |&l| l, |&(k, _)| k)
+    ///     .collect();
+    ///
+    /// assert_eq!(result, vec![(1, "a"), (1, "b"), (2, "c")]);
+    /// ```
     pub fn join<K, U, V, F, G>(
         self,
         other: U,
@@ -216,22 +291,52 @@ where
     //     }
     // }
 
-    /// Collect results into a vector
+    /// Collects all remaining items from the chain into a vector.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let chain = IteratorChain::new(vec![1, 2, 3].into_iter());
+    /// let v = chain.collect();
+    /// assert_eq!(v, vec![1, 2, 3]);
+    /// ```
     pub fn collect(self) -> Vec<T> {
         self.iterator.collect()
     }
 
-    /// Count elements
+    /// Compute the number of elements remaining in the chain.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let chain = IteratorChain::new(vec![1, 2, 3].into_iter());
+    /// assert_eq!(chain.count(), 3);
+    /// ```
     pub fn count(self) -> usize {
         self.iterator.count()
     }
 
-    /// Get the first element
+    /// Return the first element of the iterator, if any.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let first = IteratorChain::new(vec![1, 2, 3].into_iter()).first();
+    /// assert_eq!(first, Some(1));
+    /// ```
     pub fn first(mut self) -> Option<T> {
         self.iterator.next()
     }
 
-    /// Fold elements into a single value
+    /// Aggregate the chain's items into a single value using a reducer function.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let v = vec![1, 2, 3];
+    /// let sum = IteratorChain::new(v.into_iter()).fold(0, |acc, x| acc + x);
+    /// assert_eq!(sum, 6);
+    /// ```
     pub fn fold<B, F>(self, init: B, f: F) -> B
     where
         F: FnMut(B, T) -> B,
@@ -239,7 +344,17 @@ where
         self.iterator.fold(init, f)
     }
 
-    /// Get operations performed (for debugging)
+    /// Retrieve the logged transformation operations for this iterator chain.
+    ///
+    /// The returned slice contains the operation names in the order they were recorded.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let chain = IteratorChain::new(vec![1, 2, 3].into_iter()).map(|x| x * 2).filter(|x| x > &2);
+    /// let ops = chain.operations();
+    /// assert_eq!(ops, &["map".to_string(), "filter".to_string()]);
+    /// ```
     pub fn operations(&self) -> &[String] {
         &self.operations
     }
@@ -249,6 +364,17 @@ impl<T, I> fmt::Debug for IteratorChain<T, I>
 where
     I: Iterator<Item = T> + fmt::Debug,
 {
+    /// Formats the `IteratorChain` using the debug builder to show its iterator, config, and operations.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let chain = IteratorChain::new(vec![1, 2, 3].into_iter());
+    /// let s = format!("{chain:?}");
+    /// assert!(s.contains("IteratorChain"));
+    /// assert!(s.contains("config"));
+    /// assert!(s.contains("operations"));
+    /// ```
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("IteratorChain")
             .field("iterator", &self.iterator)
@@ -265,7 +391,14 @@ pub struct IteratorEngine {
 }
 
 impl IteratorEngine {
-    /// Create a new iterator engine
+    /// Constructs a new IteratorEngine with the default configuration and no performance metrics.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let engine = IteratorEngine::new();
+    /// assert!(engine.metrics().is_empty());
+    /// ```
     pub fn new() -> Self {
         Self {
             config: IteratorConfig::default(),
@@ -273,7 +406,15 @@ impl IteratorEngine {
         }
     }
 
-    /// Create an iterator engine with custom configuration
+    /// Creates an IteratorEngine configured with the provided `config`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let cfg = IteratorConfig { enable_parallel: true, buffer_size: 512, memory_limit: 1024 };
+    /// let engine = IteratorEngine::with_config(cfg);
+    /// assert!(engine.metrics().is_empty());
+    /// ```
     pub fn with_config(config: IteratorConfig) -> Self {
         Self {
             config,
@@ -281,7 +422,18 @@ impl IteratorEngine {
         }
     }
 
-    /// Create a new iterator chain from a collection
+    /// Create an IteratorChain from the given iterator using this engine's configuration.
+    ///
+    /// The returned chain wraps the provided iterator and inherits the engine's `IteratorConfig`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let engine = IteratorEngine::new();
+    /// let vec = vec![1, 2, 3];
+    /// let chain = engine.from_iter(vec.into_iter());
+    /// assert_eq!(chain.collect(), vec![1, 2, 3]);
+    /// ```
     pub fn from_iter<T, I>(&self, iterator: I) -> IteratorChain<T, I>
     where
         I: Iterator<Item = T>,
@@ -289,7 +441,17 @@ impl IteratorEngine {
         IteratorChain::new(iterator).with_config(self.config.clone())
     }
 
-    /// Create a new iterator chain from a vector
+    /// Builds an IteratorChain from a Vec, applying the engine's configuration.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let engine = IteratorEngine::new();
+    /// let v = vec![1, 2, 3];
+    /// let chain = engine.from_vec(v);
+    /// let collected = chain.collect();
+    /// assert_eq!(collected, vec![1, 2, 3]);
+    /// ```
     pub fn from_vec<T>(&self, vec: Vec<T>) -> IteratorChain<T, std::vec::IntoIter<T>> {
         self.from_iter(vec.into_iter())
     }
@@ -303,7 +465,22 @@ impl IteratorEngine {
     //     self.from_iter(slice.iter())
     // }
 
-    /// Process data with zero-copy transformations
+    /// Applies `transform` to each element of `data` and returns a vector of the results.
+    ///
+    /// If the crate is built with the `parallel` feature enabled, and the engine's
+    /// `config.enable_parallel` is `true` and `data.len()` exceeds `config.buffer_size`,
+    /// the transformation is performed in parallel; otherwise it is performed sequentially.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use std::sync::Arc;
+    /// # use crate::functional::iterator_engine::{IteratorEngine, IteratorConfig};
+    /// let engine = IteratorEngine::with_config(IteratorConfig { enable_parallel: false, buffer_size: 2, memory_limit: 0 });
+    /// let data = vec![1, 2, 3];
+    /// let out = engine.process_zero_copy(&data, |x| x * 2);
+    /// assert_eq!(out, vec![2, 4, 6]);
+    /// ```
     #[allow(unexpected_cfgs)]
     pub fn process_zero_copy<T, F, U>(&self, data: &[T], transform: F) -> Vec<U>
     where
@@ -323,18 +500,47 @@ impl IteratorEngine {
         data.iter().map(transform).collect()
     }
 
-    /// Get performance metrics
+    /// Accesses the engine's performance metrics.
+    ///
+    /// The map keys are metric names and the values are their recorded counts.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let engine = IteratorEngine::new();
+    /// let metrics = engine.metrics();
+    /// assert!(metrics.is_empty());
+    /// ```
     pub fn metrics(&self) -> &HashMap<String, u64> {
         &self.performance_metrics
     }
 
-    /// Reset performance metrics
+    /// Clears all collected performance metrics from the engine.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut engine = IteratorEngine::new();
+    /// // simulate metrics being recorded
+    /// engine.performance_metrics.insert("ops".to_string(), 1);
+    /// assert!(!engine.metrics().is_empty());
+    /// engine.reset_metrics();
+    /// assert!(engine.metrics().is_empty());
+    /// ```
     pub fn reset_metrics(&mut self) {
         self.performance_metrics.clear();
     }
 }
 
 impl Default for IteratorEngine {
+    /// Construct a default IteratorEngine with the default configuration and no collected metrics.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let engine = IteratorEngine::default();
+    /// assert!(engine.metrics().is_empty());
+    /// ```
     fn default() -> Self {
         Self::new()
     }

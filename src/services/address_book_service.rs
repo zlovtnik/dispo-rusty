@@ -36,6 +36,24 @@ pub fn filter(filter: PersonFilter, pool: &Pool) -> Result<Page<Person>, Service
     }
 }
 
+/// Inserts a new person record into the database.
+///
+/// # Parameters
+///
+/// * `new_person` - Data transfer object containing the fields for the person to create.
+///
+/// # Returns
+///
+/// `Ok(())` on success, `ServiceError::InternalServerError` with a message when insertion fails.
+///
+/// # Examples
+///
+/// ```
+/// // Construct a PersonDTO and a connection pool appropriate for your application.
+/// let dto = PersonDTO::default();
+/// let pool = Pool::new();
+/// assert!(insert(dto, &pool).is_ok());
+/// ```
 pub fn insert(new_person: PersonDTO, pool: &Pool) -> Result<(), ServiceError> {
     match Person::insert(new_person, &mut pool.get().unwrap()) {
         Ok(_) => Ok(()),
@@ -45,6 +63,23 @@ pub fn insert(new_person: PersonDTO, pool: &Pool) -> Result<(), ServiceError> {
     }
 }
 
+/// Updates the person with the given `id` using the provided `updated_person` data.
+///
+/// Returns `Ok(())` when the update succeeds. Returns `ServiceError::NotFound` if no person
+/// exists with the given `id`, or `ServiceError::InternalServerError` if the update operation fails.
+///
+/// # Examples
+///
+/// ```ignore
+/// use crate::services::address_book_service::update;
+/// use crate::models::PersonDTO;
+/// use crate::db::Pool;
+///
+/// let pool: Pool = /* obtain pool */;
+/// let dto = PersonDTO { /* populate fields */ };
+/// let result = update(1, dto, &pool);
+/// assert!(result.is_ok());
+/// ```
 pub fn update(id: i32, updated_person: PersonDTO, pool: &Pool) -> Result<(), ServiceError> {
     match Person::find_by_id(id, &mut pool.get().unwrap()) {
         Ok(_) => match Person::update(id, updated_person, &mut pool.get().unwrap()) {

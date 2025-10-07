@@ -59,6 +59,29 @@ pub fn login(login: LoginDTO, pool: &Pool) -> Result<TokenBodyResponse, ServiceE
     }
 }
 
+/// Invalidates the login session associated with the bearer token in the Authorization header.
+///
+/// Parses and validates a `Bearer` token from `authen_header`, verifies the token against the
+/// database via `pool`, and clears the corresponding user's login session on success.
+///
+/// # Arguments
+///
+/// * `authen_header` - An HTTP `Authorization` header expected to contain a `Bearer <token>`.
+/// * `pool` - Database connection pool used to verify the token and update the user's session.
+///
+/// # Returns
+///
+/// `Ok(())` if the user's login session was successfully invalidated; `Err(ServiceError::InternalServerError)`
+/// if token parsing/validation, user lookup, or database access fails.
+///
+/// # Examples
+///
+/// ```no_run
+/// use actix_web::http::header::HeaderValue;
+/// // let pool = /* obtain Pool instance */;
+/// let header = HeaderValue::from_str("Bearer example.token.value").unwrap();
+/// // let result = logout(&header, &pool);
+/// ```
 pub fn logout(authen_header: &HeaderValue, pool: &Pool) -> Result<(), ServiceError> {
     if let Ok(authen_str) = authen_header.to_str() {
         if token_utils::is_auth_header_valid(authen_header) {
@@ -82,6 +105,25 @@ pub fn logout(authen_header: &HeaderValue, pool: &Pool) -> Result<(), ServiceErr
     })
 }
 
+/// Refreshes an authentication token found in the provided `Authorization` header and returns a new token response.
+///
+/// Validates the header and token, confirms the login session is still valid, retrieves the associated login info,
+/// and generates a new bearer token. Returns a `ServiceError::Unauthorized` when the header or token is missing/invalid
+/// or when the session is not valid; returns `ServiceError::InternalServerError` if token generation cannot be serialized.
+///
+/// # Examples
+///
+/// ```no_run
+/// use actix_web::http::HeaderValue;
+///
+/// // `pool` must be an initialized database pool from your application.
+/// let header = HeaderValue::from_static("Bearer <existing_token>");
+/// let result = crate::services::account_service::refresh(&header, &pool);
+/// match result {
+///     Ok(token_res) => println!("new token: {}", token_res.token),
+///     Err(err) => eprintln!("refresh failed: {:?}", err),
+/// }
+/// ```
 pub fn refresh(
     authen_header: &HeaderValue,
     pool: &Pool,
@@ -130,6 +172,22 @@ pub fn refresh(
     })
 }
 
+/// Retrieves the login information associated with the bearer token from the Authorization header.
+///
+/// Attempts to validate and decode the bearer token found in `authen_header` and returns the corresponding
+/// `LoginInfoDTO` looked up from the provided database pool.
+///
+/// # Returns
+///
+/// `Ok(LoginInfoDTO)` when the token is valid and the login record is found, `Err(ServiceError::InternalServerError)` otherwise.
+///
+/// # Examples
+///
+/// ```
+/// // Example usage (pseudocode):
+/// // let header = HeaderValue::from_str("Bearer <token>").unwrap();
+/// // let result = me(&header, &pool);
+/// ```
 pub fn me(authen_header: &HeaderValue, pool: &Pool) -> Result<LoginInfoDTO, ServiceError> {
     if let Ok(authen_str) = authen_header.to_str() {
         if token_utils::is_auth_header_valid(authen_header) {

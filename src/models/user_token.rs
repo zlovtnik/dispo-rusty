@@ -23,6 +23,23 @@ pub struct UserToken {
 }
 
 impl UserToken {
+    /// Generates a JSON Web Token (JWT) for the given login information.
+    ///
+    /// Reads `MAX_AGE` from the environment (falls back to seven days if absent or invalid) and sets
+    /// the token's `iat` and `exp` claims accordingly. This function will panic if the `.env` file
+    /// cannot be read or if JWT encoding fails.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let login = crate::models::LoginInfoDTO {
+    ///     username: "alice".to_string(),
+    ///     login_session: "session123".to_string(),
+    ///     tenant_id: "tenantA".to_string(),
+    /// };
+    /// let token = crate::auth::generate_token(&login);
+    /// assert!(!token.is_empty());
+    /// ```
     pub fn generate_token(login: &LoginInfoDTO) -> String {
         dotenv::dotenv().expect("Failed to read .env file");
         let max_age: i64 = match env::var("MAX_AGE") {
