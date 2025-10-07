@@ -1,11 +1,11 @@
 use chrono::NaiveDateTime;
-use diesel::{prelude::*, Identifiable, Insertable, Queryable, AsChangeset, result};
+use diesel::{prelude::*, result, AsChangeset, Identifiable, Insertable, Queryable};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
 use crate::{
-    schema::tenants::{self, dsl::*},
     models::filters::TenantFilter,
+    schema::tenants::{self, dsl::*},
 };
 
 #[derive(Clone, Identifiable, Queryable, Serialize, Deserialize)]
@@ -36,10 +36,12 @@ pub struct UpdateTenant {
 impl Tenant {
     pub fn validate_db_url(url: &str) -> QueryResult<()> {
         // Validate URL format
-        Url::parse(url).map_err(|_| result::Error::DatabaseError(
-            result::DatabaseErrorKind::Unknown,
-            Box::new("Invalid database URL format".to_string()),
-        ))?;
+        Url::parse(url).map_err(|_| {
+            result::Error::DatabaseError(
+                result::DatabaseErrorKind::Unknown,
+                Box::new("Invalid database URL format".to_string()),
+            )
+        })?;
 
         Ok(())
     }
@@ -49,7 +51,11 @@ impl Tenant {
         diesel::insert_into(tenants).values(&dto).get_result(conn)
     }
 
-    pub fn update(id_: &str, dto: UpdateTenant, conn: &mut crate::config::db::Connection) -> QueryResult<Tenant> {
+    pub fn update(
+        id_: &str,
+        dto: UpdateTenant,
+        conn: &mut crate::config::db::Connection,
+    ) -> QueryResult<Tenant> {
         if let Some(ref url) = dto.db_url {
             Self::validate_db_url(url)?;
         }
@@ -91,10 +97,10 @@ impl Tenant {
     /// using paginated methods for better performance.
     pub fn list_all(conn: &mut crate::config::db::Connection) -> QueryResult<Vec<Tenant>> {
         const MAX_LIMIT: i64 = 10000;
-        
+
         // Check total count first
         let total_count: i64 = tenants.count().get_result(conn)?;
-        
+
         if total_count > MAX_LIMIT {
             return Err(diesel::result::Error::DatabaseError(
                 diesel::result::DatabaseErrorKind::Unknown,
@@ -104,7 +110,7 @@ impl Tenant {
                 )),
             ));
         }
-        
+
         tenants.limit(MAX_LIMIT).load::<Tenant>(conn)
     }
 
@@ -117,7 +123,10 @@ impl Tenant {
     /// # Returns
     ///
     /// A `Vec<Tenant>` containing up to the limit of records from the `tenants` table.
-    pub fn list_all_with_limit(limit: Option<i64>, conn: &mut crate::config::db::Connection) -> QueryResult<Vec<Tenant>> {
+    pub fn list_all_with_limit(
+        limit: Option<i64>,
+        conn: &mut crate::config::db::Connection,
+    ) -> QueryResult<Vec<Tenant>> {
         let limit = limit.unwrap_or(1000).min(10000);
         tenants.limit(limit).load::<Tenant>(conn)
     }
@@ -139,7 +148,11 @@ impl Tenant {
     /// let (page, total) = Tenant::list_paginated(0, 10, &mut conn).expect("query failed");
     /// assert!(total >= page.len() as i64);
     /// ```
-    pub fn list_paginated(offset: i64, limit: i64, conn: &mut crate::config::db::Connection) -> QueryResult<(Vec<Tenant>, i64)> {
+    pub fn list_paginated(
+        offset: i64,
+        limit: i64,
+        conn: &mut crate::config::db::Connection,
+    ) -> QueryResult<(Vec<Tenant>, i64)> {
         let total = tenants.count().get_result::<i64>(conn)?;
         let results = tenants.offset(offset).limit(limit).load::<Tenant>(conn)?;
         Ok((results, total))
@@ -158,7 +171,10 @@ impl Tenant {
     /// let tenant = Tenant::find_by_name("acme", &mut conn).unwrap();
     /// assert_eq!(tenant.name, "acme");
     /// ```
-    pub fn find_by_name(name_: &str, conn: &mut crate::config::db::Connection) -> QueryResult<Tenant> {
+    pub fn find_by_name(
+        name_: &str,
+        conn: &mut crate::config::db::Connection,
+    ) -> QueryResult<Tenant> {
         tenants.filter(name.eq(name_)).first::<Tenant>(conn)
     }
 
@@ -191,10 +207,17 @@ impl Tenant {
             ));
         }
 
-        if !dto.id.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
+        if !dto
+            .id
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+        {
             return Err(result::Error::DatabaseError(
                 result::DatabaseErrorKind::Unknown,
-                Box::new("Tenant ID must contain only alphanumeric characters, dashes, and underscores".to_string()),
+                Box::new(
+                    "Tenant ID must contain only alphanumeric characters, dashes, and underscores"
+                        .to_string(),
+                ),
             ));
         }
 
@@ -227,7 +250,10 @@ impl Tenant {
     /// let inserted = Tenant::batch_create(dtos, &mut conn).unwrap();
     /// assert_eq!(inserted, 1);
     /// ```
-    pub fn batch_create(dtos: Vec<TenantDTO>, conn: &mut crate::config::db::Connection) -> QueryResult<usize> {
+    pub fn batch_create(
+        dtos: Vec<TenantDTO>,
+        conn: &mut crate::config::db::Connection,
+    ) -> QueryResult<usize> {
         conn.transaction(|tx_conn| {
             for dto in &dtos {
                 Self::validate_tenant_dto(dto)?;
@@ -253,7 +279,10 @@ impl Tenant {
     /// // let filter = TenantFilter { /* filters and optional pagination */ };
     /// // let tenants = Tenant::filter(filter, &mut conn).expect("query failed");
     /// ```
-    pub fn filter(filter: TenantFilter, conn: &mut crate::config::db::Connection) -> QueryResult<Vec<Tenant>> {
+    pub fn filter(
+        filter: TenantFilter,
+        conn: &mut crate::config::db::Connection,
+    ) -> QueryResult<Vec<Tenant>> {
         let mut query = tenants::table.into_boxed();
 
         for field_filter in &filter.filters {
@@ -369,12 +398,15 @@ impl Tenant {
                 ));
             }
 
-            let offset = cursor.checked_mul(page_size).ok_or_else(|| {
-                result::Error::DatabaseError(
-                    result::DatabaseErrorKind::Unknown,
-                    Box::new("Offset calculation would overflow".to_string()),
-                )
-            })?.min(i64::MAX - page_size); // Ensure offset doesn't cause issues with limit
+            let offset = cursor
+                .checked_mul(page_size)
+                .ok_or_else(|| {
+                    result::Error::DatabaseError(
+                        result::DatabaseErrorKind::Unknown,
+                        Box::new("Offset calculation would overflow".to_string()),
+                    )
+                })?
+                .min(i64::MAX - page_size); // Ensure offset doesn't cause issues with limit
 
             if page_size == 0 {
                 return Err(result::Error::DatabaseError(

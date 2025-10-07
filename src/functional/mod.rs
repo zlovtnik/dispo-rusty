@@ -20,20 +20,49 @@
 //! - Pagination: Iterator-based pagination
 //! - Performance Monitoring: Functional pipeline metrics
 
-// pub mod iterator_engine;
-// pub mod chain_builder;
+pub mod chain_builder;
 pub mod function_traits;
-pub mod pure_function_registry;
 pub mod immutable_state;
+pub mod iterator_engine;
+pub mod pure_function_registry;
+pub mod query_builder;
+pub mod query_composition;
 pub mod state_transitions;
+pub mod validation_engine;
+pub mod validation_integration;
+pub mod validation_rules;
 
 // Re-export commonly used types for convenience
-// pub use iterator_engine::{IteratorEngine, IteratorChain};
+// Commented out to avoid unused import warnings
 // pub use chain_builder::ChainBuilder;
-// pub use pure_function_registry::{PureFunctionRegistry, SharedRegistry, RegistryError};
+// pub use iterator_engine::{IteratorChain, IteratorEngine};
+// pub use pure_function_registry::{PureFunctionRegistry, RegistryError, SharedRegistry};
 
 // pub use immutable_state::{
 //     ImmutableRef, ImmutableStateManager, PersistentHashMap, PersistentVector,
 //     QueryResult, StateTransitionMetrics, TenantApplicationState
 // };
 // pub use state_transitions::{TransitionError, TransitionResult, build_login_transitions, build_logout_transitions};
+
+// Re-export query composition types
+// pub use query_builder::{
+//     Column, Operator, Predicate, QueryFilter, TypeSafeQueryBuilder, LogicOperator,
+//     equals, contains, compare, null_check
+// };
+// pub use query_composition::{
+//     ComposablePredicate, FunctionalQueryComposer, LazyEvaluationConfig,
+//     QueryPerformanceMetrics, ParameterSanitizer, QueryOptimizationEngine,
+//     composable_predicate, field_filter_to_composable
+// };
+
+// Re-export validation types
+// pub use validation_engine::{
+//     ValidationEngine, ValidationConfig, ValidationContext, ValidationOutcome,
+//     ValidationPipeline, ValidationPipelineResult, LazyValidationIterator,
+//     validator, validator_with_config, validate_struct_field
+// };
+// pub use validation_rules::{
+//     ValidationRule, ValidationResult, ValidationError,
+//     Required, Length, Email, Range, Phone, Url, Custom, OneOf, Unique, MustBeTrue,
+//     all, any, not, when, validate_collection, cross_field_validate
+// };

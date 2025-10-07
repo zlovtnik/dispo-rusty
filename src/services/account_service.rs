@@ -7,7 +7,7 @@ use crate::{
     constants,
     error::ServiceError,
     models::{
-        user::{LoginDTO, User, UserDTO, LoginInfoDTO},
+        user::{LoginDTO, LoginInfoDTO, User, UserDTO},
         user_token::UserToken,
     },
     utils::token_utils,
@@ -82,7 +82,10 @@ pub fn logout(authen_header: &HeaderValue, pool: &Pool) -> Result<(), ServiceErr
     })
 }
 
-pub fn refresh(authen_header: &HeaderValue, pool: &Pool) -> Result<TokenBodyResponse, ServiceError> {
+pub fn refresh(
+    authen_header: &HeaderValue,
+    pool: &Pool,
+) -> Result<TokenBodyResponse, ServiceError> {
     if let Ok(authen_str) = authen_header.to_str() {
         if token_utils::is_auth_header_valid(authen_header) {
             let token = authen_str[6..authen_str.len()].trim();
@@ -90,20 +93,28 @@ pub fn refresh(authen_header: &HeaderValue, pool: &Pool) -> Result<TokenBodyResp
                 // Validate the token and generate a new one
                 if User::is_valid_login_session(&token_data.claims, &mut pool.get().unwrap()) {
                     // Get login info and generate new token
-                    match User::find_login_info_by_token(&token_data.claims, &mut pool.get().unwrap()) {
+                    match User::find_login_info_by_token(
+                        &token_data.claims,
+                        &mut pool.get().unwrap(),
+                    ) {
                         Ok(login_info) => {
                             match serde_json::from_value(
                                 json!({ "token": UserToken::generate_token(&login_info), "token_type": "bearer" }),
                             ) {
                                 Ok(token_res) => return Ok(token_res),
-                                Err(_) => return Err(ServiceError::InternalServerError {
-                                    error_message: constants::MESSAGE_INTERNAL_SERVER_ERROR.to_string(),
-                                }),
+                                Err(_) => {
+                                    return Err(ServiceError::InternalServerError {
+                                        error_message: constants::MESSAGE_INTERNAL_SERVER_ERROR
+                                            .to_string(),
+                                    })
+                                }
                             }
-                        },
-                        Err(_) => return Err(ServiceError::Unauthorized {
-                            error_message: constants::MESSAGE_TOKEN_MISSING.to_string(),
-                        }),
+                        }
+                        Err(_) => {
+                            return Err(ServiceError::Unauthorized {
+                                error_message: constants::MESSAGE_TOKEN_MISSING.to_string(),
+                            })
+                        }
                     }
                 } else {
                     return Err(ServiceError::Unauthorized {
@@ -124,7 +135,9 @@ pub fn me(authen_header: &HeaderValue, pool: &Pool) -> Result<LoginInfoDTO, Serv
         if token_utils::is_auth_header_valid(authen_header) {
             let token = authen_str[6..authen_str.len()].trim();
             if let Ok(token_data) = token_utils::decode_token(token.to_string()) {
-                if let Ok(login_info) = User::find_login_info_by_token(&token_data.claims, &mut pool.get().unwrap()) {
+                if let Ok(login_info) =
+                    User::find_login_info_by_token(&token_data.claims, &mut pool.get().unwrap())
+                {
                     return Ok(login_info);
                 }
             }

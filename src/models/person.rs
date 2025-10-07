@@ -8,7 +8,7 @@ use crate::{
     schema::people::{self, dsl::*},
 };
 
-use super::{filters::PersonFilter, response::Page, pagination::HasId};
+use super::{filters::PersonFilter, pagination::HasId, response::Page};
 
 #[derive(Queryable, Serialize, Deserialize)]
 pub struct Person {
@@ -96,10 +96,7 @@ impl Person {
             .page_size
             .unwrap_or(crate::constants::DEFAULT_PER_PAGE);
         let records = query
-            .paginate(
-                people::id,
-                cursor,
-            )
+            .paginate(people::id, cursor)
             .per_page(page_size)
             .load_items::<Person>(conn)?;
         Ok(Page::new(

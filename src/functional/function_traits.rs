@@ -5,6 +5,7 @@
 //! must be pure (deterministic, side-effect free), thread-safe,
 //! and composable.
 
+#[allow(dead_code)]
 use std::fmt::Debug;
 use std::hash::Hash;
 
@@ -141,8 +142,8 @@ where
 /// This allows storing functions with different input/output types
 /// in the same collection while maintaining thread safety.
 pub struct FunctionContainer {
-    /// Type-erased function pointer
-    function: Box<dyn std::any::Any + Send + Sync>,
+    /// Type-erased callable function
+    callable: Box<dyn Callable>,
     /// Function signature
     signature: &'static str,
     /// Function category
@@ -156,24 +157,27 @@ impl FunctionContainer {
     /// Create a new function container.
     ///
     /// # Arguments
-    /// * `function` - The function to store
-    /// * `signature` - Function signature
-    /// * `category` - Function category
+    /// * `function` - The pure function implementation
+    /// * `signature` - Unique function signature for identification
+    /// * `category` - Function category for organization
     ///
     /// # Returns
-    /// A new FunctionContainer
+    /// A new FunctionContainer instance
     pub fn new<Input, Output, F>(
         function: F,
         signature: &'static str,
         category: FunctionCategory,
     ) -> Self
     where
-        Input: 'static,
-        Output: 'static,
+        Input: Send + Sync + 'static,
+        Output: Send + Sync + 'static,
         F: PureFunction<Input, Output> + 'static,
     {
+        // Create a closure that calls the PureFunction
+        let closure = move |input: Input| function.call(input);
+        let wrapper = FunctionWrapper::new(closure, signature, category);
         Self {
-            function: Box::new(function),
+            callable: Box::new(wrapper),
             signature,
             category,
             input_type_id: std::any::TypeId::of::<Input>(),
@@ -201,30 +205,66 @@ impl FunctionContainer {
         self.output_type_id
     }
 
-    /// Try to downcast and call the function.
+    /// Try to call the function with type-erased input/output.
     ///
     /// # Arguments
-    /// * `input` - The input value
+    /// * `input` - The input value as Any
     ///
     /// # Returns
     /// Some(output) if the types match, None otherwise
-    pub fn try_call<Input, Output>(&self, input: Input) -> Option<Output>
-    where
-        Input: 'static,
-        Output: 'static,
-    {
-        if self.input_type_id != std::any::TypeId::of::<Input>() ||
-           self.output_type_id != std::any::TypeId::of::<Output>() {
+    pub fn try_call(&self, input: Box<dyn std::any::Any>) -> Option<Box<dyn std::any::Any>> {
+        // Check if the input type matches by checking the inner type
+        if (*input).type_id() != self.input_type_id {
             return None;
         }
 
-        self.function
-            .downcast_ref::<Box<dyn PureFunction<Input, Output>>>()
-            .and_then(|f| Some(f.call(input)))
+        // Call the function using the Callable trait
+        Some(self.callable.call_boxed(input))
     }
 }
 
-/// Helper macros for creating pure functions with proper traits.
+/// Object-safe callable trait for type-erased function calls
+pub trait Callable: Send + Sync {
+    fn call_boxed(&self, input: Box<dyn std::any::Any>) -> Box<dyn std::any::Any>;
+    fn input_type_id(&self) -> std::any::TypeId;
+    fn output_type_id(&self) -> std::any::TypeId;
+}
+
+impl<Input, Output, F> Callable for FunctionWrapper<Input, Output, F>
+where
+    Input: Send + Sync + 'static,
+    Output: Send + Sync + 'static,
+    F: Fn(Input) -> Output + Send + Sync + 'static,
+{
+    fn call_boxed(&self, input: Box<dyn std::any::Any>) -> Box<dyn std::any::Any> {
+        // Check type before downcast
+        if (*input).type_id() != std::any::TypeId::of::<Input>() {
+            eprintln!(
+                "Type mismatch in callable: expected {:?}, got {:?}",
+                std::any::TypeId::of::<Input>(),
+                (*input).type_id()
+            );
+            panic!("Type mismatch in callable");
+        }
+
+        // Downcast the input to the expected type
+        if let Ok(input) = input.downcast::<Input>() {
+            let result = (self.function)(*input);
+            Box::new(result)
+        } else {
+            panic!("Type mismatch in callable")
+        }
+    }
+
+    fn input_type_id(&self) -> std::any::TypeId {
+        std::any::TypeId::of::<Input>()
+    }
+
+    fn output_type_id(&self) -> std::any::TypeId {
+        std::any::TypeId::of::<Output>()
+    }
+}
+
 #[macro_export]
 macro_rules! pure_function {
     ($name:ident, $input:ty, $output:ty, $category:expr, $body:expr) => {
@@ -249,10 +289,6 @@ macro_rules! pure_function {
 #[macro_export]
 macro_rules! pure_closure {
     ($signature:expr, $category:expr, $closure:expr) => {
-        $crate::functional::function_traits::FunctionWrapper::new(
-            $closure,
-            $signature,
-            $category,
-        )
+        $crate::functional::function_traits::FunctionWrapper::new($closure, $signature, $category)
     };
 }

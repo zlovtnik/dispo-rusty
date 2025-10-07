@@ -11,7 +11,9 @@ use crate::{
 pub async fn find_all(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
     if let Some(pool) = req.extensions().get::<Pool>() {
         match address_book_service::find_all(pool) {
-            Ok(people) => Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, people))),
+            Ok(people) => {
+                Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, people)))
+            }
             Err(err) => Err(err),
         }
     } else {
@@ -28,7 +30,9 @@ pub async fn find_by_id(
 ) -> Result<HttpResponse, ServiceError> {
     if let Some(pool) = req.extensions().get::<Pool>() {
         match address_book_service::find_by_id(id.into_inner(), pool) {
-            Ok(person) => Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, person))),
+            Ok(person) => {
+                Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, person)))
+            }
             Err(err) => Err(err),
         }
     } else {
@@ -82,7 +86,8 @@ pub async fn update(
     if let Some(pool) = req.extensions().get::<Pool>() {
         match address_book_service::update(id.into_inner(), updated_person.0, pool) {
             Ok(()) => {
-                Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, constants::EMPTY)))
+                Ok(HttpResponse::Ok()
+                    .json(ResponseBody::new(constants::MESSAGE_OK, constants::EMPTY)))
             }
             Err(err) => Err(err),
         }
@@ -94,14 +99,12 @@ pub async fn update(
 }
 
 // DELETE api/address-book/{id}
-pub async fn delete(
-    id: web::Path<i32>,
-    req: HttpRequest,
-) -> Result<HttpResponse, ServiceError> {
+pub async fn delete(id: web::Path<i32>, req: HttpRequest) -> Result<HttpResponse, ServiceError> {
     if let Some(pool) = req.extensions().get::<Pool>() {
         match address_book_service::delete(id.into_inner(), pool) {
             Ok(()) => {
-                Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, constants::EMPTY)))
+                Ok(HttpResponse::Ok()
+                    .json(ResponseBody::new(constants::MESSAGE_OK, constants::EMPTY)))
             }
             Err(err) => Err(err),
         }
@@ -214,7 +217,7 @@ mod tests {
             .as_str(),
         );
         config::db::run_migration(&mut pool.get().unwrap());
-        
+
         let manager = TenantPoolManager::new(pool.clone());
 
         let _app = test::init_service(
@@ -235,16 +238,8 @@ mod tests {
         )
         .await;
 
-        assert!(insert_mock_data(1, &pool)
-            .await
-            .is_ok());
-        assert_eq!(
-            get_people_in_db(&pool)
-                .await
-                .unwrap()
-                .len(),
-            1
-        );
+        assert!(insert_mock_data(1, &pool).await.is_ok());
+        assert_eq!(get_people_in_db(&pool).await.unwrap().len(), 1);
     }
 
     #[actix_web::test]
@@ -261,7 +256,9 @@ mod tests {
         config::db::run_migration(&mut pool.get().unwrap());
 
         let manager = TenantPoolManager::new(pool.clone());
-        manager.add_tenant_pool("tenant1".to_string(), pool.clone()).unwrap();
+        manager
+            .add_tenant_pool("tenant1".to_string(), pool.clone())
+            .unwrap();
 
         let app = test::init_service(
             App::new()
@@ -300,13 +297,7 @@ mod tests {
                     .await;
 
                 assert_eq!(resp.status(), StatusCode::CREATED);
-                assert_eq!(
-                    get_people_in_db(&pool)
-                        .await
-                        .unwrap()
-                        .len(),
-                    1
-                );
+                assert_eq!(get_people_in_db(&pool).await.unwrap().len(), 1);
             }
             Err(err) => {
                 unreachable!("{}", err);
@@ -328,7 +319,9 @@ mod tests {
         config::db::run_migration(&mut pool.get().unwrap());
 
         let manager = TenantPoolManager::new(pool.clone());
-        manager.add_tenant_pool("tenant1".to_string(), pool.clone()).unwrap();
+        manager
+            .add_tenant_pool("tenant1".to_string(), pool.clone())
+            .unwrap();
 
         let app = test::init_service(
             App::new()
@@ -394,13 +387,7 @@ mod tests {
                 assert_eq!(resp_missing_email.status(), StatusCode::BAD_REQUEST);
                 assert_eq!(resp_empty.status(), StatusCode::BAD_REQUEST);
                 assert_eq!(resp_trash_value.status(), StatusCode::BAD_REQUEST);
-                assert_eq!(
-                    get_people_in_db(&pool)
-                        .await
-                        .unwrap()
-                        .len(),
-                    0
-                );
+                assert_eq!(get_people_in_db(&pool).await.unwrap().len(), 0);
             }
             Err(err) => {
                 unreachable!("{}", err);
@@ -422,7 +409,9 @@ mod tests {
         config::db::run_migration(&mut pool.get().unwrap());
 
         let manager = TenantPoolManager::new(pool.clone());
-        manager.add_tenant_pool("tenant1".to_string(), pool.clone()).unwrap();
+        manager
+            .add_tenant_pool("tenant1".to_string(), pool.clone())
+            .unwrap();
 
         let app = test::init_service(
             App::new()

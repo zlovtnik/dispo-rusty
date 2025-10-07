@@ -1,3 +1,4 @@
+use crate::error::ServiceError;
 #[allow(unused_imports)]
 use diesel::{
     pg::PgConnection,
@@ -7,7 +8,6 @@ use diesel::{
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
-use crate::error::ServiceError;
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 
@@ -32,8 +32,7 @@ pub fn init_db_pool(url: &str) -> Pool {
 
     info!("Migrating and configuring database...");
     let manager = ConnectionManager::<Connection>::new(url);
-    
-    
+
     r2d2::Pool::builder()
         .build(manager)
         .expect("Failed to create pool.")
@@ -66,6 +65,7 @@ pub struct TenantPoolManager {
     pub tenant_pools: Arc<RwLock<HashMap<String, Pool>>>,
 }
 
+#[allow(dead_code)]
 impl TenantPoolManager {
     pub fn new(main_pool: Pool) -> Self {
         TenantPoolManager {

@@ -62,10 +62,7 @@ pub fn config_services(cfg: &mut web::ServiceConfig) {
     cfg.service(health_controller::health);
 
     // API scope routes
-    cfg.service(
-        web::scope("/api")
-            .configure(configure_api_routes),
-    );
+    cfg.service(web::scope("/api").configure(configure_api_routes));
 }
 
 /// Registers API endpoints and sub-scopes used under the `/api` path.
@@ -88,28 +85,16 @@ fn configure_api_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(health_controller::logs);
 
     // Auth scope routes
-    cfg.service(
-        web::scope("/auth")
-            .configure(configure_auth_routes),
-    );
+    cfg.service(web::scope("/auth").configure(configure_auth_routes));
 
     // Address book scope routes
-    cfg.service(
-        web::scope("/address-book")
-            .configure(configure_address_book_routes),
-    );
+    cfg.service(web::scope("/address-book").configure(configure_address_book_routes));
 
     // Admin scope routes
-    cfg.service(
-        web::scope("/admin")
-            .configure(configure_admin_routes),
-    );
+    cfg.service(web::scope("/admin").configure(configure_admin_routes));
 
     // Tenant scope routes
-    cfg.service(
-        web::scope("/tenants")
-            .configure(configure_tenant_routes),
-    );
+    cfg.service(web::scope("/tenants").configure(configure_tenant_routes));
 }
 
 /// Register authentication-related HTTP routes on the provided ServiceConfig.
@@ -127,21 +112,11 @@ fn configure_api_routes(cfg: &mut web::ServiceConfig) {
 /// );
 /// ```
 fn configure_auth_routes(cfg: &mut web::ServiceConfig) {
-    cfg.service(
-        web::resource("/signup").route(web::post().to(account_controller::signup)),
-    );
-    cfg.service(
-        web::resource("/login").route(web::post().to(account_controller::login)),
-    );
-    cfg.service(
-        web::resource("/logout").route(web::post().to(account_controller::logout)),
-    );
-    cfg.service(
-        web::resource("/refresh").route(web::post().to(account_controller::refresh)),
-    );
-    cfg.service(
-        web::resource("/me").route(web::get().to(account_controller::me)),
-    );
+    cfg.service(web::resource("/signup").route(web::post().to(account_controller::signup)));
+    cfg.service(web::resource("/login").route(web::post().to(account_controller::login)));
+    cfg.service(web::resource("/logout").route(web::post().to(account_controller::logout)));
+    cfg.service(web::resource("/refresh").route(web::post().to(account_controller::refresh)));
+    cfg.service(web::resource("/me").route(web::get().to(account_controller::me)));
 }
 
 fn configure_address_book_routes(cfg: &mut web::ServiceConfig) {
@@ -156,17 +131,11 @@ fn configure_address_book_routes(cfg: &mut web::ServiceConfig) {
             .route(web::put().to(address_book_controller::update))
             .route(web::delete().to(address_book_controller::delete)),
     );
-    cfg.service(
-        web::resource("/filter")
-            .route(web::get().to(address_book_controller::filter)),
-    );
+    cfg.service(web::resource("/filter").route(web::get().to(address_book_controller::filter)));
 }
 
 fn configure_admin_routes(cfg: &mut web::ServiceConfig) {
-    cfg.service(
-        web::scope("/tenant")
-            .configure(configure_tenant_admin_routes),
-    );
+    cfg.service(web::scope("/tenant").configure(configure_tenant_admin_routes));
 }
 
 /// Configure tenant-related admin routes under the tenant admin scope.
@@ -184,9 +153,7 @@ fn configure_admin_routes(cfg: &mut web::ServiceConfig) {
 /// let app = App::new().service(web::scope("/admin/tenant").configure(configure_tenant_admin_routes));
 /// ```
 fn configure_tenant_admin_routes(cfg: &mut web::ServiceConfig) {
-    cfg.service(
-        web::resource("/stats").route(web::get().to(tenant_controller::get_system_stats)),
-    );
+    cfg.service(web::resource("/stats").route(web::get().to(tenant_controller::get_system_stats)));
     cfg.service(
         web::resource("/health").route(web::get().to(tenant_controller::get_tenant_health)),
     );
@@ -214,10 +181,7 @@ fn configure_tenant_routes(cfg: &mut web::ServiceConfig) {
             .route(web::get().to(tenant_controller::find_all))
             .route(web::post().to(tenant_controller::create)),
     );
-    cfg.service(
-        web::resource("/filter")
-            .route(web::get().to(tenant_controller::filter)),
-    );
+    cfg.service(web::resource("/filter").route(web::get().to(tenant_controller::filter)));
     cfg.service(
         web::resource("/{id}")
             .route(web::get().to(tenant_controller::find_by_id))

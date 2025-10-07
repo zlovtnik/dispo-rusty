@@ -118,11 +118,14 @@ impl User {
             .is_ok()
     }
 
-    pub fn find_login_info_by_token(user_token: &UserToken, conn: &mut Connection) -> Result<LoginInfoDTO, String> {
+    pub fn find_login_info_by_token(
+        user_token: &UserToken,
+        conn: &mut Connection,
+    ) -> Result<LoginInfoDTO, String> {
         let user_result = users
-        .filter(username.eq(&user_token.user))
-        .filter(login_session.eq(&user_token.login_session))
-        .get_result::<User>(conn);
+            .filter(username.eq(&user_token.user))
+            .filter(login_session.eq(&user_token.login_session))
+            .get_result::<User>(conn);
 
         if let Ok(user) = user_result {
             return Ok(LoginInfoDTO {
@@ -163,6 +166,9 @@ impl User {
     }
 
     pub fn count_logged_in(conn: &mut Connection) -> QueryResult<i64> {
-        users.filter(login_session.is_not_null().and(login_session.ne(""))).count().get_result(conn)
+        users
+            .filter(login_session.is_not_null().and(login_session.ne("")))
+            .count()
+            .get_result(conn)
     }
 }

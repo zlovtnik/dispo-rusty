@@ -1,7 +1,7 @@
-use actix_web::{web, HttpRequest, HttpResponse, HttpMessage};
+use actix_web::{web, HttpMessage, HttpRequest, HttpResponse};
 
 use crate::{
-    config::db::{TenantPoolManager, Pool},
+    config::db::{Pool, TenantPoolManager},
     constants,
     error::ServiceError,
     models::{
@@ -22,7 +22,9 @@ pub async fn signup(
     };
     if let Some(pool) = manager.get_tenant_pool(&user_dto.tenant_id) {
         match account_service::signup(user_db, &pool) {
-            Ok(message) => Ok(HttpResponse::Ok().json(ResponseBody::new(&message, constants::EMPTY))),
+            Ok(message) => {
+                Ok(HttpResponse::Ok().json(ResponseBody::new(&message, constants::EMPTY)))
+            }
             Err(err) => Err(err),
         }
     } else {
@@ -77,7 +79,10 @@ pub async fn refresh(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
     if let Some(authen_header) = req.headers().get(constants::AUTHORIZATION) {
         if let Some(pool) = req.extensions().get::<Pool>() {
             match account_service::refresh(authen_header, pool) {
-                Ok(login_info) => Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, login_info))),
+                Ok(login_info) => {
+                    Ok(HttpResponse::Ok()
+                        .json(ResponseBody::new(constants::MESSAGE_OK, login_info)))
+                }
                 Err(err) => Err(err),
             }
         } else {
@@ -97,7 +102,10 @@ pub async fn me(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
     if let Some(authen_header) = req.headers().get(constants::AUTHORIZATION) {
         if let Some(pool) = req.extensions().get::<Pool>() {
             match account_service::me(authen_header, pool) {
-                Ok(login_info) => Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, login_info))),
+                Ok(login_info) => {
+                    Ok(HttpResponse::Ok()
+                        .json(ResponseBody::new(constants::MESSAGE_OK, login_info)))
+                }
                 Err(err) => Err(err),
             }
         } else {
@@ -123,8 +131,8 @@ mod tests {
     use testcontainers::clients;
     use testcontainers::images::postgres::Postgres;
 
-    use crate::{config, App};
     use crate::config::db::TenantPoolManager;
+    use crate::{config, App};
 
     #[actix_web::test]
     async fn test_signup_ok() {
@@ -140,7 +148,9 @@ mod tests {
         config::db::run_migration(&mut pool.get().unwrap());
 
         let manager = TenantPoolManager::new(pool.clone());
-        manager.add_tenant_pool("test".to_string(), pool.clone()).unwrap();
+        manager
+            .add_tenant_pool("test".to_string(), pool.clone())
+            .unwrap();
 
         let app = test::init_service(
             App::new()
@@ -188,7 +198,9 @@ mod tests {
         config::db::run_migration(&mut pool.get().unwrap());
 
         let manager = TenantPoolManager::new(pool.clone());
-        manager.add_tenant_pool("test".to_string(), pool.clone()).unwrap();
+        manager
+            .add_tenant_pool("test".to_string(), pool.clone())
+            .unwrap();
 
         let app = test::init_service(
             App::new()
@@ -245,7 +257,9 @@ mod tests {
         config::db::run_migration(&mut pool.get().unwrap());
 
         let manager = TenantPoolManager::new(pool.clone());
-        manager.add_tenant_pool("test".to_string(), pool.clone()).unwrap();
+        manager
+            .add_tenant_pool("test".to_string(), pool.clone())
+            .unwrap();
 
         let app = test::init_service(
             App::new()
@@ -276,7 +290,10 @@ mod tests {
         let resp = test::TestRequest::post()
             .uri("/api/auth/login")
             .insert_header(header::ContentType::json())
-            .set_payload(r#"{"username_or_email":"admin","password":"123456","tenant_id":"test"}"#.as_bytes())
+            .set_payload(
+                r#"{"username_or_email":"admin","password":"123456","tenant_id":"test"}"#
+                    .as_bytes(),
+            )
             .send_request(&app)
             .await;
 
@@ -297,7 +314,9 @@ mod tests {
         config::db::run_migration(&mut pool.get().unwrap());
 
         let manager = TenantPoolManager::new(pool.clone());
-        manager.add_tenant_pool("test".to_string(), pool.clone()).unwrap();
+        manager
+            .add_tenant_pool("test".to_string(), pool.clone())
+            .unwrap();
 
         let app = test::init_service(
             App::new()
@@ -329,7 +348,8 @@ mod tests {
             .uri("/api/auth/login")
             .insert_header(header::ContentType::json())
             .set_payload(
-                r#"{"username_or_email":"admin@gmail.com","password":"123456","tenant_id":"test"}"#.as_bytes(),
+                r#"{"username_or_email":"admin@gmail.com","password":"123456","tenant_id":"test"}"#
+                    .as_bytes(),
             )
             .send_request(&app)
             .await;
@@ -351,7 +371,9 @@ mod tests {
         config::db::run_migration(&mut pool.get().unwrap());
 
         let manager = TenantPoolManager::new(pool.clone());
-        manager.add_tenant_pool("test".to_string(), pool.clone()).unwrap();
+        manager
+            .add_tenant_pool("test".to_string(), pool.clone())
+            .unwrap();
 
         let app = test::init_service(
             App::new()
@@ -382,7 +404,10 @@ mod tests {
         let resp = test::TestRequest::post()
             .uri("/api/auth/login")
             .insert_header(header::ContentType::json())
-            .set_payload(r#"{"username_or_email":"admin","password":"password","tenant_id":"test"}"#.as_bytes())
+            .set_payload(
+                r#"{"username_or_email":"admin","password":"password","tenant_id":"test"}"#
+                    .as_bytes(),
+            )
             .send_request(&app)
             .await;
 
@@ -403,7 +428,9 @@ mod tests {
         config::db::run_migration(&mut pool.get().unwrap());
 
         let manager = TenantPoolManager::new(pool.clone());
-        manager.add_tenant_pool("test".to_string(), pool.clone()).unwrap();
+        manager
+            .add_tenant_pool("test".to_string(), pool.clone())
+            .unwrap();
 
         let app = test::init_service(
             App::new()
@@ -457,7 +484,9 @@ mod tests {
         config::db::run_migration(&mut pool.get().unwrap());
 
         let manager = TenantPoolManager::new(pool.clone());
-        manager.add_tenant_pool("test".to_string(), pool.clone()).unwrap();
+        manager
+            .add_tenant_pool("test".to_string(), pool.clone())
+            .unwrap();
 
         let app = test::init_service(
             App::new()
@@ -489,7 +518,9 @@ mod tests {
         let resp = test::TestRequest::post()
             .uri("/api/auth/login")
             .insert_header(header::ContentType::json())
-            .set_payload(r#"{"username_or_email":"abc","password":"123456","tenant_id":"test"}"#.as_bytes())
+            .set_payload(
+                r#"{"username_or_email":"abc","password":"123456","tenant_id":"test"}"#.as_bytes(),
+            )
             .send_request(&app)
             .await;
 
@@ -510,7 +541,9 @@ mod tests {
         config::db::run_migration(&mut pool.get().unwrap());
 
         let manager = TenantPoolManager::new(pool.clone());
-        manager.add_tenant_pool("test".to_string(), pool.clone()).unwrap();
+        manager
+            .add_tenant_pool("test".to_string(), pool.clone())
+            .unwrap();
 
         let app = test::init_service(
             App::new()
@@ -542,7 +575,10 @@ mod tests {
         let resp = test::TestRequest::post()
             .uri("/api/auth/login")
             .insert_header(header::ContentType::json())
-            .set_payload(r#"{"username_or_email":"abc@gmail.com","password":"123456","tenant_id":"test"}"#.as_bytes())
+            .set_payload(
+                r#"{"username_or_email":"abc@gmail.com","password":"123456","tenant_id":"test"}"#
+                    .as_bytes(),
+            )
             .send_request(&app)
             .await;
 

@@ -1,21 +1,21 @@
-use actix_web::{get, HttpRequest, HttpResponse, web};
+use actix_web::{get, web, HttpRequest, HttpResponse};
 use serde::Serialize;
 use tokio::time::{timeout, Duration};
 
-use crate::config::db::{Pool as DatabasePool, TenantPoolManager};
 use crate::config::cache::Pool as RedisPool;
+use crate::config::db::{Pool as DatabasePool, TenantPoolManager};
 use crate::models::tenant::Tenant;
 
-use diesel::prelude::*;
-use redis;
-use log::{debug, error, info};
-use chrono::{Utc};
 use actix_web::web::Bytes;
+use chrono::Utc;
+use diesel::prelude::*;
+use log::{debug, error, info};
+use redis;
 use std::io::Error as IoError;
 use std::path::Path;
 
-use tokio::sync::mpsc;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, SeekFrom};
+use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
 #[derive(Serialize, Clone)]
@@ -38,8 +38,6 @@ struct HealthStatus {
     cache: Status,
 }
 
-
-
 #[derive(Serialize)]
 struct HealthResponse {
     status: Status,
@@ -55,12 +53,21 @@ struct TenantHealth {
     status: Status,
 }
 
-async fn check_database_health_async(pool: web::Data<DatabasePool>) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
-    tokio::task::spawn_blocking(move || check_database_health(pool)).await.unwrap().map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync + 'static>)
+async fn check_database_health_async(
+    pool: web::Data<DatabasePool>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
+    tokio::task::spawn_blocking(move || check_database_health(pool))
+        .await
+        .unwrap()
+        .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync + 'static>)
 }
 
-async fn check_cache_health_async(redis_pool: web::Data<RedisPool>) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
-    tokio::task::spawn_blocking(move || check_cache_health(&redis_pool)).await.unwrap()
+async fn check_cache_health_async(
+    redis_pool: web::Data<RedisPool>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
+    tokio::task::spawn_blocking(move || check_cache_health(&redis_pool))
+        .await
+        .unwrap()
 }
 
 #[get("/health")]
@@ -73,25 +80,26 @@ async fn health(pool: web::Data<DatabasePool>, redis_pool: web::Data<RedisPool>)
         Ok(Err(e)) => {
             error!("Database health check failed: {}", e);
             Status::Unhealthy
-        },
+        }
         Err(_) => {
             error!("Database health check timeout");
             Status::Unhealthy
-        },
+        }
     };
 
     // Check cache with timeout
-    let cache_status = match timeout(Duration::from_secs(3), check_cache_health_async(redis_pool)).await {
-        Ok(Ok(())) => Status::Healthy,
-        Ok(Err(e)) => {
-            error!("Cache health check failed: {}", e);
-            Status::Unhealthy
-        },
-        Err(_) => {
-            error!("Cache health check timeout");
-            Status::Unhealthy
-        },
-    };
+    let cache_status =
+        match timeout(Duration::from_secs(3), check_cache_health_async(redis_pool)).await {
+            Ok(Ok(())) => Status::Healthy,
+            Ok(Err(e)) => {
+                error!("Cache health check failed: {}", e);
+                Status::Unhealthy
+            }
+            Err(_) => {
+                error!("Cache health check timeout");
+                Status::Unhealthy
+            }
+        };
 
     let overall_status = if db_status.is_healthy() && cache_status.is_healthy() {
         Status::Healthy
@@ -113,7 +121,12 @@ async fn health(pool: web::Data<DatabasePool>, redis_pool: web::Data<RedisPool>)
 }
 
 #[get("/health/detailed")]
-async fn health_detailed(req: HttpRequest, pool: web::Data<DatabasePool>, redis_pool: web::Data<RedisPool>, main_conn: web::Data<DatabasePool>) -> HttpResponse {
+async fn health_detailed(
+    req: HttpRequest,
+    pool: web::Data<DatabasePool>,
+    redis_pool: web::Data<RedisPool>,
+    main_conn: web::Data<DatabasePool>,
+) -> HttpResponse {
     let manager = req.app_data::<web::Data<TenantPoolManager>>();
     info!("Detailed health check requested");
 
@@ -123,25 +136,26 @@ async fn health_detailed(req: HttpRequest, pool: web::Data<DatabasePool>, redis_
         Ok(Err(e)) => {
             error!("Database health check failed: {}", e);
             Status::Unhealthy
-        },
+        }
         Err(_) => {
             error!("Database health check timeout");
             Status::Unhealthy
-        },
+        }
     };
 
     // Check cache with timeout
-    let cache_status = match timeout(Duration::from_secs(3), check_cache_health_async(redis_pool)).await {
-        Ok(Ok(())) => Status::Healthy,
-        Ok(Err(e)) => {
-            error!("Cache health check failed: {}", e);
-            Status::Unhealthy
-        },
-        Err(_) => {
-            error!("Cache health check timeout");
-            Status::Unhealthy
-        },
-    };
+    let cache_status =
+        match timeout(Duration::from_secs(3), check_cache_health_async(redis_pool)).await {
+            Ok(Ok(())) => Status::Healthy,
+            Ok(Err(e)) => {
+                error!("Cache health check failed: {}", e);
+                Status::Unhealthy
+            }
+            Err(_) => {
+                error!("Cache health check timeout");
+                Status::Unhealthy
+            }
+        };
 
     // Check tenant health if tenant manager is available
     let tenants = if let Some(manager_ref) = manager {
@@ -155,17 +169,13 @@ async fn health_detailed(req: HttpRequest, pool: web::Data<DatabasePool>, redis_
 
             for tenant in tenants {
                 let status = match manager_data.get_tenant_pool(&tenant.id) {
-                    Some(pool) => {
-                        match pool.get() {
-                            Ok(mut conn) => {
-                                match diesel::sql_query("SELECT 1").execute(&mut conn) {
-                                    Ok(_) => Status::Healthy,
-                                    Err(_) => Status::Unhealthy,
-                                }
-                            }
+                    Some(pool) => match pool.get() {
+                        Ok(mut conn) => match diesel::sql_query("SELECT 1").execute(&mut conn) {
+                            Ok(_) => Status::Healthy,
                             Err(_) => Status::Unhealthy,
-                        }
-                    }
+                        },
+                        Err(_) => Status::Unhealthy,
+                    },
                     None => Status::Unhealthy,
                 };
                 tenant_healths.push(TenantHealth {
@@ -185,7 +195,12 @@ async fn health_detailed(req: HttpRequest, pool: web::Data<DatabasePool>, redis_
         None
     };
 
-    let overall_status = if db_status.is_healthy() && cache_status.is_healthy() && tenants.as_ref().map_or(true, |t| t.iter().all(|th| th.status.is_healthy())) {
+    let overall_status = if db_status.is_healthy()
+        && cache_status.is_healthy()
+        && tenants
+            .as_ref()
+            .map_or(true, |t| t.iter().all(|th| th.status.is_healthy()))
+    {
         Status::Healthy
     } else {
         Status::Unhealthy
@@ -217,9 +232,15 @@ fn check_database_health(pool: web::Data<DatabasePool>) -> Result<(), diesel::re
     }
 }
 
-fn check_cache_health(redis_pool: &RedisPool) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
-    let mut conn = redis_pool.get().map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync + 'static>)?;
-    redis::cmd("PING").query::<()>(&mut conn).map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync + 'static>)?;
+fn check_cache_health(
+    redis_pool: &RedisPool,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
+    let mut conn = redis_pool
+        .get()
+        .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync + 'static>)?;
+    redis::cmd("PING")
+        .query::<()>(&mut conn)
+        .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync + 'static>)?;
     Ok(())
 }
 
@@ -252,15 +273,16 @@ fn check_cache_health(redis_pool: &RedisPool) -> Result<(), Box<dyn std::error::
 #[get("/logs")]
 async fn logs() -> HttpResponse {
     // Check if log streaming is enabled
-    if !std::env::var("ENABLE_LOG_STREAM").map(|v| v == "true").unwrap_or(false) {
+    if !std::env::var("ENABLE_LOG_STREAM")
+        .map(|v| v == "true")
+        .unwrap_or(false)
+    {
         return HttpResponse::MethodNotAllowed().body("Log streaming disabled");
     }
 
     // Get log file path
     let log_file = std::env::var("LOG_FILE").unwrap_or_else(|_| "/var/log/app.log".to_string());
     let path = Path::new(&log_file);
-
-
 
     if !path.exists() {
         return HttpResponse::NotFound().body("Log file not found");
@@ -294,12 +316,21 @@ async fn logs() -> HttpResponse {
         let mut pending_data = Vec::new();
 
         // Send initial message
-        if tx.send(Ok(Bytes::from("data: Log streaming started for ".to_string() + &log_file + "\n\n"))).await.is_err() {
+        if tx
+            .send(Ok(Bytes::from(
+                "data: Log streaming started for ".to_string() + &log_file + "\n\n",
+            )))
+            .await
+            .is_err()
+        {
             return;
         }
 
         // If in test mode, send end message and close stream
-        if std::env::var("TEST_MODE").map(|v| v == "true").unwrap_or(false) {
+        if std::env::var("TEST_MODE")
+            .map(|v| v == "true")
+            .unwrap_or(false)
+        {
             if tx.send(Ok(Bytes::from("data: end\n\n"))).await.is_err() {
                 return;
             }
@@ -352,21 +383,26 @@ async fn logs() -> HttpResponse {
                 // Process complete lines
                 while let Some(pos) = pending_data.iter().position(|&b| b == b'\n') {
                     let line_bytes = pending_data.drain(..=pos).collect::<Vec<_>>();
-                        if let Ok(line) = String::from_utf8(line_bytes) {
-                            let trimmed = line.trim_end_matches('\n').trim_end_matches('\r');
-                            if !trimmed.is_empty() {
-                                // Channel saturation is expected under high load, reducing log noise
-                                if tx.send(Ok(Bytes::from(format!("data: {}\n\n", trimmed)))).await.is_err() {
-                                    debug!("failed to send log line '{}' to watcher channel", trimmed);
-                                    return;
-                                }
+                    if let Ok(line) = String::from_utf8(line_bytes) {
+                        let trimmed = line.trim_end_matches('\n').trim_end_matches('\r');
+                        if !trimmed.is_empty() {
+                            // Channel saturation is expected under high load, reducing log noise
+                            if tx
+                                .send(Ok(Bytes::from(format!("data: {}\n\n", trimmed))))
+                                .await
+                                .is_err()
+                            {
+                                debug!("failed to send log line '{}' to watcher channel", trimmed);
+                                return;
                             }
                         }
+                    }
                 }
             }
 
             keep_alive_count += 1;
-            if keep_alive_count >= 3 {  // Every 30 seconds
+            if keep_alive_count >= 3 {
+                // Every 30 seconds
                 keep_alive_count = 0;
                 if tx.send(Ok(Bytes::from("data: \n\n"))).await.is_err() {
                     return;
@@ -394,10 +430,10 @@ mod tests {
     //! To avoid test failures, run with: `cargo test -- --test-threads=1`
     //!
     //! Consider using the `serial_test` crate in the future for better test isolation.
-    
-    use actix_web::{test, http::StatusCode};
-    use actix_web::web::Data;
+
     use actix_cors::Cors;
+    use actix_web::web::Data;
+    use actix_web::{http::StatusCode, test};
     use testcontainers::clients;
     use testcontainers::images::postgres::Postgres;
     use testcontainers::images::redis::Redis;
@@ -435,11 +471,7 @@ mod tests {
         config::db::run_migration(&mut pool.get().unwrap());
 
         let redis_client = config::cache::init_redis_client(
-            format!(
-                "redis://127.0.0.1:{}",
-                redis.get_host_port_ipv4(6379)
-            )
-            .as_str(),
+            format!("redis://127.0.0.1:{}", redis.get_host_port_ipv4(6379)).as_str(),
         );
 
         let app = test::init_service(
@@ -493,7 +525,7 @@ mod tests {
         env::remove_var("ENABLE_LOG_STREAM");
         env::remove_var("LOG_FILE");
         env::remove_var("TEST_MODE");
-        
+
         // Create a temporary log file
         let temp_file = NamedTempFile::new().unwrap();
         let log_path = temp_file.path().to_str().unwrap().to_string();
@@ -531,11 +563,7 @@ mod tests {
 
         // set up the Redis client
         let redis_client = config::cache::init_redis_client(
-            format!(
-                "redis://127.0.0.1:{}",
-                redis.get_host_port_ipv4(6379)
-            )
-            .as_str(),
+            format!("redis://127.0.0.1:{}", redis.get_host_port_ipv4(6379)).as_str(),
         );
 
         let app = test::init_service(
@@ -558,7 +586,10 @@ mod tests {
         let resp = test::call_service(&app, req).await;
 
         assert_eq!(resp.status(), StatusCode::OK);
-        assert_eq!(resp.headers().get("content-type").unwrap(), "text/event-stream");
+        assert_eq!(
+            resp.headers().get("content-type").unwrap(),
+            "text/event-stream"
+        );
 
         // Consume the body to verify SSE frames or keep-alive messages
         let sse_frame_received = timeout(Duration::from_secs(35), async {
@@ -566,11 +597,13 @@ mod tests {
             let bytes = to_bytes(body).await.unwrap();
             let body_str = String::from_utf8_lossy(&bytes);
             Ok::<bool, ()>(body_str.starts_with("data:"))
-        }).await.unwrap_or(Ok(false)).unwrap();
+        })
+        .await
+        .unwrap_or(Ok(false))
+        .unwrap();
 
         assert!(sse_frame_received, "No SSE frame received within timeout");
-        
+
         // Cleanup happens automatically via CleanupGuard's Drop implementation
     }
-
 }

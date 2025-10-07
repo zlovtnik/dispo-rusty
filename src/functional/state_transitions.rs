@@ -15,7 +15,7 @@ use std::collections::HashMap;
 use chrono::{DateTime, Utc, Duration};
 use serde_json::Value as JsonValue;
 use super::immutable_state::{
-    TenantApplicationState, QueryResult, PersistentVector,
+    TenantApplicationState, QueryResult, PersistentVector, SessionData,
 };
 
 /// Result type for state transitions
@@ -65,11 +65,17 @@ pub struct TransitionContext {
 pub fn create_user_session(
     session_id: String,
     user_data: String,
-    _ttl_seconds: u64,
+    ttl_seconds: u64,
 ) -> impl FnOnce(&TenantApplicationState) -> TenantApplicationState {
     move |state| {
         let mut new_state = state.clone();
-        new_state.user_sessions = state.user_sessions.insert(session_id, user_data);
+        new_state.user_sessions = state.user_sessions.insert(
+            session_id,
+            SessionData {
+                user_data,
+                expires_at: Utc::now() + Duration::seconds(ttl_seconds as i64),
+            },
+        );
         new_state.last_updated = Utc::now();
 
         new_state
@@ -88,7 +94,7 @@ pub fn create_user_session(
 pub fn update_user_session(
     session_id: impl Into<String>,
     new_user_data: String,
-    _extend_ttl_seconds: Option<u64>,
+    extend_ttl_seconds: Option<u64>,
 ) -> Result<impl FnOnce(&TenantApplicationState) -> TenantApplicationState, TransitionError> {
     let session_id = session_id.into();
 
@@ -106,7 +112,20 @@ pub fn update_user_session(
         }
 
         let mut new_state = state.clone();
-        new_state.user_sessions = state.user_sessions.insert(session_id, new_user_data);
+        
+        // Get the existing session to preserve/update its data
+        if let Some(existing_session) = state.user_sessions.get(&session_id) {
+            let updated_session = SessionData {
+                user_data: new_user_data,
+                expires_at: if let Some(ttl) = extend_ttl_seconds {
+                    Utc::now() + Duration::seconds(ttl as i64)
+                } else {
+                    existing_session.expires_at
+                },
+            };
+            new_state.user_sessions = state.user_sessions.insert(session_id, updated_session);
+        }
+        
         new_state.last_updated = Utc::now();
 
         new_state
@@ -466,16 +485,18 @@ mod tests {
         manager.initialize_tenant(tenant).unwrap();
 
         // Apply create session transition
-        let transition = create_user_session(
+        let create_fn = create_user_session(
             "session123".to_string(),
             "user_data_here".to_string(),
             3600, // 1 hour TTL
         );
 
-        manager.apply_transition("test_tenant", transition).unwrap();
+        manager.apply_transition("test_tenant", |state| Ok(create_fn(state))).unwrap();
 
         let state = manager.get_tenant_state("test_tenant").unwrap();
-        assert_eq!(state.user_sessions.get(&"session123".to_string()), Some(&"user_data_here".to_string()));
+        let session = state.user_sessions.get(&"session123".to_string());
+        assert!(session.is_some());
+        assert_eq!(session.unwrap().user_data, "user_data_here");
     }
 
     #[test]
@@ -485,23 +506,26 @@ mod tests {
         manager.initialize_tenant(tenant).unwrap();
 
         // First create a session
-        manager.apply_transition("test_tenant", create_user_session(
+        let create_fn = create_user_session(
             "session123".to_string(),
             "old_data".to_string(),
             3600,
-        )).unwrap();
+        );
+        manager.apply_transition("test_tenant", |state| Ok(create_fn(state))).unwrap();
 
         // Then update it
-        let update_transition = update_user_session(
+        let update_fn = update_user_session(
             "session123",
             "new_data".to_string(),
             None,
         ).unwrap();
 
-        manager.apply_transition("test_tenant", update_transition).unwrap();
+        manager.apply_transition("test_tenant", |state| Ok(update_fn(state))).unwrap();
 
         let state = manager.get_tenant_state("test_tenant").unwrap();
-        assert_eq!(state.user_sessions.get(&"session123".to_string()), Some(&"new_data".to_string()));
+        let session = state.user_sessions.get(&"session123".to_string());
+        assert!(session.is_some());
+        assert_eq!(session.unwrap().user_data, "new_data");
     }
 
     #[test]
@@ -511,13 +535,13 @@ mod tests {
         manager.initialize_tenant(tenant).unwrap();
 
         // Set some configuration
-        let config_transition = set_app_config(
+        let config_fn = set_app_config(
             "app.theme",
             serde_json::json!("dark"),
             None::<fn(&serde_json::Value) -> bool>,
         ).unwrap();
 
-        manager.apply_transition("test_tenant", config_transition).unwrap();
+        manager.apply_transition("test_tenant", |state| Ok(config_fn(state))).unwrap();
 
         let state = manager.get_tenant_state("test_tenant").unwrap();
         assert_eq!(state.app_data.get(&"app.theme".to_string()), Some(&serde_json::json!("dark")));
@@ -573,7 +597,7 @@ mod tests {
         let final_state = manager.get_tenant_state("test_tenant").unwrap();
 
         // Session should be removed
-        assert_eq!(final_state.user_sessions.get(&session_id), None);
+        assert!(final_state.user_sessions.get(&session_id).is_none());
     }
 
     #[test]

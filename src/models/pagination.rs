@@ -67,10 +67,7 @@ where
     i32: diesel::serialize::ToSql<Col::SqlType, Pg>,
 {
     pub fn per_page(self, per_page: i64) -> Self {
-        SortedAndPaginated {
-            per_page,
-            ..self
-        }
+        SortedAndPaginated { per_page, ..self }
     }
 
     pub fn load_items<'a, U>(self, conn: &mut PgConnection) -> QueryResult<Page<U>>
@@ -95,8 +92,6 @@ where
             next_cursor,
         ))
     }
-
-
 }
 
 impl<T: Query, Col> Query for SortedAndPaginated<T, Col> {

@@ -1,18 +1,17 @@
 use actix_web::{web, HttpResponse};
-use serde::Serialize;
-use log::info;
-use std::collections::HashMap;
 use diesel::prelude::*;
-
+use log::info;
+use serde::Serialize;
+use std::collections::HashMap;
 
 use crate::{
     config::db::{Pool as DatabasePool, TenantPoolManager},
-    models::tenant::{Tenant, TenantDTO, UpdateTenant},
-    models::filters::TenantFilter,
-    models::user::User,
     constants,
-    models::response::ResponseBody,
     error::ServiceError,
+    models::filters::TenantFilter,
+    models::response::ResponseBody,
+    models::tenant::{Tenant, TenantDTO, UpdateTenant},
+    models::user::User,
 };
 
 #[derive(Serialize)]
@@ -81,12 +80,14 @@ pub async fn get_system_stats(
     })?;
 
     // Get total users and logged in count (global, since no tenant_id in users)
-    let total_users = User::count_all(&mut conn).map_err(|e| ServiceError::InternalServerError {
-        error_message: format!("Failed to count users: {}", e),
-    })?;
-    let logged_in_users = User::count_logged_in(&mut conn).map_err(|e| ServiceError::InternalServerError {
-        error_message: format!("Failed to count logged in users: {}", e),
-    })?;
+    let total_users =
+        User::count_all(&mut conn).map_err(|e| ServiceError::InternalServerError {
+            error_message: format!("Failed to count users: {}", e),
+        })?;
+    let logged_in_users =
+        User::count_logged_in(&mut conn).map_err(|e| ServiceError::InternalServerError {
+            error_message: format!("Failed to count logged in users: {}", e),
+        })?;
 
     let mut tenant_stats = Vec::new();
     let mut active_count = 0;
@@ -94,15 +95,13 @@ pub async fn get_system_stats(
     for tenant in &tenants {
         // Check tenant health (database connection)
         let status = match manager.get_tenant_pool(&tenant.id) {
-            Some(pool) => {
-                match pool.get() {
-                    Ok(_) => {
-                        active_count += 1;
-                        true
-                    }
-                    Err(_) => false,
+            Some(pool) => match pool.get() {
+                Ok(_) => {
+                    active_count += 1;
+                    true
                 }
-            }
+                Err(_) => false,
+            },
             None => false,
         };
 
@@ -110,7 +109,11 @@ pub async fn get_system_stats(
         tenant_stats.push(TenantStats {
             tenant_id: tenant.id.clone(),
             name: tenant.name.clone(),
-            status: if status { "active".to_string() } else { "inactive".to_string() },
+            status: if status {
+                "active".to_string()
+            } else {
+                "inactive".to_string()
+            },
         });
     }
 
@@ -241,21 +244,31 @@ pub async fn find_all(
     pool: web::Data<DatabasePool>,
 ) -> Result<HttpResponse, ServiceError> {
     // Parse pagination parameters
-    let offset = query.get("offset").and_then(|s| s.parse::<i64>().ok())
+    let offset = query
+        .get("offset")
+        .and_then(|s| s.parse::<i64>().ok())
         .or_else(|| query.get("cursor").and_then(|s| s.parse::<i64>().ok()))
         .unwrap_or(0);
 
-    let limit = query.get("limit").and_then(|s| s.parse::<i64>().ok()).unwrap_or(50);
+    let limit = query
+        .get("limit")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(50);
     let limit = limit.min(500); // Max limit
 
-    info!("Fetching tenants with pagination - offset: {}, limit: {}", offset, limit);
+    info!(
+        "Fetching tenants with pagination - offset: {}, limit: {}",
+        offset, limit
+    );
 
     let mut conn = pool.get().map_err(|e| ServiceError::InternalServerError {
         error_message: format!("Failed to get db connection: {}", e),
     })?;
 
-    let (tenants, total) = Tenant::list_paginated(offset, limit, &mut conn).map_err(|e| ServiceError::InternalServerError {
-        error_message: format!("Failed to fetch tenants: {}", e),
+    let (tenants, total) = Tenant::list_paginated(offset, limit, &mut conn).map_err(|e| {
+        ServiceError::InternalServerError {
+            error_message: format!("Failed to fetch tenants: {}", e),
+        }
     })?;
 
     let count = tenants.len();
@@ -326,12 +339,17 @@ pub async fn filter(
     for (key, value) in query.iter() {
         if key.starts_with("filters[") && key.ends_with("][field]") {
             // Extract index from filters[index][field]
-            if let Some(index_str) = key.strip_prefix("filters[").and_then(|s| s.strip_suffix("][field]")) {
+            if let Some(index_str) = key
+                .strip_prefix("filters[")
+                .and_then(|s| s.strip_suffix("][field]"))
+            {
                 if let Ok(index) = index_str.parse::<usize>() {
                     // Get corresponding operator and value
                     let operator_key = format!("filters[{}][operator]", index);
                     let value_key = format!("filters[{}][value]", index);
-                    if let (Some(operator), Some(field_val)) = (query.get(&operator_key), query.get(&value_key)) {
+                    if let (Some(operator), Some(field_val)) =
+                        (query.get(&operator_key), query.get(&value_key))
+                    {
                         filters.push(crate::models::filters::FieldFilter {
                             field: value.clone(),
                             operator: operator.clone(),
@@ -353,9 +371,10 @@ pub async fn filter(
         page_size,
     };
 
-    let tenants = Tenant::filter(filter, &mut conn).map_err(|e| ServiceError::InternalServerError {
-        error_message: format!("Failed to filter tenants: {}", e),
-    })?;
+    let tenants =
+        Tenant::filter(filter, &mut conn).map_err(|e| ServiceError::InternalServerError {
+            error_message: format!("Failed to filter tenants: {}", e),
+        })?;
 
     Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, tenants)))
 }
@@ -391,12 +410,16 @@ pub async fn find_by_id(
 
     let tenant = match Tenant::find_by_id(&id, &mut conn) {
         Ok(t) => t,
-        Err(diesel::result::Error::NotFound) => return Err(ServiceError::NotFound {
-            error_message: format!("Tenant not found: {}", id),
-        }),
-        Err(e) => return Err(ServiceError::InternalServerError {
-            error_message: format!("Failed to find tenant: {}", e),
-        }),
+        Err(diesel::result::Error::NotFound) => {
+            return Err(ServiceError::NotFound {
+                error_message: format!("Tenant not found: {}", id),
+            })
+        }
+        Err(e) => {
+            return Err(ServiceError::InternalServerError {
+                error_message: format!("Failed to find tenant: {}", e),
+            })
+        }
     };
 
     Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, tenant)))
@@ -449,9 +472,10 @@ pub async fn create(
     }
 
     // Create the tenant
-    let tenant = Tenant::create(tenant_dto.0, &mut conn).map_err(|e| ServiceError::InternalServerError {
-        error_message: format!("Failed to create tenant: {}", e),
-    })?;
+    let tenant =
+        Tenant::create(tenant_dto.0, &mut conn).map_err(|e| ServiceError::InternalServerError {
+            error_message: format!("Failed to create tenant: {}", e),
+        })?;
 
     Ok(HttpResponse::Created().json(ResponseBody::new(constants::MESSAGE_OK, tenant)))
 }
@@ -485,12 +509,16 @@ pub async fn update(
 
     let tenant = match Tenant::update(&id, update_dto.0, &mut conn) {
         Ok(t) => t,
-        Err(diesel::result::Error::NotFound) => return Err(ServiceError::NotFound {
-            error_message: format!("Tenant not found: {}", id),
-        }),
-        Err(e) => return Err(ServiceError::InternalServerError {
-            error_message: format!("Failed to update tenant: {}", e),
-        }),
+        Err(diesel::result::Error::NotFound) => {
+            return Err(ServiceError::NotFound {
+                error_message: format!("Tenant not found: {}", id),
+            })
+        }
+        Err(e) => {
+            return Err(ServiceError::InternalServerError {
+                error_message: format!("Failed to update tenant: {}", e),
+            })
+        }
     };
 
     Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, tenant)))
@@ -518,12 +546,16 @@ pub async fn delete(
 
     match Tenant::delete(&id, &mut conn) {
         Ok(_) => (),
-        Err(diesel::result::Error::NotFound) => return Err(ServiceError::NotFound {
-            error_message: format!("Tenant not found: {}", id),
-        }),
-        Err(e) => return Err(ServiceError::InternalServerError {
-            error_message: format!("Failed to delete tenant: {}", e),
-        }),
+        Err(diesel::result::Error::NotFound) => {
+            return Err(ServiceError::NotFound {
+                error_message: format!("Tenant not found: {}", id),
+            })
+        }
+        Err(e) => {
+            return Err(ServiceError::InternalServerError {
+                error_message: format!("Failed to delete tenant: {}", e),
+            })
+        }
     };
 
     Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, constants::EMPTY)))

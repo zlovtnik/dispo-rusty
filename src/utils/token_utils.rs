@@ -17,10 +17,7 @@ pub fn decode_token(token: String) -> jsonwebtoken::errors::Result<TokenData<Use
     )
 }
 
-pub fn verify_token(
-    token_data: &TokenData<UserToken>,
-    pool: &Pool,
-) -> Result<String, String> {
+pub fn verify_token(token_data: &TokenData<UserToken>, pool: &Pool) -> Result<String, String> {
     if User::is_valid_login_session(&token_data.claims, &mut pool.get().unwrap()) {
         Ok(token_data.claims.user.to_string())
     } else {

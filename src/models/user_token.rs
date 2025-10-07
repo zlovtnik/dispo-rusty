@@ -22,8 +22,6 @@ pub struct UserToken {
     pub tenant_id: String,
 }
 
-
-
 impl UserToken {
     pub fn generate_token(login: &LoginInfoDTO) -> String {
         dotenv::dotenv().expect("Failed to read .env file");

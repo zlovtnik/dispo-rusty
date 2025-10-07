@@ -5,13 +5,21 @@
 //! and purity validation. All operations are optimized for performance
 //! with sub-millisecond lookup times.
 
+#[allow(dead_code)]
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 
-use super::function_traits::{
-    FunctionCategory, FunctionContainer, PureFunction, FunctionWrapper,
-};
+use super::function_traits::{FunctionCategory, FunctionContainer, FunctionWrapper, PureFunction};
+
+/// Information about a registered function (without the executable function)
+#[derive(Debug, Clone, PartialEq)]
+pub struct FunctionInfo {
+    pub signature: &'static str,
+    pub category: FunctionCategory,
+    pub input_type_id: std::any::TypeId,
+    pub output_type_id: std::any::TypeId,
+}
 
 /// Performance metrics for registry operations.
 #[derive(Debug, Clone)]
@@ -64,17 +72,17 @@ impl PureFunctionRegistry {
     ///
     /// # Performance
     /// O(1) average case for HashMap operations
-    pub fn register<Input, Output, F>(
-        &self,
-        function: F,
-    ) -> Result<(), RegistryError>
+    pub fn register<Input, Output, F>(&self, function: F) -> Result<(), RegistryError>
     where
-        Input: 'static,
-        Output: 'static,
+        Input: Send + Sync + 'static,
+        Output: Send + Sync + 'static,
         F: PureFunction<Input, Output> + 'static,
     {
-        let start = Instant::now();
-        let mut functions = self.functions.write().map_err(|_| RegistryError::LockPoisoned)?;
+        let _start = Instant::now();
+        let mut functions = self
+            .functions
+            .write()
+            .map_err(|_| RegistryError::LockPoisoned)?;
 
         let category = function.category();
         let signature = function.signature();
@@ -95,23 +103,23 @@ impl PureFunctionRegistry {
         category_map.insert(signature, container);
 
         // Update metrics
-        let mut metrics = self.metrics.write().map_err(|_| RegistryError::LockPoisoned)?;
+        let mut metrics = self
+            .metrics
+            .write()
+            .map_err(|_| RegistryError::LockPoisoned)?;
         metrics.total_functions += 1;
-
-        let duration = start.elapsed();
-        self.update_lookup_metrics(duration);
 
         Ok(())
     }
 
-    /// Lookup a function by category and signature.
+    /// Look up a function by category and signature.
     ///
     /// # Arguments
     /// * `category` - The function category
     /// * `signature` - The function signature
     ///
     /// # Returns
-    /// Some reference to the function container if found, None otherwise
+    /// Some function info if found, None otherwise
     ///
     /// # Performance
     /// O(1) average case lookup time
@@ -119,14 +127,22 @@ impl PureFunctionRegistry {
         &self,
         category: FunctionCategory,
         signature: &str,
-    ) -> Result<Option<FunctionContainer>, RegistryError> {
+    ) -> Result<Option<FunctionInfo>, RegistryError> {
         let start = Instant::now();
-        let functions = self.functions.read().map_err(|_| RegistryError::LockPoisoned)?;
+        let functions = self
+            .functions
+            .read()
+            .map_err(|_| RegistryError::LockPoisoned)?;
 
         let result = functions
             .get(&category)
             .and_then(|category_map| category_map.get(signature))
-            .cloned();
+            .map(|container| FunctionInfo {
+                signature: container.signature(),
+                category: container.category(),
+                input_type_id: container.input_type_id(),
+                output_type_id: container.output_type_id(),
+            });
 
         let duration = start.elapsed();
         self.update_lookup_metrics(duration)?;
@@ -145,21 +161,15 @@ impl PureFunctionRegistry {
         &self,
         category: FunctionCategory,
     ) -> Result<Vec<&'static str>, RegistryError> {
-        let functions = self.functions.read().map_err(|_| RegistryError::LockPoisoned)?;
+        let functions = self
+            .functions
+            .read()
+            .map_err(|_| RegistryError::LockPoisoned)?;
 
         Ok(functions
             .get(&category)
             .map(|category_map| category_map.keys().copied().collect())
             .unwrap_or_default())
-    }
-
-    /// Get all available categories.
-    ///
-    /// # Returns
-    /// Vector of all function categories that have registered functions
-    pub fn get_categories(&self) -> Result<Vec<FunctionCategory>, RegistryError> {
-        let functions = self.functions.read().map_err(|_| RegistryError::LockPoisoned)?;
-        Ok(functions.keys().copied().collect())
     }
 
     /// Compose two functions from the registry.
@@ -212,14 +222,26 @@ impl PureFunctionRegistry {
         input: Input,
     ) -> Result<Option<Output>, RegistryError>
     where
-        Input: 'static,
-        Output: 'static,
+        Input: Send + Sync + 'static,
+        Output: Send + Sync + 'static,
     {
-        let container = self.lookup(category, signature)?;
-        match container {
-            Some(container) => Ok(container.try_call(input)),
-            None => Ok(None),
-        }
+        let start = Instant::now();
+        let functions = self
+            .functions
+            .read()
+            .map_err(|_| RegistryError::LockPoisoned)?;
+
+        let result = functions
+            .get(&category)
+            .and_then(|category_map| category_map.get(signature))
+            .and_then(|container| container.try_call(Box::new(input)))
+            .and_then(|boxed_result| boxed_result.downcast::<Output>().ok())
+            .map(|output| *output);
+
+        let duration = start.elapsed();
+        self.update_lookup_metrics(duration)?;
+
+        Ok(result)
     }
 
     /// Validate function purity by executing with same input multiple times.
@@ -244,8 +266,8 @@ impl PureFunctionRegistry {
         iterations: Option<usize>,
     ) -> Result<bool, RegistryError>
     where
-        Input: Clone + 'static,
-        Output: Eq + 'static,
+        Input: Clone + Send + Sync + 'static,
+        Output: Eq + Send + Sync + 'static,
     {
         let iterations = iterations.unwrap_or(100);
         let mut results: Vec<Output> = Vec::with_capacity(iterations);
@@ -255,11 +277,19 @@ impl PureFunctionRegistry {
             let result = self.execute(category, signature, input.clone())?;
             match result {
                 Some(output) => results.push(output),
-                None => return Err(RegistryError::FunctionNotFound {
-                    category,
-                    signature: signature.to_string(),
-                }),
+                None => {
+                    return Err(RegistryError::FunctionNotFound {
+                        category,
+                        signature: signature.to_string(),
+                    })
+                }
             }
+        }
+
+        // Guard against zero iterations or empty results
+        if iterations == 0 || results.is_empty() {
+            // If no runs were performed, return true as no non-deterministic behavior was detected
+            return Ok(true);
         }
 
         // Check if all results are identical
@@ -269,16 +299,25 @@ impl PureFunctionRegistry {
 
     /// Get current performance metrics.
     pub fn get_metrics(&self) -> Result<RegistryMetrics, RegistryError> {
-        let metrics = self.metrics.read().map_err(|_| RegistryError::LockPoisoned)?;
+        let metrics = self
+            .metrics
+            .read()
+            .map_err(|_| RegistryError::LockPoisoned)?;
         Ok(metrics.clone())
     }
 
     /// Clear all registered functions and reset metrics.
     pub fn clear(&self) -> Result<(), RegistryError> {
-        let mut functions = self.functions.write().map_err(|_| RegistryError::LockPoisoned)?;
+        let mut functions = self
+            .functions
+            .write()
+            .map_err(|_| RegistryError::LockPoisoned)?;
         functions.clear();
 
-        let mut metrics = self.metrics.write().map_err(|_| RegistryError::LockPoisoned)?;
+        let mut metrics = self
+            .metrics
+            .write()
+            .map_err(|_| RegistryError::LockPoisoned)?;
         *metrics = RegistryMetrics::default();
 
         Ok(())
@@ -286,47 +325,53 @@ impl PureFunctionRegistry {
 
     /// Update lookup performance metrics.
     fn update_lookup_metrics(&self, duration: Duration) -> Result<(), RegistryError> {
-        let mut metrics = self.metrics.write().map_err(|_| RegistryError::LockPoisoned)?;
-        metrics.lookup_count += 1;
+        let mut metrics = self
+            .metrics
+            .write()
+            .map_err(|_| RegistryError::LockPoisoned)?;
 
-        // Update rolling average
-        let current_avg = metrics.avg_lookup_time_ns;
         let new_measurement = duration.as_nanos() as u64;
-        metrics.avg_lookup_time_ns = (current_avg + new_measurement) / 2;
+        let prev_count = metrics.lookup_count;
+
+        // Compute cumulative average: (current_avg * prev_count + new_measurement) / (prev_count + 1)
+        let current_avg = metrics.avg_lookup_time_ns;
+        if prev_count == 0 {
+            // First measurement
+            metrics.avg_lookup_time_ns = new_measurement;
+        } else {
+            // Running average: (avg * count + new) / (count + 1)
+            metrics.avg_lookup_time_ns =
+                (current_avg * prev_count + new_measurement) / (prev_count + 1);
+        }
+
+        metrics.lookup_count += 1;
 
         Ok(())
     }
 }
 
 /// Helper struct for function composition.
-struct ComposableFunction<Input, Output> {
-    container: FunctionContainer,
+struct ComposableFunction<'a, Input, Output> {
+    container: &'a FunctionContainer,
     _phantom: std::marker::PhantomData<(Input, Output)>,
 }
 
-impl<Input, Output> ComposableFunction<Input, Output>
+impl<'a, Input, Output> ComposableFunction<'a, Input, Output>
 where
     Input: 'static,
     Output: 'static,
 {
-    fn new(container: &FunctionContainer) -> Result<Self, RegistryError> {
-        if container.input_type_id() != std::any::TypeId::of::<Input>() ||
-           container.output_type_id() != std::any::TypeId::of::<Output>() {
+    fn new(container: &'a FunctionContainer) -> Result<Self, RegistryError> {
+        if container.input_type_id() != std::any::TypeId::of::<Input>()
+            || container.output_type_id() != std::any::TypeId::of::<Output>()
+        {
             return Err(RegistryError::TypeMismatch);
         }
 
         Ok(Self {
-            container: container.clone(),
+            container,
             _phantom: std::marker::PhantomData,
         })
-    }
-}
-
-impl Clone for FunctionContainer {
-    fn clone(&self) -> Self {
-        // For now, we can't clone due to private fields
-        // This is a limitation that should be addressed in the FunctionContainer design
-        unimplemented!("FunctionContainer clone not implemented due to private fields")
     }
 }
 
@@ -431,34 +476,48 @@ mod tests {
         let registry = PureFunctionRegistry::new();
 
         // Register a function
-        registry.register(FunctionWrapper::new(
-            |x: i32| x + 1,
-            "increment",
-            FunctionCategory::Mathematical,
-        )).unwrap();
+        registry
+            .register(FunctionWrapper::new(
+                |x: i32| x + 1,
+                "increment",
+                FunctionCategory::Mathematical,
+            ))
+            .unwrap();
 
         // Look it up
-        let container = registry.lookup(FunctionCategory::Mathematical, "increment").unwrap();
-        assert!(container.is_some());
+        let info = registry
+            .lookup(FunctionCategory::Mathematical, "increment")
+            .unwrap();
+        assert!(info.is_some());
 
-        let container = container.unwrap();
-        assert_eq!(container.signature(), "increment");
-        assert_eq!(container.category(), FunctionCategory::Mathematical);
+        let info = info.unwrap();
+        assert_eq!(info.signature, "increment");
+        assert_eq!(info.category, FunctionCategory::Mathematical);
     }
 
     #[test]
     fn test_function_execution() {
+        eprintln!("DEBUG: Starting test_function_execution");
         let registry = PureFunctionRegistry::new();
+        eprintln!("DEBUG: Created registry");
 
         // Register a function
-        registry.register(FunctionWrapper::new(
-            |x: i32| x * 3,
-            "triple",
-            FunctionCategory::Mathematical,
-        )).unwrap();
+        eprintln!("DEBUG: Registering function");
+        registry
+            .register(FunctionWrapper::new(
+                |x: i32| x * 3,
+                "triple",
+                FunctionCategory::Mathematical,
+            ))
+            .unwrap();
+        eprintln!("DEBUG: Function registered");
 
         // Execute it
-        let result: Option<i32> = registry.execute(FunctionCategory::Mathematical, "triple", 5).unwrap();
+        eprintln!("DEBUG: Executing function");
+        let result: Option<i32> = registry
+            .execute(FunctionCategory::Mathematical, "triple", 5)
+            .unwrap();
+        eprintln!("DEBUG: Execution completed, result: {:?}", result);
         assert_eq!(result, Some(15));
     }
 
@@ -467,11 +526,13 @@ mod tests {
         let registry = PureFunctionRegistry::new();
 
         // Register a function
-        registry.register(FunctionWrapper::new(
-            |x: i32| x + 1,
-            "increment",
-            FunctionCategory::Mathematical,
-        )).unwrap();
+        registry
+            .register(FunctionWrapper::new(
+                |x: i32| x + 1,
+                "increment",
+                FunctionCategory::Mathematical,
+            ))
+            .unwrap();
 
         // Try to register the same function again
         let result = registry.register(FunctionWrapper::new(
@@ -482,7 +543,7 @@ mod tests {
 
         assert!(result.is_err());
         match result.unwrap_err() {
-            RegistryError::FunctionAlreadyExists { .. } => {},
+            RegistryError::FunctionAlreadyExists { .. } => {}
             _ => panic!("Expected FunctionAlreadyExists error"),
         }
     }
@@ -492,19 +553,23 @@ mod tests {
         let registry = PureFunctionRegistry::new();
 
         // Register a pure function
-        registry.register(FunctionWrapper::new(
-            |x: i32| x * 2,
-            "pure_double",
-            FunctionCategory::Mathematical,
-        )).unwrap();
+        registry
+            .register(FunctionWrapper::new(
+                |x: i32| x * 2,
+                "pure_double",
+                FunctionCategory::Mathematical,
+            ))
+            .unwrap();
 
         // Validate purity
-        let is_pure = registry.validate_purity::<i32, i32>(
-            FunctionCategory::Mathematical,
-            "pure_double",
-            10,
-            Some(10),
-        ).unwrap();
+        let is_pure = registry
+            .validate_purity::<i32, i32>(
+                FunctionCategory::Mathematical,
+                "pure_double",
+                10,
+                Some(10),
+            )
+            .unwrap();
 
         assert!(is_pure);
     }
@@ -514,32 +579,42 @@ mod tests {
         let registry = PureFunctionRegistry::new();
 
         // Register functions in different categories
-        registry.register(FunctionWrapper::new(
-            |x: i32| x + 1,
-            "increment",
-            FunctionCategory::Mathematical,
-        )).unwrap();
+        registry
+            .register(FunctionWrapper::new(
+                |x: i32| x + 1,
+                "increment",
+                FunctionCategory::Mathematical,
+            ))
+            .unwrap();
 
-        registry.register(FunctionWrapper::new(
-            |s: String| s.len(),
-            "length",
-            FunctionCategory::StringProcessing,
-        )).unwrap();
+        registry
+            .register(FunctionWrapper::new(
+                |s: String| s.len(),
+                "length",
+                FunctionCategory::StringProcessing,
+            ))
+            .unwrap();
 
-        registry.register(FunctionWrapper::new(
-            |x: i32| x * 2,
-            "double",
-            FunctionCategory::Mathematical,
-        )).unwrap();
+        registry
+            .register(FunctionWrapper::new(
+                |x: i32| x * 2,
+                "double",
+                FunctionCategory::Mathematical,
+            ))
+            .unwrap();
 
         // Check mathematical functions
-        let math_funcs = registry.get_category_functions(FunctionCategory::Mathematical).unwrap();
+        let math_funcs = registry
+            .get_category_functions(FunctionCategory::Mathematical)
+            .unwrap();
         assert_eq!(math_funcs.len(), 2);
         assert!(math_funcs.contains(&"increment"));
         assert!(math_funcs.contains(&"double"));
 
         // Check string processing functions
-        let string_funcs = registry.get_category_functions(FunctionCategory::StringProcessing).unwrap();
+        let string_funcs = registry
+            .get_category_functions(FunctionCategory::StringProcessing)
+            .unwrap();
         assert_eq!(string_funcs.len(), 1);
         assert!(string_funcs.contains(&"length"));
     }
@@ -549,15 +624,19 @@ mod tests {
         let registry = PureFunctionRegistry::new();
 
         // Register a function
-        registry.register(FunctionWrapper::new(
-            |x: i32| x + 1,
-            "increment",
-            FunctionCategory::Mathematical,
-        )).unwrap();
+        registry
+            .register(FunctionWrapper::new(
+                |x: i32| x + 1,
+                "increment",
+                FunctionCategory::Mathematical,
+            ))
+            .unwrap();
 
         // Perform some lookups
         for _ in 0..10 {
-            let _ = registry.lookup(FunctionCategory::Mathematical, "increment").unwrap();
+            let _ = registry
+                .lookup(FunctionCategory::Mathematical, "increment")
+                .unwrap();
         }
 
         let metrics = registry.get_metrics().unwrap();
@@ -571,17 +650,21 @@ mod tests {
         let registry = PureFunctionRegistry::new();
 
         // Register some functions
-        registry.register(FunctionWrapper::new(
-            |x: i32| x + 1,
-            "increment",
-            FunctionCategory::Mathematical,
-        )).unwrap();
+        registry
+            .register(FunctionWrapper::new(
+                |x: i32| x + 1,
+                "increment",
+                FunctionCategory::Mathematical,
+            ))
+            .unwrap();
 
-        registry.register(FunctionWrapper::new(
-            |s: String| s.len(),
-            "length",
-            FunctionCategory::StringProcessing,
-        )).unwrap();
+        registry
+            .register(FunctionWrapper::new(
+                |s: String| s.len(),
+                "length",
+                FunctionCategory::StringProcessing,
+            ))
+            .unwrap();
 
         assert_eq!(registry.get_metrics().unwrap().total_functions, 2);
 

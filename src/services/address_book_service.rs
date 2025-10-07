@@ -45,11 +45,7 @@ pub fn insert(new_person: PersonDTO, pool: &Pool) -> Result<(), ServiceError> {
     }
 }
 
-pub fn update(
-    id: i32,
-    updated_person: PersonDTO,
-    pool: &Pool,
-) -> Result<(), ServiceError> {
+pub fn update(id: i32, updated_person: PersonDTO, pool: &Pool) -> Result<(), ServiceError> {
     match Person::find_by_id(id, &mut pool.get().unwrap()) {
         Ok(_) => match Person::update(id, updated_person, &mut pool.get().unwrap()) {
             Ok(_) => Ok(()),
