@@ -282,30 +282,23 @@ where
     T: Send + Sync + 'static,
     U: Clone + Send + Sync + 'static,
 {
-    /// Create a lazy streaming iterator that loads query results in configurable chunks.
+    /// Creates a lazy streaming iterator configured to load query results in chunks
+    /// according to the composer's `lazy_config`.
     ///
-    /// Constructs a new `LazyQueryIterator` configured from the provided query composer, concurrency
-    /// semaphore, and performance metrics tracker.
-    ///
-    /// # Parameters
-    ///
-    /// - `composer` — The functional query composer that supplies the base query and lazy configuration.
-    /// - `semaphore` — Concurrency control semaphore used to limit parallel chunk processing.
-    /// - `metrics` — Initial performance metrics to be attached and updated during iteration.
-    ///
-    /// # Returns
-    ///
-    /// A `LazyQueryIterator` ready to stream results according to the composer's `lazy_config`.
+    /// The returned iterator is initialized with an empty current chunk, positions set
+    /// to the start, and the page size taken from `composer.lazy_config.chunk_size`.
     ///
     /// # Examples
     ///
-    /// ```rust,no_run
+    /// ```no_run
     /// use std::sync::Arc;
     /// use tokio::sync::Semaphore;
+    ///
     /// // Assume `FunctionalQueryComposer` and `QueryPerformanceMetrics` are available in scope.
-    /// let composer: Arc<FunctionalQueryComposer<_, _>> = /* obtain or construct composer */ Arc::new(/* ... */);
+    /// let composer: Arc<FunctionalQueryComposer<_, _>> = Arc::new(/* ... */);
     /// let semaphore = Arc::new(Semaphore::new(4));
     /// let metrics = QueryPerformanceMetrics::default();
+    ///
     /// let iterator = LazyQueryIterator::new(composer, semaphore, metrics);
     /// ```
     pub fn new(
@@ -328,42 +321,24 @@ where
         }
     }
 
-    /// Create a test-only iterator with pre-loaded data (bypasses database execution).
+    /// Creates a test-only LazyQueryIterator that yields the provided items in order.
     ///
-    /// This constructor is intended for testing the iteration logic without requiring
-    /// a real database connection. The iterator will yield all items from `data` and
-    /// then be exhausted.
-    ///
-    /// # Parameters
-    ///
-    /// - `data` — The pre-loaded data to iterate over.
+    /// This constructor bypasses any database loading and returns elements from `data` until exhausted.
     ///
     /// # Examples
     ///
     /// ```
-    /// # use std::sync::Arc;
-    /// # use tokio::sync::Semaphore;
-    /// # // Mock types for example
-    /// # struct FunctionalQueryComposer<T, U>(std::marker::PhantomData<(T, U)>);
-    /// # impl<T, U> FunctionalQueryComposer<T, U> {
-    /// #     fn lazy_config(&self) -> LazyEvaluationConfig {
-    /// #         LazyEvaluationConfig::default()
-    /// #     }
-    /// # }
-    /// # struct LazyEvaluationConfig { chunk_size: usize }
-    /// # impl LazyEvaluationConfig { fn default() -> Self { Self { chunk_size: 1000 } } }
-    /// # struct QueryPerformanceMetrics;
-    /// # impl QueryPerformanceMetrics { fn default() -> Self { Self } }
-    /// #
-    /// let data = vec![1, 2, 3, 4, 5];
+    /// let data = vec![1, 2, 3];
     /// let mut iter = LazyQueryIterator::with_data(data);
     /// assert_eq!(iter.next(), Some(1));
     /// assert_eq!(iter.next(), Some(2));
+    /// assert_eq!(iter.next(), Some(3));
+    /// assert_eq!(iter.next(), None);
     /// ```
     #[cfg(test)]
     pub fn with_data(data: Vec<U>) -> Self {
         use std::time::Duration;
-        
+
         let composer = Arc::new(FunctionalQueryComposer {
             builder: TypeSafeQueryBuilder::new(),
             current_filter: None,
@@ -378,7 +353,7 @@ where
             },
             _phantom: PhantomData,
         });
-        
+
         Self {
             composer,
             current_chunk: data,
@@ -400,17 +375,31 @@ where
         }
     }
 
-    /// Attempt to load the next chunk of data from the database.
+    /// Load the next page of results into the iterator's buffer.
     ///
-    /// This method is currently unimplemented and will panic if called. In a complete
-    /// implementation, this would execute a paginated query using `self.offset` and
-    /// `self.page_size`, update `self.current_chunk` with the results, reset
-    /// `self.chunk_position` to 0, and set `self.exhausted` to true if no results
-    /// were returned.
+    /// When implemented, this will fetch up to `self.page_size` records starting at
+    /// `self.offset`, replace `self.current_chunk` with the fetched records,
+    /// reset `self.chunk_position` to `0`, advance `self.offset` by the number of
+    /// records loaded, and mark the iterator as exhausted when no more results are
+    /// available.
     ///
     /// # Returns
     ///
     /// `true` if a new chunk was loaded successfully, `false` if no more data is available.
+    ///
+    /// # Panics
+    ///
+    /// This function is currently unimplemented and will panic if called.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut it = LazyQueryIterator::with_data(vec![1u32, 2u32, 3u32]);
+    /// assert_eq!(it.next(), Some(1u32));
+    /// assert_eq!(it.next(), Some(2u32));
+    /// assert_eq!(it.next(), Some(3u32));
+    /// assert_eq!(it.next(), None);
+    /// ```
     fn load_next_chunk(&mut self) -> bool {
         // FIXME: Implement actual chunk loading via database query executor
         // Expected implementation:
@@ -420,7 +409,7 @@ where
         // 4. self.chunk_position = 0
         // 5. self.offset += self.page_size
         // 6. return true
-        
+
         unimplemented!(
             "Chunked query execution is not implemented. \
              LazyQueryIterator::load_next_chunk requires a real database query executor \
@@ -438,35 +427,22 @@ where
 {
     type Item = U;
 
-    /// Advances the iterator and yields the next item from the current chunk, loading the next chunk when needed.
+    /// Returns the next item from the currently loaded in-memory chunk or `None` if the iterator is exhausted.
     ///
-    /// When the current in-memory chunk is depleted, this method attempts to load the next chunk
-    /// via `load_next_chunk()`. If no chunk loader is implemented (production case), it will panic
-    /// with `unimplemented!()`. For testing, use `with_data()` to create an iterator with pre-loaded data.
-    ///
-    /// # Returns
-    ///
-    /// `Some(item)` with the next element from the current chunk, `None` when the iterator is exhausted
-    /// (either naturally or when `load_next_chunk()` returns false indicating no more data).
-    ///
-    /// # Panics
-    ///
-    /// Panics if chunk loading is attempted but not yet implemented (i.e., when used outside of tests
-    /// without a database query executor).
+    /// If the current chunk contains remaining items, advances the internal position counters and yields the next element. For iterators constructed with `with_data`, no additional chunk loading is performed and iteration ends when the in-memory data is consumed.
     ///
     /// # Examples
     ///
     /// ```
-    /// # #[cfg(test)]
-    /// # {
     /// use crate::functional::query_composition::LazyQueryIterator;
+    ///
     /// let data = vec![1, 2, 3];
     /// let mut iter = LazyQueryIterator::with_data(data);
+    ///
     /// assert_eq!(iter.next(), Some(1));
     /// assert_eq!(iter.next(), Some(2));
     /// assert_eq!(iter.next(), Some(3));
     /// assert_eq!(iter.next(), None);
-    /// # }
     /// ```
     fn next(&mut self) -> Option<Self::Item> {
         if self.exhausted {
@@ -480,7 +456,7 @@ where
                 self.exhausted = true;
                 return None;
             }
-            
+
             // FIXME: Chunk loading is not implemented yet - fail fast
             // When implementing, load_next_chunk() should return true if data was loaded,
             // false if no more data is available
@@ -530,16 +506,39 @@ pub struct SanitizationRule {
     pub error_message: String,
 }
 
-/// Get the compiled regex for detecting SQL comments (--  |  /*  |  */)
+/// Provides a compiled Regex that matches SQL comment markers ("--", "/*", "*/").
+///
+/// The compiled pattern is cached in a static OnceLock and reused for subsequent calls.
+///
+/// # Examples
+///
+/// ```
+/// let re = sql_comment_regex();
+/// assert!(re.is_match("-- a comment"));
+/// assert!(re.is_match("/* block comment */"));
+/// assert!(re.is_match("*/"));
+/// ```
 fn sql_comment_regex() -> &'static Regex {
     static SQL_COMMENT: OnceLock<Regex> = OnceLock::new();
-    SQL_COMMENT.get_or_init(|| {
-        Regex::new(r"--|/\*|\*/")
-            .expect("SQL comment regex should compile")
-    })
+    SQL_COMMENT.get_or_init(|| Regex::new(r"--|/\*|\*/").expect("SQL comment regex should compile"))
 }
 
-/// Get the compiled regex for detecting SQL keywords at word boundaries (case-insensitive)
+/// Returns a cached compiled regex that matches common SQL keywords at word boundaries, case-insensitively.
+///
+/// The regex is initialized once and reused for subsequent calls to avoid recompilation.
+///
+/// # Returns
+///
+/// A reference to a compiled regex matching the keywords `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `DROP`, `UNION`, `EXEC`, and `EXECUTE` at word boundaries, case-insensitively.
+///
+/// # Examples
+///
+/// ```
+/// let re = sql_keyword_regex();
+/// assert!(re.is_match("SELECT * FROM users"));
+/// assert!(re.is_match("select"));
+/// assert!(!re.is_match("selection"));
+/// ```
 fn sql_keyword_regex() -> &'static Regex {
     static SQL_KEYWORD: OnceLock<Regex> = OnceLock::new();
     SQL_KEYWORD.get_or_init(|| {
@@ -548,13 +547,23 @@ fn sql_keyword_regex() -> &'static Regex {
     })
 }
 
-/// Get the compiled regex for detecting hexadecimal sequences (for percent-encoding detection)
+/// Compiled regex that matches two-digit hexadecimal sequences (useful for detecting percent-encoding components).
+///
+/// # Examples
+///
+/// ```
+/// // matches the two-hex-digit sequence in a percent-encoded string
+/// assert!(hex_sequence_regex().is_match("%20"));
+/// // matches a standalone two-digit hex sequence
+/// assert!(hex_sequence_regex().is_match("2F"));
+/// // does not match non-hex or incomplete sequences
+/// assert!(!hex_sequence_regex().is_match("g1"));
+/// assert!(!hex_sequence_regex().is_match("A"));
+/// ```
 fn hex_sequence_regex() -> &'static Regex {
     static HEX_SEQUENCE: OnceLock<Regex> = OnceLock::new();
-    HEX_SEQUENCE.get_or_init(|| {
-        Regex::new(r"[0-9A-Fa-f]{2}")
-            .expect("Hex sequence regex should compile")
-    })
+    HEX_SEQUENCE
+        .get_or_init(|| Regex::new(r"[0-9A-Fa-f]{2}").expect("Hex sequence regex should compile"))
 }
 
 impl ParameterSanitizer {
@@ -637,12 +646,11 @@ impl ParameterSanitizer {
         Ok(())
     }
 
-    /// Apply a single sanitization rule to a string value.
+    /// Applies a sanitization rule to a string value.
     ///
-    /// Recognizes at least two rule names:
-    /// - `"no_sql_injection"`: rejects SQL comment tokens, common statement keywords at word boundaries (case-insensitive), percent-encoding hints, and semicolon-based terminators according to the rule's `pattern`.
-    /// - `"reasonable_length"`: enforces a maximum length of 255 characters.
-    /// Unknown rule names pass by default.
+    /// Recognizes the `"no_sql_injection"` rule (rejects SQL comment tokens, common SQL keywords
+    /// at word boundaries, percent-encoding hints, and semicolons) and the `"reasonable_length"`
+    /// rule (allows up to 255 characters). Unknown rule names pass by default.
     ///
     /// # Examples
     ///
@@ -666,23 +674,23 @@ impl ParameterSanitizer {
         match rule.name.as_str() {
             "no_sql_injection" => {
                 // Use compiled regexes for efficient pattern matching
-                
+
                 // 1. Reject SQL comment patterns (--|/*|*/)
                 if sql_comment_regex().is_match(value) {
                     return false;
                 }
-                
+
                 // 2. Reject SQL keywords at word boundaries (case-insensitive)
                 if sql_keyword_regex().is_match(value) {
                     return false;
                 }
-                
+
                 // 3. Reject percent-encoding attempts (e.g., %27 for single quote)
                 // Check if value contains '%' followed by hex digits
                 if value.contains('%') && hex_sequence_regex().is_match(value) {
                     return false;
                 }
-                
+
                 // 4. Reject semicolons (statement terminators)
                 !value.contains(';')
             }

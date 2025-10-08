@@ -23,22 +23,25 @@ pub struct UserToken {
 }
 
 impl UserToken {
-    /// Creates a signed JWT containing issued-at, expiration, and the provided login information.
+    /// Generates a signed JWT containing issued-at, expiration, and the provided login information.
     ///
-    /// The token's lifetime is determined by the `MAX_AGE` environment variable (seconds). If `MAX_AGE` is not set or cannot be parsed as an integer, a default of `ONE_WEEK` is used.
+    /// Token lifetime is taken from the `MAX_AGE` environment variable (seconds); if `MAX_AGE` is missing or cannot be parsed as an integer, `ONE_WEEK` is used.
     ///
     /// # Returns
     ///
-    /// A JWT encoded as a `String`.
+    /// The encoded JWT as a `String`.
     ///
     /// # Examples
     ///
     /// ```
+    /// use crate::models::user::LoginInfoDTO;
+    ///
     /// let login = LoginInfoDTO {
     ///     username: "alice".into(),
     ///     login_session: "session-123".into(),
     ///     tenant_id: "tenant-a".into(),
     /// };
+    ///
     /// let token = generate_token(&login);
     /// assert!(!token.is_empty());
     /// ```

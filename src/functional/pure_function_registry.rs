@@ -37,13 +37,22 @@ pub struct RegistryMetrics {
 }
 
 impl RegistryMetrics {
-    /// Recomputes the average lookup time from the total accumulated time and count.
+    /// Recomputes the average lookup time in nanoseconds from the accumulated totals.
     ///
-    /// This method ensures the public `avg_lookup_time_ns` field reflects the true
-    /// average without precision loss from repeated integer division.
+    /// Sets `avg_lookup_time_ns` to `total_lookup_time_ns / lookup_count` (integer division).
+    /// If `lookup_count` is zero, `avg_lookup_time_ns` is set to `0`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut m = RegistryMetrics { total_lookup_time_ns: 150, lookup_count: 3, ..Default::default() };
+    /// m.recompute_average();
+    /// assert_eq!(m.avg_lookup_time_ns, 50);
+    /// ```
     fn recompute_average(&mut self) {
         if self.lookup_count > 0 {
-            self.avg_lookup_time_ns = (self.total_lookup_time_ns / self.lookup_count as u128) as u64;
+            self.avg_lookup_time_ns =
+                (self.total_lookup_time_ns / self.lookup_count as u128) as u64;
         } else {
             self.avg_lookup_time_ns = 0;
         }
@@ -462,10 +471,10 @@ impl PureFunctionRegistry {
         Ok(())
     }
 
-    /// Updates the registry's lookup-performance metrics with a new duration measurement.
+    /// Update the registry's lookup-performance metrics with a new duration measurement.
     ///
-    /// This updates the total accumulated lookup time and recomputes the running average
-    /// lookup time (`avg_lookup_time_ns`) without precision loss, then increments `lookup_count`.
+    /// Adds the measured duration (in nanoseconds) to the total accumulated lookup time,
+    /// increments the lookup count, and recomputes the running average lookup time.
     ///
     /// # Errors
     ///
@@ -475,9 +484,12 @@ impl PureFunctionRegistry {
     ///
     /// ```
     /// use std::time::Duration;
+    ///
     /// let registry = PureFunctionRegistry::new();
+    ///
     /// // record a 100-nanosecond lookup measurement
     /// registry.update_lookup_metrics(Duration::from_nanos(100)).unwrap();
+    ///
     /// let metrics = registry.get_metrics().unwrap();
     /// assert_eq!(metrics.lookup_count, 1);
     /// assert_eq!(metrics.avg_lookup_time_ns, 100);
@@ -489,11 +501,11 @@ impl PureFunctionRegistry {
             .map_err(|_| RegistryError::LockPoisoned)?;
 
         let new_measurement = duration.as_nanos();
-        
+
         // Accumulate total time (no precision loss)
         metrics.total_lookup_time_ns += new_measurement;
         metrics.lookup_count += 1;
-        
+
         // Recompute average from accumulated total
         metrics.recompute_average();
 
@@ -828,7 +840,7 @@ mod tests {
     #[test]
     fn test_lookup_metrics_precision() {
         use std::time::Duration;
-        
+
         let registry = PureFunctionRegistry::new();
 
         // Register a function
@@ -843,9 +855,15 @@ mod tests {
         // Simulate lookups with varying durations that would cause precision loss
         // with integer division on each update
         // Example: 3 lookups of 1ns, 2ns, 3ns = average should be 2ns exactly
-        registry.update_lookup_metrics(Duration::from_nanos(1)).unwrap();
-        registry.update_lookup_metrics(Duration::from_nanos(2)).unwrap();
-        registry.update_lookup_metrics(Duration::from_nanos(3)).unwrap();
+        registry
+            .update_lookup_metrics(Duration::from_nanos(1))
+            .unwrap();
+        registry
+            .update_lookup_metrics(Duration::from_nanos(2))
+            .unwrap();
+        registry
+            .update_lookup_metrics(Duration::from_nanos(3))
+            .unwrap();
 
         let metrics = registry.get_metrics().unwrap();
         assert_eq!(metrics.lookup_count, 3);
@@ -865,7 +883,9 @@ mod tests {
 
         // Add 1000 measurements of 1000ns each
         for _ in 0..1000 {
-            registry.update_lookup_metrics(Duration::from_nanos(1000)).unwrap();
+            registry
+                .update_lookup_metrics(Duration::from_nanos(1000))
+                .unwrap();
         }
 
         let metrics = registry.get_metrics().unwrap();

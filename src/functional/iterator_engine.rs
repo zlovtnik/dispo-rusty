@@ -146,7 +146,19 @@ where
         }
     }
 
-    /// Group consecutive elements by key
+    /// Group consecutive elements by a derived key, yielding `(key, Vec<items>)` for each contiguous run.
+    ///
+    /// The resulting `IteratorChain` produces one `(key, Vec<T>)` tuple for each sequence of adjacent
+    /// items whose derived keys are equal. Requires `T: Clone` because groups are collected into `Vec<T>`,
+    /// and `K: PartialEq` to compare adjacent keys.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let chain = IteratorChain::new(vec![1, 1, 2, 2, 2, 3].into_iter());
+    /// let groups: Vec<(i32, Vec<i32>)> = chain.chunk_by(|&x| x).collect();
+    /// assert_eq!(groups, vec![(1, vec![1, 1]), (2, vec![2, 2, 2]), (3, vec![3])]);
+    /// ```
     #[cfg(feature = "functional")]
     pub fn chunk_by<K, F>(
         self,
@@ -160,10 +172,13 @@ where
         let mut operations = self.operations;
         operations.push("chunk_by".to_string());
 
-        let chunks: Vec<(K, Vec<T>)> = self.iterator.chunk_by(f).into_iter()
+        let chunks: Vec<(K, Vec<T>)> = self
+            .iterator
+            .chunk_by(f)
+            .into_iter()
             .map(|(key, group)| (key, group.collect()))
             .collect();
-        
+
         IteratorChain {
             iterator: chunks.into_iter(),
             config: self.config,

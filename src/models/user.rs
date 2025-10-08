@@ -207,7 +207,11 @@ impl User {
         }
     }
 
-    /// Get the total number of users in the database.
+    /// Compute the total number of users in the database.
+    ///
+    /// # Returns
+    ///
+    /// The total number of users as an `i64`.
     ///
     /// # Examples
     ///
@@ -220,11 +224,9 @@ impl User {
         users.count().get_result(conn)
     }
 
-    /// Counts users with an active login session.
+    /// Counts users that currently have a non-empty login session.
     ///
-    /// # Returns
-    ///
-    /// The number of users whose `login_session` is neither null nor the empty string.
+    /// Returns the number of users whose `login_session` column is neither `NULL` nor the empty string.
     ///
     /// # Examples
     ///

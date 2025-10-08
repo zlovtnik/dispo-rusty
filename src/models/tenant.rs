@@ -302,13 +302,17 @@ impl Tenant {
         })
     }
 
-    /// Filters tenants using field-based conditions and optional database-level pagination.
+    /// Filter tenants by field-based conditions with optional database-level pagination.
     ///
-    /// Supported fields:
-    /// - `id`, `name`, `db_url`: operators `contains` and `equals`.
-    /// - `created_at`, `updated_at`: operators `gt`, `gte`, `lt`, `lte`, and `equals`. Date/time values must use ISO-like format `YYYY-MM-DDTHH:MM:SS.sssZ` (for example `2023-12-25T10:00:00.000Z`).
+    /// Supported fields and operators:
+    /// - `id`, `name`, `db_url`: `contains`, `equals`.
+    ///   - Note: `contains` uses SQL LIKE; `%` and `_` characters in the value are treated as wildcards.
     ///
-    /// Unknown fields or unsupported operators are ignored. When `filter.page_size` is provided, the function applies a database `LIMIT`/`OFFSET` using the provided `cursor` and enforces limits: maximum page size 10,000, non-negative cursor, and overflow-safe offset calculation. The function returns a Diesel `DatabaseError` if a date value cannot be parsed or if pagination parameters violate the constraints (e.g., negative cursor, cursor too large, page size zero, or offset overflow).
+    /// - `created_at`, `updated_at`: `gt`, `gte`, `lt`, `lte`, `equals`. Date/time values must use ISO-like format `YYYY-MM-DDTHH:MM:SS.sssZ` (for example `2023-12-25T10:00:00.000Z`).
+    ///
+    /// Unknown fields or unsupported operators are ignored. When `filter.page_size` is provided, the function applies `LIMIT`/`OFFSET` using `cursor` and enforces constraints: maximum page size 10,000, non-negative cursor, safe offset calculation to avoid overflow, and page size cannot be zero.
+    ///
+    /// Returns a `DatabaseError` if a date value cannot be parsed or if pagination parameters violate constraints (e.g., negative cursor, cursor too large, page size zero, or offset overflow).
     ///
     /// # Examples
     ///

@@ -497,6 +497,21 @@ pub struct AllValidator<T, R: ValidationRule<T>> {
 }
 
 impl<T, R: ValidationRule<T>> ValidationRule<T> for AllValidator<T, R> {
+    /// Validates a value against every rule in the validator, returning on the first failure.
+    ///
+    /// Applies each contained rule in sequence; if any rule returns an error, that error is
+    /// propagated immediately. If all rules succeed, validation succeeds.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use crate::validators::{all, Length, ValidationRule};
+    /// let v = all(vec![Length { min: Some(3), max: Some(5) }]);
+    /// let ok = v.validate(&"rust".to_string(), "username");
+    /// assert!(ok.is_ok());
+    /// let err = v.validate(&"hi".to_string(), "username");
+    /// assert!(err.is_err());
+    /// ```
     fn validate(&self, value: &T, field_name: &str) -> ValidationResult<()> {
         for rule in &self.rules {
             // Propagate the first error encountered
@@ -506,8 +521,19 @@ impl<T, R: ValidationRule<T>> ValidationRule<T> for AllValidator<T, R> {
     }
 }
 
+/// Constructs an AllValidator that applies every rule in `rules` in sequence.
+///
+/// The returned validator succeeds only if all contained rules succeed; it returns the first
+/// encountered validation error otherwise.
+///
+/// # Examples
+///
+/// ```
+/// // create an AllValidator for `i32` with no rules (always passes)
+/// let _validator = crate::all::<i32, _>(vec![]);
+/// ```
 pub fn all<T, R: ValidationRule<T>>(rules: Vec<R>) -> AllValidator<T, R> {
-    AllValidator { 
+    AllValidator {
         rules,
         _phantom: std::marker::PhantomData,
     }
@@ -536,19 +562,41 @@ pub struct AnyValidator<T, R: ValidationRule<T>> {
 }
 
 impl<T, R: ValidationRule<T>> ValidationRule<T> for AnyValidator<T, R> {
+    /// Validates a value against a set of rules and succeeds if any single rule passes.
+    ///
+    /// If no rules are provided, returns an error with code `VALIDATION_FAILED` and message
+    /// "No validation rules provided". If all rules fail, returns an error with code
+    /// `ANY_VALIDATION_FAILED` and a message that combines each rule's failure message.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let non_empty = Custom::new(|s: &String| !s.is_empty(), "REQUIRED", "{} is required");
+    /// let equals_ok = Custom::new(|s: &String| s == "ok", "MUST_BE_OK", "{} must be \"ok\"");
+    /// let validator = any(vec![non_empty, equals_ok]);
+    ///
+    /// assert!(validator.validate(&"hello".to_string(), "field").is_ok());
+    /// assert!(validator.validate(&"ok".to_string(), "field").is_ok());
+    /// let err = validator.validate(&"".to_string(), "field").unwrap_err();
+    /// assert_eq!(err.code, "ANY_VALIDATION_FAILED");
+    /// ```
     fn validate(&self, value: &T, field_name: &str) -> ValidationResult<()> {
         let mut collected_errors = Vec::new();
-        
+
         for rule in &self.rules {
             match rule.validate(value, field_name) {
                 Ok(()) => return Ok(()), // Return immediately if any rule succeeds
                 Err(error) => collected_errors.push(error),
             }
         }
-        
+
         // All rules failed - return combined error
         if collected_errors.is_empty() {
-            Err(ValidationError::new(field_name, "VALIDATION_FAILED", "No validation rules provided"))
+            Err(ValidationError::new(
+                field_name,
+                "NO_RULES_PROVIDED",
+                "No validation rules provided",
+            ))
         } else {
             let combined_message = collected_errors
                 .iter()
@@ -556,47 +604,58 @@ impl<T, R: ValidationRule<T>> ValidationRule<T> for AnyValidator<T, R> {
                 .collect::<Vec<_>>()
                 .join("; ");
             Err(ValidationError::new(
-                field_name, 
-                "ANY_VALIDATION_FAILED", 
-                &format!("All validation rules failed: {}", combined_message)
+                field_name,
+                "ANY_VALIDATION_FAILED",
+                &format!("All validation rules failed: {}", combined_message),
             ))
         }
     }
 }
 
+/// Creates an AnyValidator that succeeds if at least one of the provided rules passes.
+///
+/// # Examples
+///
+/// ```
+/// // Helper types for the example
+/// struct AlwaysFail;
+/// struct AlwaysPass;
+///
+/// impl crate::ValidationRule<i32> for AlwaysFail {
+///     fn validate(&self, _value: &i32, _field_name: &str) -> crate::ValidationResult<()> {
+///         Err(crate::ValidationError::new("x", "FAILED", "always fails"))
+///     }
+/// }
+///
+/// impl crate::ValidationRule<i32> for AlwaysPass {
+///     fn validate(&self, _value: &i32, _field_name: &str) -> crate::ValidationResult<()> {
+///         Ok(())
+///     }
+/// }
+///
+/// let v = crate::any(vec![AlwaysFail, AlwaysPass]);
+/// assert!(v.validate(&42, "x").is_ok());
+/// ```
 pub fn any<T, R: ValidationRule<T>>(rules: Vec<R>) -> AnyValidator<T, R> {
-    AnyValidator { 
+    AnyValidator {
         rules,
         _phantom: std::marker::PhantomData,
     }
 }
 
 /// Creates a composite validation rule that succeeds only when the provided rule fails.
-
 ///
-
 /// The returned rule validates a value by applying `rule` and interpreting a failure from `rule` as success; if `rule` succeeds the composite fails with error code `VALIDATION_FAILED` and message "Validation rule should have failed but passed".
-
 ///
-
 /// # Examples
-
 ///
-
 /// ```
-
 /// # use your_crate::{Required, ValidationRule, ValidationResult};
-
 /// let negated = not(Required);
-
 /// // Required fails for the default String (empty), so negated succeeds
-
 /// assert!(negated.validate(&String::new(), "name").is_ok());
-
 /// // Required succeeds for non-empty, so negated fails
-
 /// assert!(negated.validate(&"ok".to_string(), "name").is_err());
-
 /// ```
 /// Validator that succeeds when the inner rule fails
 pub struct NotValidator<T, R: ValidationRule<T>> {
@@ -681,6 +740,46 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    struct PassingRule;
+
+    impl ValidationRule<i32> for PassingRule {
+        fn validate(&self, _value: &i32, _field_name: &str) -> ValidationResult<()> {
+            Ok(())
+        }
+    }
+
+    struct FailingRule;
+
+    impl ValidationRule<i32> for FailingRule {
+        fn validate(&self, _value: &i32, field_name: &str) -> ValidationResult<()> {
+            Err(ValidationError::new(
+                field_name,
+                "INNER_RULE_FAILED",
+                &format!("{} failed validation", field_name),
+            ))
+        }
+    }
+
+    struct SpyRule {
+        called: Rc<RefCell<bool>>,
+        delegate: Box<dyn ValidationRule<i32>>,
+    }
+
+    impl SpyRule {
+        fn new(delegate: Box<dyn ValidationRule<i32>>, called: Rc<RefCell<bool>>) -> Self {
+            Self { called, delegate }
+        }
+    }
+
+    impl ValidationRule<i32> for SpyRule {
+        fn validate(&self, value: &i32, field_name: &str) -> ValidationResult<()> {
+            *self.called.borrow_mut() = true;
+            self.delegate.validate(value, field_name)
+        }
+    }
 
     #[test]
     fn test_required_string() {
@@ -739,5 +838,61 @@ mod tests {
         let composed = all(rules);
         assert!(composed.validate(&"test".to_string(), "name").is_ok());
         assert!(composed.validate(&"t".to_string(), "name").is_err());
+    }
+
+    #[test]
+    fn not_validator_fails_when_inner_rule_succeeds() {
+        let inner = Custom::new(|value: &i32| *value == 5, "MATCH", "{} must equal five");
+        let negated = not(inner);
+
+        let error = negated.validate(&5, "number").expect_err("negated rule should fail");
+
+        assert_eq!(error.field, "number");
+        assert_eq!(error.code, "VALIDATION_FAILED");
+        assert_eq!(error.message, "Validation rule should have failed but passed");
+    }
+
+    #[test]
+    fn not_validator_succeeds_when_inner_rule_fails() {
+        let inner = Custom::new(|value: &i32| *value > 10, "TOO_SMALL", "{} must be greater than 10");
+        let negated = not(inner);
+
+        assert!(negated.validate(&5, "threshold").is_ok());
+    }
+
+    #[test]
+    fn when_validator_invokes_rule_when_condition_true_and_passes() {
+        let called = Rc::new(RefCell::new(false));
+        let spy = SpyRule::new(Box::new(PassingRule), Rc::clone(&called));
+        let validator = when(|value: &i32| *value > 0, spy);
+
+        assert!(validator.validate(&5, "positive").is_ok());
+        assert!(*called.borrow());
+    }
+
+    #[test]
+    fn when_validator_returns_error_when_condition_true_and_rule_fails() {
+        let called = Rc::new(RefCell::new(false));
+        let spy = SpyRule::new(Box::new(FailingRule), Rc::clone(&called));
+        let validator = when(|value: &i32| *value > 0, spy);
+
+        let error = validator
+            .validate(&5, "number")
+            .expect_err("expected inner rule failure");
+
+        assert!(*called.borrow());
+        assert_eq!(error.field, "number");
+        assert_eq!(error.code, "INNER_RULE_FAILED");
+        assert_eq!(error.message, "number failed validation");
+    }
+
+    #[test]
+    fn when_validator_skips_rule_when_condition_false() {
+        let called = Rc::new(RefCell::new(false));
+        let spy = SpyRule::new(Box::new(FailingRule), Rc::clone(&called));
+        let validator = when(|value: &i32| *value > 10, spy);
+
+        assert!(validator.validate(&5, "number").is_ok());
+        assert!(!*called.borrow());
     }
 }

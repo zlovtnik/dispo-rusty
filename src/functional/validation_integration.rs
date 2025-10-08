@@ -200,16 +200,18 @@ pub fn validate_person_batch(people: Vec<PersonDTO>) -> Vec<ValidationOutcome<()
                 Err(outcome.errors.into_iter().next().unwrap())
             } else {
                 // Multiple errors - combine them
-                                    let combined_message = outcome.errors
-                                        .iter()
-                                        .map(|e| e.message.clone())
-                                        .collect::<Vec<String>>()
-                                        .join("; ");
-                let combined_field = outcome.errors
+                let combined_message = outcome
+                    .errors
+                    .iter()
+                    .map(|e| e.message.clone())
+                    .collect::<Vec<String>>()
+                    .join("; ");
+                let combined_field = outcome
+                    .errors
                     .first()
                     .map(|e| e.field.as_str())
                     .unwrap_or("multiple_fields");
-                    
+
                 Err(crate::functional::validation_rules::ValidationError::new(
                     combined_field,
                     "MULTIPLE_ERRORS",
@@ -306,6 +308,35 @@ mod tests {
         assert!(!validate_person_with_complex_rules(&person3).is_valid);
     }
 
+    /// Verifies that validate_person_batch returns a valid outcome for a valid PersonDTO and an invalid outcome for an invalid PersonDTO.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let people = vec![
+    ///     PersonDTO {
+    ///         name: "Valid Person".to_string(),
+    ///         gender: true,
+    ///         age: 30,
+    ///         address: "123 Valid St".to_string(),
+    ///         phone: "+1-555-0123".to_string(),
+    ///         email: "valid@example.com".to_string(),
+    ///     },
+    ///     PersonDTO {
+    ///         name: "".to_string(), // Invalid
+    ///         gender: true,
+    ///         age: 30,
+    ///         address: "123 Valid St".to_string(),
+    ///         phone: "+1-555-0123".to_string(),
+    ///         email: "valid@example.com".to_string(),
+    ///     },
+    /// ];
+    ///
+    /// let results = validate_person_batch(people);
+    /// assert_eq!(results.len(), 2);
+    /// assert!(results[0].is_valid);
+    /// assert!(!results[1].is_valid);
+    /// ```
     #[test]
     fn test_batch_validation() {
         let people = vec![

@@ -40,6 +40,8 @@ pub mod query_builder;
 #[cfg(feature = "functional")]
 pub mod query_composition;
 #[cfg(feature = "functional")]
+pub mod response_transformers;
+#[cfg(feature = "functional")]
 pub mod state_transitions;
 #[cfg(feature = "functional")]
 pub mod validation_engine;

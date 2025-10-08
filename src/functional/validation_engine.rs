@@ -546,9 +546,9 @@ impl<T, I> ValidationPipeline<T, I>
 where
     I: Iterator<Item = T>,
 {
-    /// Constructs a new ValidationPipeline that will iterate over the provided iterator.
+    /// Creates a new ValidationPipeline that will iterate over the provided iterator.
     ///
-    /// The pipeline is initialized with no validators and uses the default ValidationConfig.
+    /// The pipeline is created with no validators and uses the default ValidationConfig.
     ///
     /// # Examples
     ///
@@ -565,34 +565,20 @@ where
         }
     }
 
-    /// Adds a validator to the pipeline and returns the pipeline for chaining.
-    
+    /// Add a validator to the pipeline and return the pipeline for chaining.
     ///
-    
-    /// The provided `validator` will be invoked for each item when the pipeline is executed.
-    
-    /// The validator must accept a reference to an item of type `T` and return a `ValidationResult<()>`.
-    
+    /// The provided validator is applied to each item when the pipeline is executed. The validator
+    /// receives a reference to an item of type `T` and must return a `ValidationResult<()>`.
     ///
-    
     /// # Examples
-    
     ///
-    
     /// ```no_run
-    
     /// let data = vec!["a", "b", "c"];
-    
     /// let pipeline = ValidationPipeline::new(data.into_iter())
-    
     ///     .add_validator(|item: &str| {
-    
-    ///         // return Ok(()) for valid, or an Err(...) with validation errors
-    
+    ///         // return Ok(()) for valid items or Err(...) with validation errors
     ///         Ok(())
-    
     ///     });
-    
     /// ```
     pub fn add_validator<F>(mut self, validator: F) -> Self
     where
@@ -616,23 +602,17 @@ where
         self
     }
 
-    /// Runs the pipeline over the input iterator, applying each validator to every item and collecting valid items, invalid items with their errors, and totals.
+    /// Processes each item from the pipeline's iterator with all configured validators and collects passing items, failing items with their errors, and summary totals.
     ///
-    /// Returns a ValidationPipelineResult containing:
-    /// - `valid_items`: items that passed all validators,
-    /// - `invalid_items`: items paired with the validation errors that failed them,
-    /// - `total_processed`: number of items examined,
-    /// - `total_errors`: total number of validation errors encountered.
+    /// The pipeline honors its `fail_fast` and `max_errors` configuration while validating items; items that pass all validators are returned in `valid_items`, items that fail are returned in `invalid_items` paired with their validation errors, and `total_processed`/`total_errors` report counts collected during execution.
     ///
     /// # Examples
     ///
     /// ```
-    /// // Example validators: here using simple closures that always succeed or fail.
+    /// // Example validators: simple closures that succeed for positive values.
     /// let data = vec![1, 2, 3];
     /// let pipeline = ValidationPipeline::new(data.into_iter())
-    ///     .add_validator(|v: &i32| {
-    ///         if *v > 0 { Ok(()) } else { Err(ValidationError::new("non_positive")) }
-    ///     });
+    ///     .add_validator(|v: &i32| if *v > 0 { Ok(()) } else { Err(ValidationError::new("non_positive")) });
     ///
     /// let result = pipeline.validate();
     /// assert_eq!(result.total_processed, 3);
@@ -690,17 +670,26 @@ where
         }
     }
 
-    /// Run the pipeline over the iterator using an itertools-style grouping and collect valid and invalid items.
+    /// Apply the pipeline's validators to every item from the iterator and collect items that passed and items that failed.
     ///
-    /// Returns a ValidationPipelineResult containing items that passed all validators, items that failed with their errors, the total processed count, and the total error count.
+    /// The pipeline's validators are executed for each item; items with no validation errors are returned in `valid_items`, and items with one or more errors are returned in `invalid_items` paired with their errors.
+    ///
+    /// # Returns
+    ///
+    /// `ValidationPipelineResult` containing:
+    /// - `valid_items`: items that passed all validators,
+    /// - `invalid_items`: pairs of items and their validation errors,
+    /// - `total_processed`: number of items examined,
+    /// - `total_errors`: total number of validation errors across all items.
     ///
     /// # Examples
     ///
     /// ```
     /// let pipeline = ValidationPipeline::new(vec![1, 2, 3].into_iter())
-    ///     .add_validator(|_| Ok(()));
+    ///     .add_validator(|_: &i32| Ok(()));
     ///
     /// let result = pipeline.validate_with_itertools();
+    ///
     /// assert_eq!(result.valid_items.len(), 3);
     /// assert_eq!(result.total_errors, 0);
     /// ```
@@ -710,7 +699,7 @@ where
     {
         // Take ownership of validators before moving self.iterator
         let validators = self.validators;
-        
+
         // Use itertools for advanced validation patterns
         let mut valid_items = Vec::new();
         let mut invalid_items = Vec::new();
@@ -735,7 +724,7 @@ where
 
         let total_processed = valid_items.len() + invalid_items.len();
         let total_errors: usize = invalid_items.iter().map(|(_, errors)| errors.len()).sum();
-        
+
         ValidationPipelineResult {
             valid_items,
             invalid_items,
@@ -866,7 +855,7 @@ impl<T, I> LazyValidationIterator<T, I>
 where
     I: Iterator<Item = T>,
 {
-    /// Creates a new LazyValidationIterator wrapping the given iterator with no validators.
+    /// Creates a LazyValidationIterator that wraps the given iterator and starts with no validators.
     ///
     /// # Examples
     ///
@@ -885,34 +874,20 @@ where
         }
     }
 
-    /// Adds a validator to the pipeline and returns the pipeline for chaining.
-    
+    /// Add a validator to the pipeline and return the pipeline for chaining.
     ///
-    
-    /// The provided `validator` will be invoked for each item when the pipeline is executed.
-    
-    /// The validator must accept a reference to an item of type `T` and return a `ValidationResult<()>`.
-    
+    /// The provided validator is applied to each item when the pipeline is executed. The validator
+    /// receives a reference to an item of type `T` and must return a `ValidationResult<()>`.
     ///
-    
     /// # Examples
-    
     ///
-    
     /// ```no_run
-    
     /// let data = vec!["a", "b", "c"];
-    
     /// let pipeline = ValidationPipeline::new(data.into_iter())
-    
     ///     .add_validator(|item: &str| {
-    
-    ///         // return Ok(()) for valid, or an Err(...) with validation errors
-    
+    ///         // return Ok(()) for valid items or Err(...) with validation errors
     ///         Ok(())
-    
     ///     });
-    
     /// ```
     pub fn add_validator<F>(mut self, validator: F) -> Self
     where
@@ -1034,36 +1009,49 @@ mod tests {
     use crate::functional::validation_rules::{Email, Required};
 
     // Tests using concrete types for validation rules
-    
+
     #[test]
     fn test_single_field_validation_success() {
         let engine = ValidationEngine::new();
         let value = "test".to_string();
         let rules = vec![Required];
-        
+
         let result = engine.validate_field(&value, "field", rules);
         assert!(result.is_valid);
     }
-    
+
+    /// Verifies that validating an empty string with the `Required` rule produces a failure.
+    ///
+    /// This test constructs a default `ValidationEngine`, validates an empty `String` for the field named `"field"` using the `Required` rule, and asserts the outcome is invalid.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let engine = ValidationEngine::new();
+    /// let value = "".to_string();
+    /// let rules = vec![Required];
+    /// let result = engine.validate_field(&value, "field", rules);
+    /// assert!(!result.is_valid);
+    /// ```
     #[test]
     fn test_single_field_validation_failure() {
         let engine = ValidationEngine::new();
         let value = "".to_string();
         let rules = vec![Required];
-        
+
         let result = engine.validate_field(&value, "field", rules);
         assert!(!result.is_valid);
     }
-    
+
     #[test]
     fn test_multiple_field_validation() {
         let engine = ValidationEngine::new();
         let value = "test@example.com".to_string();
         // Test each rule separately since they are different types
-        
+
         let result1 = engine.validate_field(&value, "email", vec![Required]);
         assert!(result1.is_valid);
-        
+
         let result2 = engine.validate_field(&value, "email", vec![Email]);
         assert!(result2.is_valid);
     }
@@ -1085,6 +1073,22 @@ mod tests {
         assert_eq!(result.total_errors, 1);
     }
 
+    /// Demonstrates validating items lazily with `LazyValidationIterator`, producing a `ValidationOutcome` per element.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let data = vec!["test".to_string(), "".to_string(), "another".to_string()];
+    ///
+    /// let lazy_iter = LazyValidationIterator::new(data.into_iter())
+    ///     .add_validator(|s: &String| Required.validate(s, "field"));
+    ///
+    /// let results: Vec<_> = lazy_iter.collect();
+    /// assert_eq!(results.len(), 3);
+    /// assert!(results[0].is_valid);
+    /// assert!(!results[1].is_valid);
+    /// assert!(results[2].is_valid);
+    /// ```
     #[test]
     fn test_lazy_validation_iterator() {
         let data = vec!["test".to_string(), "".to_string(), "another".to_string()];

@@ -1,7 +1,5 @@
 // Source: https://github.com/diesel-rs/diesel/blob/master/examples/postgres/advanced-blog-cli/src/pagination.rs
 
-#![allow(unused_imports)]
-
 use diesel::pg::Pg;
 use diesel::prelude::*;
 use diesel::query_builder::*;
@@ -138,6 +136,20 @@ where
     i32: diesel::serialize::ToSql<Col::SqlType, Pg>,
     Pg: diesel::sql_types::HasSqlType<Col::SqlType>,
 {
+    /// Generates the SQL fragment for the paginated query wrapper.
+    ///
+    /// The generated fragment selects all columns from the inner query as a subquery,
+    /// filters rows where `cursor_column > cursor`, orders by `cursor_column`, and
+    /// applies a `LIMIT` of `per_page`. The cursor and limit values are emitted as
+    /// bound parameters with their corresponding SQL types.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// // Conceptual usage: `sorted_and_paginated` wraps an existing Diesel query.
+    /// // The produced SQL will look like:
+    /// // SELECT * FROM (<inner query>) t WHERE <cursor_column> > $1 ORDER BY <cursor_column> LIMIT $2
+    /// ```
     fn walk_ast<'b>(&'b self, mut out: AstPass<'_, 'b, Pg>) -> QueryResult<()> {
         out.push_sql("SELECT * FROM (");
         self.query.walk_ast(out.reborrow())?;

@@ -59,27 +59,24 @@ pub fn login(login: LoginDTO, pool: &Pool) -> Result<TokenBodyResponse, ServiceE
     }
 }
 
-/// Logs out the user associated with the bearer token found in the Authorization header.
+/// Clears the login session for the user identified by the bearer token in the Authorization header.
 ///
-/// Attempts to validate, decode, and verify the bearer token from `authen_header`,
-/// then locates the corresponding user and clears their login session in the database.
-///
-/// # Arguments
-///
-/// * `authen_header` - The Authorization header expected to contain a `Bearer <token>` value.
-/// * `pool` - Database connection pool used to look up the user and perform the logout.
+/// Validates and decodes the `Bearer <token>` header, verifies the token, and removes the associated
+/// login session from the database.
 ///
 /// # Returns
 ///
-/// `Ok(())` if the user's session was successfully cleared; `Err(ServiceError::Unauthorized)` if header parsing, token processing, user lookup, or database access fails.
+/// `Ok(())` if the user's session was successfully cleared, `Err(ServiceError::Unauthorized)` otherwise.
 ///
 /// # Examples
 ///
 /// ```no_run
 /// use actix_web::http::HeaderValue;
 ///
+/// // `pool` is an existing database pool in scope.
 /// let header = HeaderValue::from_static("Bearer <token>");
-/// let result = logout(&header, &pool);
+/// let res = logout(&header, &pool);
+/// assert!(res.is_ok() || res.is_err());
 /// ```
 pub fn logout(authen_header: &HeaderValue, pool: &Pool) -> Result<(), ServiceError> {
     if let Ok(authen_str) = authen_header.to_str() {
@@ -104,12 +101,16 @@ pub fn logout(authen_header: &HeaderValue, pool: &Pool) -> Result<(), ServiceErr
     })
 }
 
-/// Refreshes an authentication token extracted from the Authorization header.
+/// Refreshes an access token extracted from an Authorization header.
 ///
-/// Validates the header and token, ensures the login session is still valid, looks up
-/// the associated login information, and returns a newly issued `TokenBodyResponse`.
-/// Returns `Unauthorized` when the header or token is missing/invalid or the session is not valid.
-/// Returns `InternalServerError` if generating or serializing the new token fails.
+/// Validates the header and token, verifies the login session is still valid, looks up
+/// the login information associated with the token, and returns a newly issued `TokenBodyResponse`.
+///
+/// Errors:
+/// - Returns `ServiceError::Unauthorized` when the header or token is missing or invalid,
+///   when the login session is no longer valid, or when login information cannot be found.
+/// - Returns `ServiceError::InternalServerError` when a database connection cannot be acquired
+///   or when generating/serializing the new token fails.
 ///
 /// # Examples
 ///
@@ -131,14 +132,11 @@ pub fn refresh(
                 let mut conn = pool.get().map_err(|e| ServiceError::InternalServerError {
                     error_message: format!("Failed to get database connection: {}", e),
                 })?;
-                
+
                 // Validate the token and generate a new one
                 if User::is_valid_login_session(&token_data.claims, &mut conn) {
                     // Get login info and generate new token
-                    match User::find_login_info_by_token(
-                        &token_data.claims,
-                        &mut conn,
-                    ) {
+                    match User::find_login_info_by_token(&token_data.claims, &mut conn) {
                         Ok(login_info) => {
                             match serde_json::from_value(
                                 json!({ "token": UserToken::generate_token(&login_info), "token_type": "bearer" }),
@@ -204,7 +202,7 @@ pub fn me(authen_header: &HeaderValue, pool: &Pool) -> Result<LoginInfoDTO, Serv
                 let mut conn = pool.get().map_err(|e| ServiceError::InternalServerError {
                     error_message: format!("Failed to get database connection: {}", e),
                 })?;
-                
+
                 if let Ok(login_info) =
                     User::find_login_info_by_token(&token_data.claims, &mut conn)
                 {
