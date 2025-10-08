@@ -93,6 +93,23 @@ pub fn update(id: i32, updated_person: PersonDTO, pool: &Pool) -> Result<(), Ser
     }
 }
 
+/// Deletes the person with the specified `id` from the database.
+///
+/// Returns `Ok(())` if the person was found and deleted. Returns `ServiceError::NotFound`
+/// if no person exists with the given `id`. Returns `ServiceError::InternalServerError`
+/// if the deletion failed for other reasons.
+///
+/// # Examples
+///
+/// ```no_run
+/// # use crate::services::address_book_service::delete;
+/// # use crate::db::Pool;
+/// let pool: Pool = /* obtain pool */ unimplemented!();
+/// match delete(1, &pool) {
+///     Ok(()) => println!("Deleted"),
+///     Err(e) => println!("Error: {:?}", e),
+/// }
+/// ```
 pub fn delete(id: i32, pool: &Pool) -> Result<(), ServiceError> {
     match Person::find_by_id(id, &mut pool.get().unwrap()) {
         Ok(_) => match Person::delete(id, &mut pool.get().unwrap()) {

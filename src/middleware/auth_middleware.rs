@@ -52,13 +52,14 @@ where
 
     forward_ready!(service);
 
-    /// Authenticate the incoming request and either forward it to the inner service or return a 401 Unauthorized response.
+    /// Authenticates an incoming `ServiceRequest`, forwarding it to the wrapped service on success or returning a 401 Unauthorized response on failure.
     ///
-    /// On success the request is forwarded to the wrapped service and its response body is preserved as the left variant; on failure an Unauthorized response with a JSON error payload is returned as the right variant.
+    /// If authentication succeeds the request is forwarded to the inner service and its response body is preserved as the left variant; if authentication fails a 401 JSON response with an error payload is returned as the right variant.
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```no_run
+    /// use actix_web::dev::{ServiceRequest};
     /// // Given `middleware` that wraps an inner service and a `req: ServiceRequest`:
     /// // let fut = middleware.call(req);
     /// // let result = futures::executor::block_on(fut);
@@ -148,12 +149,38 @@ mod functional_auth {
     }
 
     impl FunctionalAuthentication {
-        /// Create new functional authentication middleware
+        /// Creates a FunctionalAuthentication with no registry configured.
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// let auth = FunctionalAuthentication::new();
+        /// ```
         pub fn new() -> Self {
             Self { registry: None }
         }
 
-        /// Create functional authentication with custom registry
+        /// Create a `FunctionalAuthentication` configured with a supplied pure-function registry.
+        ///
+        /// The provided registry will be stored and used by the middleware to register
+        /// pure functions when authentication succeeds.
+        ///
+        /// # Parameters
+        ///
+        /// - `registry`: an `Arc`-wrapped `PureFunctionRegistry` to associate with the middleware.
+        ///
+        /// # Returns
+        ///
+        /// A `FunctionalAuthentication` instance containing the given registry.
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// use std::sync::Arc;
+        /// // Construct a registry (assumes `PureFunctionRegistry` implements `Default`).
+        /// let registry = Arc::new(PureFunctionRegistry::default());
+        /// let auth: FunctionalAuthentication = FunctionalAuthentication::with_registry(registry);
+        /// ```
         pub fn with_registry(registry: Arc<PureFunctionRegistry>) -> Self {
             Self {
                 registry: Some(registry),
@@ -162,6 +189,14 @@ mod functional_auth {
     }
 
     impl Default for FunctionalAuthentication {
+        /// Create a `FunctionalAuthentication` configured with no registry.
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// let auth = FunctionalAuthentication::default();
+        /// // `auth` is ready to be used; it does not have a registry attached.
+        /// ```
         fn default() -> Self {
             Self::new()
         }
@@ -179,6 +214,18 @@ mod functional_auth {
         type Transform = FunctionalAuthenticationMiddleware<S>;
         type Future = Ready<Result<Self::Transform, Self::InitError>>;
 
+        /// Create a new middleware instance that wraps the provided service and carries a cloned optional registry.
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// use crate::middleware::functional_auth::FunctionalAuthentication;
+        ///
+        /// let auth = FunctionalAuthentication::new();
+        /// // `svc` represents the inner service to be wrapped; `new_transform` returns a Ready future
+        /// // that will resolve to the constructed `FunctionalAuthenticationMiddleware`.
+        /// let _ready = auth.new_transform(svc);
+        /// ```
         fn new_transform(&self, service: S) -> Self::Future {
             ok(FunctionalAuthenticationMiddleware {
                 service,
@@ -204,7 +251,21 @@ mod functional_auth {
 
         forward_ready!(service);
 
-        /// Process request through functional authentication pipeline
+        /// Authenticate the incoming request using the functional authentication pipeline and either forward it to the inner service or produce an unauthorized response.
+        ///
+        /// Skips authentication for OPTIONS and configured ignore routes. On non-skipped requests, it extracts and validates a bearer token, obtains the tenant pool, injects the tenant pool into the request extensions on success, and optionally registers pure functions when a registry is present.
+        ///
+        /// # Returns
+        /// A future that resolves to the inner service response (mapped into the left `EitherBody`) when authentication succeeds, or to a 401 Unauthorized `ServiceResponse` (right `EitherBody`) when authentication fails.
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// // High-level usage (types elided for brevity):
+        /// // let middleware = FunctionalAuthenticationMiddleware { service, registry: None };
+        /// // let fut = middleware.call(service_request);
+        /// // let response = fut.await.unwrap();
+        /// ```
         fn call(&self, req: ServiceRequest) -> Self::Future {
             let registry = self.registry.clone();
 
@@ -255,7 +316,24 @@ mod functional_auth {
     }
 
     impl<S> FunctionalAuthenticationMiddleware<S> {
-        /// Pure function to determine if authentication should be skipped
+        /// Determines whether the incoming request should bypass authentication.
+        ///
+        /// Returns `true` when the request method is `OPTIONS` or when the request path
+        /// starts with any prefix listed in `constants::IGNORE_ROUTES`.
+        ///
+        /// # Examples
+        ///
+        /// ```rust
+        /// use actix_web::http::Method;
+        /// use actix_web::test::TestRequest;
+        /// // OPTIONS requests should be skipped
+        /// let req = TestRequest::default().method(Method::OPTIONS).to_srv_request();
+        /// assert!(crate::middleware::functional_auth::should_skip_authentication(&req));
+        ///
+        /// // Non-OPTIONS request to a non-ignored path should not be skipped
+        /// let req = TestRequest::with_uri("/some/route").to_srv_request();
+        /// assert!(!crate::middleware::functional_auth::should_skip_authentication(&req));
+        /// ```
         fn should_skip_authentication(req: &ServiceRequest) -> bool {
             // Skip OPTIONS preflight requests
             if req.method() == Method::OPTIONS {
@@ -268,7 +346,25 @@ mod functional_auth {
                 .any(|route| req.path().starts_with(route))
         }
 
-        /// Functional pipeline for token extraction and validation
+        /// Validate the Authorization token on the request and return the tenant id, user id, and tenant DB pool.
+        ///
+        /// Attempts to extract a bearer token from `req`, decode its claims, locate the corresponding tenant pool
+        /// via `manager`, and verify the token against that tenant's pool. On success returns `(tenant_id, user_id, tenant_pool)`.
+        /// On failure returns a static string describing the error condition.
+        ///
+        /// # Returns
+        ///
+        /// `Ok((tenant_id, user_id, tenant_pool))` on successful extraction, decoding, tenant lookup and verification;
+        /// `Err("Token decode failed")`, `Err("Tenant not found")`, or `Err("Token verification failed")` for the respective failure cases.
+        ///
+        /// # Examples
+        ///
+        /// ```no_run
+        /// use actix_web::dev::ServiceRequest;
+        /// // let req: ServiceRequest = ...;
+        /// // let manager: TenantPoolManager = ...;
+        /// // let result = FunctionalAuthenticationMiddleware::process_authentication(&req, &manager);
+        /// ```
         fn process_authentication(
             req: &ServiceRequest,
             manager: &TenantPoolManager,
@@ -294,7 +390,25 @@ mod functional_auth {
             Ok((tenant_id, user_id, tenant_pool.clone()))
         }
 
-        /// Pure function for token extraction
+        /// Extracts the bearer token from the request's `Authorization` header.
+        ///
+        /// Returns `Ok` with the token string when an Authorization header using the
+        /// `Bearer` scheme is present and non-empty, or `Err` with a static error
+        /// message describing the failure.
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// use actix_web::http::header;
+        /// use actix_web::test;
+        ///
+        /// let req = test::TestRequest::default()
+        ///     .insert_header((header::AUTHORIZATION, "Bearer abc.def.ghi"))
+        ///     .to_srv_request();
+        ///
+        /// let token = super::extract_token(&req).unwrap();
+        /// assert_eq!(token, "abc.def.ghi");
+        /// ```
         fn extract_token(req: &ServiceRequest) -> Result<String, &'static str> {
             let auth_header = req
                 .headers()
@@ -317,14 +431,46 @@ mod functional_auth {
             Ok(token.to_string())
         }
 
-        /// Register authentication-related pure functions
+        /// Registers authentication-related pure functions into the provided registry.
+        ///
+        /// This is a placeholder hook where authentication-specific pure functions
+        /// (used by the functional middleware) can be registered for reuse across the
+        /// application. Currently the function is a no-op and exists to reserve the
+        /// registration point for future extensions.
+        ///
+        /// # Examples
+        ///
+        /// ```no_run
+        /// // Obtain or construct a `PureFunctionRegistry` appropriate for your app,
+        /// // then pass a reference to this function to register authentication helpers.
+        /// let registry = /* obtain PureFunctionRegistry */ unimplemented!();
+        /// register_auth_functions(&registry);
+        /// ```
         fn register_auth_functions(registry: &PureFunctionRegistry) {
             // Note: In a full implementation, we would register the pure functions
             // used in authentication here for reuse across the application
             let _ = registry; // Placeholder to avoid unused variable warning
         }
 
-        /// Create unauthorized error response
+        /// Creates a 401 Unauthorized ServiceResponse with the standardized JSON error body for an invalid token.
+        ///
+        /// # Returns
+        ///
+        /// `Ok(ServiceResponse)` containing an `Unauthorized` JSON body with the standardized error message.
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// use actix_web::test::TestRequest;
+        /// use actix_web::dev::ServiceRequest;
+        ///
+        /// // Build a minimal ServiceRequest and produce the unauthorized response.
+        /// let req: ServiceRequest = TestRequest::default().to_srv_request();
+        /// let res = crate::middleware::auth_middleware::functional_auth::create_unauthorized_response(req);
+        /// assert!(res.is_ok());
+        /// let srv_res = res.unwrap();
+        /// assert_eq!(srv_res.status(), actix_web::http::StatusCode::UNAUTHORIZED);
+        /// ```
         fn create_unauthorized_response(
             req: ServiceRequest,
         ) -> Result<ServiceResponse<EitherBody<impl actix_web::body::MessageBody>>, Error> {

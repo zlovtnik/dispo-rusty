@@ -546,13 +546,13 @@ impl<T, I> ValidationPipeline<T, I>
 where
     I: Iterator<Item = T>,
 {
-    /// Constructs a new ValidationPipeline that will iterate over the provided iterator.
-    ///
-    /// The pipeline is initialized with no validators and uses the default ValidationConfig.
+    /// Creates a ValidationPipeline over the given iterator using the default configuration and no validators.
     ///
     /// # Examples
     ///
     /// ```
+    /// use crate::functional::validation_engine::ValidationPipeline;
+    ///
     /// let data = vec!["a", "b", "c"];
     /// let result = ValidationPipeline::new(data.into_iter()).validate();
     /// assert_eq!(result.valid_items.len(), 3);
@@ -565,34 +565,19 @@ where
         }
     }
 
-    /// Adds a validator to the pipeline and returns the pipeline for chaining.
-
+    /// Adds a validator to the pipeline.
     ///
-
-    /// The provided `validator` will be invoked for each item when the pipeline is executed.
-
-    /// The validator must accept a reference to an item of type `T` and return a `ValidationResult<()>`.
-
+    /// The validator will be applied to every item when the pipeline is executed.
     ///
-
     /// # Examples
-
     ///
-
-    /// ```no_run
-
+    /// ```
     /// let data = vec!["a", "b", "c"];
-
     /// let pipeline = ValidationPipeline::new(data.into_iter())
-
     ///     .add_validator(|item: &str| {
-
-    ///         // return Ok(()) for valid, or an Err(...) with validation errors
-
+    ///         // return Ok(()) for valid, or Err(...) with validation errors
     ///         Ok(())
-
     ///     });
-
     /// ```
     pub fn add_validator<F>(mut self, validator: F) -> Self
     where
@@ -690,9 +675,9 @@ where
         }
     }
 
-    /// Run the pipeline over the iterator using an itertools-style grouping and collect valid and invalid items.
+    /// Validate all items using the pipeline's validators and collect results grouped by validity.
     ///
-    /// Returns a ValidationPipelineResult containing items that passed all validators, items that failed with their errors, the total processed count, and the total error count.
+    /// The returned ValidationPipelineResult contains the items that passed all validators, the items that failed with their errors, the total number of processed items, and the total error count.
     ///
     /// # Examples
     ///
@@ -866,13 +851,13 @@ impl<T, I> LazyValidationIterator<T, I>
 where
     I: Iterator<Item = T>,
 {
-    /// Creates a new LazyValidationIterator wrapping the given iterator with no validators.
+    /// Creates a LazyValidationIterator that wraps the given iterator and initially has no validators.
     ///
     /// # Examples
     ///
     /// ```
     /// let it = vec![1, 2, 3].into_iter();
-    /// let mut lazy = LazyValidationIterator::new(it);
+    /// let mut lazy = crate::functional::validation_engine::LazyValidationIterator::new(it);
     /// // Add a no-op validator that always succeeds
     /// lazy = lazy.add_validator(|_: &i32| Ok(()));
     /// let results: Vec<_> = lazy.collect();
@@ -885,34 +870,19 @@ where
         }
     }
 
-    /// Adds a validator to the pipeline and returns the pipeline for chaining.
-
+    /// Adds a validator to the pipeline.
     ///
-
-    /// The provided `validator` will be invoked for each item when the pipeline is executed.
-
-    /// The validator must accept a reference to an item of type `T` and return a `ValidationResult<()>`.
-
+    /// The validator will be applied to every item when the pipeline is executed.
     ///
-
     /// # Examples
-
     ///
-
-    /// ```no_run
-
+    /// ```
     /// let data = vec!["a", "b", "c"];
-
     /// let pipeline = ValidationPipeline::new(data.into_iter())
-
     ///     .add_validator(|item: &str| {
-
-    ///         // return Ok(()) for valid, or an Err(...) with validation errors
-
+    ///         // return Ok(()) for valid, or Err(...) with validation errors
     ///         Ok(())
-
     ///     });
-
     /// ```
     pub fn add_validator<F>(mut self, validator: F) -> Self
     where

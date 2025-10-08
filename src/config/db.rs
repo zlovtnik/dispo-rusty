@@ -51,18 +51,20 @@ pub fn try_init_db_pool(url: &str) -> Result<Pool, ServiceError> {
         })
 }
 
-/// Applies all embedded, pending database migrations against the provided PostgreSQL connection.
+/// Applies all embedded pending database migrations to the given PostgreSQL connection.
 ///
-/// # Returns
+/// # Errors
 ///
-/// `Ok(())` if migrations succeed, `Err(ServiceError)` if they fail.
+/// Returns `ServiceError::InternalServerError` if applying migrations fails.
 ///
 /// # Examples
 ///
 /// ```
-/// // Obtain a `PgConnection`, then apply migrations:
-/// // let mut conn = establish_connection(); // user-provided connection setup
-/// // run_migration(&mut conn)?;
+/// # use crate::run_migration;
+/// # use diesel::PgConnection;
+/// # fn get_conn() -> PgConnection { unimplemented!() }
+/// let mut conn = get_conn();
+/// run_migration(&mut conn).unwrap();
 /// ```
 pub fn run_migration(conn: &mut PgConnection) -> Result<(), ServiceError> {
     conn.run_pending_migrations(MIGRATIONS)
@@ -133,34 +135,20 @@ impl TenantPoolManager {
         self.main_pool.clone()
     }
 
-    /// Removes and returns the connection pool associated with a tenant ID, if present.
+    /// Removes and returns the connection pool for the given tenant ID, if present.
     ///
-    /// If the internal tenant pools lock is poisoned, returns a `ServiceError::InternalServerError`
-    /// with the message "Tenant pools lock was poisoned".
-    ///
-    /// # Returns
-    ///
-    /// `Ok(Some(pool))` with the removed pool if a pool existed for `tenant_id`, `Ok(None)` if no
-    /// pool was found for `tenant_id`, or `Err(ServiceError::InternalServerError { ... })` if the
-    /// tenant pools lock is poisoned.
+    /// Returns `Ok(Some(pool))` with the removed pool if a pool existed for `tenant_id`,
+    /// `Ok(None)` if no pool was found for `tenant_id`, or `Err(ServiceError::InternalServerError { .. })`
+    /// if the tenant pools lock was poisoned.
     ///
     /// # Examples
     ///
     /// ```no_run
-    /// # use crate::config::db::{TenantPoolManager, init_db_pool};
-    /// # use crate::error::ServiceError;
-    /// # let main_pool = init_db_pool("postgres://user:pass@localhost/db");
-    /// let manager = TenantPoolManager::new(main_pool.clone());
-    /// // Add a tenant pool elsewhere...
-    /// let removed = manager.remove_tenant_pool("tenant_a");
-    /// match removed {
-    ///     Ok(Some(pool)) => println!("Removed tenant pool"),
-    ///     Ok(None) => println!("No pool for given tenant"),
-    ///     Err(e) => match e {
-    ///         ServiceError::InternalServerError { error_message } => eprintln!("{}", error_message),
-    ///         _ => (),
-    ///     },
-    /// }
+    /// use crate::config::db::{TenantPoolManager, init_db_pool};
+    /// let main = init_db_pool("postgres://user:pass@localhost/db");
+    /// let manager = TenantPoolManager::new(main);
+    /// // Removes pool for "tenant_a" if it exists
+    /// let _ = manager.remove_tenant_pool("tenant_a");
     /// ```
     pub fn remove_tenant_pool(&self, tenant_id: &str) -> Result<Option<Pool>, ServiceError> {
         match self.tenant_pools.write() {

@@ -25,16 +25,12 @@ pub struct Page<T> {
     pub next_cursor: Option<i32>,
 }
 impl<T> Page<T> {
-    /// Constructs a Page<T> with the provided message, items, cursor, and pagination metadata.
-    ///
-    /// Returns a Page<T> whose fields are set to the supplied `message`, `data`, `current_cursor`,
-    /// `page_size`, `total_elements`, and `next_cursor`.
+    /// Create a paginated Page containing a message, items, cursor, and pagination metadata.
     ///
     /// # Examples
     ///
     /// ```
     /// let page = Page::new("ok", vec![1, 2, 3], 0, 10, Some(3_i64), Some(1));
-    ///
     /// assert_eq!(page.message, "ok");
     /// assert_eq!(page.data, vec![1, 2, 3]);
     /// assert_eq!(page.current_cursor, 0);
