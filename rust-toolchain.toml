@@ -1,5 +1,5 @@
 [toolchain]
-channel = "1.63.0"
+channel = "1.75.0"  # Updated from 1.63.0 - modern stable with security fixes
 components = ["rustc", "cargo", "rustfmt", "clippy"]
 targets = ["x86_64-unknown-linux-gnu"]
 profile = "default"

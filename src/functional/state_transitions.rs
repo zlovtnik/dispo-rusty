@@ -11,6 +11,8 @@
 //! - Composite transition builders
 //! - Transition validation and composition
 
+#![allow(dead_code)]
+
 use std::collections::HashMap;
 use chrono::{DateTime, Utc, Duration};
 use serde_json::Value as JsonValue;
@@ -561,21 +563,14 @@ pub fn build_config_updates(
     let mut transitions = Vec::new();
 
     for (key, value) in config_updates {
-        // Build the transition closure directly
-        if key.trim().is_empty() {
-            return Err(TransitionError::InvalidParameters {
-                message: "Configuration key cannot be empty".to_string()
-            });
-        }
+        // Use set_app_config to centralize validation and state mutation
+        let transition_fn = set_app_config(key, value, None::<fn(&JsonValue) -> bool>)?;
+        
+        // Box the transition function to match the return type
+        let boxed_transition: Box<dyn FnOnce(&TenantApplicationState) -> TenantApplicationState + Send + Sync> = 
+            Box::new(transition_fn);
 
-        let transition: Box<dyn FnOnce(&TenantApplicationState) -> TenantApplicationState + Send + Sync> = Box::new(move |state: &TenantApplicationState| {
-            let mut new_state = state.clone();
-            new_state.app_data = state.app_data.insert(key, value);
-            new_state.last_updated = Utc::now();
-            new_state
-        });
-
-        transitions.push(transition);
+        transitions.push(boxed_transition);
     }
 
     Ok(transitions)

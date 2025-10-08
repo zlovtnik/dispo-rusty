@@ -128,14 +128,14 @@ pub struct PersistentVector<T> {
 }
 
 impl<T> PersistentVector<T> {
-    /// Creates an empty PersistentHashMap.
+    /// Creates an empty PersistentVector.
     ///
     /// # Examples
     ///
     /// ```
-    /// let map: crate::functional::immutable_state::PersistentHashMap<String, i32> = PersistentHashMap::new();
-    /// assert!(map.is_empty());
-    /// assert_eq!(map.len(), 0);
+    /// let vec: crate::functional::immutable_state::PersistentVector<i32> = PersistentVector::new();
+    /// assert!(vec.is_empty());
+    /// assert_eq!(vec.len(), 0);
     /// ```
     pub fn new() -> Self {
         Self { root: None }
@@ -298,13 +298,13 @@ impl<T: Clone> PersistentVector<T> {
 }
 
 impl<T> Default for PersistentVector<T> {
-    /// Constructs a default `ImmutableStateManager` configured with a 100 MB memory limit.
+    /// Constructs a default empty `PersistentVector`.
     ///
     /// # Examples
     ///
     /// ```
-    /// let mgr = ImmutableStateManager::default();
-    /// assert_eq!(mgr.get_metrics().unwrap().transition_count, 0);
+    /// let vec: PersistentVector<i32> = PersistentVector::default();
+    /// assert!(vec.is_empty());
     /// ```
     fn default() -> Self {
         Self::new()
@@ -461,29 +461,16 @@ where
     }
 
     /// Creates an iterator over the map's entries.
-    
-    ///
-    
     /// The iterator yields pairs of references to keys and values; if the map is empty the iterator yields no items.
-    
     ///
-    
     /// # Examples
-    
     ///
-    
     /// ```
-    
     /// let m = PersistentHashMap::new()
-    
     ///     .insert("a".to_string(), 1)
-    
     ///     .insert("b".to_string(), 2);
-    
     /// let items: Vec<(&String, &i32)> = m.iter().collect();
-    
     /// assert_eq!(items.len(), 2);
-    
     /// ```
     pub fn iter(&self) -> Box<dyn Iterator<Item = (&K, &V)> + '_> {
         match self.root.as_ref() {
@@ -519,13 +506,13 @@ where
     K: Clone + Eq + std::hash::Hash,
     V: Clone,
 {
-    /// Constructs a default `ImmutableStateManager` configured with a 100 MB memory limit.
+    /// Constructs a default empty `PersistentHashMap`.
     ///
     /// # Examples
     ///
     /// ```
-    /// let mgr = ImmutableStateManager::default();
-    /// assert_eq!(mgr.get_metrics().unwrap().transition_count, 0);
+    /// let map: PersistentHashMap<String, i32> = PersistentHashMap::default();
+    /// assert!(map.is_empty());
     /// ```
     fn default() -> Self {
         Self::new()

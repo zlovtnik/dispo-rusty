@@ -6,6 +6,7 @@ use uuid::Uuid;
 use crate::{
     config::db::Connection,
     constants,
+    error::ServiceError,
     models::{login_history::LoginHistory, user_token::UserToken},
     schema::users::{self, dsl::*},
 };
@@ -134,7 +135,8 @@ impl User {
     /// Looks up a user's login information by matching the provided token's username and session.
     ///
     /// Returns `Ok(LoginInfoDTO)` when a user with the same username and `login_session` is found,
-    /// `Err(String)` with "User not found!" otherwise.
+    /// `Err(ServiceError::NotFound)` when no matching user is found, or `Err(ServiceError::InternalServerError)`
+    /// for other database errors.
     ///
     /// # Parameters
     ///
@@ -144,7 +146,7 @@ impl User {
     /// # Examples
     ///
     /// ```no_run
-    /// use crate::{UserToken, LoginInfoDTO, find_login_info_by_token};
+    /// use crate::{UserToken, LoginInfoDTO, User};
     ///
     /// let token = UserToken {
     ///     user: "alice".to_string(),
@@ -152,7 +154,7 @@ impl User {
     ///     tenant_id: "tenant-1".to_string(),
     /// };
     /// // `conn` would be a valid DB connection in real usage
-    /// let result = find_login_info_by_token(&token, &mut conn);
+    /// let result = User::find_login_info_by_token(&token, &mut conn);
     /// match result {
     ///     Ok(info) => assert_eq!(info.username, "alice"),
     ///     Err(e) => println!("not found: {}", e),
@@ -161,21 +163,25 @@ impl User {
     pub fn find_login_info_by_token(
         user_token: &UserToken,
         conn: &mut Connection,
-    ) -> Result<LoginInfoDTO, String> {
+    ) -> Result<LoginInfoDTO, ServiceError> {
         let user_result = users
             .filter(username.eq(&user_token.user))
             .filter(login_session.eq(&user_token.login_session))
             .get_result::<User>(conn);
 
-        if let Ok(user) = user_result {
-            return Ok(LoginInfoDTO {
+        match user_result {
+            Ok(user) => Ok(LoginInfoDTO {
                 username: user.username,
                 login_session: user.login_session,
                 tenant_id: user_token.tenant_id.clone(),
-            });
+            }),
+            Err(diesel::result::Error::NotFound) => Err(ServiceError::NotFound {
+                error_message: "User not found".to_string(),
+            }),
+            Err(e) => Err(ServiceError::InternalServerError {
+                error_message: format!("Database error: {}", e),
+            }),
         }
-
-        Err("User not found!".to_string())
     }
 
     pub fn find_user_by_username(un: &str, conn: &mut Connection) -> QueryResult<User> {

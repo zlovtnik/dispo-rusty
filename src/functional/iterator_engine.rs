@@ -473,15 +473,6 @@ impl IteratorEngine {
         self.from_iter(vec.into_iter())
     }
 
-    // FIXME: Lifetime issue - slice.iter() lifetime doesn't match return type
-    // /// Create a new iterator chain from a slice
-    // pub fn from_slice<T>(&self, slice: &[T]) -> IteratorChain<&T, std::slice::Iter<T>>
-    // where
-    //     T: Clone,
-    // {
-    //     self.from_iter(slice.iter())
-    // }
-
     /// Applies `transform` to each element of `data` by reference and returns a `Vec` of the results.
     ///
     /// This function borrows each input (`&T`) so elements are not cloned; when the engine's

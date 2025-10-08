@@ -164,7 +164,7 @@ impl Tenant {
         limit: Option<i64>,
         conn: &mut crate::config::db::Connection,
     ) -> QueryResult<Vec<Tenant>> {
-        let limit = limit.unwrap_or(1000).min(10000);
+        let limit = limit.unwrap_or(1000).max(0).min(10000);
         tenants.limit(limit).load::<Tenant>(conn)
     }
 

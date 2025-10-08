@@ -279,27 +279,16 @@ impl FunctionContainer {
     }
 
     /// The `TypeId` of the container's input type.
-    
     ///
-    
     /// # Examples
-    
     ///
-    
     /// ```
-    
     /// use std::any::TypeId;
-    
     /// // Construct a wrapper and container for a simple i32 -> i32 function.
-    
     /// let wrapper = crate::FunctionWrapper::new(|x: i32| x + 1, "inc", crate::FunctionCategory::Transformation);
-    
     /// let container = crate::FunctionContainer::new::<i32, i32, _>(wrapper, "inc", crate::FunctionCategory::Transformation);
-    
     /// let id = container.input_type_id();
-    
     /// assert_eq!(id, TypeId::of::<i32>());
-    
     /// ```
     pub fn input_type_id(&self) -> std::any::TypeId {
         self.input_type_id

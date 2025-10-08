@@ -24,14 +24,30 @@ pub struct FunctionInfo {
 /// Performance metrics for registry operations.
 #[derive(Debug, Clone)]
 pub struct RegistryMetrics {
-    /// Average lookup time in nanoseconds
+    /// Average lookup time in nanoseconds (computed from total_lookup_time_ns / lookup_count)
     pub avg_lookup_time_ns: u64,
+    /// Total accumulated lookup time in nanoseconds (internal tracking for precise averaging)
+    total_lookup_time_ns: u128,
     /// Total number of functions registered
     pub total_functions: usize,
     /// Number of lookup operations performed
     pub lookup_count: u64,
     /// Number of composition operations performed
     pub composition_count: u64,
+}
+
+impl RegistryMetrics {
+    /// Recomputes the average lookup time from the total accumulated time and count.
+    ///
+    /// This method ensures the public `avg_lookup_time_ns` field reflects the true
+    /// average without precision loss from repeated integer division.
+    fn recompute_average(&mut self) {
+        if self.lookup_count > 0 {
+            self.avg_lookup_time_ns = (self.total_lookup_time_ns / self.lookup_count as u128) as u64;
+        } else {
+            self.avg_lookup_time_ns = 0;
+        }
+    }
 }
 
 impl Default for RegistryMetrics {
@@ -49,6 +65,7 @@ impl Default for RegistryMetrics {
     fn default() -> Self {
         Self {
             avg_lookup_time_ns: 0,
+            total_lookup_time_ns: 0,
             total_functions: 0,
             lookup_count: 0,
             composition_count: 0,
@@ -447,8 +464,8 @@ impl PureFunctionRegistry {
 
     /// Updates the registry's lookup-performance metrics with a new duration measurement.
     ///
-    /// This updates the running average lookup time (`avg_lookup_time_ns`) to incorporate
-    /// `duration` and increments `lookup_count`.
+    /// This updates the total accumulated lookup time and recomputes the running average
+    /// lookup time (`avg_lookup_time_ns`) without precision loss, then increments `lookup_count`.
     ///
     /// # Errors
     ///
@@ -463,7 +480,7 @@ impl PureFunctionRegistry {
     /// registry.update_lookup_metrics(Duration::from_nanos(100)).unwrap();
     /// let metrics = registry.get_metrics().unwrap();
     /// assert_eq!(metrics.lookup_count, 1);
-    /// assert!(metrics.avg_lookup_time_ns >= 100);
+    /// assert_eq!(metrics.avg_lookup_time_ns, 100);
     /// ```
     fn update_lookup_metrics(&self, duration: Duration) -> Result<(), RegistryError> {
         let mut metrics = self
@@ -471,61 +488,16 @@ impl PureFunctionRegistry {
             .write()
             .map_err(|_| RegistryError::LockPoisoned)?;
 
-        let new_measurement = duration.as_nanos() as u64;
-        let prev_count = metrics.lookup_count;
-
-        // Compute cumulative average: (current_avg * prev_count + new_measurement) / (prev_count + 1)
-        let current_avg = metrics.avg_lookup_time_ns;
-        if prev_count == 0 {
-            // First measurement
-            metrics.avg_lookup_time_ns = new_measurement;
-        } else {
-            // Running average: (avg * count + new) / (count + 1)
-            metrics.avg_lookup_time_ns =
-                (current_avg * prev_count + new_measurement) / (prev_count + 1);
-        }
-
+        let new_measurement = duration.as_nanos();
+        
+        // Accumulate total time (no precision loss)
+        metrics.total_lookup_time_ns += new_measurement;
         metrics.lookup_count += 1;
+        
+        // Recompute average from accumulated total
+        metrics.recompute_average();
 
         Ok(())
-    }
-}
-
-/// Helper struct for function composition.
-struct ComposableFunction<'a, Input, Output> {
-    container: &'a FunctionContainer,
-    _phantom: std::marker::PhantomData<(Input, Output)>,
-}
-
-impl<'a, Input, Output> ComposableFunction<'a, Input, Output>
-where
-    Input: 'static,
-    Output: 'static,
-{
-    /// Constructs a ComposableFunction by validating that the provided container's input and output TypeIds match `Input` and `Output`.
-    ///
-    /// Returns `Ok(Self)` when the container's input and output types match the generics; returns `Err(RegistryError::TypeMismatch)` otherwise.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// # use crate::functional::pure_function_registry::{ComposableFunction, FunctionContainer, RegistryError};
-    /// fn example(container: &FunctionContainer) -> Result<(), RegistryError> {
-    ///     let _composable = ComposableFunction::<i32, i32>::new(container)?;
-    ///     Ok(())
-    /// }
-    /// ```
-    fn new(container: &'a FunctionContainer) -> Result<Self, RegistryError> {
-        if container.input_type_id() != std::any::TypeId::of::<Input>()
-            || container.output_type_id() != std::any::TypeId::of::<Output>()
-        {
-            return Err(RegistryError::TypeMismatch);
-        }
-
-        Ok(Self {
-            container,
-            _phantom: std::marker::PhantomData,
-        })
     }
 }
 
@@ -682,12 +654,9 @@ mod tests {
 
     #[test]
     fn test_function_execution() {
-        eprintln!("DEBUG: Starting test_function_execution");
         let registry = PureFunctionRegistry::new();
-        eprintln!("DEBUG: Created registry");
 
         // Register a function
-        eprintln!("DEBUG: Registering function");
         registry
             .register(FunctionWrapper::new(
                 |x: i32| x * 3,
@@ -695,14 +664,11 @@ mod tests {
                 FunctionCategory::Mathematical,
             ))
             .unwrap();
-        eprintln!("DEBUG: Function registered");
 
         // Execute it
-        eprintln!("DEBUG: Executing function");
         let result: Option<i32> = registry
             .execute(FunctionCategory::Mathematical, "triple", 5)
             .unwrap();
-        eprintln!("DEBUG: Execution completed, result: {:?}", result);
         assert_eq!(result, Some(15));
     }
 
@@ -857,5 +823,54 @@ mod tests {
 
         assert_eq!(registry.get_metrics().unwrap().total_functions, 0);
         assert_eq!(registry.get_metrics().unwrap().lookup_count, 0);
+    }
+
+    #[test]
+    fn test_lookup_metrics_precision() {
+        use std::time::Duration;
+        
+        let registry = PureFunctionRegistry::new();
+
+        // Register a function
+        registry
+            .register(FunctionWrapper::new(
+                |x: i32| x + 1,
+                "increment",
+                FunctionCategory::Mathematical,
+            ))
+            .unwrap();
+
+        // Simulate lookups with varying durations that would cause precision loss
+        // with integer division on each update
+        // Example: 3 lookups of 1ns, 2ns, 3ns = average should be 2ns exactly
+        registry.update_lookup_metrics(Duration::from_nanos(1)).unwrap();
+        registry.update_lookup_metrics(Duration::from_nanos(2)).unwrap();
+        registry.update_lookup_metrics(Duration::from_nanos(3)).unwrap();
+
+        let metrics = registry.get_metrics().unwrap();
+        assert_eq!(metrics.lookup_count, 3);
+        // With the old integer division approach: (0*0 + 1)/1 = 1, (1*1 + 2)/2 = 1, (1*2 + 3)/3 = 1
+        // With the new approach: (1 + 2 + 3) / 3 = 2 (exact)
+        assert_eq!(metrics.avg_lookup_time_ns, 2);
+
+        // Test with many measurements to ensure no accumulated rounding errors
+        registry.clear().unwrap();
+        registry
+            .register(FunctionWrapper::new(
+                |x: i32| x + 1,
+                "increment",
+                FunctionCategory::Mathematical,
+            ))
+            .unwrap();
+
+        // Add 1000 measurements of 1000ns each
+        for _ in 0..1000 {
+            registry.update_lookup_metrics(Duration::from_nanos(1000)).unwrap();
+        }
+
+        let metrics = registry.get_metrics().unwrap();
+        assert_eq!(metrics.lookup_count, 1000);
+        // Should be exactly 1000ns average with no precision loss
+        assert_eq!(metrics.avg_lookup_time_ns, 1000);
     }
 }

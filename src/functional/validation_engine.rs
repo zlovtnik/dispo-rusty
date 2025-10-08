@@ -4,6 +4,8 @@
 //! to create composable validation pipelines. Uses itertools for advanced
 //! iterator operations and provides pure functional validation processing.
 
+#![allow(dead_code)]
+
 use std::collections::HashMap;
 
 use crate::functional::validation_rules::{ValidationError, ValidationResult, ValidationRule};
@@ -706,14 +708,16 @@ where
     where
         T: Clone + Eq + std::hash::Hash,
     {
+        // Take ownership of validators before moving self.iterator
+        let validators = self.validators;
+        
         // Use itertools for advanced validation patterns
         let mut valid_items = Vec::new();
         let mut invalid_items = Vec::new();
 
         // Group items by validation status using itertools
         let grouped = self.iterator.map(|item| {
-            let errors: Vec<_> = self
-                .validators
+            let errors: Vec<_> = validators
                 .iter()
                 .filter_map(|validator| validator(&item).err())
                 .collect();
@@ -1029,17 +1033,40 @@ mod tests {
     use super::*;
     use crate::functional::validation_rules::{Email, Required};
 
-    // FIXME: These tests are broken - they try to mix different ValidationRule types
-    // in the same Vec, which isn't possible without trait objects or enums
+    // Tests using concrete types for validation rules
     
-    // #[test]
-    // fn test_single_field_validation_success() { ... }
+    #[test]
+    fn test_single_field_validation_success() {
+        let engine = ValidationEngine::new();
+        let value = "test".to_string();
+        let rules = vec![Required];
+        
+        let result = engine.validate_field(&value, "field", rules);
+        assert!(result.is_valid);
+    }
     
-    // #[test]
-    // fn test_single_field_validation_failure() { ... }
+    #[test]
+    fn test_single_field_validation_failure() {
+        let engine = ValidationEngine::new();
+        let value = "".to_string();
+        let rules = vec![Required];
+        
+        let result = engine.validate_field(&value, "field", rules);
+        assert!(!result.is_valid);
+    }
     
-    // #[test]
-    // fn test_multiple_field_validation() { ... }
+    #[test]
+    fn test_multiple_field_validation() {
+        let engine = ValidationEngine::new();
+        let value = "test@example.com".to_string();
+        // Test each rule separately since they are different types
+        
+        let result1 = engine.validate_field(&value, "email", vec![Required]);
+        assert!(result1.is_valid);
+        
+        let result2 = engine.validate_field(&value, "email", vec![Email]);
+        assert!(result2.is_valid);
+    }
 
     #[test]
     fn test_validation_pipeline() {

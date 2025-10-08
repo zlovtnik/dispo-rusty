@@ -72,7 +72,7 @@ async fn check_database_health_async(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
     tokio::task::spawn_blocking(move || check_database_health(pool))
         .await
-        .unwrap()
+        .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync + 'static>)?
         .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync + 'static>)
 }
 
@@ -96,7 +96,7 @@ async fn check_cache_health_async(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
     tokio::task::spawn_blocking(move || check_cache_health(&redis_pool))
         .await
-        .unwrap()
+        .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync + 'static>)?
 }
 
 /// Return current service health and component statuses as JSON.

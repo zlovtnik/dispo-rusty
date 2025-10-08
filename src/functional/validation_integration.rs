@@ -1,6 +1,8 @@
 //! Integration example showing how to use the Iterator-Based Validation Engine
 //! with existing Actix Web request processing and models.
 
+#![allow(dead_code)]
+
 use crate::functional::validation_engine::{ValidationEngine, ValidationOutcome};
 use crate::functional::validation_rules::{Email, Length, Phone, Range, Required};
 use crate::models::person::PersonDTO;
@@ -16,16 +18,19 @@ use crate::models::person::PersonDTO;
 /// # Examples
 ///
 /// ```
+/// # use crate::models::person::PersonDTO;
+/// # use crate::functional::validation_integration::validate_person_dto;
 /// let person = PersonDTO {
 ///     name: "Alice".into(),
-///     email: "alice@example.com".into(),
+///     gender: true,
 ///     age: 30,
 ///     address: "123 Main St".into(),
 ///     phone: "+1234567890".into(),
+///     email: "alice@example.com".into(),
 /// };
 ///
 /// let outcome = validate_person_dto(&person);
-/// assert!(outcome.is_valid());
+/// assert!(outcome.is_valid);
 /// ```
 pub fn validate_person_dto(person: &PersonDTO) -> ValidationOutcome<()> {
     let engine = ValidationEngine::new();
@@ -96,12 +101,15 @@ pub fn validate_person_dto(person: &PersonDTO) -> ValidationOutcome<()> {
 /// # Examples
 ///
 /// ```
+/// # use crate::models::person::PersonDTO;
+/// # use crate::functional::validation_integration::validate_person_with_complex_rules;
 /// let person = PersonDTO {
 ///     name: "Alice".into(),
-///     email: "alice@example.com".into(),
-///     phone: "".into(),
-///     age: Some(30),
+///     gender: false,
+///     age: 30,
 ///     address: "123 Main St".into(),
+///     phone: "".into(),
+///     email: "alice@example.com".into(),
 /// };
 ///
 /// let outcome = validate_person_with_complex_rules(&person);
@@ -161,7 +169,14 @@ pub fn validate_person_with_complex_rules(person: &PersonDTO) -> ValidationOutco
 /// ```
 /// # use crate::models::person::PersonDTO;
 /// # use crate::functional::validation_integration::validate_person_batch;
-/// let people = vec![PersonDTO::default()];
+/// let people = vec![PersonDTO {
+///     name: "Alice".into(),
+///     gender: true,
+///     age: 30,
+///     address: "123 Main St".into(),
+///     phone: "+1234567890".into(),
+///     email: "alice@example.com".into(),
+/// }];
 /// let results = validate_person_batch(people);
 /// assert_eq!(results.len(), 1);
 /// ```
@@ -173,13 +188,34 @@ pub fn validate_person_batch(people: Vec<PersonDTO>) -> Vec<ValidationOutcome<()
         if outcome.is_valid {
             Ok(())
         } else {
-            Err(outcome.errors.into_iter().next().unwrap_or_else(|| {
-                crate::functional::validation_rules::ValidationError::new(
+            // Preserve all errors by creating a combined error
+            if outcome.errors.is_empty() {
+                Err(crate::functional::validation_rules::ValidationError::new(
                     "unknown",
                     "UNKNOWN_ERROR",
                     "Unknown validation error",
-                )
-            }))
+                ))
+            } else if outcome.errors.len() == 1 {
+                // Single error - return it directly
+                Err(outcome.errors.into_iter().next().unwrap())
+            } else {
+                // Multiple errors - combine them
+                                    let combined_message = outcome.errors
+                                        .iter()
+                                        .map(|e| e.message.clone())
+                                        .collect::<Vec<String>>()
+                                        .join("; ");
+                let combined_field = outcome.errors
+                    .first()
+                    .map(|e| e.field.as_str())
+                    .unwrap_or("multiple_fields");
+                    
+                Err(crate::functional::validation_rules::ValidationError::new(
+                    combined_field,
+                    "MULTIPLE_ERRORS",
+                    &format!("Multiple validation errors: {}", combined_message),
+                ))
+            }
         }
     };
 

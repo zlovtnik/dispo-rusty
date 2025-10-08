@@ -4,6 +4,8 @@
 //! combined using functional programming patterns. All validation rules
 //! are pure functions that return Results for easy chaining and composition.
 
+#![allow(dead_code)]
+
 use regex::Regex;
 use std::collections::HashSet;
 
@@ -486,17 +488,28 @@ impl ValidationRule<bool> for MustBeTrue {
 /// let err = rule.validate(&"a".to_string(), "name").is_err();
 /// assert!(err);
 /// ```
-pub fn all<T, R: ValidationRule<T>>(rules: Vec<R>) -> impl ValidationRule<T> {
-    Custom::new(
-        move |value: &T| {
-            rules.iter().all(|rule| {
-                // We need to provide a dummy field name since we're composing
-                rule.validate(value, "").is_ok()
-            })
-        },
-        "VALIDATION_FAILED",
-        "One or more validation rules failed",
-    )
+
+/// Validator that succeeds only when all rules succeed
+pub struct AllValidator<T, R: ValidationRule<T>> {
+    rules: Vec<R>,
+    _phantom: std::marker::PhantomData<T>,
+}
+
+impl<T, R: ValidationRule<T>> ValidationRule<T> for AllValidator<T, R> {
+    fn validate(&self, value: &T, field_name: &str) -> ValidationResult<()> {
+        for rule in &self.rules {
+            // Propagate the first error encountered
+            rule.validate(value, field_name)?;
+        }
+        Ok(()) // All rules passed
+    }
+}
+
+pub fn all<T, R: ValidationRule<T>>(rules: Vec<R>) -> AllValidator<T, R> {
+    AllValidator { 
+        rules,
+        _phantom: std::marker::PhantomData,
+    }
 }
 
 /// Creates a composite validation rule that passes when at least one of the provided rules succeeds.
@@ -514,12 +527,47 @@ pub fn all<T, R: ValidationRule<T>>(rules: Vec<R>) -> impl ValidationRule<T> {
 /// assert!(rule.validate(&"cherry".to_string(), "field").is_ok()); // contains 'b'
 /// assert!(rule.validate(&"zzz".to_string(), "field").is_err());   // contains neither
 /// ```
-pub fn any<T, R: ValidationRule<T>>(rules: Vec<R>) -> impl ValidationRule<T> {
-    Custom::new(
-        move |value: &T| rules.iter().any(|rule| rule.validate(value, "").is_ok()),
-        "VALIDATION_FAILED",
-        "None of the validation rules passed",
-    )
+
+/// Validator that succeeds when at least one rule succeeds
+pub struct AnyValidator<T, R: ValidationRule<T>> {
+    rules: Vec<R>,
+    _phantom: std::marker::PhantomData<T>,
+}
+
+impl<T, R: ValidationRule<T>> ValidationRule<T> for AnyValidator<T, R> {
+    fn validate(&self, value: &T, field_name: &str) -> ValidationResult<()> {
+        let mut collected_errors = Vec::new();
+        
+        for rule in &self.rules {
+            match rule.validate(value, field_name) {
+                Ok(()) => return Ok(()), // Return immediately if any rule succeeds
+                Err(error) => collected_errors.push(error),
+            }
+        }
+        
+        // All rules failed - return combined error
+        if collected_errors.is_empty() {
+            Err(ValidationError::new(field_name, "VALIDATION_FAILED", "No validation rules provided"))
+        } else {
+            let combined_message = collected_errors
+                .iter()
+                .map(|e| e.message.as_str())
+                .collect::<Vec<_>>()
+                .join("; ");
+            Err(ValidationError::new(
+                field_name, 
+                "ANY_VALIDATION_FAILED", 
+                &format!("All validation rules failed: {}", combined_message)
+            ))
+        }
+    }
+}
+
+pub fn any<T, R: ValidationRule<T>>(rules: Vec<R>) -> AnyValidator<T, R> {
+    AnyValidator { 
+        rules,
+        _phantom: std::marker::PhantomData,
+    }
 }
 
 /// Creates a composite validation rule that succeeds only when the provided rule fails.

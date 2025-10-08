@@ -125,8 +125,8 @@ impl TenantPoolManager {
     /// # Examples
     ///
     /// ```no_run
-    /// # use your_crate::config::db::{TenantPoolManager, init_db_pool};
-    /// # use your_crate::errors::ServiceError;
+    /// # use crate::config::db::{TenantPoolManager, init_db_pool};
+    /// # use crate::error::ServiceError;
     /// # let main_pool = init_db_pool("postgres://user:pass@localhost/db");
     /// let manager = TenantPoolManager::new(main_pool.clone());
     /// // Add a tenant pool elsewhere...

@@ -33,6 +33,7 @@ rayon = { version = "1.11", optional = true }
 im = "15.1"
 thiserror = "2.0.17"
 regex = "1.10"
+num_cpus = "1.17"
 
 [dependencies.diesel]
 version = "2.1.0"

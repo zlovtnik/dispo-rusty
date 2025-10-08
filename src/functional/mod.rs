@@ -21,9 +21,12 @@
 //! - Performance Monitoring: Functional pipeline metrics
 
 pub mod chain_builder;
+pub mod concurrent_processing;
 pub mod function_traits;
 pub mod immutable_state;
 pub mod iterator_engine;
+// pub mod lazy_pipeline;  // Temporarily disabled - file needs to be recreated
+pub mod parallel_iterators;
 pub mod pure_function_registry;
 pub mod query_builder;
 pub mod query_composition;

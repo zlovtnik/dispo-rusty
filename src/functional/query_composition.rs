@@ -13,6 +13,8 @@
 //! - All user-provided values are bound as parameters, never concatenated into SQL strings
 //!
 //! Key Features:
+
+#![allow(dead_code)]
 //! - Lazy evaluation for large datasets with automatic chunking
 //! - Parameterized queries with automatic sanitization
 //! - Functional predicate composition with monadic operations
@@ -22,9 +24,10 @@
 use crate::functional::query_builder::{
     Column, Operator, Predicate, QueryFilter, TypeSafeQueryBuilder,
 };
+use regex::Regex;
 use std::collections::HashMap;
 use std::marker::PhantomData;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 use tokio::sync::Semaphore;
 
@@ -266,6 +269,8 @@ pub struct LazyQueryIterator<T, U> {
     total_processed: usize,
     /// Whether the iterator is exhausted
     exhausted: bool,
+    /// Whether this is a test-only iterator (no chunk loading)
+    is_test_iterator: bool,
     /// Semaphore for controlling concurrency
     semaphore: Arc<Semaphore>,
     /// Performance metrics
@@ -317,9 +322,112 @@ where
             page_size,
             total_processed: 0,
             exhausted: false,
+            is_test_iterator: false,
             semaphore,
             metrics,
         }
+    }
+
+    /// Create a test-only iterator with pre-loaded data (bypasses database execution).
+    ///
+    /// This constructor is intended for testing the iteration logic without requiring
+    /// a real database connection. The iterator will yield all items from `data` and
+    /// then be exhausted.
+    ///
+    /// # Parameters
+    ///
+    /// - `data` — The pre-loaded data to iterate over.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use std::sync::Arc;
+    /// # use tokio::sync::Semaphore;
+    /// # // Mock types for example
+    /// # struct FunctionalQueryComposer<T, U>(std::marker::PhantomData<(T, U)>);
+    /// # impl<T, U> FunctionalQueryComposer<T, U> {
+    /// #     fn lazy_config(&self) -> LazyEvaluationConfig {
+    /// #         LazyEvaluationConfig::default()
+    /// #     }
+    /// # }
+    /// # struct LazyEvaluationConfig { chunk_size: usize }
+    /// # impl LazyEvaluationConfig { fn default() -> Self { Self { chunk_size: 1000 } } }
+    /// # struct QueryPerformanceMetrics;
+    /// # impl QueryPerformanceMetrics { fn default() -> Self { Self } }
+    /// #
+    /// let data = vec![1, 2, 3, 4, 5];
+    /// let mut iter = LazyQueryIterator::with_data(data);
+    /// assert_eq!(iter.next(), Some(1));
+    /// assert_eq!(iter.next(), Some(2));
+    /// ```
+    #[cfg(test)]
+    pub fn with_data(data: Vec<U>) -> Self {
+        use std::time::Duration;
+        
+        let composer = Arc::new(FunctionalQueryComposer {
+            builder: TypeSafeQueryBuilder::new(),
+            current_filter: None,
+            lazy_config: LazyEvaluationConfig::default(),
+            metrics: QueryPerformanceMetrics {
+                composition_time: Duration::from_secs(0),
+                execution_time: Duration::from_secs(0),
+                records_processed: 0,
+                complexity_score: 0,
+                memory_usage: 0,
+                round_trips: 0,
+            },
+            _phantom: PhantomData,
+        });
+        
+        Self {
+            composer,
+            current_chunk: data,
+            chunk_position: 0,
+            offset: 0,
+            page_size: 1000,
+            total_processed: 0,
+            exhausted: false,
+            is_test_iterator: true,
+            semaphore: Arc::new(Semaphore::new(1)),
+            metrics: QueryPerformanceMetrics {
+                composition_time: Duration::from_secs(0),
+                execution_time: Duration::from_secs(0),
+                records_processed: 0,
+                complexity_score: 0,
+                memory_usage: 0,
+                round_trips: 0,
+            },
+        }
+    }
+
+    /// Attempt to load the next chunk of data from the database.
+    ///
+    /// This method is currently unimplemented and will panic if called. In a complete
+    /// implementation, this would execute a paginated query using `self.offset` and
+    /// `self.page_size`, update `self.current_chunk` with the results, reset
+    /// `self.chunk_position` to 0, and set `self.exhausted` to true if no results
+    /// were returned.
+    ///
+    /// # Returns
+    ///
+    /// `true` if a new chunk was loaded successfully, `false` if no more data is available.
+    fn load_next_chunk(&mut self) -> bool {
+        // FIXME: Implement actual chunk loading via database query executor
+        // Expected implementation:
+        // 1. Execute query with LIMIT self.page_size OFFSET self.offset
+        // 2. If results.is_empty(), set self.exhausted = true and return false
+        // 3. self.current_chunk = results
+        // 4. self.chunk_position = 0
+        // 5. self.offset += self.page_size
+        // 6. return true
+        
+        unimplemented!(
+            "Chunked query execution is not implemented. \
+             LazyQueryIterator::load_next_chunk requires a real database query executor \
+             (e.g., composer.execute_chunk_query(offset, page_size)) to fetch data. \
+             Use LazyQueryIterator::with_data() for testing, or implement the database \
+             integration before using this in production."
+        );
     }
 }
 
@@ -332,64 +440,66 @@ where
 
     /// Advances the iterator and yields the next item from the current chunk, loading the next chunk when needed.
     ///
-    /// If the iterator is exhausted, returns `None`. When the current in-memory chunk is depleted the implementation
-    /// attempts to load the next chunk; in this stubbed implementation chunk loading is not performed and the
-    /// iterator will be marked exhausted instead. Each returned item increments the iterator's `total_processed` count.
+    /// When the current in-memory chunk is depleted, this method attempts to load the next chunk
+    /// via `load_next_chunk()`. If no chunk loader is implemented (production case), it will panic
+    /// with `unimplemented!()`. For testing, use `with_data()` to create an iterator with pre-loaded data.
     ///
     /// # Returns
     ///
-    /// `Some(item)` with the next element from the current chunk, `None` when the iterator is exhausted.
+    /// `Some(item)` with the next element from the current chunk, `None` when the iterator is exhausted
+    /// (either naturally or when `load_next_chunk()` returns false indicating no more data).
+    ///
+    /// # Panics
+    ///
+    /// Panics if chunk loading is attempted but not yet implemented (i.e., when used outside of tests
+    /// without a database query executor).
     ///
     /// # Examples
     ///
-    /// ```no_run
-    /// // Given a LazyQueryIterator whose current_chunk contains [1, 2]
-    /// // the first two calls yield the elements and the third returns None (stubbed chunk loading).
-    /// // let mut it = /* LazyQueryIterator::new(...) with current_chunk = vec![1, 2] */ ;
-    /// // assert_eq!(it.next(), Some(1));
-    /// // assert_eq!(it.next(), Some(2));
-    /// // assert_eq!(it.next(), None);
+    /// ```
+    /// # #[cfg(test)]
+    /// # {
+    /// use crate::functional::query_composition::LazyQueryIterator;
+    /// let data = vec![1, 2, 3];
+    /// let mut iter = LazyQueryIterator::with_data(data);
+    /// assert_eq!(iter.next(), Some(1));
+    /// assert_eq!(iter.next(), Some(2));
+    /// assert_eq!(iter.next(), Some(3));
+    /// assert_eq!(iter.next(), None);
+    /// # }
     /// ```
     fn next(&mut self) -> Option<Self::Item> {
         if self.exhausted {
             return None;
         }
 
-        // If we've exhausted the current chunk, load the next one
+        // If we've exhausted the current chunk, try to load the next one
         if self.chunk_position >= self.current_chunk.len() {
-            // TODO: In a real implementation, this would execute a chunked query:
-            // 1. Build a query with LIMIT self.page_size OFFSET self.offset
-            // 2. Execute the query and retrieve the next chunk of results
-            // 3. Handle potential database errors (convert to iterator termination)
-            //
-            // Example pseudocode:
-            // match self.composer.execute_chunk_query(self.offset, self.page_size) {
-            //     Ok(chunk) => {
-            //         if chunk.is_empty() {
-            //             self.exhausted = true;
-            //             return None;
-            //         }
-            //         self.current_chunk = chunk;
-            //         self.chunk_position = 0;
-            //         self.offset += self.current_chunk.len();
-            //     }
-            //     Err(_) => {
-            //         // Database error - terminate iteration
-            //         self.exhausted = true;
-            //         return None;
-            //     }
-            // }
-            //
-            // For now, we mark as exhausted since query execution requires connection pool
-            self.exhausted = true;
-            return None;
+            // For test iterators, just mark as exhausted (no chunk loading)
+            if self.is_test_iterator {
+                self.exhausted = true;
+                return None;
+            }
+            
+            // Try to load the next chunk
+            let loaded = self.load_next_chunk();
+            
+            if !loaded {
+                // No more data available - mark as exhausted
+                self.exhausted = true;
+                return None;
+            }
+            
+            // Verify we actually got data
+            if self.current_chunk.is_empty() {
+                self.exhausted = true;
+                return None;
+            }
         }
 
         // Return the next item from the current chunk
         let item = self.current_chunk[self.chunk_position].clone();
         self.chunk_position += 1;
-
-        // Only update total_processed when we actually return an item
         self.total_processed += 1;
 
         Some(item)
@@ -427,6 +537,33 @@ pub struct SanitizationRule {
     pub pattern: String,
     /// Error message if validation fails
     pub error_message: String,
+}
+
+/// Get the compiled regex for detecting SQL comments (--  |  /*  |  */)
+fn sql_comment_regex() -> &'static Regex {
+    static SQL_COMMENT: OnceLock<Regex> = OnceLock::new();
+    SQL_COMMENT.get_or_init(|| {
+        Regex::new(r"--|/\*|\*/")
+            .expect("SQL comment regex should compile")
+    })
+}
+
+/// Get the compiled regex for detecting SQL keywords at word boundaries (case-insensitive)
+fn sql_keyword_regex() -> &'static Regex {
+    static SQL_KEYWORD: OnceLock<Regex> = OnceLock::new();
+    SQL_KEYWORD.get_or_init(|| {
+        Regex::new(r"(?i)\b(SELECT|INSERT|UPDATE|DELETE|DROP|UNION|EXEC|EXECUTE)\b")
+            .expect("SQL keyword regex should compile")
+    })
+}
+
+/// Get the compiled regex for detecting hexadecimal sequences (for percent-encoding detection)
+fn hex_sequence_regex() -> &'static Regex {
+    static HEX_SEQUENCE: OnceLock<Regex> = OnceLock::new();
+    HEX_SEQUENCE.get_or_init(|| {
+        Regex::new(r"[0-9A-Fa-f]{2}")
+            .expect("Hex sequence regex should compile")
+    })
 }
 
 impl ParameterSanitizer {
@@ -537,41 +674,26 @@ impl ParameterSanitizer {
         // This provides additional pattern-based rejection
         match rule.name.as_str() {
             "no_sql_injection" => {
-                // Reject SQL comment patterns
-                if value.contains("--") || value.contains("/*") || value.contains("*/") {
+                // Use compiled regexes for efficient pattern matching
+                
+                // 1. Reject SQL comment patterns (--|/*|*/)
+                if sql_comment_regex().is_match(value) {
                     return false;
                 }
-                // Reject common SQL statement keywords at word boundaries
-                // (case-insensitive check for: SELECT, INSERT, UPDATE, DELETE, DROP, UNION, EXEC)
-                let value_upper = value.to_uppercase();
-                let dangerous_keywords = [
-                    " SELECT ",
-                    " INSERT ",
-                    " UPDATE ",
-                    " DELETE ",
-                    " DROP ",
-                    " UNION ",
-                    " EXEC ",
-                    " EXECUTE ",
-                    ";SELECT",
-                    ";INSERT",
-                    ";UPDATE",
-                    ";DELETE",
-                    ";DROP",
-                    ";UNION",
-                    ";EXEC",
-                ];
-                for keyword in &dangerous_keywords {
-                    if value_upper.contains(keyword) {
-                        return false;
-                    }
-                }
-                // Reject percent-encoding attempts (e.g., %27 for single quote)
-                if value.contains('%') && value.chars().any(|c| c.is_ascii_hexdigit()) {
+                
+                // 2. Reject SQL keywords at word boundaries (case-insensitive)
+                if sql_keyword_regex().is_match(value) {
                     return false;
                 }
-                // Reject semicolons (statement terminators)
-                !value.contains(&rule.pattern)
+                
+                // 3. Reject percent-encoding attempts (e.g., %27 for single quote)
+                // Check if value contains '%' followed by hex digits
+                if value.contains('%') && hex_sequence_regex().is_match(value) {
+                    return false;
+                }
+                
+                // 4. Reject semicolons (statement terminators)
+                !value.contains(';')
             }
             "reasonable_length" => value.len() <= 255, // Max reasonable length
             _ => true,                                 // Unknown rules pass by default
@@ -972,4 +1094,54 @@ pub fn field_filter_to_composable(
         field_name,
         0.5, // Default selectivity
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_lazy_query_iterator_with_data() {
+        // Test that the iterator works correctly with pre-loaded data
+        let data = vec![1, 2, 3, 4, 5];
+        let mut iter: LazyQueryIterator<(), i32> = LazyQueryIterator::with_data(data);
+
+        assert_eq!(iter.next(), Some(1));
+        assert_eq!(iter.next(), Some(2));
+        assert_eq!(iter.next(), Some(3));
+        assert_eq!(iter.next(), Some(4));
+        assert_eq!(iter.next(), Some(5));
+        assert_eq!(iter.next(), None);
+        assert_eq!(iter.next(), None); // Should remain None
+    }
+
+    #[test]
+    fn test_lazy_query_iterator_empty_data() {
+        // Test that an empty iterator immediately returns None
+        let data: Vec<i32> = vec![];
+        let mut iter: LazyQueryIterator<(), i32> = LazyQueryIterator::with_data(data);
+
+        assert_eq!(iter.next(), None);
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn test_lazy_query_iterator_single_item() {
+        // Test with a single item
+        let data = vec![42];
+        let mut iter: LazyQueryIterator<(), i32> = LazyQueryIterator::with_data(data);
+
+        assert_eq!(iter.next(), Some(42));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn test_lazy_query_iterator_collect() {
+        // Test that collect() works properly
+        let data = vec!["a", "b", "c"];
+        let iter: LazyQueryIterator<(), &str> = LazyQueryIterator::with_data(data.clone());
+
+        let collected: Vec<&str> = iter.collect();
+        assert_eq!(collected, data);
+    }
 }

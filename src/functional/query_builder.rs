@@ -12,6 +12,8 @@
 //! - Parameterized query generation to prevent SQL injection
 //! - Integration with Diesel ORM
 
+#![allow(dead_code)]
+
 use crate::functional::function_traits::{FunctionCategory, PureFunction};
 use diesel::pg::Pg;
 use diesel::prelude::*;
@@ -655,32 +657,28 @@ where
     T: Table + Send + Sync + 'static,
     U: Clone + Send + Sync + 'static,
 {
-    /// Builds a Diesel SQL fragment representing the accumulated filters, ordering, limit, and offset.
+    /// **NOT IMPLEMENTED**: Attempts to build a Diesel SQL fragment representing the accumulated filters, ordering, limit, and offset.
     ///
-    /// This implementation returns a boxed Diesel `QueryFragment` containing the constructed,
-    /// parameterized query. Currently this is a placeholder that returns a static SQL fragment;
-    /// a real implementation would map predicates to Diesel expressions for the concrete table schema.
+    /// **WARNING**: This method is not yet implemented. Parameterized query building is not available.
+    /// Calling this method will return an error to prevent unsafe SQL fragment generation.
     ///
     /// # Examples
     ///
     /// ```no_run
     /// use crate::functional::query_builder::TypeSafeQueryBuilder;
     ///
-    /// // Create a builder, optionally configure filters/order/limit, then build the query fragment.
+    /// // Create a builder, optionally configure filters/order/limit, then attempt to build.
     /// let qb = TypeSafeQueryBuilder::<(), String>::new();
-    /// let fragment = qb.build();
-    /// // `fragment` is a boxed `QueryFragment<Pg>` representing the constructed query.
+    /// let result = qb.build();
+    /// assert!(result.is_err()); // Currently always returns an error
     /// ```
     ///
     /// # Returns
     ///
-    /// A boxed Diesel `QueryFragment<Pg>` containing the constructed parameterized query.
-    pub fn build(self) -> Box<dyn QueryFragment<Pg> + Send> {
-        // Placeholder implementation - in a real scenario, this would
-        // construct the actual Diesel query based on the filters and table
-        Box::new(diesel::dsl::sql::<diesel::sql_types::Text>(
-            "-- Placeholder query",
-        ))
+    /// A `Result` containing either a boxed Diesel `QueryFragment<Pg>` on success,
+    /// or a `String` error message indicating the feature is not yet implemented.
+    pub fn build(self) -> Result<Box<dyn QueryFragment<Pg> + Send>, String> {
+        Err("Not implemented - parameterized query building is not yet available".to_string())
     }
 }
 
