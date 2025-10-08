@@ -67,6 +67,7 @@ impl<T> ImmutableDataset<T>
 where
     T: Clone + Send + Sync + 'static,
 {
+
     /// Construct an ImmutableDataset from an owned `Vec`.
     ///
     /// # Examples
@@ -81,18 +82,7 @@ where
         }
     }
 
-    /// Create an ImmutableDataset by taking ownership of an existing `Arc<[T]>`.
-    ///
-    /// This reuses the provided shared slice without cloning its contents.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::sync::Arc;
-    /// let arc = Arc::from(vec![1, 2, 3].into_boxed_slice());
-    /// let ds = ImmutableDataset::from_arc(arc.clone());
-    /// assert_eq!(ds.len(), 3);
-    /// ```
+    /// Create an immutable dataset from an existing shared slice.
     pub fn from_arc(inner: Arc<[T]>) -> Self {
         Self { inner }
     }
@@ -113,38 +103,14 @@ where
         self.inner.len()
     }
 
-    /// Checks whether the dataset contains no elements.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::sync::Arc;
-    /// // Construct via Vec<T>
-    /// let ds = ImmutableDataset::new(vec![1, 2, 3]);
-    /// assert!(!ds.is_empty());
-    ///
-    /// // Empty dataset
-    /// let empty = ImmutableDataset::new(Vec::<i32>::new());
-    /// assert!(empty.is_empty());
-    /// ```
+    /// Returns `true` when the dataset has no elements.
     pub fn is_empty(&self) -> bool {
         self.inner.is_empty()
     }
 
-    /// Materializes the shared data into an owned vector.
+    /// Materialises the shared data into an owned vector.
     ///
-    /// Clones each element from the internal shared slice so the returned `Vec<T>` is independent
-    /// of the dataset's backing storage.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::sync::Arc;
-    /// // construct via public API; replace with the correct path if module is re-exported
-    /// let ds = ImmutableDataset::new(vec![1, 2, 3]);
-    /// let v = ds.to_vec();
-    /// assert_eq!(v, vec![1, 2, 3]);
-    /// ```
+    /// This clones each element, preserving immutability of the shared backing slice.
     pub fn to_vec(&self) -> Vec<T> {
         self.inner.iter().cloned().collect()
     }
@@ -220,33 +186,12 @@ impl ConcurrentProcessor {
         Self::new(ParallelConfig::default())
     }
 
-    /// Get the active parallel configuration for this processor.
-    ///
-    /// This returns a shared reference to the processor's `ParallelConfig`.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let proc = ConcurrentProcessor::try_default().unwrap();
-    /// let _: &ParallelConfig = proc.config();
-    /// ```
+    /// Returns the active parallel configuration.
     pub fn config(&self) -> &ParallelConfig {
         &self.config
     }
 
-    /// Create a new `ConcurrentProcessor` using the provided `ParallelConfig`.
-    ///
-    /// The current instance is not mutated; this constructs a fresh processor configured
-    /// with `config` and returns it or an error if the underlying thread pool cannot be built.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let cfg = ParallelConfig::default();
-    /// let proc = ConcurrentProcessor::try_default().unwrap();
-    /// let new_proc = proc.with_config(cfg).unwrap();
-    /// assert_eq!(new_proc.config(), &ParallelConfig::default());
-    /// ```
+    /// Creates a new processor with a different configuration.
     pub fn with_config(&self, config: ParallelConfig) -> Result<Self, ConcurrentProcessingError> {
         Self::new(config)
     }
@@ -717,3 +662,268 @@ mod tests {
         assert_eq!(result.data.last().copied(), Some(192));
     }
 }
+
+    #[test]
+    fn immutable_dataset_creation() {
+        let data = vec\![1, 2, 3, 4, 5];
+        let dataset = ImmutableDataset::new(data);
+        
+        assert_eq\!(dataset.len(), 5);
+        assert\!(\!dataset.is_empty());
+        assert_eq\!(dataset.as_slice()[0], 1);
+    }
+
+    #[test]
+    fn immutable_dataset_to_vec_clones_data() {
+        let dataset = ImmutableDataset::new(vec\![10, 20, 30]);
+        let cloned = dataset.to_vec();
+        
+        assert_eq\!(cloned, vec\![10, 20, 30]);
+        assert_eq\!(dataset.len(), 3); // Original still intact
+    }
+
+    #[test]
+    fn immutable_dataset_from_arc() {
+        let arc_data = Arc::<[i32]>::from(vec\![1, 2, 3]);
+        let dataset = ImmutableDataset::from_arc(arc_data);
+        
+        assert_eq\!(dataset.len(), 3);
+        assert_eq\!(dataset.as_slice(), &[1, 2, 3]);
+    }
+
+    #[test]
+    fn immutable_dataset_empty() {
+        let dataset: ImmutableDataset<i32> = ImmutableDataset::new(vec\![]);
+        
+        assert_eq\!(dataset.len(), 0);
+        assert\!(dataset.is_empty());
+    }
+
+    #[test]
+    fn concurrent_processor_config() {
+        let config = ParallelConfig {
+            thread_pool_size: 4,
+            min_parallel_size: 10,
+            chunk_size: 100,
+        };
+        
+        let processor = ConcurrentProcessor::new(config).expect("should build processor");
+        assert_eq\!(processor.config().thread_pool_size, 4);
+        assert_eq\!(processor.config().min_parallel_size, 10);
+    }
+
+    #[test]
+    fn concurrent_processor_with_config() {
+        let processor = ConcurrentProcessor::try_default().unwrap();
+        let new_config = ParallelConfig {
+            thread_pool_size: 2,
+            min_parallel_size: 50,
+            chunk_size: 200,
+        };
+        
+        let new_processor = processor.with_config(new_config).expect("should build");
+        assert_eq\!(new_processor.config().thread_pool_size, 2);
+    }
+
+    #[test]
+    fn map_empty_collection() {
+        let processor = processor();
+        let data: Vec<i32> = vec\![];
+        
+        let result = processor.map(data, |x| x * 2);
+        
+        assert\!(result.data.is_empty());
+        assert_eq\!(result.metrics.thread_count, 1);
+    }
+
+    #[test]
+    fn map_large_dataset() {
+        let processor = processor();
+        let data: Vec<i32> = (0..10000).collect();
+        
+        let result = processor.map(data, |x| x + 1);
+        
+        assert_eq\!(result.data.len(), 10000);
+        assert_eq\!(result.data[0], 1);
+        assert_eq\!(result.data[9999], 10000);
+    }
+
+    #[test]
+    fn fold_accumulates_values() {
+        let processor = processor();
+        let data = vec\![1, 2, 3, 4, 5];
+        
+        let result = processor.fold(
+            data,
+            0,
+            |acc, x| acc + x,
+            |a, b| a + b,
+        );
+        
+        assert_eq\!(result.data, 15);
+    }
+
+    #[test]
+    fn fold_with_complex_accumulator() {
+        let processor = processor();
+        let data = vec\!["hello", "world", "rust"];
+        
+        let result = processor.fold(
+            data,
+            String::new(),
+            |mut acc, word| {
+                if \!acc.is_empty() {
+                    acc.push(' ');
+                }
+                acc.push_str(word);
+                acc
+            },
+            |mut a, b| {
+                if \!a.is_empty() && \!b.is_empty() {
+                    a.push(' ');
+                }
+                a.push_str(&b);
+                a
+            },
+        );
+        
+        assert\!(result.data.contains("hello"));
+        assert\!(result.data.contains("world"));
+        assert\!(result.data.contains("rust"));
+    }
+
+    #[test]
+    fn filter_preserves_matching_items() {
+        let processor = processor();
+        let data = vec\![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+        
+        let result = processor.filter(data, |x| x % 2 == 0);
+        
+        assert_eq\!(result.data, vec\![2, 4, 6, 8, 10]);
+    }
+
+    #[test]
+    fn filter_all_match() {
+        let processor = processor();
+        let data = vec\![2, 4, 6, 8];
+        
+        let result = processor.filter(data, |x| x % 2 == 0);
+        
+        assert_eq\!(result.data, vec\![2, 4, 6, 8]);
+    }
+
+    #[test]
+    fn filter_none_match() {
+        let processor = processor();
+        let data = vec\![1, 3, 5, 7];
+        
+        let result = processor.filter(data, |x| x % 2 == 0);
+        
+        assert\!(result.data.is_empty());
+    }
+
+    #[test]
+    fn group_by_creates_buckets() {
+        let processor = processor();
+        let data = vec\![1, 2, 3, 4, 5, 6];
+        
+        let result = processor.group_by(data, |x| x % 3);
+        
+        assert_eq\!(result.data.len(), 3); // Groups: 0, 1, 2
+        assert\!(result.data.contains_key(&0));
+        assert\!(result.data.contains_key(&1));
+        assert\!(result.data.contains_key(&2));
+    }
+
+    #[test]
+    fn group_by_string_keys() {
+        let processor = processor();
+        let data = vec\!["apple", "apricot", "banana", "blueberry", "cherry"];
+        
+        let result = processor.group_by(data, |word| {
+            word.chars().next().unwrap_or('_')
+        });
+        
+        assert_eq\!(result.data.get(&'a').unwrap().len(), 2);
+        assert_eq\!(result.data.get(&'b').unwrap().len(), 2);
+        assert_eq\!(result.data.get(&'c').unwrap().len(), 1);
+    }
+
+    #[actix_rt::test]
+    async fn fold_async_with_strings() {
+        let processor = processor();
+        let data = vec\!["a", "b", "c"];
+        
+        let result = processor
+            .fold_async(
+                data,
+                String::new(),
+                |mut acc, s| {
+                    acc.push_str(s);
+                    acc
+                },
+                |mut a, b| {
+                    a.push_str(&b);
+                    a
+                },
+            )
+            .await
+            .expect("fold_async should succeed");
+        
+        assert\!(result.data.contains('a'));
+        assert\!(result.data.contains('b'));
+        assert\!(result.data.contains('c'));
+    }
+
+    #[actix_rt::test]
+    async fn process_batch_legacy_api() {
+        let processor = processor();
+        let data = vec\![10, 20, 30, 40];
+        
+        let result = processor
+            .process_batch(data, |x| x / 10)
+            .await
+            .expect("process_batch should succeed");
+        
+        assert_eq\!(result.data, vec\![1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn aggregate_metrics_empty_iterator() {
+        let metrics: Vec<&ParallelMetrics> = vec\![];
+        let aggregated = aggregate_metrics(metrics);
+        
+        assert_eq\!(aggregated.throughput, 0);
+        assert_eq\!(aggregated.memory_usage, 0);
+        assert_eq\!(aggregated.total_time, Duration::from_secs(0));
+    }
+
+    #[test]
+    fn aggregate_metrics_single_metric() {
+        let mut m = ParallelMetrics::default();
+        m.throughput = 500;
+        m.memory_usage = 1024;
+        m.efficiency = 0.95;
+        m.total_time = Duration::from_millis(100);
+        m.thread_count = 4;
+        
+        let aggregated = aggregate_metrics([&m]);
+        
+        assert_eq\!(aggregated.throughput, 500);
+        assert_eq\!(aggregated.memory_usage, 1024);
+        assert_eq\!(aggregated.thread_count, 4);
+        assert\!((aggregated.efficiency - 0.95).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn concurrent_processing_error_invalid_thread_pool() {
+        let config = ParallelConfig {
+            thread_pool_size: 0,
+            min_parallel_size: 10,
+            chunk_size: 100,
+        };
+        
+        // Should succeed with 0 threads (uses default)
+        let result = ConcurrentProcessor::new(config);
+        assert\!(result.is_ok());
+    }

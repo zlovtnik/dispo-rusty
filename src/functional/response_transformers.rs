@@ -60,13 +60,11 @@ pub enum ResponseFormat {
     JsonPretty,
     /// Plain text (`text/plain`).
     Text,
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum FormatStrategy {
     Auto,
     Forced(ResponseFormat),
-}
 
 /// Errors that can occur while composing responses.
 #[derive(Debug, Error)]
@@ -77,7 +75,6 @@ pub enum ResponseTransformError {
     InvalidHeaderName(#[from] InvalidHeaderName),
     #[error("invalid header value: {0}")]
     InvalidHeaderValue(#[from] InvalidHeaderValue),
-}
 
 /// Serializable response envelope used for standardized payloads.
 #[derive(Debug, Clone, Serialize)]
@@ -89,7 +86,6 @@ where
     pub data: T,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<JsonValue>,
-}
 
 /// Functional response transformer with fluent, immutable composition.
 #[derive(Debug)]
@@ -101,7 +97,6 @@ pub struct ResponseTransformer<T> {
     headers: Vec<(HeaderName, HeaderValue)>,
     allowed_formats: Vec<ResponseFormat>,
     strategy: FormatStrategy,
-}
 
 impl<T> ResponseTransformer<T> {
     /// Creates a ResponseTransformer for the provided payload with sensible defaults.
@@ -194,18 +189,7 @@ impl<T> ResponseTransformer<T> {
         self
     }
 
-    /// Sets the transformer's metadata to the provided pre-serialized JSON value.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use serde_json::json;
-    ///
-    /// let transformed = ResponseTransformer::new(42)
-    ///     .with_metadata_value(json!({"source": "unit-test"}));
-    ///
-    /// // method is chainable; `transformed` now carries the given metadata
-    /// ```
+    /// Adds or replaces metadata with a pre-serialized JSON value.
     pub fn with_metadata_value(mut self, metadata: JsonValue) -> Self {
         self.metadata = Some(metadata);
         self
@@ -277,19 +261,7 @@ impl<T> ResponseTransformer<T> {
         }
     }
 
-    /// Appends the given HTTP header to the transformer's header list and returns the updated transformer.
-    ///
-    /// The header is provided as a `(HeaderName, HeaderValue)` pair and will be included in the final `HttpResponse`
-    /// produced by the transformer.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use actix_web::http::{header::HeaderName, header::HeaderValue};
-    /// // Assume `ResponseTransformer::new` is in scope and T = i32 for this example.
-    /// let transformed = crate::functional::response_transformers::ResponseTransformer::new(42)
-    ///     .insert_header((HeaderName::from_static("x-request-id"), HeaderValue::from_static("abc123")));
-    /// ```
+    /// Adds an HTTP header to the response.
     pub fn insert_header(mut self, header: (HeaderName, HeaderValue)) -> Self {
         self.headers.push(header);
         self
@@ -382,22 +354,7 @@ impl<T> ResponseTransformer<T> {
         self.allow_format(format)
     }
 
-    /// Transforms the transformer's payload using the provided function.
-    ///
-    /// Consumes `self` and returns a new `ResponseTransformer` with the transformed
-    /// payload; all other configuration (message, status, metadata, headers,
-    /// allowed formats, and strategy) is preserved.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let t = ResponseTransformer::new(1)
-    ///     .with_message("one".into())
-    ///     .with_status(actix_web::http::StatusCode::OK);
-    ///
-    /// let t2 = t.map_data(|n| n + 1);
-    /// // payload was transformed from 1 to 2; other fields remain the same.
-    /// ```
+    /// Functional transformation over the underlying payload.
     pub fn map_data<U, F>(self, transform: F) -> ResponseTransformer<U>
     where
         F: FnOnce(T) -> U,
@@ -423,24 +380,8 @@ impl<T> ResponseTransformer<T> {
         }
     }
 
-    /// Applies a fallible transformation to the transformer's metadata and, if the
-    /// transformation yields a value, serializes and stores it as the new metadata.
-    ///
-    /// The provided `transform` receives the current metadata (as `Option<JsonValue>`)
-    /// and returns `Ok(Some(u))` to replace metadata with `u`, `Ok(None)` to clear
-    /// metadata, or an `Err(serde_json::Error)` to signal a serialization/transformation
-    /// failure. Any returned `U` is serialized with `serde_json::to_value`.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use serde::Serialize;
-    /// // assume ResponseTransformer::new is in scope
-    ///
-    /// let transformer = ResponseTransformer::new(42);
-    /// let result = transformer.try_map_metadata(|_existing| Ok::<_, serde_json::Error>(Some("meta")));
-    /// assert!(result.is_ok());
-    /// ```
+    /// Maps the metadata component using a fallible function that can
+    /// produce serializable metadata.
     pub fn try_map_metadata<U, F>(
         self,
         transform: F,
@@ -562,7 +503,6 @@ impl<T> ResponseTransformer<T> {
             }
         }
     }
-}
 
 impl<T> Responder for ResponseTransformer<T>
 where
@@ -570,19 +510,6 @@ where
 {
     type Body = BoxBody;
 
-    /// Convert the configured `ResponseTransformer` into an Actix `HttpResponse`, selecting the output format by negotiating the request and applying any forced preferences.
-    ///
-    /// The response will use the transformer's configured status and headers, wrap the message, data, and optional metadata into a `ResponseEnvelope`, and serialize the envelope according to the resolved `ResponseFormat`. If serialization fails, an internal server error response containing error details will be returned.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// use actix_web::test::TestRequest;
-    /// // Create a transformer and produce an HttpResponse using a test request.
-    /// let resp = crate::functional::response_transformers::ResponseTransformer::new("payload")
-    ///     .respond_to(&TestRequest::default().to_http_request());
-    /// assert!(resp.status().is_success());
-    /// ```
     fn respond_to(self, req: &HttpRequest) -> HttpResponse<Self::Body> {
         let format = self.resolve_format(req);
         let mut builder = HttpResponse::build(self.status);
@@ -602,33 +529,7 @@ where
             Err(err) => serialization_error(err),
         }
     }
-}
 
-/// Serialize a ResponseEnvelope into an HttpResponse using the specified format.
-///
-/// The response body is serialized from `envelope` according to `format`:
-/// - `Json`: compact JSON bytes with `Content-Type: application/json`.
-/// - `JsonPretty`: pretty-printed JSON string with `Content-Type: application/json`.
-/// - `Text`: pretty-printed JSON string with `Content-Type: text/plain`.
-///
-/// # Errors
-///
-/// Returns a `serde_json::Error` if serializing the envelope fails.
-///
-/// # Examples
-///
-/// ```
-/// use actix_web::http::StatusCode;
-/// // Construct a builder and an example envelope (types from the surrounding module)
-/// let builder = actix_web::HttpResponse::build(StatusCode::OK);
-/// let envelope = ResponseEnvelope { message: "ok".into(), data: 42, metadata: None };
-/// let resp = render_response(builder, envelope, ResponseFormat::Json).unwrap();
-/// assert_eq!(resp.status(), StatusCode::OK);
-/// assert_eq!(
-///     resp.headers().get(actix_web::http::header::CONTENT_TYPE).unwrap().as_bytes(),
-///     b"application/json"
-/// );
-/// ```
 fn render_response<T>(
     mut builder: HttpResponseBuilder,
     envelope: ResponseEnvelope<T>,
@@ -654,57 +555,14 @@ where
             Ok(builder.body(payload))
         }
     }
-}
 
-/// Creates an HTTP 500 Internal Server Error response whose body is a standardized `ResponseBody` containing
-/// the internal error message and a JSON object with the error's string under the `"error"` key.
-///
-/// # Examples
-///
-/// ```
-/// use serde_json::from_str;
-/// use actix_web::http::StatusCode;
-///
-/// let err = from_str::<serde_json::Value>("not json").unwrap_err();
-/// let resp = crate::functional::response_transformers::serialization_error(err);
-/// assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
-/// ```
 fn serialization_error(err: serde_json::Error) -> HttpResponse {
     let body = ResponseBody::new(
         constants::MESSAGE_INTERNAL_SERVER_ERROR,
         json!({ "error": err.to_string() }),
     );
     HttpResponse::InternalServerError().json(body)
-}
 
-/// Determines the best response format from the request's `Accept` header that is also allowed.
-///
-/// Considers `Accept` tokens in order and returns the first token that maps to a supported
-/// `ResponseFormat` present in `allowed`. Recognizes the wildcards `*/*` (maps to the first
-/// allowed format) and `application/*` (maps to `ResponseFormat::Json` if allowed).
-///
-/// # Parameters
-///
-/// - `req`: HTTP request whose `Accept` header is inspected.
-/// - `allowed`: Slice of formats that are permitted for the response.
-///
-/// # Returns
-///
-/// `Some(ResponseFormat)` with the selected format if a compatible token is found, `None` otherwise.
-///
-/// # Examples
-///
-/// ```
-/// use actix_web::test::TestRequest;
-/// use crate::functional::response_transformers::{negotiated_format, ResponseFormat};
-///
-/// let req = TestRequest::default()
-///     .insert_header(("Accept", "text/plain"))
-///     .to_http_request();
-///
-/// let allowed = &[ResponseFormat::Json, ResponseFormat::Text];
-/// assert_eq!(negotiated_format(&req, allowed), Some(ResponseFormat::Text));
-/// ```
 fn negotiated_format(req: &HttpRequest, allowed: &[ResponseFormat]) -> Option<ResponseFormat> {
     let accepts = req
         .headers()
@@ -731,25 +589,7 @@ fn negotiated_format(req: &HttpRequest, allowed: &[ResponseFormat]) -> Option<Re
     }
 
     None
-}
 
-/// Maps a single Accept header media-range token to a supported ResponseFormat.
-///
-/// Returns `Some(ResponseFormat::JsonPretty)` if the token contains both `json` and `pretty`,
-/// `Some(ResponseFormat::Json)` if it contains `json` (but not `pretty`),
-/// `Some(ResponseFormat::Text)` if it contains `text/plain`, and `None` if the token is unrecognized.
-///
-/// # Examples
-///
-/// ```
-/// use crate::functional::response_transformers::ResponseFormat;
-/// use crate::functional::response_transformers::parse_accept_token;
-///
-/// assert_eq!(parse_accept_token("application/json"), Some(ResponseFormat::Json));
-/// assert_eq!(parse_accept_token("application/json; pretty=true"), Some(ResponseFormat::JsonPretty));
-/// assert_eq!(parse_accept_token("text/plain; q=0.8"), Some(ResponseFormat::Text));
-/// assert_eq!(parse_accept_token("application/xml"), None);
-/// ```
 fn parse_accept_token(token: &str) -> Option<ResponseFormat> {
     let token = token.to_ascii_lowercase();
     if token.contains("json") {
@@ -789,7 +629,6 @@ fn prefers_pretty_json(req: &HttpRequest) -> bool {
             }
             None => false,
         })
-}
 
 #[cfg(test)]
 mod tests {
@@ -860,5 +699,354 @@ mod tests {
         let body = body::to_bytes(response.into_body()).await.unwrap();
         let payload = String::from_utf8(body.to_vec()).unwrap();
         assert!(payload.contains("\n"));
+    }
+
+    #[actix_rt::test]
+    async fn response_with_custom_status() {
+        let request = TestRequest::default();
+        let response = ResponseTransformer::new("data")
+            .with_status(StatusCode::CREATED)
+            .respond_to(&request.to_http_request());
+
+        assert_eq\!(response.status(), StatusCode::CREATED);
+    }
+
+    #[actix_rt::test]
+    async fn response_with_metadata() {
+        let request = TestRequest::default();
+        let response = ResponseTransformer::new(vec\![1, 2, 3])
+            .try_with_metadata(json\!({"count": 3}))
+            .unwrap()
+            .respond_to(&request.to_http_request());
+
+        let body = body::to_bytes(response.into_body()).await.unwrap();
+        let payload: JsonValue = serde_json::from_slice(&body).unwrap();
+
+        assert\!(payload["metadata"].is_object());
+        assert_eq\!(payload["metadata"]["count"], 3);
+    }
+
+    #[actix_rt::test]
+    async fn response_with_metadata_value() {
+        let request = TestRequest::default();
+        let metadata = json\!({"version": "1.0", "source": "test"});
+        let response = ResponseTransformer::new("ok")
+            .with_metadata_value(metadata)
+            .respond_to(&request.to_http_request());
+
+        let body = body::to_bytes(response.into_body()).await.unwrap();
+        let payload: JsonValue = serde_json::from_slice(&body).unwrap();
+
+        assert_eq\!(payload["metadata"]["version"], "1.0");
+        assert_eq\!(payload["metadata"]["source"], "test");
+    }
+
+    #[actix_rt::test]
+    async fn response_map_message() {
+        let request = TestRequest::default();
+        let response = ResponseTransformer::new(42)
+            .with_message("original")
+            .map_message(|msg| format\!("{}\!", msg).into())
+            .respond_to(&request.to_http_request());
+
+        let body = body::to_bytes(response.into_body()).await.unwrap();
+        let payload: JsonValue = serde_json::from_slice(&body).unwrap();
+
+        assert_eq\!(payload["message"], "original\!");
+    }
+
+    #[actix_rt::test]
+    async fn response_map_metadata() {
+        let request = TestRequest::default();
+        let response = ResponseTransformer::new(1)
+            .with_metadata_value(json\!({"count": 5}))
+            .map_metadata(|meta| {
+                meta.map(|m| {
+                    let mut obj = m.as_object().unwrap().clone();
+                    obj.insert("doubled".to_string(), json\!(10));
+                    json\!(obj)
+                })
+            })
+            .respond_to(&request.to_http_request());
+
+        let body = body::to_bytes(response.into_body()).await.unwrap();
+        let payload: JsonValue = serde_json::from_slice(&body).unwrap();
+
+        assert_eq\!(payload["metadata"]["count"], 5);
+        assert_eq\!(payload["metadata"]["doubled"], 10);
+    }
+
+    #[actix_rt::test]
+    async fn response_insert_custom_header() {
+        let request = TestRequest::default();
+        let header_name = HeaderName::from_static("x-custom");
+        let header_value = HeaderValue::from_static("test-value");
+        
+        let response = ResponseTransformer::new("data")
+            .insert_header((header_name.clone(), header_value))
+            .respond_to(&request.to_http_request());
+
+        assert\!(response.headers().contains_key(&header_name));
+        assert_eq\!(
+            response.headers().get(&header_name).unwrap().to_str().unwrap(),
+            "test-value"
+        );
+    }
+
+    #[actix_rt::test]
+    async fn response_try_insert_header_valid() {
+        let request = TestRequest::default();
+        let response = ResponseTransformer::new("data")
+            .try_insert_header("x-request-id", "12345")
+            .unwrap()
+            .respond_to(&request.to_http_request());
+
+        let header = response.headers().get("x-request-id");
+        assert\!(header.is_some());
+        assert_eq\!(header.unwrap().to_str().unwrap(), "12345");
+    }
+
+    #[test]
+    fn response_try_insert_header_invalid_name() {
+        let result = ResponseTransformer::new("data")
+            .try_insert_header("invalid header\!", "value");
+
+        assert\!(result.is_err());
+    }
+
+    #[actix_rt::test]
+    async fn response_force_format_json_pretty() {
+        let request = TestRequest::default()
+            .insert_header((ACCEPT, "text/plain"));
+        
+        let response = ResponseTransformer::new(vec\![1, 2, 3])
+            .force_format(ResponseFormat::JsonPretty)
+            .respond_to(&request.to_http_request());
+
+        let body = body::to_bytes(response.into_body()).await.unwrap();
+        let body_str = String::from_utf8(body.to_vec()).unwrap();
+        
+        // Pretty JSON should contain newlines
+        assert\!(body_str.contains('\n'));
+    }
+
+    #[actix_rt::test]
+    async fn response_force_format_text() {
+        let request = TestRequest::default()
+            .insert_header((ACCEPT, "application/json"));
+        
+        let response = ResponseTransformer::new(json\!({"key": "value"}))
+            .force_format(ResponseFormat::Text)
+            .respond_to(&request.to_http_request());
+
+        let content_type = response.headers().get(CONTENT_TYPE).unwrap();
+        assert_eq\!(
+            content_type.to_str().unwrap(),
+            header::ContentType::plaintext().to_string()
+        );
+    }
+
+    #[actix_rt::test]
+    async fn response_prefer_pretty_json() {
+        let request = TestRequest::default();
+        let response = ResponseTransformer::new(vec\![1, 2])
+            .prefer_pretty_json()
+            .respond_to(&request.to_http_request());
+
+        let body = body::to_bytes(response.into_body()).await.unwrap();
+        let body_str = String::from_utf8(body.to_vec()).unwrap();
+        
+        assert\!(body_str.contains('\n'));
+    }
+
+    #[actix_rt::test]
+    async fn response_compose_transformation() {
+        let request = TestRequest::default();
+        let response = ResponseTransformer::new(vec\![1, 2, 3])
+            .with_message("numbers")
+            .compose(|envelope| {
+                let sum: i32 = envelope.data.iter().sum();
+                ResponseEnvelope {
+                    message: format\!("{} (sum={})", envelope.message, sum),
+                    data: sum,
+                    metadata: envelope.metadata,
+                }
+            })
+            .respond_to(&request.to_http_request());
+
+        let body = body::to_bytes(response.into_body()).await.unwrap();
+        let payload: JsonValue = serde_json::from_slice(&body).unwrap();
+
+        assert_eq\!(payload["message"], "numbers (sum=6)");
+        assert_eq\!(payload["data"], 6);
+    }
+
+    #[actix_rt::test]
+    async fn response_chained_transformations() {
+        let request = TestRequest::default();
+        let response = ResponseTransformer::new(10)
+            .with_message("start")
+            .map_data(|x| x * 2)
+            .map_data(|x| x + 5)
+            .map_message(|msg| format\!("{}\!", msg).into())
+            .respond_to(&request.to_http_request());
+
+        let body = body::to_bytes(response.into_body()).await.unwrap();
+        let payload: JsonValue = serde_json::from_slice(&body).unwrap();
+
+        assert_eq\!(payload["data"], 25); // (10 * 2) + 5
+        assert_eq\!(payload["message"], "start\!");
+    }
+
+    #[actix_rt::test]
+    async fn negotiate_format_with_wildcard() {
+        let request = TestRequest::default()
+            .insert_header((ACCEPT, "*/*"));
+        
+        let response = ResponseTransformer::new("data")
+            .respond_to(&request.to_http_request());
+
+        assert_eq\!(response.status(), StatusCode::OK);
+    }
+
+    #[actix_rt::test]
+    async fn negotiate_format_with_application_wildcard() {
+        let request = TestRequest::default()
+            .insert_header((ACCEPT, "application/*"));
+        
+        let response = ResponseTransformer::new("data")
+            .respond_to(&request.to_http_request());
+
+        let content_type = response.headers().get(CONTENT_TYPE).unwrap();
+        assert\!(content_type.to_str().unwrap().contains("json"));
+    }
+
+    #[actix_rt::test]
+    async fn negotiate_format_multiple_accepts() {
+        let request = TestRequest::default()
+            .insert_header((ACCEPT, "text/html, application/json, */*"));
+        
+        let response = ResponseTransformer::new("data")
+            .respond_to(&request.to_http_request());
+
+        let content_type = response.headers().get(CONTENT_TYPE).unwrap();
+        assert\!(content_type.to_str().unwrap().contains("json"));
+    }
+
+    #[actix_rt::test]
+    async fn query_string_format_parameter() {
+        let request = TestRequest::with_uri("/api/data?format=pretty");
+        let response = ResponseTransformer::new(json\!({"test": "value"}))
+            .respond_to(&request.to_http_request());
+
+        let body = body::to_bytes(response.into_body()).await.unwrap();
+        let body_str = String::from_utf8(body.to_vec()).unwrap();
+        
+        assert\!(body_str.contains('\n'));
+    }
+
+    #[actix_rt::test]
+    async fn response_with_error_status() {
+        let request = TestRequest::default();
+        let response = ResponseTransformer::new("error details")
+            .with_status(StatusCode::BAD_REQUEST)
+            .with_message("Validation failed")
+            .respond_to(&request.to_http_request());
+
+        assert_eq\!(response.status(), StatusCode::BAD_REQUEST);
+
+        let body = body::to_bytes(response.into_body()).await.unwrap();
+        let payload: JsonValue = serde_json::from_slice(&body).unwrap();
+
+        assert_eq\!(payload["message"], "Validation failed");
+    }
+
+    #[actix_rt::test]
+    async fn response_empty_data() {
+        let request = TestRequest::default();
+        let response = ResponseTransformer::new(())
+            .with_message("empty response")
+            .respond_to(&request.to_http_request());
+
+        let body = body::to_bytes(response.into_body()).await.unwrap();
+        let payload: JsonValue = serde_json::from_slice(&body).unwrap();
+
+        assert_eq\!(payload["message"], "empty response");
+        assert_eq\!(payload["data"], json\!(null));
+    }
+
+    #[test]
+    fn response_format_enum_equality() {
+        assert_eq\!(ResponseFormat::Json, ResponseFormat::Json);
+        assert_ne\!(ResponseFormat::Json, ResponseFormat::JsonPretty);
+        assert_ne\!(ResponseFormat::Json, ResponseFormat::Text);
+    }
+
+    #[actix_rt::test]
+    async fn allow_format_adds_capability() {
+        let request = TestRequest::default()
+            .insert_header((ACCEPT, "text/plain"));
+        
+        let response = ResponseTransformer::new("test")
+            .allow_format(ResponseFormat::Text)
+            .respond_to(&request.to_http_request());
+
+        let content_type = response.headers().get(CONTENT_TYPE).unwrap();
+        assert_eq\!(
+            content_type.to_str().unwrap(),
+            header::ContentType::plaintext().to_string()
+        );
+    }
+
+    #[actix_rt::test]
+    async fn try_map_metadata_success() {
+        let request = TestRequest::default();
+        let response = ResponseTransformer::new(1)
+            .with_metadata_value(json\!({"value": 10}))
+            .try_map_metadata(|meta| {
+                Ok(meta.map(|m| {
+                    json\!({"transformed": true, "original": m})
+                }))
+            })
+            .unwrap()
+            .respond_to(&request.to_http_request());
+
+        let body = body::to_bytes(response.into_body()).await.unwrap();
+        let payload: JsonValue = serde_json::from_slice(&body).unwrap();
+
+        assert_eq\!(payload["metadata"]["transformed"], true);
+        assert\!(payload["metadata"]["original"].is_object());
+    }
+
+    #[test]
+    fn try_map_metadata_error() {
+        let result = ResponseTransformer::new(1)
+            .with_metadata_value(json\!({"value": 10}))
+            .try_map_metadata(|_| {
+                Err(serde_json::Error::custom("transformation failed"))
+            });
+
+        assert\!(result.is_err());
+    }
+
+    #[actix_rt::test]
+    async fn complex_transformation_pipeline() {
+        let request = TestRequest::default();
+        let response = ResponseTransformer::new(vec\![1, 2, 3, 4, 5])
+            .with_message("numbers")
+            .with_status(StatusCode::OK)
+            .map_data(|nums| nums.into_iter().filter(|&x| x % 2 == 0).collect::<Vec<_>>())
+            .map_data(|nums: Vec<i32>| nums.into_iter().map(|x| x * 10).collect::<Vec<_>>())
+            .try_with_metadata(json\!({"filtered": true, "multiplied": 10}))
+            .unwrap()
+            .map_message(|msg| format\!("{} - processed", msg).into())
+            .respond_to(&request.to_http_request());
+
+        let body = body::to_bytes(response.into_body()).await.unwrap();
+        let payload: JsonValue = serde_json::from_slice(&body).unwrap();
+
+        assert_eq\!(payload["data"], json\!([20, 40]));
+        assert_eq\!(payload["message"], "numbers - processed");
+        assert_eq\!(payload["metadata"]["filtered"], true);
     }
 }

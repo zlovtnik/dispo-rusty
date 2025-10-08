@@ -62,7 +62,7 @@ where
     ///
     /// # Examples
     ///
-    /// ```no_run
+    /// ```
     /// // Given `middleware` that wraps an inner service and a `req: ServiceRequest`:
     /// // let fut = middleware.call(req);
     /// // let res = futures::executor::block_on(fut).unwrap();
@@ -196,15 +196,6 @@ mod functional_auth {
     }
 
     impl Default for FunctionalAuthentication {
-        /// Creates a default `FunctionalAuthentication` with no function registry configured.
-        ///
-        /// # Examples
-        ///
-        /// ```
-        /// let auth = FunctionalAuthentication::default();
-        /// let auth2 = FunctionalAuthentication::new();
-        /// // Both have no registry by default.
-        /// ```
         fn default() -> Self {
             Self::new()
         }
@@ -330,21 +321,7 @@ mod functional_auth {
     }
 
     impl<S> FunctionalAuthenticationMiddleware<S> {
-        /// Determines whether the given request should bypass authentication.
-        ///
-        /// Returns `true` for HTTP OPTIONS requests or when the request path starts with
-        /// any entry in `constants::IGNORE_ROUTES`, `false` otherwise.
-        ///
-        /// # Examples
-        ///
-        /// ```rust
-        /// # // Example usage (ignored for doctest compilation)
-        /// # use actix_web::{http::Method, test::TestRequest};
-        /// # use actix_web::dev::ServiceRequest;
-        /// // Construct a ServiceRequest and check skipping behavior
-        /// let req: ServiceRequest = TestRequest::with_uri("/health").method(Method::OPTIONS).to_srv_request();
-        /// assert!(should_skip_authentication(&req));
-        /// ```
+        /// Pure function to determine if authentication should be skipped
         fn should_skip_authentication(req: &ServiceRequest) -> bool {
             // Skip OPTIONS preflight requests
             if req.method() == Method::OPTIONS {
@@ -357,36 +334,7 @@ mod functional_auth {
                 .any(|route| req.path().starts_with(route))
         }
 
-        /// Processes and validates an authorization token from the request and returns the tenant context on success.
-        ///
-        /// Attempts to extract a bearer token from the `Authorization` header, decode it, locate the tenant's DB pool,
-        /// and verify the token against that tenant's secrets. On success returns `(tenant_id, user_id, tenant_pool)`.
-        ///
-        /// # Errors
-        ///
-        /// Returns an `Err(&'static str)` with one of:
-        /// - `"Missing authorization header"`, `"Invalid header encoding"`, `"Invalid authorization scheme"`, or `"Empty token"` from token extraction;
-        /// - `"Token decode failed"` if token decoding fails;
-        /// - `"Tenant not found"` if the tenant ID has no associated pool;
-        /// - `"Token verification failed"` if token verification against the tenant pool fails.
-        ///
-        /// # Examples
-        ///
-        /// ```
-        /// // Pseudocode example: requires a running Actix ServiceRequest and TenantPoolManager.
-        /// # use std::sync::Arc;
-        /// # use crate::middleware::auth_middleware::FunctionalAuthenticationMiddleware as M;
-        /// # fn example(req: &actix_web::dev::ServiceRequest, manager: &crate::config::tenant::TenantPoolManager) {
-        /// match M::process_authentication(req, manager) {
-        ///     Ok((tenant_id, user_id, _pool)) => {
-        ///         // use tenant_id and user_id
-        ///     }
-        ///     Err(err) => {
-        ///         // handle unauthorized case
-        ///     }
-        /// }
-        /// # }
-        /// ```
+        /// Functional pipeline for token extraction and validation
         fn process_authentication(
             req: &ServiceRequest,
             manager: &TenantPoolManager,
@@ -499,3 +447,143 @@ mod functional_auth {
 
 #[cfg(feature = "functional")]
 pub use functional_auth::*;
+
+#[cfg(all(test, feature = "functional"))]
+mod tests {
+    use super::*;
+    use actix_web::{test, web, App, HttpResponse};
+    use crate::functional::pure_function_registry::PureFunctionRegistry;
+    use std::sync::Arc;
+
+    async fn test_handler() -> HttpResponse {
+        HttpResponse::Ok().body("test")
+    }
+
+    #[actix_rt::test]
+    async fn functional_auth_middleware_creates_default() {
+        let middleware = FunctionalAuthentication::default();
+        // Should create successfully
+        assert\!(middleware.registry.is_none());
+    }
+
+    #[actix_rt::test]
+    async fn functional_auth_middleware_with_registry() {
+        let registry = Arc::new(PureFunctionRegistry::new());
+        let middleware = FunctionalAuthentication::with_registry(registry.clone());
+        
+        assert\!(middleware.registry.is_some());
+    }
+
+    #[actix_rt::test]
+    async fn functional_auth_should_skip_options_request() {
+        let app = test::init_service(
+            App::new()
+                .wrap(FunctionalAuthentication::new())
+                .route("/test", web::get().to(test_handler))
+        )
+        .await;
+
+        let req = test::TestRequest::with_uri("/test")
+            .method(actix_web::http::Method::OPTIONS)
+            .to_request();
+
+        let resp = test::call_service(&app, req).await;
+        // OPTIONS should pass through without auth
+        assert\!(resp.status().is_success() || resp.status() == StatusCode::METHOD_NOT_ALLOWED);
+    }
+
+    #[actix_rt::test]
+    async fn functional_auth_blocks_unauthorized_request() {
+        let app = test::init_service(
+            App::new()
+                .wrap(FunctionalAuthentication::new())
+                .route("/protected", web::get().to(test_handler))
+        )
+        .await;
+
+        let req = test::TestRequest::get()
+            .uri("/protected")
+            .to_request();
+
+        let resp = test::call_service(&app, req).await;
+        assert_eq\!(resp.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[test]
+    fn functional_auth_extract_token_missing_header() {
+        let req = test::TestRequest::get().uri("/test").to_srv_request();
+        let result = FunctionalAuthenticationMiddleware::<()>::extract_token(&req);
+        
+        assert\!(result.is_err());
+        assert_eq\!(result.unwrap_err(), "Missing authorization header");
+    }
+
+    #[test]
+    fn functional_auth_extract_token_invalid_scheme() {
+        let req = test::TestRequest::get()
+            .uri("/test")
+            .insert_header((constants::AUTHORIZATION, "Basic abc123"))
+            .to_srv_request();
+        
+        let result = FunctionalAuthenticationMiddleware::<()>::extract_token(&req);
+        
+        assert\!(result.is_err());
+        assert_eq\!(result.unwrap_err(), "Invalid authorization scheme");
+    }
+
+    #[test]
+    fn functional_auth_extract_token_empty_token() {
+        let req = test::TestRequest::get()
+            .uri("/test")
+            .insert_header((constants::AUTHORIZATION, "Bearer "))
+            .to_srv_request();
+        
+        let result = FunctionalAuthenticationMiddleware::<()>::extract_token(&req);
+        
+        assert\!(result.is_err());
+        assert_eq\!(result.unwrap_err(), "Empty token");
+    }
+
+    #[test]
+    fn functional_auth_extract_token_success() {
+        let req = test::TestRequest::get()
+            .uri("/test")
+            .insert_header((constants::AUTHORIZATION, "Bearer valid_token_here"))
+            .to_srv_request();
+        
+        let result = FunctionalAuthenticationMiddleware::<()>::extract_token(&req);
+        
+        assert\!(result.is_ok());
+        assert_eq\!(result.unwrap(), "valid_token_here");
+    }
+
+    #[test]
+    fn functional_auth_should_skip_health_endpoint() {
+        let req = test::TestRequest::get()
+            .uri("/health")
+            .to_srv_request();
+        
+        let should_skip = FunctionalAuthenticationMiddleware::<()>::should_skip_authentication(&req);
+        assert\!(should_skip);
+    }
+
+    #[test]
+    fn functional_auth_should_skip_api_doc() {
+        let req = test::TestRequest::get()
+            .uri("/api-doc")
+            .to_srv_request();
+        
+        let should_skip = FunctionalAuthenticationMiddleware::<()>::should_skip_authentication(&req);
+        assert\!(should_skip);
+    }
+
+    #[test]
+    fn functional_auth_should_not_skip_protected_route() {
+        let req = test::TestRequest::get()
+            .uri("/api/protected")
+            .to_srv_request();
+        
+        let should_skip = FunctionalAuthenticationMiddleware::<()>::should_skip_authentication(&req);
+        assert\!(\!should_skip);
+    }
+}
