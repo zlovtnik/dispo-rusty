@@ -93,21 +93,24 @@ pub fn update(id: i32, updated_person: PersonDTO, pool: &Pool) -> Result<(), Ser
     }
 }
 
-/// Deletes the person with the specified `id` from the database.
+/// Deletes the person record with the given id from the database.
 ///
-/// Returns `Ok(())` if the person was found and deleted. Returns `ServiceError::NotFound`
-/// if no person exists with the given `id`. Returns `ServiceError::InternalServerError`
-/// if the deletion failed for other reasons.
+/// If a person with the provided `id` exists, the record is removed; otherwise the function
+/// returns a `ServiceError::NotFound`.
+///
+/// # Returns
+///
+/// `Ok(())` on successful deletion; `Err(ServiceError::NotFound)` if no record with the given `id` exists;
+/// `Err(ServiceError::InternalServerError)` if the deletion operation fails.
 ///
 /// # Examples
 ///
-/// ```no_run
-/// # use crate::services::address_book_service::delete;
-/// # use crate::db::Pool;
-/// let pool: Pool = /* obtain pool */ unimplemented!();
-/// match delete(1, &pool) {
-///     Ok(()) => println!("Deleted"),
-///     Err(e) => println!("Error: {:?}", e),
+/// ```
+/// // assume `pool` is a valid database pool available in scope
+/// let result = delete(42, &pool);
+/// match result {
+///     Ok(()) => println!("Person deleted"),
+///     Err(e) => eprintln!("Delete failed: {:?}", e),
 /// }
 /// ```
 pub fn delete(id: i32, pool: &Pool) -> Result<(), ServiceError> {

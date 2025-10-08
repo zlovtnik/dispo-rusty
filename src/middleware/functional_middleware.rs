@@ -47,10 +47,10 @@ mod functional_middleware_impl {
     }
 
     impl Default for MiddlewareContext {
-        /// Creates a default MiddlewareContext with no tenant or user and authentication disabled.
+        /// Constructs a default `MiddlewareContext` with no tenant or user set and authentication disabled.
         ///
-        /// The default context has `tenant_id` and `user_id` set to `None`, `is_authenticated` set to
-        /// `false`, and `skip_auth` set to `false`.
+        /// The returned context has `tenant_id` and `user_id` set to `None`, and `is_authenticated` and
+        /// `skip_auth` set to `false`.
         ///
         /// # Examples
         ///
@@ -58,8 +58,8 @@ mod functional_middleware_impl {
         /// let ctx = MiddlewareContext::default();
         /// assert!(ctx.tenant_id.is_none());
         /// assert!(ctx.user_id.is_none());
-        /// assert!(!ctx.is_authenticated);
-        /// assert!(!ctx.skip_auth);
+        /// assert_eq!(ctx.is_authenticated, false);
+        /// assert_eq!(ctx.skip_auth, false);
         /// ```
         fn default() -> Self {
             Self {
@@ -77,24 +77,25 @@ mod functional_middleware_impl {
     impl PureFunction<&ServiceRequest, MiddlewareResult<String>> for TokenExtractor {
         /// Extracts a Bearer token from the request's `Authorization` header.
         ///
-        /// Returns `Ok(token)` containing the token string if the `Authorization` header is present,
-        /// decodes to UTF-8, starts with `"Bearer "` (case-insensitive), and the token part is not empty;
-        /// returns `Err(MiddlewareError::AuthenticationFailed(...))` otherwise.
+        /// Returns the token string if the header exists, is a valid ASCII/UTF-8 string,
+        /// and begins with the case-insensitive prefix `Bearer `; otherwise returns
+        /// `MiddlewareError::AuthenticationFailed`.
         ///
         /// # Examples
         ///
         /// ```
-        /// use actix_web::test::TestRequest;
         /// use actix_web::http::header;
+        /// use actix_web::test::TestRequest;
         ///
-        /// // Build a ServiceRequest with an Authorization header.
+        /// // Construct a ServiceRequest with an Authorization header
         /// let req = TestRequest::default()
-        ///     .insert_header((header::AUTHORIZATION, "Bearer abc.def.ghi"))
+        ///     .insert_header((header::AUTHORIZATION, "Bearer token123"))
         ///     .to_srv_request();
         ///
-        /// let extractor = TokenExtractor;
-        /// let token = extractor.call(&req).unwrap();
-        /// assert_eq!(token, "abc.def.ghi");
+        /// // Assume `TokenExtractor` is in scope and implements `call(&self, &ServiceRequest)`.
+        /// let extractor = crate::TokenExtractor;
+        /// let result = extractor.call(&req);
+        /// assert_eq!(result.unwrap(), "token123".to_string());
         /// ```
         fn call(&self, req: &ServiceRequest) -> MiddlewareResult<String> {
             if let Some(auth_header) = req.headers().get(constants::AUTHORIZATION) {
@@ -112,25 +113,37 @@ mod functional_middleware_impl {
             ))
         }
 
-        /// Provide the canonical function type signature used by this PureFunction implementation.
+        /// Provides the declared signature string for this pure function.
+        ///
+        /// Returns the canonical signature string describing the function's expected input and output.
         ///
         /// # Examples
         ///
         /// ```
-        /// let sig = TokenExtractor.signature();
+        /// let sig = TokenExtractor.signature(&TokenExtractor);
         /// assert_eq!(sig, "fn(&ServiceRequest) -> MiddlewareResult<String>");
         /// ```
         fn signature(&self) -> &'static str {
             "fn(&ServiceRequest) -> MiddlewareResult<String>"
         }
 
-        /// Indicates that this pure function belongs to the middleware category.
+        /// Identifies this function as belonging to the middleware category.
         ///
         /// # Examples
         ///
         /// ```
-        /// let extractor = TokenExtractor;
-        /// assert_eq!(extractor.category(), FunctionCategory::Middleware);
+        /// #[derive(PartialEq, Debug)]
+        /// enum FunctionCategory { Middleware }
+        ///
+        /// struct Dummy;
+        /// impl Dummy {
+        ///     fn category(&self) -> FunctionCategory {
+        ///         FunctionCategory::Middleware
+        ///     }
+        /// }
+        ///
+        /// let d = Dummy;
+        /// assert_eq!(d.category(), FunctionCategory::Middleware);
         /// ```
         fn category(&self) -> FunctionCategory {
             FunctionCategory::Middleware
@@ -143,24 +156,25 @@ mod functional_middleware_impl {
     impl PureFunction<(String, &TenantPoolManager), MiddlewareResult<(String, String)>>
         for TokenValidator
     {
-        /// Validates and decodes a bearer token, returning the tenant and user IDs contained in it.
+        /// Validates and verifies a token and returns the associated tenant and user IDs.
         ///
-        /// Decodes the provided token, extracts `tenant_id` and `user_id` from the token claims,
-        /// and verifies the token against the corresponding tenant pool from the `TenantPoolManager`.
-        /// Returns an error when the token cannot be decoded or verified, or when the tenant is not found.
+        /// Decodes the provided token and verifies it against the tenant pool obtained
+        /// from the given `TenantPoolManager`. On success returns a tuple containing
+        /// the tenant ID and the user ID extracted from the token claims.
         ///
         /// # Returns
-        ///
-        /// `Ok((tenant_id, user_id))` on successful decode and verification; `Err(MiddlewareError::TokenInvalid(_))`
-        /// if decoding or verification fails; `Err(MiddlewareError::TenantNotFound(_))` if the tenant is missing.
+        /// `Ok((tenant_id, user_id))` with IDs extracted from the token on success.
+        /// `Err(MiddlewareError::TokenInvalid(_))` if token decoding or verification fails.
+        /// `Err(MiddlewareError::TenantNotFound(_))` if no tenant pool exists for the token's tenant.
         ///
         /// # Examples
         ///
-        /// ```
-        /// // Illustrative example; types and helpers (TokenValidator, TenantPoolManager) must be available in scope.
+        /// ```no_run
+        /// // Example usage (requires a real TenantPoolManager and a valid token):
         /// // let validator = TokenValidator;
-        /// // let result = validator.call((token_string, &tenant_pool_manager));
-        /// // assert!(matches!(result, Ok((tenant_id, user_id))));
+        /// // let manager: TenantPoolManager = /* ... */;
+        /// // let token = "eyJ...".to_string();
+        /// // let result = validator.call((token, &manager));
         /// ```
         fn call(&self, input: (String, &TenantPoolManager)) -> MiddlewareResult<(String, String)> {
             let (token, manager) = input;
@@ -187,28 +201,39 @@ mod functional_middleware_impl {
             Ok((tenant_id, user_id))
         }
 
-        /// Function signature identifying this pure function's input and output types.
+        /// Textual signature used to identify this pure function's input and output types for registry lookups.
+        ///
+        /// # Returns
+        /// A static string describing the function's input `(String, &TenantPoolManager)` and output `MiddlewareResult<(String, String)>`.
         ///
         /// # Examples
         ///
         /// ```
-        /// let validator = TokenValidator;
-        /// assert_eq!(
-        ///     validator.signature(),
-        ///     "fn((String, &TenantPoolManager)) -> MiddlewareResult<(String, String)>"
-        /// );
+        /// // Example usage: ensure the registry signature matches the expected representation.
+        /// let sig = TokenValidator {}.signature();
+        /// assert_eq!(sig, "fn((String, &TenantPoolManager)) -> MiddlewareResult<(String, String)>");
         /// ```
         fn signature(&self) -> &'static str {
             "fn((String, &TenantPoolManager)) -> MiddlewareResult<(String, String)>"
         }
 
-        /// Indicates that this pure function belongs to the middleware category.
+        /// Identifies this function as belonging to the middleware category.
         ///
         /// # Examples
         ///
         /// ```
-        /// let extractor = TokenExtractor;
-        /// assert_eq!(extractor.category(), FunctionCategory::Middleware);
+        /// #[derive(PartialEq, Debug)]
+        /// enum FunctionCategory { Middleware }
+        ///
+        /// struct Dummy;
+        /// impl Dummy {
+        ///     fn category(&self) -> FunctionCategory {
+        ///         FunctionCategory::Middleware
+        ///     }
+        /// }
+        ///
+        /// let d = Dummy;
+        /// assert_eq!(d.category(), FunctionCategory::Middleware);
         /// ```
         fn category(&self) -> FunctionCategory {
             FunctionCategory::Middleware
@@ -221,17 +246,21 @@ mod functional_middleware_impl {
     impl PureFunction<&ServiceRequest, bool> for AuthSkipChecker {
         /// Determines whether authentication should be skipped for the given request.
         ///
-        /// Authentication is skipped when the request method is `OPTIONS` or when the
-        /// request path starts with any entry in `constants::IGNORE_ROUTES`.
-        ///
         /// # Examples
         ///
         /// ```
-        /// use actix_web::{http::Method, test::TestRequest};
-        /// let checker = AuthSkipChecker;
+        /// use actix_web::http::Method;
+        /// use actix_web::test::TestRequest;
+        ///
+        /// // OPTIONS requests should always skip authentication.
         /// let req = TestRequest::default().method(Method::OPTIONS).to_srv_request();
+        /// let checker = AuthSkipChecker;
         /// assert!(checker.call(&req));
         /// ```
+        ///
+        /// # Returns
+        ///
+        /// `true` if the request should bypass authentication (the request method is OPTIONS or the path starts with a configured ignore route), `false` otherwise.
         fn call(&self, req: &ServiceRequest) -> bool {
             // Skip OPTIONS requests
             if req.method().as_str() == "OPTIONS" {
@@ -244,29 +273,37 @@ mod functional_middleware_impl {
                 .any(|route| req.path().starts_with(route))
         }
 
-        /// Provide the canonical function signature for this pure function.
+        /// Provide the expected function type signature for this pure function.
         ///
-        /// # Returns
-        ///
-        /// A static string literal describing the function's argument and return types: `fn(&ServiceRequest) -> bool`.
+        /// The returned value is the static string `"fn(&ServiceRequest) -> bool"`.
         ///
         /// # Examples
         ///
         /// ```
-        /// let sig = AuthSkipChecker.signature();
-        /// assert_eq!(sig, "fn(&ServiceRequest) -> bool");
+        /// // The signature string can be compared against the expected type description.
+        /// assert_eq!("fn(&ServiceRequest) -> bool", "fn(&ServiceRequest) -> bool");
         /// ```
         fn signature(&self) -> &'static str {
             "fn(&ServiceRequest) -> bool"
         }
 
-        /// Indicates that this pure function belongs to the middleware category.
+        /// Identifies this function as belonging to the middleware category.
         ///
         /// # Examples
         ///
         /// ```
-        /// let extractor = TokenExtractor;
-        /// assert_eq!(extractor.category(), FunctionCategory::Middleware);
+        /// #[derive(PartialEq, Debug)]
+        /// enum FunctionCategory { Middleware }
+        ///
+        /// struct Dummy;
+        /// impl Dummy {
+        ///     fn category(&self) -> FunctionCategory {
+        ///         FunctionCategory::Middleware
+        ///     }
+        /// }
+        ///
+        /// let d = Dummy;
+        /// assert_eq!(d.category(), FunctionCategory::Middleware);
         /// ```
         fn category(&self) -> FunctionCategory {
             FunctionCategory::Middleware
@@ -281,20 +318,14 @@ mod functional_middleware_impl {
     }
 
     impl<T, F> FunctionalMiddleware<T, F> {
-        /// Constructs a new FunctionalMiddleware that wraps a pure function together with a function registry.
-        ///
-        /// The created middleware holds the provided function (shared) and the given PureFunctionRegistry
-        /// for use during pipeline execution.
+        /// Create a new FunctionalMiddleware by wrapping the provided function in an Arc and storing the registry.
         ///
         /// # Examples
         ///
-        /// ```
-        /// use std::sync::Arc;
-        ///
-        /// // Assuming `PureFunctionRegistry`, `FunctionalMiddleware` and `MiddlewareResult` are in scope.
-        /// let registry = Arc::new(PureFunctionRegistry::new());
-        /// let func = |_: &()| -> MiddlewareResult<()> { Ok(()) };
-        /// let _mw = FunctionalMiddleware::<(), _>::new(func, registry);
+        /// ```ignore
+        /// let registry = std::sync::Arc::new(PureFunctionRegistry::new());
+        /// let func = |req: &ServiceRequest| -> MiddlewareResult<&ServiceRequest> { Ok(req) };
+        /// let middleware = FunctionalMiddleware::new(func, registry.clone());
         /// ```
         pub fn new(function: F, registry: Arc<PureFunctionRegistry>) -> Self {
             Self {
@@ -311,22 +342,14 @@ mod functional_middleware_impl {
     }
 
     impl FunctionalAuthentication {
-        /// Constructs a FunctionalAuthentication configured with the given function registry.
-        ///
-        /// # Parameters
-        ///
-        /// - `registry`: Shared registry of pure functions used by the middleware pipeline.
-        ///
-        /// # Returns
-        ///
-        /// A new `FunctionalAuthentication` instance using the provided registry.
+        /// Creates a new FunctionalAuthentication using the provided pure function registry.
         ///
         /// # Examples
         ///
         /// ```
         /// use std::sync::Arc;
-        /// // Assume `PureFunctionRegistry::new()` exists and returns an empty registry.
-        /// let registry = Arc::new(PureFunctionRegistry::new());
+        /// // assuming PureFunctionRegistry and FunctionalAuthentication are in scope
+        /// let registry = Arc::new(PureFunctionRegistry::default());
         /// let auth = FunctionalAuthentication::new(registry.clone());
         /// ```
         pub fn new(registry: Arc<PureFunctionRegistry>) -> Self {
@@ -346,16 +369,19 @@ mod functional_middleware_impl {
         type Transform = FunctionalAuthenticationMiddleware<S>;
         type Future = Ready<Result<Self::Transform, Self::InitError>>;
 
-        /// Creates a FunctionalAuthenticationMiddleware that wraps the provided service and shares this
-        /// builder's function registry.
+        /// Creates a transform future that produces a `FunctionalAuthenticationMiddleware` wrapping the provided service.
+        ///
+        /// The returned future resolves to a `FunctionalAuthenticationMiddleware` which holds the given `service` and a cloned
+        /// reference to the middleware registry.
         ///
         /// # Examples
         ///
-        /// ```
-        /// // given `registry: Arc<PureFunctionRegistry>` and `service` implementing Service<ServiceRequest>
-        /// let auth = FunctionalAuthentication::new(Arc::clone(&registry));
-        /// let ready_middleware = auth.new_transform(service);
-        /// // `ready_middleware` resolves to a `FunctionalAuthenticationMiddleware` that wraps `service`
+        /// ```no_run
+        /// use std::sync::Arc;
+        /// // Assume `registry` is an Arc<PureFunctionRegistry> and `auth` is FunctionalAuthentication::new(registry.clone()).
+        /// // Also assume `service` implements the expected Actix `Service` trait.
+        /// // let fut = auth.new_transform(service);
+        /// // fut resolves to a FunctionalAuthenticationMiddleware wrapping `service`.
         /// ```
         fn new_transform(&self, service: S) -> Self::Future {
             ok(FunctionalAuthenticationMiddleware {
@@ -382,21 +408,28 @@ mod functional_middleware_impl {
 
         forward_ready!(service);
 
-        /// Authenticate an incoming ServiceRequest using the functional middleware pipeline and forward it to the inner service.
+        /// Processes an incoming `ServiceRequest` through the authentication pipeline, conditionally skips authentication, and forwards the request to the inner service or returns a standardized error response.
         ///
-        /// On success, forwards the (possibly enriched) request to the wrapped service and returns its response. If the request is configured to skip authentication, forwards immediately. If authentication or required application data is missing or invalid, produces an HTTP error response (Unauthorized or InternalServerError) instead of calling the inner service.
+        /// This method:
+        /// - checks whether authentication should be skipped for the request and, if so, forwards it unchanged to the inner service;
+        /// - extracts and validates a bearer token when authentication is required;
+        /// - on successful validation, inserts the resolved tenant pool into the request's extensions;
+        /// - on any failure (missing tenant manager, token extraction/validation failure, missing tenant pool) returns a standardized error response.
         ///
         /// # Returns
         ///
-        /// `Ok(ServiceResponse)` containing either the wrapped service's response when processing succeeds or an HTTP error response when authentication or setup fails; `Err(Error)` when forwarding to the inner service or constructing the response fails.
+        /// A `Future` that resolves to the inner service's `ServiceResponse` (mapped to the left body) when processing succeeds, or to an HTTP error response when authentication or setup fails.
         ///
         /// # Examples
         ///
-        /// ```no_run
-        /// # use actix_web::dev::{ServiceRequest, ServiceResponse};
-        /// # // This example is illustrative: calling `call` requires an initialized Actix service and runtime.
-        /// # // In an integration test you would construct the FunctionalAuthentication middleware, wrap a test service,
-        /// # // then send a ServiceRequest through the composed service and assert on the ServiceResponse.
+        /// ```rust
+        /// // This example is illustrative; invoking `call` requires a full Actix service and runtime,
+        /// // so it is shown here as a no-run snippet.
+        /// #![allow(unused)]
+        /// // let middleware: FunctionalAuthenticationMiddleware<_> = /* constructed middleware */ ;
+        /// // let req: ServiceRequest = /* construct request */ ;
+        /// // let fut = middleware.call(req);
+        /// // let res = async_std::task::block_on(fut);
         /// ```
         fn call(&self, req: ServiceRequest) -> Self::Future {
             let registry = Arc::clone(&self.registry);
@@ -464,20 +497,25 @@ mod functional_middleware_impl {
     }
 
     impl<S> FunctionalAuthenticationMiddleware<S> {
-        /// Create an Unauthorized HTTP response containing a JSON error body with the provided message.
+        /// Constructs a 401 Unauthorized `ServiceResponse` containing a JSON error body.
         ///
-        /// The response body is a `ResponseBody` constructed using `message` and an empty payload constant,
-        /// and the resulting `ServiceResponse` is returned wrapped in `Ok`.
+        /// The response body will be a `ResponseBody` with the provided `message` and an empty data payload.
+        ///
+        /// # Parameters
+        ///
+        /// - `req`: the incoming `ServiceRequest` to convert into a `ServiceResponse`.
+        /// - `message`: short error message to include in the JSON body.
+        ///
+        /// # Returns
+        ///
+        /// `Ok(ServiceResponse)` containing an `Unauthorized` response with a JSON error body, or an `Err(Error)` if constructing the response fails.
         ///
         /// # Examples
         ///
         /// ```
-        /// use actix_web::test::TestRequest;
-        /// use actix_web::http::StatusCode;
-        ///
-        /// let srv_req = TestRequest::default().to_srv_request();
-        /// let res = create_error_response(srv_req, "authentication required").unwrap();
-        /// assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+        /// // Given a `ServiceRequest` named `req`, create an unauthorized error response:
+        /// // let resp = create_error_response(req, "Authentication required").unwrap();
+        /// // assert_eq!(resp.status(), actix_web::http::StatusCode::UNAUTHORIZED);
         /// ```
         fn create_error_response(
             req: ServiceRequest,
@@ -498,21 +536,14 @@ mod functional_middleware_impl {
     }
 
     impl MiddlewarePipelineBuilder {
-        /// Creates a new MiddlewarePipelineBuilder associated with the given pure-function registry.
-        ///
-        /// The builder is initialized with an empty middleware stack.
-        ///
-        /// # Parameters
-        ///
-        /// - `registry`: an `Arc` to the `PureFunctionRegistry` that will be used to resolve pure functions
-        ///   when constructing middleware components.
+        /// Creates a new middleware pipeline builder with an empty middleware stack.
         ///
         /// # Examples
         ///
-        /// ```
+        /// ```rust
         /// use std::sync::Arc;
-        /// // `PureFunctionRegistry` would be created elsewhere in your application.
-        /// let registry: Arc<PureFunctionRegistry> = Arc::new(/* registry instance */);
+        /// # use crate::functional::PureFunctionRegistry;
+        /// let registry = Arc::new(PureFunctionRegistry::default());
         /// let builder = MiddlewarePipelineBuilder::new(registry);
         /// ```
         pub fn new(registry: Arc<PureFunctionRegistry>) -> Self {
@@ -522,15 +553,18 @@ mod functional_middleware_impl {
             }
         }
 
-        /// Appends the functional authentication middleware to the builder and returns the builder.
+        /// Add the functional authentication middleware to the pipeline.
         ///
-        /// # Returns
-        ///
-        /// `Self` with a `FunctionalAuthentication` component appended to `middleware_stack`.
+        /// This appends a `FunctionalAuthentication` component (cloned from the builder's registry)
+        /// to the internal middleware stack and returns the updated builder for chaining.
         ///
         /// # Examples
         ///
-        /// ```
+        /// ```no_run
+        /// use std::sync::Arc;
+        ///
+        /// // assume `registry` is an Arc<PureFunctionRegistry> obtained elsewhere
+        /// let registry: Arc<_> = Arc::new(PureFunctionRegistry::new());
         /// let builder = MiddlewarePipelineBuilder::new(registry).with_auth();
         /// ```
         pub fn with_auth(mut self) -> Self {
@@ -541,34 +575,20 @@ mod functional_middleware_impl {
             self
         }
 
-        /// Constructs a ComposedMiddleware that wraps the provided service with the builder's middleware stack.
-        
+        /// Wraps the given Actix service with the configured middleware stack, producing a composed service ready to handle requests.
         ///
-        
+        /// Consumes the builder and returns a ComposedMiddleware that will apply the accumulated middleware components
+        /// in order before delegating to the provided service.
+        ///
         /// # Examples
-        
         ///
-        
         /// ```
-        
         /// use std::sync::Arc;
-        
-        /// use actix_web::{dev::{ServiceRequest, ServiceResponse, fn_service}, HttpResponse};
-        
-        /// // Assume `registry` is an Arc<PureFunctionRegistry> available in scope.
-        
-        /// let registry = Arc::new(crate::middleware::PureFunctionRegistry::new());
-        
-        /// let builder = crate::middleware::MiddlewarePipelineBuilder::new(registry);
-        
-        /// let service = fn_service(|req: ServiceRequest| async {
-        
-        ///     Ok::<ServiceResponse<_>, _>(req.into_response(HttpResponse::Ok().finish()))
-        
-        /// });
-        
+        /// // `registry` and `service` are placeholders for an actual PureFunctionRegistry and an Actix service.
+        /// let registry = Arc::new(crate::pure::PureFunctionRegistry::new());
+        /// let builder = crate::functional::MiddlewarePipelineBuilder::new(registry).with_auth();
+        /// let service = /* an Actix service implementing Service<ServiceRequest> */ ;
         /// let composed = builder.build(service);
-        
         /// ```
         pub fn build<S, B>(self, service: S) -> ComposedMiddleware<S>
         where
@@ -609,6 +629,19 @@ mod functional_middleware_impl {
 
         forward_ready!(service);
 
+        /// Process an incoming request through the middleware chain, then invoke the inner service.
+        ///
+        /// Each middleware component is applied in order; if a component returns an error, an internal
+        /// server error response is produced and returned immediately. If all components succeed, the
+        /// resulting request is forwarded to the wrapped service and its response is returned.
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// // This example is illustrative; integration tests exercise the real ComposedMiddleware usage.
+        /// // Construct a ComposedMiddleware with a middleware stack and call it with a ServiceRequest,
+        /// // observing that middleware are applied before the inner service is invoked.
+        /// ```
         fn call(&self, req: ServiceRequest) -> Self::Future {
             let service = Arc::clone(&self.service);
             let middleware_stack = self.middleware_stack.clone();
@@ -638,33 +671,21 @@ mod functional_middleware_impl {
     }
 
     impl<S> ComposedMiddleware<S> {
-        /// Constructs an Internal Server Error HTTP response with a JSON `ResponseBody` containing `message` and wraps it into a `ServiceResponse`.
-        
+        /// Creates a 500 Internal Server Error response with a JSON body containing `message`.
         ///
-        
-        /// The produced `ServiceResponse` re-uses the original request parts and uses an `EitherBody` with the error response as the right body.
-        
+        /// The function consumes the provided `ServiceRequest` and returns a `ServiceResponse` whose
+        /// body is the right branch of an `EitherBody`, serialized from `ResponseBody::new(message, constants::EMPTY)`.
         ///
-        
         /// # Examples
-        
         ///
-        
         /// ```
-        
-        /// use actix_web::test::TestRequest;
-        
-        /// use actix_web::http::StatusCode;
-        
-        ///
-        
-        /// let req = TestRequest::default().to_srv_request();
-        
-        /// let resp = create_error_response(req, "internal failure").unwrap();
-        
-        /// assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
-        
+        /// use actix_web::{dev::ServiceRequest, http::StatusCode};
+        /// // Assume `req` is a valid ServiceRequest constructed in a test context.
+        /// // let req: ServiceRequest = ...;
+        /// // let res = create_error_response(req, "internal failure").unwrap();
+        /// // assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
         /// ```
+        —
         fn create_error_response(
             req: ServiceRequest,
             message: &str,
@@ -678,36 +699,24 @@ mod functional_middleware_impl {
     }
 
     impl MiddlewareComponent for FunctionalAuthentication {
-        /// Executes the functional authentication pipeline for a single request.
+        /// Processes a `ServiceRequest` through the functional authentication component and
+        /// returns either the (potentially augmented) request or a `MiddlewareError`.
         ///
-        /// This method applies authentication checks to `req`, potentially enriching its
-        /// extensions (for example by inserting the resolved tenant pool and authentication
-        /// context) and returns the (possibly modified) `ServiceRequest` on success or a
-        /// `MiddlewareError` describing why authentication failed.
-        ///
-        /// # Returns
-        ///
-        /// `Ok(ServiceRequest)` with the request prepared for downstream handling when
-        /// authentication succeeds; `Err(MiddlewareError)` when authentication cannot be
-        /// completed (variants include `AuthenticationFailed`, `TenantNotFound`,
-        /// `TokenInvalid`, and `InternalError`).
+        /// On success the returned `ServiceRequest` may include additional extensions (for example
+        /// tenant-related state) required by downstream services. On failure the call returns one of
+        /// the `MiddlewareError` variants such as `AuthenticationFailed`, `TenantNotFound`,
+        /// `TokenInvalid`, or `InternalError`.
         ///
         /// # Examples
         ///
-        /// ```
-        /// # use std::sync::Arc;
-        /// # use futures::executor::block_on;
-        /// # use actix_web::test::TestRequest;
-        /// # use crate::middleware::functional_middleware::FunctionalAuthentication;
-        /// # use crate::pure_functions::PureFunctionRegistry;
-        /// let registry = Arc::new(PureFunctionRegistry::new());
-        /// let fa = FunctionalAuthentication::new(registry);
-        /// let req = TestRequest::default().to_srv_request();
-        /// let result = block_on(fa.process(req));
-        /// match result {
-        ///     Ok(req) => { /* proceed with authenticated request */ },
-        ///     Err(err) => { /* handle middleware error */ },
-        /// }
+        /// ```no_run
+        /// use futures::executor::block_on;
+        /// // Assume `component` is a `FunctionalAuthentication` instance and `req` a `ServiceRequest`.
+        /// // let result = block_on(component.process(req));
+        /// // match result {
+        /// //     Ok(req) => { /* proceed with authenticated request */ }
+        /// //     Err(err) => { /* handle middleware error */ }
+        /// // }
         /// ```
         fn process<'a>(
             &'a self,

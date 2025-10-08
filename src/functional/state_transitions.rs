@@ -185,19 +185,16 @@ pub fn remove_user_session(
     }
 }
 
-/// Create a transition that inserts or replaces an application configuration entry.
+/// Creates a transition that sets or updates an application configuration entry.
 ///
-/// The returned closure, when applied to a `TenantApplicationState`, sets `app_data[key]` to
-/// the given JSON `value` and updates the state's `last_updated` timestamp.
-///
-/// If `validate` is provided and returns `false` for `value`, the function returns
-/// `TransitionError::ValidationFailed`.
+/// The returned transition, when applied to a `TenantApplicationState`, inserts or replaces
+/// `app_data[key]` with the provided JSON `value` and updates the state's `last_updated` timestamp.
 ///
 /// # Returns
 ///
-/// `Ok(transition)` containing a closure that applies the configuration change and updates `last_updated`.
-/// `Err(TransitionError::InvalidParameters)` if `key` is empty.
-/// `Err(TransitionError::ValidationFailed)` if the provided validator rejects `value`.
+/// - `Ok(transition)` — a closure that applies the configuration change and updates `last_updated`.
+/// - `Err(TransitionError::InvalidParameters)` — if `key` is empty or whitespace.
+/// - `Err(TransitionError::ValidationFailed)` — if a provided `validate` function returns `false`.
 ///
 /// # Examples
 ///
@@ -269,18 +266,13 @@ pub fn remove_app_config(
     }
 }
 
-/// Creates a transition that updates an application data entry by applying the provided transformer.
+/// Creates a transition that updates the application data entry for `key` by applying `transform`.
 ///
-/// The returned transition, when applied to a `TenantApplicationState`, reads the value at `key`
-/// (or uses `default_value` if the key is absent), calls `transform` with that value, and:
-/// - if `transform` returns `Ok(new_value)`, returns a new state with `app_data[key]` set to
-///   `new_value` and `last_updated` set to the current time;
-/// - if `transform` returns `Err(_)`, returns the original state unchanged.
+/// If `key` is absent the `default_value` is passed to `transform`. If `transform` returns `Ok(new_value)`,
+/// the returned transition produces a new state with `app_data[key]` set to `new_value` and `last_updated` set
+/// to the current time. If `transform` returns `Err(_)`, the transition returns the original state unchanged.
 ///
-/// # Returns
-///
-/// `Ok(transition)` containing a function that takes `&TenantApplicationState` and returns the
-/// updated `TenantApplicationState`, or `Err(TransitionError::InvalidParameters)` if `key` is empty.
+/// `key` must not be empty or whitespace; otherwise the function returns `Err(TransitionError::InvalidParameters)`.
 ///
 /// # Examples
 ///
@@ -334,11 +326,12 @@ where
     })
 }
 
-/// Creates a transition that appends a query result with an expiration to the tenant's query cache.
+/// Appends a query result with a computed expiration to the tenant's query cache.
 ///
-/// The returned transition, when applied to a `TenantApplicationState`, clones the state, appends a
-/// `QueryResult` (containing the provided `query_id`, `data`, and `expires_at = now + ttl_seconds`)
-/// to `query_cache`, updates `last_updated`, and returns the new state.
+/// Validates that `query_id` and `data` are not empty and, on success, returns a transition
+/// closure which, when applied to a `TenantApplicationState`, clones the state, appends a
+/// `QueryResult { query_id, data, expires_at }` (where `expires_at = now + ttl_seconds`),
+/// updates `last_updated`, and returns the new state.
 ///
 /// # Errors
 ///
@@ -350,10 +343,7 @@ where
 /// let state = TenantApplicationState::default();
 /// let transition = cache_query_result("search:users?page=1", vec![1, 2, 3], 60).unwrap();
 /// let new_state = transition(&state);
-/// assert!(new_state
-///     .query_cache
-///     .iter()
-///     .any(|entry| entry.query_id == "search:users?page=1"));
+/// assert!(new_state.query_cache.iter().any(|entry| entry.query_id == "search:users?page=1"));
 /// ```
 pub fn cache_query_result(
     query_id: impl Into<String>,
@@ -394,11 +384,7 @@ pub fn cache_query_result(
 ///
 /// The returned transition produces a new `TenantApplicationState` with all
 /// `query_cache` entries whose `expires_at` is less than or equal to the
-/// current time removed, and updates `last_updated` to now.
-///
-/// # Returns
-///
-/// A transition function that yields the updated `TenantApplicationState`.
+/// current time removed, and updates `last_updated` to the current timestamp.
 ///
 /// # Examples
 ///
@@ -435,13 +421,16 @@ pub fn clean_expired_cache() -> impl FnOnce(&TenantApplicationState) -> TenantAp
     }
 }
 
-/// Builds a sequence of state transitions that perform a user login.
+/// Builds a chain of state transitions that perform a user login.
 ///
-/// The transitions, applied in order, will: clean expired query-cache entries, create a new user session with a generated session ID, and record the user's last-login timestamp in app data.
+/// The produced transitions, when applied in order to a tenant state, will:
+/// 1. remove expired query-cache entries,
+/// 2. create a new user session with a generated session ID, and
+/// 3. record the user's last-login timestamp in app data.
 ///
 /// # Returns
 ///
-/// `Ok(Vec<Box<dyn FnOnce(&TenantApplicationState) -> TenantApplicationState>>)` with three transitions on success; `Err(TransitionError::InvalidParameters)` if `user_id` is empty or if composing the last-login update fails.
+/// A vector of boxed transition functions that apply the three login-related updates in sequence.
 ///
 /// # Examples
 ///
@@ -494,8 +483,8 @@ pub fn build_login_transitions(
 /// Creates a sequence of state transitions that perform logout for the given session.
 ///
 /// The returned transitions, when applied in order, remove the specified user session and then
-/// clean expired entries from the query cache. Returns an `InvalidParameters` `TransitionError`
-/// if `session_id` is empty or only whitespace.
+/// remove expired entries from the query cache. Returns a `TransitionError::InvalidParameters`
+/// if `session_id` is empty or contains only whitespace.
 ///
 /// # Examples
 ///
@@ -525,9 +514,9 @@ pub fn build_logout_transitions(
     Ok(transitions)
 }
 
-/// Builds boxed transitions that apply multiple application configuration updates.
+/// Builds a sequence of transitions that atomically apply multiple app configuration updates.
 ///
-/// Each returned transition, when applied to a `TenantApplicationState`, sets the specified
+/// Each returned transition, when applied to a `TenantApplicationState`, sets the corresponding
 /// key in `app_data` to the provided JSON value and updates `last_updated`.
 ///
 /// # Errors
@@ -536,7 +525,7 @@ pub fn build_logout_transitions(
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```
 /// use std::collections::HashMap;
 /// use serde_json::json;
 ///
@@ -545,7 +534,7 @@ pub fn build_logout_transitions(
 /// updates.insert("items_per_page".to_string(), json!(20));
 ///
 /// let transitions = build_config_updates(updates).expect("valid config updates");
-/// // one boxed transition per entry in the map
+/// // transitions contains one boxed transition per entry in the map
 /// assert_eq!(transitions.len(), 2);
 /// ```
 pub fn build_config_updates(

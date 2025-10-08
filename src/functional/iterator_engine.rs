@@ -146,19 +146,15 @@ where
         }
     }
 
-    /// Groups consecutive elements by the key produced by `f`, collecting each group into a `Vec<T>`.
+    /// Groups consecutive elements by a key derived from each item, yielding `(key, Vec<items>)` for each contiguous group.
     ///
-    /// The resulting chain yields items of `(K, Vec<T>)` where each `Vec<T>` contains a consecutive run
-    /// of elements that share the same key.
+    /// The returned `IteratorChain` produces one tuple per run of adjacent elements that share the same key value.
     ///
     /// # Examples
     ///
     /// ```
-    /// # use iterator_engine::{IteratorEngine, IteratorChain};
-    /// let engine = IteratorEngine::new();
-    /// let chain = engine.from_vec(vec![1, 1, 2, 2, 2, 3])
-    ///     .chunk_by(|&v| v);
-    /// let groups: Vec<(i32, Vec<i32>)> = chain.collect();
+    /// let chain = IteratorChain::new(vec![1, 1, 2, 2, 2, 3].into_iter());
+    /// let groups: Vec<(i32, Vec<i32>)> = chain.chunk_by(|&x| x).collect();
     /// assert_eq!(groups, vec![(1, vec![1, 1]), (2, vec![2, 2, 2]), (3, vec![3])]);
     /// ```
     #[cfg(feature = "functional")]

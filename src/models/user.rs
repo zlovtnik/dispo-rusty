@@ -220,17 +220,15 @@ impl User {
         users.count().get_result(conn)
     }
 
-    /// Count users whose `login_session` is not null and not the empty string.
+    /// Counts users that currently have a non-empty login session.
     ///
-    /// # Returns
-    ///
-    /// `i64` with the number of users whose `login_session` is not null and not empty.
+    /// Returns the number of users whose `login_session` column is neither `NULL` nor the empty string.
     ///
     /// # Examples
     ///
     /// ```
     /// let mut conn = establish_connection(); // obtain a test database connection
-    /// let logged_in = crate::models::user::count_logged_in(&mut conn).expect("failed to count logged-in users");
+    /// let logged_in = count_logged_in(&mut conn).expect("failed to count logged-in users");
     /// assert!(logged_in >= 0);
     /// ```
     pub fn count_logged_in(conn: &mut Connection) -> QueryResult<i64> {

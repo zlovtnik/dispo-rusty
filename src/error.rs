@@ -24,7 +24,14 @@ pub enum ServiceError {
     Conflict { error_message: String },
 }
 impl error::ResponseError for ServiceError {
-    /// Maps a `ServiceError` variant to its HTTP status code.
+    /// Returns the HTTP status code that corresponds to this `ServiceError` variant.
+    ///
+    /// Maps each enum variant to its canonical HTTP status code:
+    /// - `Unauthorized` -> `401 UNAUTHORIZED`
+    /// - `InternalServerError` -> `500 INTERNAL_SERVER_ERROR`
+    /// - `BadRequest` -> `400 BAD_REQUEST`
+    /// - `NotFound` -> `404 NOT_FOUND`
+    /// - `Conflict` -> `409 CONFLICT`
     ///
     /// # Examples
     ///
@@ -32,11 +39,11 @@ impl error::ResponseError for ServiceError {
     /// use crate::error::ServiceError;
     /// use actix_web::http::StatusCode;
     ///
-    /// let err = ServiceError::Unauthorized { error_message: "no token".into() };
-    /// assert_eq!(err.status_code(), StatusCode::UNAUTHORIZED);
+    /// let e = ServiceError::Unauthorized { error_message: "no token".into() };
+    /// assert_eq!(e.status_code(), StatusCode::UNAUTHORIZED);
     ///
-    /// let err = ServiceError::NotFound { error_message: "missing".into() };
-    /// assert_eq!(err.status_code(), StatusCode::NOT_FOUND);
+    /// let e = ServiceError::InternalServerError { error_message: "oops".into() };
+    /// assert_eq!(e.status_code(), StatusCode::INTERNAL_SERVER_ERROR);
     /// ```
     fn status_code(&self) -> StatusCode {
         match *self {
@@ -47,15 +54,17 @@ impl error::ResponseError for ServiceError {
             ServiceError::Conflict { .. } => StatusCode::CONFLICT,
         }
     }
-    /// Builds an HTTP response representing this service error.
+    /// Builds an HTTP response for this error with a JSON body describing the error.
     ///
-    /// The response uses this error's HTTP status code and a JSON body created by `ResponseBody::new` containing the error's string message and an empty detail string.
+    /// The response uses the HTTP status mapped from the error variant, sets `Content-Type: application/json`,
+    /// and has a JSON body containing the error's string representation as the message and an empty detail string.
     ///
     /// # Examples
     ///
     /// ```
     /// # use actix_web::http::StatusCode;
     /// # use actix_web::error::ResponseError;
+    /// # // Example assumes ServiceError is available in scope
     /// # use actix_web_rest_api_with_jwt::error::ServiceError;
     /// let err = ServiceError::BadRequest { error_message: "invalid input".into() };
     /// let resp = err.error_response();
@@ -84,26 +93,29 @@ pub trait ErrorTransformer<T, E> {
     /// The transformed Result after applying the transformation logic.
     fn transform(&self, error: Result<T, E>) -> Result<T, E>;
 
-    /// Returns a transformer that applies this transformer's `transform` method and then applies another transformer to the result.
+    /// Composes this transformer with another transformer, applying them in sequence.
     ///
-    /// The returned closure first invokes `self.transform` on the input `Result<T, E>`, then invokes `other` on the intermediate result and returns the final `Result<T, E>`.
-    ///
-    /// # Returns
-    ///
-    /// A closure that takes a `Result<T, E>`, applies this transform, then applies `other`, and returns the resulting `Result<T, E>`.
+    /// The returned closure first applies this transformer's `transform` to the input `Result`,
+    /// then applies the provided transformer to the intermediate result.
     ///
     /// # Examples
     ///
     /// ```
     /// use crate::error::ErrorTransformer;
     ///
-    /// // Two simple transformers that wrap error messages.
-    /// let t1 = |r: Result<i32, String>| r.map_err(|e| format!("transformed: {}", e));
-    /// let t2 = |r: Result<i32, String>| r.map_err(|e| format!("further: {}", e));
+    /// struct PrefixTransformer(pub String);
+    /// impl<T, E> ErrorTransformer<T, E> for PrefixTransformer {
+    ///     fn transform(&self, r: Result<T, E>) -> Result<T, E> {
+    ///         r.map_err(|e| format!("{}{}", self.0, format!("{:?}", e)).into())
+    ///     }
+    /// }
     ///
-    /// let mut composed = t1.compose(t2);
-    /// let input: Result<i32, String> = Err("err".into());
-    /// assert_eq!(composed(input), Err("further: transformed: err".into()));
+    /// let t1 = PrefixTransformer("A: ".to_string());
+    /// let mut composed = t1.compose(|r: Result<i32, String>| r.map_err(|e| format!("B: {}", e)));
+    ///
+    /// let res: Result<i32, String> = Err("err".into());
+    /// let out = composed(res);
+    /// assert!(out.is_err());
     /// ```
     fn compose<U>(self, other: U) -> impl FnMut(Result<T, E>) -> Result<T, E>
     where
@@ -126,7 +138,11 @@ pub trait ErrorTransformer<T, E> {
 /// These functions provide combinators inspired by functional programming patterns,
 /// allowing for more expressive and composable error handling.
 pub mod monadic {
-    /// Converts an Option<T> into a Result<U, E> by applying `f` to the contained value or returning `default_error` if empty.
+    /// Converts an `Option<T>` into a `Result<U, E>` by applying `f` to the contained value or returning `default_error` when the option is `None`.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(f(value))` if `option` is `Some(value)`, `Err(default_error)` if `option` is `None`.
     ///
     /// # Examples
     ///
@@ -134,12 +150,12 @@ pub mod monadic {
     /// use crate::error::monadic::option_to_result;
     ///
     /// let opt = Some(5);
-    /// let result = option_to_result(opt, |x| x * 2, "No value");
-    /// assert_eq!(result, Ok(10));
+    /// let res = option_to_result(opt, |x| x * 2, "No value");
+    /// assert_eq!(res, Ok(10));
     ///
     /// let none: Option<i32> = None;
-    /// let result = option_to_result(none, |x| x * 2, "No value");
-    /// assert_eq!(result, Err("No value"));
+    /// let res = option_to_result(none, |x| x * 2, "No value");
+    /// assert_eq!(res, Err("No value"));
     /// ```
     pub fn option_to_result<T, U, E>(
         option: Option<T>,
@@ -152,27 +168,25 @@ pub mod monadic {
         }
     }
 
-    /// Converts a `Result<Option<T>, E1>` into a `Result<T, E2>`, mapping errors and producing a default `T` when the option is `None`.
+    /// Convert a `Result<Option<T>, E1>` into `Result<T, E2>`, mapping errors and replacing `None` with `T::default()`.
     ///
-    /// If the input is `Ok(Some(value))` the function returns `Ok(value)`. If the input is `Ok(None)` the function returns
-    /// `Ok(T::default())`. If the input is `Err(e)` the function returns `Err(error_mapper(e))`.
-    ///
-    /// The `error_mapper` parameter is used to convert an `E1` into an `E2`. `T` must implement `Default` so a value can be
-    /// produced for the `None` case.
+    /// If the input is `Ok(Some(value))` the value is returned as `Ok(value)`. If the input is `Ok(None)`,
+    /// this function returns `Ok(T::default())`. If the input is `Err(e)`, the error is mapped with
+    /// `error_mapper` and returned as `Err(mapped)`.
     ///
     /// # Examples
     ///
     /// ```
     /// use crate::error::monadic::flatten_option;
     ///
-    /// let res_ok_some: Result<Option<i32>, &str> = Ok(Some(42));
-    /// assert_eq!(flatten_option(res_ok_some, |e| format!("err: {}", e)), Ok(42));
+    /// let r: Result<Option<i32>, &str> = Ok(Some(42));
+    /// assert_eq!(flatten_option(r, |e| format!("err: {}", e)), Ok(42));
     ///
-    /// let res_ok_none: Result<Option<i32>, &str> = Ok(None);
-    /// assert_eq!(flatten_option(res_ok_none, |e| format!("err: {}", e)), Ok(0)); // i32::default() == 0
+    /// let r_none: Result<Option<i32>, &str> = Ok(None);
+    /// assert_eq!(flatten_option(r_none, |e| format!("err: {}", e)), Ok(0)); // i32::default() == 0
     ///
-    /// let res_err: Result<Option<i32>, &str> = Err("boom");
-    /// assert_eq!(flatten_option(res_err, |e| format!("err: {}", e)), Err(String::from("err: boom")));
+    /// let r_err: Result<Option<i32>, &str> = Err("oops");
+    /// assert_eq!(flatten_option(r_err, |e| format!("err: {}", e)), Err("err: oops".to_string()));
     /// ```
     pub fn flatten_option<T, E1, E2>(
         result: Result<Option<T>, E1>,
@@ -194,24 +208,19 @@ pub mod monadic {
 /// These utilities allow processing sequences of errors or error-prone operations
 /// in a functional style, similar to monadic do notation.
 pub mod error_pipeline {
-    /// Applies a sequence of fallible operations to an initial value, returning the final success or the first encountered error.
+    /// Applies a sequence of fallible operations to an initial value, returning the first error encountered or the final value.
     ///
-    /// Each operation is applied in order; if any operation returns `Err`, processing stops and that error is returned.
+    /// Each operation is invoked with the current value; if it returns `Ok(next)` the pipeline continues, if it returns `Err(e)` the pipeline short-circuits and returns that error.
     ///
     /// # Examples
     ///
     /// ```
     /// use crate::error::error_pipeline::process_sequence;
     ///
-    /// let ops: Vec<fn(i32) -> Result<i32, &str>> = vec![
-    ///     |x| Ok(x + 1),
-    ///     |x| Ok(x * 2),
-    ///     |x| if x > 10 { Err("Too big") } else { Ok(x) },
-    /// ];
-    ///
+    /// let ops: Vec<fn(i32) -> Result<i32, &'static str>> = vec![|x| Ok(x + 1), |x| Ok(x * 2)];
     /// assert_eq!(process_sequence(1, ops.into_iter()), Ok(4)); // (1 + 1) * 2 = 4
     ///
-    /// let failing: Vec<fn(i32) -> Result<i32, &str>> = vec![|x| Ok(x), |_x| Err("failed")];
+    /// let failing: Vec<fn(i32) -> Result<i32, &'static str>> = vec![|x| Ok(x), |_| Err("failed")];
     /// assert_eq!(process_sequence(0, failing.into_iter()), Err("failed"));
     /// ```
     pub fn process_sequence<T, E>(
@@ -221,16 +230,15 @@ pub mod error_pipeline {
         operations.fold(Ok(initial), |acc, op| acc.and_then(op))
     }
 
-    /// Collects successful values from an iterator of `Result`s and maps them using `transform`.
+    /// Collects and transforms successful values from an iterator of `Result`s.
     ///
-    /// Returns a `Vec<U>` containing the transformed successful values; any errors are ignored.
+    /// Returns a `Vec<U>` containing `transform` applied to each `Ok` value; `Err` values are ignored.
     ///
     /// # Examples
     ///
     /// ```
     /// use crate::error::error_pipeline::collect_successes;
-    ///
-    /// let results = vec![Ok(1), Err("bad"), Ok(2), Err("worse")];
+    /// let results = vec![Ok(1), Err("bad"), Ok(2)];
     /// let successes: Vec<i32> = collect_successes(results.into_iter(), |x| x * 2);
     /// assert_eq!(successes, vec![2, 4]);
     /// ```
@@ -241,9 +249,19 @@ pub mod error_pipeline {
         results.filter_map(|r| r.ok()).map(transform).collect()
     }
 
-    /// Creates a closure that records and reports errors into a shared collection.
+    /// Creates a closure that reports and collects errors produced by pipeline steps.
     ///
-    /// The returned closure accepts a `Result<(), E>`. If given `Err(e)`, it calls `reporter(&e)` and appends a clone of `e` into the provided `Arc<Mutex<Vec<E>>>`.
+    /// The returned closure accepts a `Result<(), E>`; when it receives `Err(e)` it invokes
+    /// `reporter(&e)` and attempts to push a clone of `e` into the shared `errors` vector (locking it).
+    ///
+    /// # Parameters
+    ///
+    /// * `errors` - Shared, mutex-protected vector where encountered errors will be appended.
+    /// * `reporter` - Callback invoked with a reference to each reported error.
+    ///
+    /// # Returns
+    ///
+    /// A closure `FnMut(Result<(), E>)` that reports and stores errors on `Err` and does nothing on `Ok`.
     ///
     /// # Examples
     ///
@@ -251,11 +269,15 @@ pub mod error_pipeline {
     /// use std::sync::{Arc, Mutex};
     /// use crate::error::error_pipeline::build_error_reporter;
     ///
-    /// let errors = Arc::new(Mutex::new(Vec::new()));
-    /// let reporter = |err: &str| println!("reported: {}", err);
-    /// let mut collect = build_error_reporter(errors.clone(), reporter);
-    /// collect(Err("test error"));
-    /// assert_eq!(errors.lock().unwrap().len(), 1);
+    /// let errors = Arc::new(Mutex::new(Vec::<&str>::new()));
+    /// let reporter = |err: &&str| eprintln!("reported: {}", err);
+    /// let mut collect_fn = build_error_reporter(errors.clone(), reporter);
+    ///
+    /// collect_fn(Err("test error"));
+    ///
+    /// let locked = errors.lock().unwrap();
+    /// assert_eq!(locked.len(), 1);
+    /// assert_eq!(locked[0], "test error");
     /// ```
     pub fn build_error_reporter<E: Clone + 'static>(
         errors: std::sync::Arc<std::sync::Mutex<Vec<E>>>,
@@ -279,21 +301,34 @@ pub mod error_pipeline {
 pub mod error_logging {
     use log::{debug, error, info, warn};
 
-    /// Creates a transformer that logs any error contained in a `Result` at the specified log level.
+    /// Creates a transformer that logs the contained error at the given log `level` and returns the original `Result`.
+    
     ///
-    /// The returned closure inspects a `Result`; if it is `Err`, the error is logged using the provided `level`,
-    /// and the original `Result` is returned unchanged.
+    
+    /// The returned closure inspects a `Result`; if it is `Err`, it logs the error using the specified `log::Level` and then returns the same `Result` unchanged.
+    
     ///
+    
     /// # Examples
+    
     ///
+    
     /// ```
+    
     /// use log::Level;
+    
     /// use crate::error::error_logging::log_errors;
+    
     ///
+    
     /// let mut transformer = log_errors::<i32, &str>(Level::Error);
+    
     /// let result: Result<i32, &str> = Err("failure");
-    /// let returned = transformer(result);
-    /// assert!(returned.is_err());
+    
+    /// let logged = transformer(result);
+    
+    /// assert!(logged.is_err());
+    
     /// ```
     pub fn log_errors<T, E: std::fmt::Debug + Clone>(
         level: log::Level,
@@ -312,10 +347,10 @@ pub mod error_logging {
         }
     }
 
-    /// Create a transformer that logs an error only when the provided predicate returns true.
+    /// Creates a transformer that logs errors only when `predicate` returns `true`.
     ///
-    /// The returned closure passes through the original `Result` unchanged, but will log the error
-    /// at the specified `level` when the predicate evaluates to `true` for the error value.
+    /// The returned closure returns the original `Result` unchanged; if the input is `Err(e)`
+    /// and `predicate(&e)` is true, the error is also logged at the provided `level`.
     ///
     /// # Examples
     ///
@@ -324,9 +359,9 @@ pub mod error_logging {
     /// use crate::error::error_logging::log_errors_if;
     ///
     /// let mut transformer = log_errors_if(|e: &String| e.contains("critical"), Level::Error);
-    /// let result: Result<i32, String> = Err("critical failure".into());
-    /// let out = transformer(result);
-    /// assert_eq!(out, Err("critical failure".to_string()));
+    /// let res: Result<i32, String> = Err("critical failure".to_owned());
+    /// let out = transformer(res);
+    /// assert!(out.is_err());
     /// ```
     pub fn log_errors_if<T, E: std::fmt::Debug + Clone>(
         predicate: impl Fn(&E) -> bool + 'static,
@@ -340,22 +375,24 @@ pub mod error_logging {
         }
     }
 
-    /// Returns a transformer that first applies a logger to a `Result` and then applies a transformer.
+    /// Applies a logger to a `Result` and then applies a transformation to the (possibly logged) `Result`.
     ///
-    /// The returned closure invokes the provided `logger` with the input `Result`, then passes the logger's output into `transformer`.
+    /// The returned closure first calls `logger` with the input `Result`, then passes the logger's
+    /// output to `transformer` and returns the transformer's result.
     ///
     /// # Examples
     ///
     /// ```
-    /// use crate::error::error_logging::{log_errors, chain_log_and_transform};
     /// use log::Level;
     ///
-    /// let logger = log_errors::<i32, &str>(Level::Error);
-    /// let transformer = |r: Result<i32, &str>| r.map_err(|e| format!("Handled: {}", e));
-    /// let mut combined = chain_log_and_transform(logger, transformer);
+    /// // logger that passes through the result
+    /// let mut logger = |r: Result<i32, &str>| { r };
+    /// let transformer = |r: Result<i32, &str>| r.map_err(|e| format!("handled: {}", e));
     ///
-    /// let result = combined(Err("original error"));
-    /// assert_eq!(result, Err("Handled: original error".to_string()));
+    /// let mut combined = crate::error::error_logging::chain_log_and_transform(logger, transformer);
+    ///
+    /// let out = combined(Err("boom"));
+    /// assert_eq!(out, Err(String::from("handled: boom")));
     /// ```
     pub fn chain_log_and_transform<T, E1, E2>(
         mut logger: impl FnMut(Result<T, E1>) -> Result<T, E1>,

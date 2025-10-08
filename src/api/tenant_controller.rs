@@ -522,17 +522,17 @@ pub async fn update(
     Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, tenant)))
 }
 
-/// Deletes the tenant identified by `id`.
+/// Delete a tenant by its identifier.
 ///
-/// On success returns HTTP 200 with a standardized empty payload and message.
-/// Returns `ServiceError::NotFound` if the tenant does not exist, and
-/// `ServiceError::InternalServerError` for database or connection errors.
+/// On success returns HTTP 200 with a standardized empty payload and message. Returns
+/// `ServiceError::NotFound` if the tenant does not exist, or `ServiceError::InternalServerError`
+/// for database or connection errors.
 ///
 /// # Examples
 ///
 /// ```no_run
 /// // Called from an async context (e.g., an Actix handler or async test)
-/// // let resp = delete(actix_web::web::Path::from(String::from("tenant-id")), pool).await.unwrap();
+/// // let resp = delete(web::Path::from(String::from("tenant-id")), pool).await?;
 /// // assert_eq!(resp.status(), http::StatusCode::OK);
 /// ```
 pub async fn delete(

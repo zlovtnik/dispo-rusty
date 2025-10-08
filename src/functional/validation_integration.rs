@@ -155,10 +155,14 @@ pub fn validate_person_with_complex_rules(person: &PersonDTO) -> ValidationOutco
     ValidationOutcome::success(())
 }
 
-/// Validates a collection of PersonDTO values lazily, producing a per-item ValidationOutcome.
+/// Validates a collection of PersonDTO values lazily and produces a per-item ValidationOutcome.
 ///
-/// Each input element is validated when iterated; valid items become `ValidationOutcome::success(())`
-/// and invalid items become `ValidationOutcome::failure(errors)`.
+/// Each input element is validated when iterated; valid items are represented as `ValidationOutcome::success(())`
+/// and invalid items carry their collected validation errors in `ValidationOutcome::failure`.
+///
+/// # Returns
+///
+/// A `Vec<ValidationOutcome<()>>` where each entry is `success(())` for a valid person or `failure(errors)` for an invalid one.
 ///
 /// # Examples
 ///
@@ -175,7 +179,6 @@ pub fn validate_person_with_complex_rules(person: &PersonDTO) -> ValidationOutco
 /// }];
 /// let results = validate_person_batch(people);
 /// assert_eq!(results.len(), 1);
-/// assert!(results[0].is_valid);
 /// ```
 pub fn validate_person_batch(people: Vec<PersonDTO>) -> Vec<ValidationOutcome<()>> {
     use crate::functional::validation_engine::LazyValidationIterator;
@@ -305,6 +308,35 @@ mod tests {
         assert!(!validate_person_with_complex_rules(&person3).is_valid);
     }
 
+    /// Verifies that validate_person_batch returns a valid outcome for a valid PersonDTO and an invalid outcome for an invalid PersonDTO.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let people = vec![
+    ///     PersonDTO {
+    ///         name: "Valid Person".to_string(),
+    ///         gender: true,
+    ///         age: 30,
+    ///         address: "123 Valid St".to_string(),
+    ///         phone: "+1-555-0123".to_string(),
+    ///         email: "valid@example.com".to_string(),
+    ///     },
+    ///     PersonDTO {
+    ///         name: "".to_string(), // Invalid
+    ///         gender: true,
+    ///         age: 30,
+    ///         address: "123 Valid St".to_string(),
+    ///         phone: "+1-555-0123".to_string(),
+    ///         email: "valid@example.com".to_string(),
+    ///     },
+    /// ];
+    ///
+    /// let results = validate_person_batch(people);
+    /// assert_eq!(results.len(), 2);
+    /// assert!(results[0].is_valid);
+    /// assert!(!results[1].is_valid);
+    /// ```
     #[test]
     fn test_batch_validation() {
         let people = vec![

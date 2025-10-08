@@ -582,11 +582,11 @@ where
         &self.filters
     }
 
-    /// Retrieve the ordering specifications accumulated by the builder.
+    /// Returns the list of ordering specifications added to the builder in insertion order.
     ///
     /// # Returns
     ///
-    /// Slice of `OrderSpec` values in the order they were added.
+    /// A slice of `OrderSpec` values in the order they were added.
     ///
     /// # Examples
     ///
@@ -594,6 +594,7 @@ where
     /// let builder = TypeSafeQueryBuilder::<(), ()>::new()
     ///     .order_by("name".to_string(), true)
     ///     .order_by("created_at".to_string(), false);
+    ///
     /// let specs = builder.order_by_specs();
     /// assert_eq!(specs.len(), 2);
     /// assert_eq!(specs[0].column, "name");
@@ -605,30 +606,18 @@ where
         &self.order_by
     }
 
-    /// Fetches the configured result limit for the query builder.
-
+    /// Returns the configured result limit for the query builder.
     ///
-
     /// # Returns
-
     ///
-
     /// `Some(limit)` if a limit has been set, `None` otherwise.
-
     ///
-
     /// # Examples
-
     ///
-
     /// ```
-
     /// let builder = crate::functional::query_builder::TypeSafeQueryBuilder::<(), ()>::new()
-
     ///     .limit(25);
-
     /// assert_eq!(builder.limit_value(), Some(25));
-
     /// ```
     pub fn limit_value(&self) -> Option<i64> {
         self.limit

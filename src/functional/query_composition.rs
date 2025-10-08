@@ -328,14 +328,16 @@ where
         }
     }
 
-    /// Create a test-only `LazyQueryIterator` preloaded with the given items.
+    /// Creates a test-only lazy iterator preloaded with `data` that yields each item in order.
     ///
-    /// The iterator yields the supplied items in order and bypasses any database loading.
+    /// This constructor is intended for tests and bypasses any database loading; the iterator will
+    /// return elements from `data` until exhausted.
     ///
     /// # Examples
     ///
     /// ```
-    /// let mut iter = LazyQueryIterator::with_data(vec![1, 2, 3]);
+    /// let data = vec![1, 2, 3];
+    /// let mut iter = LazyQueryIterator::with_data(data);
     /// assert_eq!(iter.next(), Some(1));
     /// assert_eq!(iter.next(), Some(2));
     /// assert_eq!(iter.next(), Some(3));
@@ -381,22 +383,22 @@ where
         }
     }
 
-    /// Attempts to load the next chunk of rows into the iterator.
+    /// Attempt to load the next page of results into the iterator.
     ///
-    /// This method is currently unimplemented and will panic if called. When implemented it
-    /// will fetch up to `self.page_size` rows starting at `self.offset`, replace
-    /// `self.current_chunk` with the fetched rows, reset `self.chunk_position` to 0,
-    /// advance `self.offset`, and set `self.exhausted` to `true` when no rows remain.
+    /// This method is currently unimplemented and will panic if called. When implemented, it
+    /// should fetch up to `self.page_size` records starting at `self.offset`, replace
+    /// `self.current_chunk` with the fetched records, reset `self.chunk_position` to `0`,
+    /// advance `self.offset` accordingly, and mark the iterator as exhausted when no more
+    /// results are available.
     ///
     /// # Returns
     ///
-    /// `true` if a new chunk was loaded and is available for iteration, `false` if no more data is available.
+    /// `true` if a new chunk was loaded successfully, `false` if no more data is available.
     ///
     /// # Examples
     ///
     /// ```
-    /// // Use `with_data` in tests to avoid the unimplemented database integration.
-    /// let mut it = crate::LazyQueryIterator::with_data(vec![1u32, 2, 3]);
+    /// let mut it = LazyQueryIterator::with_data(vec![1u32, 2u32, 3u32]);
     /// assert_eq!(it.next(), Some(1u32));
     /// assert_eq!(it.next(), Some(2u32));
     /// assert_eq!(it.next(), Some(3u32));
@@ -429,10 +431,11 @@ where
 {
     type Item = U;
 
-    /// Advance the iterator and yield the next item from the current in-memory chunk.
+    /// Advances the iterator by one and yields the next element from the current in-memory chunk.
     ///
-    /// If the iterator has been exhausted, returns `None`. When the current chunk still
-    /// contains items, returns the next item and advances the iterator position.
+    /// If the current chunk has remaining items, returns the next item and advances the internal
+    /// position counters. If the current chunk is exhausted, the iterator is marked exhausted and
+    /// returns `None`.
     ///
     /// # Returns
     ///
@@ -516,14 +519,16 @@ pub struct SanitizationRule {
     pub error_message: String,
 }
 
-/// Provides a reference to a compiled `Regex` that matches SQL comment tokens `--`, `/*`, and `*/`.
+/// Provides a compiled Regex that matches SQL comment markers ("--", "/*", "*/").
+///
+/// The compiled pattern is cached in a static OnceLock and reused for subsequent calls.
 ///
 /// # Examples
 ///
 /// ```
-/// let re = crate::sql_comment_regex();
-/// assert!(re.is_match("-- line comment"));
-/// assert!(re.is_match("/* block comment start"));
+/// let re = sql_comment_regex();
+/// assert!(re.is_match("-- a comment"));
+/// assert!(re.is_match("/* block comment */"));
 /// assert!(re.is_match("*/"));
 /// ```
 fn sql_comment_regex() -> &'static Regex {
@@ -540,17 +545,18 @@ fn sql_keyword_regex() -> &'static Regex {
     })
 }
 
-/// Get a cached regex that matches exactly two hexadecimal digits (0-9, A-F, a-f), commonly used to detect percent-encoded sequences.
-///
-/// The compiled regex is stored in a static and reused to avoid recompilation.
+/// Compiled regex that matches two-digit hexadecimal sequences (useful for detecting percent-encoding components).
 ///
 /// # Examples
 ///
 /// ```
-/// let re = hex_sequence_regex();
-/// assert!(re.is_match("20"));
-/// assert!(re.is_match("ab"));
-/// assert!(!re.is_match("2"));
+/// // matches the two-hex-digit sequence in a percent-encoded string
+/// assert!(hex_sequence_regex().is_match("%20"));
+/// // matches a standalone two-digit hex sequence
+/// assert!(hex_sequence_regex().is_match("2F"));
+/// // does not match non-hex or incomplete sequences
+/// assert!(!hex_sequence_regex().is_match("g1"));
+/// assert!(!hex_sequence_regex().is_match("A"));
 /// ```
 fn hex_sequence_regex() -> &'static Regex {
     static HEX_SEQUENCE: OnceLock<Regex> = OnceLock::new();
@@ -638,10 +644,10 @@ impl ParameterSanitizer {
         Ok(())
     }
 
-    /// Applies a single sanitization rule to a string value.
+    /// Apply a single sanitization rule to a string value.
     ///
     /// Recognizes at least two rule names:
-    /// - `"no_sql_injection"`: rejects SQL comment tokens, common SQL keywords at word boundaries (case-insensitive), percent-encoding hints, and semicolon terminators according to the rule's `pattern`.
+    /// - `"no_sql_injection"`: rejects SQL comment tokens, common statement keywords at word boundaries (case-insensitive), percent-encoding hints, and semicolon-based terminators according to the rule's `pattern`.
     /// - `"reasonable_length"`: enforces a maximum length of 255 characters.
     /// Unknown rule names pass by default.
     ///

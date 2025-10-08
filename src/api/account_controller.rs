@@ -93,15 +93,16 @@ pub async fn logout(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
     }
 }
 
-/// Refresh the access/refresh token pair and return updated login information.
+/// Refreshes authentication and returns updated login information.
 ///
-/// Expects an `Authorization` header on `req` and a `Pool` stored in the request's extensions. On success returns HTTP 200 with `constants::MESSAGE_OK` and the refreshed login info. Returns `ServiceError::BadRequest` when the authorization header is missing, `ServiceError::InternalServerError` when the tenant pool is not found, and propagates other `ServiceError`s from the refresh operation.
+/// Expects an `Authorization` header on `req` and a tenant `Pool` available in the request's extensions.
+/// Returns the refreshed `LoginInfo` wrapped in a JSON response on success.
+/// Returns `ServiceError::BadRequest` when the authorization header is missing, `ServiceError::InternalServerError` when the tenant pool is not available, and otherwise propagates `ServiceError`s returned by the refresh operation.
 ///
 /// # Examples
 ///
-/// ```
+/// ```rust
 /// use actix_web::test::TestRequest;
-///
 /// # async fn run() {
 /// let req = TestRequest::default().to_http_request();
 /// let _ = crate::handlers::refresh(req).await;
@@ -124,12 +125,16 @@ pub async fn refresh(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
 }
 
 // GET api/auth/me
-/// Retrieve the authenticated user's login information from the request.
+/// Fetches the authenticated user's login information from the request.
 ///
-/// On success returns an HTTP 200 response with a `ResponseBody` containing
-/// `constants::MESSAGE_OK` and the user's login information. Returns a
-/// `ServiceError` if the authorization token is missing, the tenant pool is not
-/// found, or the account service fails.
+/// Examines the `Authorization` header and the tenant pool stored in the request extensions,
+/// then returns the user's login information obtained from the account service.
+///
+/// # Returns
+///
+/// `Ok(HttpResponse)` with status 200 and a `ResponseBody` containing `constants::MESSAGE_OK`
+/// and the user's login information on success; `Err(ServiceError)` if the authorization token
+/// is missing, the tenant pool cannot be resolved, or the account service returns an error.
 ///
 /// # Examples
 ///
@@ -138,7 +143,8 @@ pub async fn refresh(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
 ///
 /// // Construct an HttpRequest containing the Authorization header and a tenant Pool in extensions,
 /// // then call `me(req).await` to retrieve the current user's info.
-/// // (Test setup is omitted for brevity.)
+/// // (Test setup and tenant pool insertion are omitted for brevity.)
+///
 /// // let resp = me(req).await?;
 /// ```
 pub async fn me(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
