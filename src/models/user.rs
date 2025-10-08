@@ -207,7 +207,11 @@ impl User {
         }
     }
 
-    /// Get the total number of users in the database.
+    /// Compute the total number of users in the database.
+    ///
+    /// # Returns
+    ///
+    /// The total number of users as an `i64`.
     ///
     /// # Examples
     ///

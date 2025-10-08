@@ -567,9 +567,9 @@ where
         self
     }
 
-    /// Returns a slice of the builder's accumulated query filters for read-only inspection.
+    /// Get a read-only slice of the builder's accumulated query filters.
     ///
-    /// The slice reflects the filters added to this builder in insertion order.
+    /// The returned slice reflects the filters added to the builder in insertion order.
     ///
     /// # Examples
     ///
@@ -582,11 +582,7 @@ where
         &self.filters
     }
 
-    /// Returns the list of ordering specifications added to the builder in insertion order.
-    ///
-    /// # Returns
-    ///
-    /// A slice of `OrderSpec` values in the order they were added.
+    /// Get the ordering specifications in the order they were added to the builder.
     ///
     /// # Examples
     ///
@@ -606,7 +602,7 @@ where
         &self.order_by
     }
 
-    /// Returns the configured result limit for the query builder.
+    /// Get the configured result limit for the query builder.
     ///
     /// # Returns
     ///

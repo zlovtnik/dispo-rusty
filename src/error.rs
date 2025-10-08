@@ -24,14 +24,18 @@ pub enum ServiceError {
     Conflict { error_message: String },
 }
 impl error::ResponseError for ServiceError {
-    /// Returns the HTTP status code that corresponds to this `ServiceError` variant.
+    /// Map a `ServiceError` variant to its corresponding HTTP status code.
     ///
-    /// Maps each enum variant to its canonical HTTP status code:
+    /// The mapping is:
     /// - `Unauthorized` -> `401 UNAUTHORIZED`
     /// - `InternalServerError` -> `500 INTERNAL_SERVER_ERROR`
     /// - `BadRequest` -> `400 BAD_REQUEST`
     /// - `NotFound` -> `404 NOT_FOUND`
     /// - `Conflict` -> `409 CONFLICT`
+    ///
+    /// # Returns
+    ///
+    /// The `StatusCode` that represents the HTTP status for this error variant.
     ///
     /// # Examples
     ///
@@ -93,10 +97,10 @@ pub trait ErrorTransformer<T, E> {
     /// The transformed Result after applying the transformation logic.
     fn transform(&self, error: Result<T, E>) -> Result<T, E>;
 
-    /// Composes this transformer with another transformer, applying them in sequence.
+    /// Compose this transformer with another transformer, producing a closure that applies them in sequence.
     ///
-    /// The returned closure first applies this transformer's `transform` to the input `Result`,
-    /// then applies the provided transformer to the intermediate result.
+    /// The returned closure applies `self.transform` to its input `Result`, then passes the intermediate
+    /// result to the provided transformer and returns that final result.
     ///
     /// # Examples
     ///
@@ -104,6 +108,7 @@ pub trait ErrorTransformer<T, E> {
     /// use crate::error::ErrorTransformer;
     ///
     /// struct PrefixTransformer(pub String);
+    ///
     /// impl<T, E> ErrorTransformer<T, E> for PrefixTransformer {
     ///     fn transform(&self, r: Result<T, E>) -> Result<T, E> {
     ///         r.map_err(|e| format!("{}{}", self.0, format!("{:?}", e)).into())
@@ -170,9 +175,8 @@ pub mod monadic {
 
     /// Convert a `Result<Option<T>, E1>` into `Result<T, E2>`, mapping errors and replacing `None` with `T::default()`.
     ///
-    /// If the input is `Ok(Some(value))` the value is returned as `Ok(value)`. If the input is `Ok(None)`,
-    /// this function returns `Ok(T::default())`. If the input is `Err(e)`, the error is mapped with
-    /// `error_mapper` and returned as `Err(mapped)`.
+    /// If the input is `Ok(Some(value))` returns `Ok(value)`. If the input is `Ok(None)` returns `Ok(T::default())`.
+    /// If the input is `Err(e)` returns `Err(error_mapper(e))`.
     ///
     /// # Examples
     ///
@@ -232,12 +236,13 @@ pub mod error_pipeline {
 
     /// Collects and transforms successful values from an iterator of `Result`s.
     ///
-    /// Returns a `Vec<U>` containing `transform` applied to each `Ok` value; `Err` values are ignored.
+    /// Returns a `Vec<U>` with `transform` applied to each `Ok` value; `Err` values are ignored.
     ///
     /// # Examples
     ///
     /// ```
     /// use crate::error::error_pipeline::collect_successes;
+    ///
     /// let results = vec![Ok(1), Err("bad"), Ok(2)];
     /// let successes: Vec<i32> = collect_successes(results.into_iter(), |x| x * 2);
     /// assert_eq!(successes, vec![2, 4]);
@@ -251,17 +256,17 @@ pub mod error_pipeline {
 
     /// Creates a closure that reports and collects errors produced by pipeline steps.
     ///
-    /// The returned closure accepts a `Result<(), E>`; when it receives `Err(e)` it invokes
-    /// `reporter(&e)` and attempts to push a clone of `e` into the shared `errors` vector (locking it).
+    /// The returned closure accepts a `Result<(), E>`; on `Err(e)` it invokes `reporter(&e)`
+    /// and attempts to append a clone of `e` to the shared `errors` vector (locks the mutex).
     ///
     /// # Parameters
     ///
-    /// * `errors` - Shared, mutex-protected vector where encountered errors will be appended.
+    /// * `errors` - Shared `Arc<Mutex<Vec<E>>>` where encountered errors will be stored.
     /// * `reporter` - Callback invoked with a reference to each reported error.
     ///
     /// # Returns
     ///
-    /// A closure `FnMut(Result<(), E>)` that reports and stores errors on `Err` and does nothing on `Ok`.
+    /// A `FnMut(Result<(), E>)` closure that reports and stores errors on `Err` and does nothing on `Ok`.
     ///
     /// # Examples
     ///
@@ -301,34 +306,21 @@ pub mod error_pipeline {
 pub mod error_logging {
     use log::{debug, error, info, warn};
 
-    /// Creates a transformer that logs the contained error at the given log `level` and returns the original `Result`.
-    
+    /// Returns a transformer closure that logs any contained error at the specified log `level` and yields the original `Result`.
     ///
-    
-    /// The returned closure inspects a `Result`; if it is `Err`, it logs the error using the specified `log::Level` and then returns the same `Result` unchanged.
-    
+    /// The closure inspects the `Result`; if it is `Err`, the error is logged (using the corresponding `log` macro for the level),
+    /// then the same `Result` is returned unchanged.
     ///
-    
     /// # Examples
-    
     ///
-    
     /// ```
-    
     /// use log::Level;
-    
     /// use crate::error::error_logging::log_errors;
-    
     ///
-    
     /// let mut transformer = log_errors::<i32, &str>(Level::Error);
-    
     /// let result: Result<i32, &str> = Err("failure");
-    
     /// let logged = transformer(result);
-    
     /// assert!(logged.is_err());
-    
     /// ```
     pub fn log_errors<T, E: std::fmt::Debug + Clone>(
         level: log::Level,
@@ -349,8 +341,8 @@ pub mod error_logging {
 
     /// Creates a transformer that logs errors only when `predicate` returns `true`.
     ///
-    /// The returned closure returns the original `Result` unchanged; if the input is `Err(e)`
-    /// and `predicate(&e)` is true, the error is also logged at the provided `level`.
+    /// Returns the input `Result<T, E>` unchanged; if the input is `Err(e)` and `predicate(&e)`
+    /// is true, the error is logged at the provided `level` before being returned.
     ///
     /// # Examples
     ///
@@ -375,10 +367,10 @@ pub mod error_logging {
         }
     }
 
-    /// Applies a logger to a `Result` and then applies a transformation to the (possibly logged) `Result`.
+    /// Applies a logging function to a `Result`, then applies a transformer to the logger's output.
     ///
-    /// The returned closure first calls `logger` with the input `Result`, then passes the logger's
-    /// output to `transformer` and returns the transformer's result.
+    /// The returned closure first invokes `logger` with the input `Result`, then passes the returned
+    /// `Result` to `transformer` and returns the transformer's result.
     ///
     /// # Examples
     ///

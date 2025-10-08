@@ -565,34 +565,20 @@ where
         }
     }
 
-    /// Adds a validator to the pipeline and returns the pipeline for chaining.
-
+    /// Add a validator to the pipeline and return the pipeline for chaining.
     ///
-
-    /// The provided `validator` will be invoked for each item when the pipeline is executed.
-
-    /// The validator must accept a reference to an item of type `T` and return a `ValidationResult<()>`.
-
+    /// The provided validator is applied to each item when the pipeline is executed. The validator
+    /// receives a reference to an item of type `T` and must return a `ValidationResult<()>`.
     ///
-
     /// # Examples
-
     ///
-
     /// ```no_run
-
     /// let data = vec!["a", "b", "c"];
-
     /// let pipeline = ValidationPipeline::new(data.into_iter())
-
     ///     .add_validator(|item: &str| {
-
-    ///         // return Ok(()) for valid, or an Err(...) with validation errors
-
+    ///         // return Ok(()) for valid items or Err(...) with validation errors
     ///         Ok(())
-
     ///     });
-
     /// ```
     pub fn add_validator<F>(mut self, validator: F) -> Self
     where
@@ -616,23 +602,17 @@ where
         self
     }
 
-    /// Runs the pipeline over the input iterator, applying each validator to every item and collecting valid items, invalid items with their errors, and totals.
+    /// Processes each item from the pipeline's iterator with all configured validators and collects passing items, failing items with their errors, and summary totals.
     ///
-    /// Returns a ValidationPipelineResult containing:
-    /// - `valid_items`: items that passed all validators,
-    /// - `invalid_items`: items paired with the validation errors that failed them,
-    /// - `total_processed`: number of items examined,
-    /// - `total_errors`: total number of validation errors encountered.
+    /// The pipeline honors its `fail_fast` and `max_errors` configuration while validating items; items that pass all validators are returned in `valid_items`, items that fail are returned in `invalid_items` paired with their validation errors, and `total_processed`/`total_errors` report counts collected during execution.
     ///
     /// # Examples
     ///
     /// ```
-    /// // Example validators: here using simple closures that always succeed or fail.
+    /// // Example validators: simple closures that succeed for positive values.
     /// let data = vec![1, 2, 3];
     /// let pipeline = ValidationPipeline::new(data.into_iter())
-    ///     .add_validator(|v: &i32| {
-    ///         if *v > 0 { Ok(()) } else { Err(ValidationError::new("non_positive")) }
-    ///     });
+    ///     .add_validator(|v: &i32| if *v > 0 { Ok(()) } else { Err(ValidationError::new("non_positive")) });
     ///
     /// let result = pipeline.validate();
     /// assert_eq!(result.total_processed, 3);
@@ -690,16 +670,26 @@ where
         }
     }
 
-    /// Validate every item produced by the pipeline's iterator with the pipeline's validators and collect successful and failed items.
+    /// Apply the pipeline's validators to every item from the iterator and collect items that passed and items that failed.
     ///
-    /// Returns a ValidationPipelineResult that contains the list of items that passed all validators, the list of items that failed paired with their errors, the total number of items processed, and the total number of validation errors.
+    /// The pipeline's validators are executed for each item; items with no validation errors are returned in `valid_items`, and items with one or more errors are returned in `invalid_items` paired with their errors.
+    ///
+    /// # Returns
+    ///
+    /// `ValidationPipelineResult` containing:
+    /// - `valid_items`: items that passed all validators,
+    /// - `invalid_items`: pairs of items and their validation errors,
+    /// - `total_processed`: number of items examined,
+    /// - `total_errors`: total number of validation errors across all items.
     ///
     /// # Examples
     ///
     /// ```
     /// let pipeline = ValidationPipeline::new(vec![1, 2, 3].into_iter())
     ///     .add_validator(|_: &i32| Ok(()));
+    ///
     /// let result = pipeline.validate_with_itertools();
+    ///
     /// assert_eq!(result.valid_items.len(), 3);
     /// assert_eq!(result.total_errors, 0);
     /// ```
@@ -865,7 +855,7 @@ impl<T, I> LazyValidationIterator<T, I>
 where
     I: Iterator<Item = T>,
 {
-    /// Constructs a LazyValidationIterator that wraps the given iterator and starts with no validators.
+    /// Creates a LazyValidationIterator that wraps the given iterator and starts with no validators.
     ///
     /// # Examples
     ///
@@ -884,34 +874,20 @@ where
         }
     }
 
-    /// Adds a validator to the pipeline and returns the pipeline for chaining.
-
+    /// Add a validator to the pipeline and return the pipeline for chaining.
     ///
-
-    /// The provided `validator` will be invoked for each item when the pipeline is executed.
-
-    /// The validator must accept a reference to an item of type `T` and return a `ValidationResult<()>`.
-
+    /// The provided validator is applied to each item when the pipeline is executed. The validator
+    /// receives a reference to an item of type `T` and must return a `ValidationResult<()>`.
     ///
-
     /// # Examples
-
     ///
-
     /// ```no_run
-
     /// let data = vec!["a", "b", "c"];
-
     /// let pipeline = ValidationPipeline::new(data.into_iter())
-
     ///     .add_validator(|item: &str| {
-
-    ///         // return Ok(()) for valid, or an Err(...) with validation errors
-
+    ///         // return Ok(()) for valid items or Err(...) with validation errors
     ///         Ok(())
-
     ///     });
-
     /// ```
     pub fn add_validator<F>(mut self, validator: F) -> Self
     where

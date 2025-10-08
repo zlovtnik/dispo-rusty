@@ -59,27 +59,24 @@ pub fn login(login: LoginDTO, pool: &Pool) -> Result<TokenBodyResponse, ServiceE
     }
 }
 
-/// Logs out the user associated with the bearer token found in the Authorization header.
+/// Clears the login session for the user identified by the bearer token in the Authorization header.
 ///
-/// Attempts to validate, decode, and verify the bearer token from `authen_header`,
-/// then locates the corresponding user and clears their login session in the database.
-///
-/// # Arguments
-///
-/// * `authen_header` - The Authorization header expected to contain a `Bearer <token>` value.
-/// * `pool` - Database connection pool used to look up the user and perform the logout.
+/// Validates and decodes the `Bearer <token>` header, verifies the token, and removes the associated
+/// login session from the database.
 ///
 /// # Returns
 ///
-/// `Ok(())` if the user's session was successfully cleared; `Err(ServiceError::Unauthorized)` if header parsing, token processing, user lookup, or database access fails.
+/// `Ok(())` if the user's session was successfully cleared, `Err(ServiceError::Unauthorized)` otherwise.
 ///
 /// # Examples
 ///
 /// ```no_run
 /// use actix_web::http::HeaderValue;
 ///
+/// // `pool` is an existing database pool in scope.
 /// let header = HeaderValue::from_static("Bearer <token>");
-/// let result = logout(&header, &pool);
+/// let res = logout(&header, &pool);
+/// assert!(res.is_ok() || res.is_err());
 /// ```
 pub fn logout(authen_header: &HeaderValue, pool: &Pool) -> Result<(), ServiceError> {
     if let Ok(authen_str) = authen_header.to_str() {
