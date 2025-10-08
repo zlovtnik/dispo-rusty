@@ -15,6 +15,7 @@ mod api;
 mod config;
 mod constants;
 mod error;
+#[cfg(feature = "functional")]
 mod functional;
 mod middleware;
 mod models;

@@ -202,7 +202,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "actix-web-rest-api-with-jwt"
+name = "rcs"
 version = "0.1.0"
 dependencies = [
  "actix-cors",

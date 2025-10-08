@@ -20,19 +20,32 @@
 //! - Pagination: Iterator-based pagination
 //! - Performance Monitoring: Functional pipeline metrics
 
+#[cfg(feature = "functional")]
 pub mod chain_builder;
+#[cfg(feature = "functional")]
 pub mod concurrent_processing;
+#[cfg(feature = "functional")]
 pub mod function_traits;
+#[cfg(feature = "functional")]
 pub mod immutable_state;
+#[cfg(feature = "functional")]
 pub mod iterator_engine;
 // pub mod lazy_pipeline;  // Temporarily disabled - file needs to be recreated
+#[cfg(feature = "functional")]
 pub mod parallel_iterators;
+#[cfg(feature = "functional")]
 pub mod pure_function_registry;
+#[cfg(feature = "functional")]
 pub mod query_builder;
+#[cfg(feature = "functional")]
 pub mod query_composition;
+#[cfg(feature = "functional")]
 pub mod state_transitions;
+#[cfg(feature = "functional")]
 pub mod validation_engine;
+#[cfg(feature = "functional")]
 pub mod validation_integration;
+#[cfg(feature = "functional")]
 pub mod validation_rules;
 
 // Re-export commonly used types for convenience

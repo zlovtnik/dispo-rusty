@@ -76,7 +76,7 @@ WORKDIR /app
 RUN mkdir -p /run/secrets
 
 # Copy backend binary from rust-builder stage
-COPY --from=rust-builder /app/target/release/actix-web-rest-api-with-jwt /app/backend
+COPY --from=rust-builder /app/target/release/rcs /app/backend
 COPY --from=rust-builder /app/diesel.toml /app/diesel.toml
 COPY --from=rust-builder /app/migrations/ /app/migrations/
 

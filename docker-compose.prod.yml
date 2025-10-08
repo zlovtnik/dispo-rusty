@@ -2,7 +2,6 @@ version: '3'
 services:
   address-book-api-prod:
     container_name: address_book_be
-    image: sakadream/actix-web-rest-api-with-jwt:latest
     restart: always
     ports:
       - "8000:8000"
