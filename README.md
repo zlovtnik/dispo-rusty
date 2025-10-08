@@ -159,8 +159,8 @@ React 18.3.1+ + TypeScript 5.9+
 ### 1. Clone and Setup Backend
 
 ```bash
-git clone https://github.com/zlovtnik/actix-web-rest-api-with-jwt.git
-cd actix-web-rest-api-with-jwt
+git clone https://github.com/zlovtnik/rcs
+cd rcs
 
 # Copy environment files
 cp .env.example .env
@@ -210,7 +210,7 @@ cargo run
 
 # Production build
 cargo build --release
-./target/release/actix-web-rest-api-with-jwt
+./target/release/rcs
 ```
 
 ### 5. Setup and Run Frontend
@@ -527,39 +527,6 @@ Automated builds are handled via GitHub Actions with caching and multi-platform 
 
 ### Production Deployment Options
 
-#### Option A: Docker Compose (Production)
-```yaml
-version: '3'
-services:
-  api:
-    image: sakadream/actix-web-rest-api-with-jwt:latest
-    ports:
-      - "8000:8000"
-    env_file:
-      - .env
-    environment:
-      - APP_ENV=production
-```
-
-#### Option B: Kubernetes
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: actix-web-api
-spec:
-  replicas: 3
-  template:
-    spec:
-      containers:
-      - name: api
-        image: sakadream/actix-web-rest-api-with-jwt:latest
-        ports:
-        - containerPort: 8000
-        envFrom:
-        - configMapRef:
-            name: api-config
-```
 
 #### Option C: Cloud Platform (Railway, Render, Fly.io)
 Deploy the Docker image directly to your preferred cloud platform using the published Docker Hub image.

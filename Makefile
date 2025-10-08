@@ -67,11 +67,7 @@ seed-db: ## Seed database with initial data
 
 # Docker targets
 docker-build: ## Build Docker image for backend
-	docker build -f Dockerfile.local -t actix-web-rest-api-with-jwt:local .
-
-docker-push: ## Push Docker image to registry (requires login)
-	docker tag actix-web-rest-api-with-jwt:local sakadream/actix-web-rest-api-with-jwt:latest
-	docker push sakadream/actix-web-rest-api-with-jwt:latest
+	docker build -f Dockerfile.local -t rcs:local .
 
 docker-up-local: ## Start local Docker containers
 	docker-compose -f docker-compose.local.yml up -d

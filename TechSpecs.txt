@@ -6799,7 +6799,7 @@ FROM gcr.io/distroless/cc-debian12
 
 
 #### Copy compiled Rust binary
-COPY --from=rust-builder /app/target/x86_64-unknown-linux-gnu/release/actix-web-rest-api-with-jwt /app/
+COPY --from=rust-builder /app/target/x86_64-unknown-linux-gnu/release/rcs /app/
 
 
 #### Copy frontend assets
@@ -6810,7 +6810,7 @@ WORKDIR /app
 EXPOSE 8000
 
 
-CMD ["./actix-web-rest-api-with-jwt"]
+CMD ["./rcs"]
 Base Image Strategy Benefits:
 Aspect
 	Standard Image

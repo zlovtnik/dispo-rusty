@@ -1651,7 +1651,7 @@ frontend/src/
 - [TypeScript Handbook](https://www.typescriptlang.org/docs/handbook/intro.html)
 
 ### Project Links
-- Repository: `actix-web-rest-api-with-jwt`
+- Repository: `rcs`
 - Backend API: `http://localhost:8000/api` (development)
 - Frontend Dev Server: `http://localhost:3000`
 

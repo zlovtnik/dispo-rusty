@@ -7,15 +7,15 @@
     {
       "type": "lldb",
       "request": "launch",
-      "name": "Debug executable 'actix-web-rest-api-with-jwt'",
+      "name": "Debug executable 'rcs'",
       "cargo": {
         "args": [
           "build",
-          "--bin=actix-web-rest-api-with-jwt",
-          "--package=actix-web-rest-api-with-jwt"
+          "--bin=rcs",
+          "--package=rcs"
         ],
         "filter": {
-          "name": "actix-web-rest-api-with-jwt",
+          "name": "rcs",
           "kind": "bin"
         }
       },
@@ -25,16 +25,16 @@
     {
       "type": "lldb",
       "request": "launch",
-      "name": "Debug unit tests in executable 'actix-web-rest-api-with-jwt'",
+      "name": "Debug unit tests in executable 'rcs'",
       "cargo": {
         "args": [
           "test",
           "--no-run",
-          "--bin=actix-web-rest-api-with-jwt",
-          "--package=actix-web-rest-api-with-jwt"
+          "--bin=rcs",
+          "--package=rcs"
         ],
         "filter": {
-          "name": "actix-web-rest-api-with-jwt",
+          "name": "rcs",
           "kind": "bin"
         }
       },
