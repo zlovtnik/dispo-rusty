@@ -416,10 +416,14 @@ where
     /// assert_eq!(m2.get(&"a".to_string()), Some(&1));
     /// ```
     pub fn insert(&self, key: K, value: V) -> Self {
-        let new_map = self
-            .root
-            .as_ref()
-            .map_or(im::HashMap::new(), |map| map.update(key, value));
+        let new_map = match self.root.as_ref() {
+            Some(map) => map.update(key, value),
+            None => {
+                let mut new_map = im::HashMap::new();
+                new_map.insert(key, value);
+                new_map
+            }
+        };
 
         Self {
             root: Some(Arc::new(new_map)),

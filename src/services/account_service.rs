@@ -119,7 +119,6 @@ pub fn logout(authen_header: &HeaderValue, pool: &Pool) -> Result<(), ServiceErr
 /// // let pool = /* obtain ::deadpool_postgres::Pool */ ;
 /// // let token_res = refresh(&header, &pool);
 /// ```
-—
 pub fn refresh(
     authen_header: &HeaderValue,
     pool: &Pool,

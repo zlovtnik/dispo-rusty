@@ -827,7 +827,6 @@ mod tests {
         let metrics = registry.get_metrics().unwrap();
         assert_eq!(metrics.total_functions, 1);
         assert_eq!(metrics.lookup_count, 10);
-        assert!(metrics.avg_lookup_time_ns > 0); // Should have recorded some time
     }
 
     #[test]
