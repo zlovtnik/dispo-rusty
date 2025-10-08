@@ -93,17 +93,15 @@ pub async fn logout(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
     }
 }
 
-/// Refreshes authentication and returns updated login information.
+/// Refresh the access/refresh token pair and return updated login information.
 ///
-/// Expects an `Authorization` header on `req` and a `Pool` stored in the request's extensions.
-/// Returns an HTTP 200 response with `constants::MESSAGE_OK` and the refreshed login info on success.
-/// Returns `ServiceError::BadRequest` when the authorization header is missing,
-/// `ServiceError::InternalServerError` when the pool is not found, or propagates other `ServiceError`s returned by the refresh operation.
+/// Expects an `Authorization` header on `req` and a `Pool` stored in the request's extensions. On success returns HTTP 200 with `constants::MESSAGE_OK` and the refreshed login info. Returns `ServiceError::BadRequest` when the authorization header is missing, `ServiceError::InternalServerError` when the tenant pool is not found, and propagates other `ServiceError`s from the refresh operation.
 ///
 /// # Examples
 ///
 /// ```
 /// use actix_web::test::TestRequest;
+///
 /// # async fn run() {
 /// let req = TestRequest::default().to_http_request();
 /// let _ = crate::handlers::refresh(req).await;
@@ -126,11 +124,12 @@ pub async fn refresh(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
 }
 
 // GET api/auth/me
-/// Returns the authenticated user's information based on the request's authorization header and tenant pool.
+/// Retrieve the authenticated user's login information from the request.
 ///
-/// # Returns
-///
-/// `Ok(HttpResponse)` with status 200 and a `ResponseBody` containing `constants::MESSAGE_OK` and the user's login information on success; `Err(ServiceError)` when the authorization token is missing, the tenant pool is not found, or the account service returns an error.
+/// On success returns an HTTP 200 response with a `ResponseBody` containing
+/// `constants::MESSAGE_OK` and the user's login information. Returns a
+/// `ServiceError` if the authorization token is missing, the tenant pool is not
+/// found, or the account service fails.
 ///
 /// # Examples
 ///

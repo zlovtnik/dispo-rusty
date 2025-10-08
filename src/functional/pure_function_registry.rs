@@ -37,10 +37,26 @@ pub struct RegistryMetrics {
 }
 
 impl RegistryMetrics {
-    /// Recomputes the average lookup time from the total accumulated time and count.
+    /// Recomputes the public average lookup time from accumulated total time and count.
     ///
-    /// This method ensures the public `avg_lookup_time_ns` field reflects the true
-    /// average without precision loss from repeated integer division.
+    /// Updates `avg_lookup_time_ns` to the integer average of `total_lookup_time_ns` divided
+    /// by `lookup_count`. If `lookup_count` is zero, `avg_lookup_time_ns` is set to zero.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut m = RegistryMetrics::default();
+    /// m.total_lookup_time_ns = 150;
+    /// m.lookup_count = 3;
+    /// m.recompute_average();
+    /// assert_eq!(m.avg_lookup_time_ns, 50);
+    ///
+    /// let mut m = RegistryMetrics::default();
+    /// m.total_lookup_time_ns = 5;
+    /// m.lookup_count = 0;
+    /// m.recompute_average();
+    /// assert_eq!(m.avg_lookup_time_ns, 0);
+    /// ```
     fn recompute_average(&mut self) {
         if self.lookup_count > 0 {
             self.avg_lookup_time_ns =
@@ -463,10 +479,10 @@ impl PureFunctionRegistry {
         Ok(())
     }
 
-    /// Updates the registry's lookup-performance metrics with a new duration measurement.
+    /// Record a lookup duration and update the registry's lookup metrics.
     ///
-    /// This updates the total accumulated lookup time and recomputes the running average
-    /// lookup time (`avg_lookup_time_ns`) without precision loss, then increments `lookup_count`.
+    /// Updates the total accumulated lookup time (in nanoseconds), increments the lookup
+    /// count, and recomputes the average lookup time.
     ///
     /// # Errors
     ///
@@ -476,10 +492,14 @@ impl PureFunctionRegistry {
     ///
     /// ```
     /// use std::time::Duration;
+    ///
     /// let registry = PureFunctionRegistry::new();
+    ///
     /// // record a 100-nanosecond lookup measurement
     /// registry.update_lookup_metrics(Duration::from_nanos(100)).unwrap();
+    ///
     /// let metrics = registry.get_metrics().unwrap();
+    ///
     /// assert_eq!(metrics.lookup_count, 1);
     /// assert_eq!(metrics.avg_lookup_time_ns, 100);
     /// ```

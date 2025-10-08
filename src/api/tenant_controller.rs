@@ -524,15 +524,15 @@ pub async fn update(
 
 /// Deletes the tenant identified by `id`.
 ///
-/// On success returns an HTTP 200 response with a standardized empty payload and message.
-/// Returns `ServiceError::NotFound` if the tenant does not exist.
-/// Returns `ServiceError::InternalServerError` on database or connection errors.
+/// On success returns HTTP 200 with a standardized empty payload and message.
+/// Returns `ServiceError::NotFound` if the tenant does not exist, and
+/// `ServiceError::InternalServerError` for database or connection errors.
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```no_run
 /// // Called from an async context (e.g., an Actix handler or async test)
-/// // let resp = delete(web::Path::from(String::from("tenant-id")), pool).await?;
+/// // let resp = delete(actix_web::web::Path::from(String::from("tenant-id")), pool).await.unwrap();
 /// // assert_eq!(resp.status(), http::StatusCode::OK);
 /// ```
 pub async fn delete(

@@ -73,8 +73,7 @@ where
 
     /// Maps each item to an `Option` and yields the contained values, discarding `None`s.
     ///
-    /// The provided closure receives each item and may return `Some(mapped)` to emit a value
-    /// or `None` to skip it.
+    /// The closure receives each item and returns `Some(mapped)` to emit a value or `None` to skip it.
     ///
     /// # Examples
     ///
@@ -94,32 +93,19 @@ where
         }
     }
 
-    /// Maps each item to an iterable and flattens the produced iterators into a single sequence.
-
+    /// Maps each item to an iterable and concatenates the resulting iterators into a single sequence.
     ///
-
-    /// The provided closure `f` is called for each item and should return a value that implements
-
-    /// `IntoIterator`; the resulting iterators are concatenated (flattened) into the returned chain.
-
+    /// The closure `f` is applied to each item; each return value must implement `IntoIterator`,
+    /// and the produced iterators are flattened into the returned chain.
     ///
-
     /// # Examples
-
     ///
-
     /// ```
-
     /// let data = vec![1, 2, 3];
-
     /// let result: Vec<_> = ChainBuilder::from_vec(data)
-
     ///     .flat_map(|x| vec![x, x * 2])
-
     ///     .collect();
-
     /// assert_eq!(result, vec![1, 2, 2, 4, 3, 6]);
-
     /// ```
     pub fn flat_map<J, U, F>(self, f: F) -> ChainBuilder<FlatMap<I, J, F>>
     where
@@ -377,19 +363,9 @@ pub mod patterns {
             .collect()
     }
 
-    /// Creates a processing pipeline that applies `process_fn` to each item and returns the results.
+    /// Builds a pipeline that applies `process_fn` to each element of `data` and returns the results in input order.
     ///
-    /// This function is intended for parallel processing of large datasets; currently it executes
-    /// the processing sequentially (placeholder for a parallel implementation).
-    ///
-    /// # Parameters
-    ///
-    /// - `data`: input vector of items to process.
-    /// - `process_fn`: function applied to each item to produce an output value. It must be `Send + Sync`.
-    ///
-    /// # Returns
-    ///
-    /// A `Vec<U>` containing the processed results, in the same order as the input.
+    /// The processing is performed sequentially; a parallel implementation may be introduced later.
     ///
     /// # Examples
     ///

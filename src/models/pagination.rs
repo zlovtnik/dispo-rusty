@@ -138,6 +138,23 @@ where
     i32: diesel::serialize::ToSql<Col::SqlType, Pg>,
     Pg: diesel::sql_types::HasSqlType<Col::SqlType>,
 {
+    /// Appends a cursor-based pagination SQL fragment (with bound parameters) around the inner query into the provided AST pass.
+    ///
+    /// This writes: `SELECT * FROM ( <inner query> ) t WHERE <cursor_column> > <cursor> ORDER BY <cursor_column> LIMIT <per_page>`
+    /// with `cursor` and `per_page` added as bound parameters.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` if the SQL fragment and bindings were appended successfully, a Diesel `QueryResult::Err` otherwise.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // Conceptual example showing the SQL this method produces for an inner query named `users`,
+    /// // cursor column `id`, cursor `10`, and per_page `20`.
+    /// let sql = "SELECT * FROM (users) t WHERE id > 10 ORDER BY id LIMIT 20";
+    /// assert!(sql.contains("WHERE id > 10"));
+    /// ```
     fn walk_ast<'b>(&'b self, mut out: AstPass<'_, 'b, Pg>) -> QueryResult<()> {
         out.push_sql("SELECT * FROM (");
         self.query.walk_ast(out.reborrow())?;

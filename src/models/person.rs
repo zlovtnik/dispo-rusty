@@ -151,6 +151,18 @@ impl Person {
             .execute(conn)
     }
 
+    /// Deletes the person record with the specified id.
+    ///
+    /// # Returns
+    /// The number of rows deleted as `usize` (`0` if no matching record).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // assumes `conn` is a valid `&mut Connection` connected to the database
+    /// let result = delete(42, &mut conn).unwrap();
+    /// assert_eq!(result, 1);
+    /// ```
     pub fn delete(i: i32, conn: &mut Connection) -> QueryResult<usize> {
         diesel::delete(people.find(i)).execute(conn)
     }

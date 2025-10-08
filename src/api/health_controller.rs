@@ -56,7 +56,10 @@ struct TenantHealth {
     status: Status,
 }
 
-/// Performs a database connectivity check using the provided connection pool.
+/// Checks that the configured database responds to a simple probe.
+///
+/// Attempts the blocking database health check on a dedicated thread and maps the outcome to
+/// `Ok(())` on success or an error describing the failure.
 ///
 /// # Returns
 ///
@@ -64,9 +67,11 @@ struct TenantHealth {
 ///
 /// # Examples
 ///
-/// ```
-/// # async fn example(pool: actix_web::web::Data<DatabasePool>) {
-/// let result = check_database_health_async(pool).await;
+/// ```no_run
+/// use actix_web::web;
+///
+/// # async fn example(pool: web::Data<crate::DatabasePool>) {
+/// let result = crate::check_database_health_async(pool).await;
 /// assert!(result.is_ok());
 /// # }
 /// ```
@@ -297,33 +302,21 @@ async fn health_detailed(
     Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, response)))
 }
 
-/// Performs a simple connectivity check against the configured database.
+/// Checks database connectivity by acquiring a connection from the pool and executing a simple validation query.
 ///
-/// Attempts to acquire a connection from the provided pool and execute a lightweight
-/// validation query (`SELECT 1`).
-///
-/// # Returns
-///
-/// `Ok(())` if a connection is acquired and the query succeeds, `Err(...)` if acquiring
-/// the connection fails or the query returns a Diesel error.
-///
-/// # Errors
-///
-/// Returns a `diesel::result::Error::DatabaseError` with kind `UnableToSendCommand`
-/// when the pool cannot provide a connection; other `diesel::result::Error` variants
-/// may be returned if the validation query fails.
+/// `Ok(())` is returned when a connection can be obtained and the validation query succeeds; `Err(...)` with a boxed error is returned if acquiring the connection or executing the query fails.
 ///
 /// # Examples
 ///
 /// ```
-/// // Given a `pool: actix_web::web::Data<crate::DatabasePool>` from app data:
-/// # use actix_web::web;
-/// # use crate::check_database_health;
-/// # fn example(pool: web::Data<crate::DatabasePool>) {
-/// let res = check_database_health(pool);
-/// match res {
-///     Ok(()) => println!("DB healthy"),
-///     Err(e) => eprintln!("DB unhealthy: {}", e),
+/// use actix_web::web;
+/// # use crate::DatabasePool;
+/// # fn example(pool: web::Data<DatabasePool>) {
+/// let res = crate::check_database_health(pool);
+/// if res.is_ok() {
+///     println!("DB healthy");
+/// } else {
+///     eprintln!("DB unhealthy: {}", res.unwrap_err());
 /// }
 /// # }
 /// ```

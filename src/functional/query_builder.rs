@@ -582,7 +582,7 @@ where
         &self.filters
     }
 
-    /// List ordering specifications for the query builder.
+    /// Retrieve the ordering specifications accumulated by the builder.
     ///
     /// # Returns
     ///
