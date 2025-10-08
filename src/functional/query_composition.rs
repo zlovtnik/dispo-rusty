@@ -282,30 +282,23 @@ where
     T: Send + Sync + 'static,
     U: Clone + Send + Sync + 'static,
 {
-    /// Create a lazy streaming iterator that loads query results in configurable chunks.
+    /// Creates a lazy streaming iterator configured to load query results in chunks
+    /// according to the composer's `lazy_config`.
     ///
-    /// Constructs a new `LazyQueryIterator` configured from the provided query composer, concurrency
-    /// semaphore, and performance metrics tracker.
-    ///
-    /// # Parameters
-    ///
-    /// - `composer` — The functional query composer that supplies the base query and lazy configuration.
-    /// - `semaphore` — Concurrency control semaphore used to limit parallel chunk processing.
-    /// - `metrics` — Initial performance metrics to be attached and updated during iteration.
-    ///
-    /// # Returns
-    ///
-    /// A `LazyQueryIterator` ready to stream results according to the composer's `lazy_config`.
+    /// The returned iterator is initialized with an empty current chunk, positions set
+    /// to the start, and the page size taken from `composer.lazy_config.chunk_size`.
     ///
     /// # Examples
     ///
-    /// ```rust,no_run
+    /// ```no_run
     /// use std::sync::Arc;
     /// use tokio::sync::Semaphore;
+    ///
     /// // Assume `FunctionalQueryComposer` and `QueryPerformanceMetrics` are available in scope.
-    /// let composer: Arc<FunctionalQueryComposer<_, _>> = /* obtain or construct composer */ Arc::new(/* ... */);
+    /// let composer: Arc<FunctionalQueryComposer<_, _>> = Arc::new(/* ... */);
     /// let semaphore = Arc::new(Semaphore::new(4));
     /// let metrics = QueryPerformanceMetrics::default();
+    ///
     /// let iterator = LazyQueryIterator::new(composer, semaphore, metrics);
     /// ```
     pub fn new(
@@ -328,10 +321,9 @@ where
         }
     }
 
-    /// Creates a test-only lazy iterator preloaded with `data` that yields each item in order.
+    /// Creates a test-only LazyQueryIterator that yields the provided items in order.
     ///
-    /// This constructor is intended for tests and bypasses any database loading; the iterator will
-    /// return elements from `data` until exhausted.
+    /// This constructor bypasses any database loading and returns elements from `data` until exhausted.
     ///
     /// # Examples
     ///
@@ -383,17 +375,21 @@ where
         }
     }
 
-    /// Attempt to load the next page of results into the iterator.
+    /// Load the next page of results into the iterator's buffer.
     ///
-    /// This method is currently unimplemented and will panic if called. When implemented, it
-    /// should fetch up to `self.page_size` records starting at `self.offset`, replace
-    /// `self.current_chunk` with the fetched records, reset `self.chunk_position` to `0`,
-    /// advance `self.offset` accordingly, and mark the iterator as exhausted when no more
-    /// results are available.
+    /// When implemented, this will fetch up to `self.page_size` records starting at
+    /// `self.offset`, replace `self.current_chunk` with the fetched records,
+    /// reset `self.chunk_position` to `0`, advance `self.offset` by the number of
+    /// records loaded, and mark the iterator as exhausted when no more results are
+    /// available.
     ///
     /// # Returns
     ///
     /// `true` if a new chunk was loaded successfully, `false` if no more data is available.
+    ///
+    /// # Panics
+    ///
+    /// This function is currently unimplemented and will panic if called.
     ///
     /// # Examples
     ///
@@ -431,21 +427,13 @@ where
 {
     type Item = U;
 
-    /// Advances the iterator by one and yields the next element from the current in-memory chunk.
+    /// Returns the next item from the currently loaded in-memory chunk or `None` if the iterator is exhausted.
     ///
-    /// If the current chunk has remaining items, returns the next item and advances the internal
-    /// position counters. If the current chunk is exhausted, the iterator is marked exhausted and
-    /// returns `None`.
-    ///
-    /// # Returns
-    ///
-    /// `Some(item)` with the next element from the current chunk, `None` when the iterator is exhausted.
+    /// If the current chunk contains remaining items, advances the internal position counters and yields the next element. For iterators constructed with `with_data`, no additional chunk loading is performed and iteration ends when the in-memory data is consumed.
     ///
     /// # Examples
     ///
     /// ```
-    /// # #[cfg(test)]
-    /// # {
     /// use crate::functional::query_composition::LazyQueryIterator;
     ///
     /// let data = vec![1, 2, 3];
@@ -455,7 +443,6 @@ where
     /// assert_eq!(iter.next(), Some(2));
     /// assert_eq!(iter.next(), Some(3));
     /// assert_eq!(iter.next(), None);
-    /// # }
     /// ```
     fn next(&mut self) -> Option<Self::Item> {
         if self.exhausted {
@@ -536,7 +523,22 @@ fn sql_comment_regex() -> &'static Regex {
     SQL_COMMENT.get_or_init(|| Regex::new(r"--|/\*|\*/").expect("SQL comment regex should compile"))
 }
 
-/// Get the compiled regex for detecting SQL keywords at word boundaries (case-insensitive)
+/// Returns a cached compiled regex that matches common SQL keywords at word boundaries, case-insensitively.
+///
+/// The regex is initialized once and reused for subsequent calls to avoid recompilation.
+///
+/// # Returns
+///
+/// A reference to a compiled regex matching the keywords `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `DROP`, `UNION`, `EXEC`, and `EXECUTE` at word boundaries, case-insensitively.
+///
+/// # Examples
+///
+/// ```
+/// let re = sql_keyword_regex();
+/// assert!(re.is_match("SELECT * FROM users"));
+/// assert!(re.is_match("select"));
+/// assert!(!re.is_match("selection"));
+/// ```
 fn sql_keyword_regex() -> &'static Regex {
     static SQL_KEYWORD: OnceLock<Regex> = OnceLock::new();
     SQL_KEYWORD.get_or_init(|| {
@@ -644,12 +646,11 @@ impl ParameterSanitizer {
         Ok(())
     }
 
-    /// Apply a single sanitization rule to a string value.
+    /// Applies a sanitization rule to a string value.
     ///
-    /// Recognizes at least two rule names:
-    /// - `"no_sql_injection"`: rejects SQL comment tokens, common statement keywords at word boundaries (case-insensitive), percent-encoding hints, and semicolon-based terminators according to the rule's `pattern`.
-    /// - `"reasonable_length"`: enforces a maximum length of 255 characters.
-    /// Unknown rule names pass by default.
+    /// Recognizes the `"no_sql_injection"` rule (rejects SQL comment tokens, common SQL keywords
+    /// at word boundaries, percent-encoding hints, and semicolons) and the `"reasonable_length"`
+    /// rule (allows up to 255 characters). Unknown rule names pass by default.
     ///
     /// # Examples
     ///

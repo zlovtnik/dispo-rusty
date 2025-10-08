@@ -39,7 +39,53 @@ pub fn init_db_pool(url: &str) -> Pool {
         .expect("Failed to create pool.")
 }
 
-/// Prefer this non-panicking variant.
+/// Creates a database connection pool for the given database URL without panicking on failure.
+
+///
+
+/// The function attempts to build an r2d2 connection pool for the provided PostgreSQL URL. On
+
+/// success it returns the configured pool; on failure it returns `ServiceError::InternalServerError`
+
+/// with a descriptive message.
+
+///
+
+/// # Arguments
+
+///
+
+/// * `url` - The database connection URL (e.g., `postgres://user:pass@host/db`).
+
+///
+
+/// # Returns
+
+///
+
+/// The configured `Pool` on success, or `ServiceError::InternalServerError` describing the failure.
+
+///
+
+/// # Examples
+
+///
+
+/// ```no_run
+
+/// # use crate::db::try_init_db_pool;
+
+/// let result = try_init_db_pool("postgres://user:pass@localhost/db");
+
+/// match result {
+
+///     Ok(pool) => println!("Created pool with max size: {}", pool.state().connections()),
+
+///     Err(err) => eprintln!("Failed to create pool: {:?}", err),
+
+/// }
+
+/// ```
 pub fn try_init_db_pool(url: &str) -> Result<Pool, ServiceError> {
     use log::info;
     info!("Migrating and configuring database...");
@@ -133,26 +179,38 @@ impl TenantPoolManager {
         }
     }
 
+    /// Access the primary database connection pool.
+    ///
+    /// # Returns
+    ///
+    /// A clone of the primary `Pool`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // assuming `manager` is a TenantPoolManager
+    /// let pool = manager.get_main_pool();
+    /// // use `pool` to obtain connections...
+    /// ```
     pub fn get_main_pool(&self) -> Pool {
         self.main_pool.clone()
     }
 
-    /// Removes and returns the connection pool for the given tenant ID if one exists.
-    ///
-    /// If the tenant pools lock is poisoned, returns `ServiceError::InternalServerError` with the
-    /// message "Tenant pools lock was poisoned".
+    /// Removes and returns the connection pool for the specified tenant, if present.
     ///
     /// # Returns
     ///
-    /// `Ok(Some(pool))` if a pool was removed, `Ok(None)` if no pool existed for `tenant_id`, or
-    /// `Err(ServiceError::InternalServerError { error_message })` if the tenant pools lock is poisoned.
+    /// `Ok(Some(pool))` if a pool was removed, `Ok(None)` if no pool existed for `tenant_id`,
+    /// or `Err(ServiceError::InternalServerError { error_message })` if the tenant pools lock was poisoned.
     ///
     /// # Examples
     ///
     /// ```no_run
     /// use crate::config::db::{TenantPoolManager, init_db_pool};
+    ///
     /// let main_pool = init_db_pool("postgres://user:pass@localhost/db");
     /// let manager = TenantPoolManager::new(main_pool.clone());
+    ///
     /// // Assume a tenant pool was added previously.
     /// let res = manager.remove_tenant_pool("tenant_a");
     /// match res {

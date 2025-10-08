@@ -71,10 +71,10 @@ where
         }
     }
 
-    /// Maps each item to an `Option` and yields the contained values, discarding `None`s.
+    /// Maps each item to an `Option` and yields the contained values, discarding `None` results.
     ///
     /// The provided closure receives each item and may return `Some(mapped)` to emit a value
-    /// or `None` to skip it.
+    /// or `None` to skip the item.
     ///
     /// # Examples
     ///
@@ -94,32 +94,19 @@ where
         }
     }
 
-    /// Maps each item to an iterable and flattens the produced iterators into a single sequence.
-
+    /// Maps each item to an iterable and concatenates the resulting iterators into a single sequence.
     ///
-
-    /// The provided closure `f` is called for each item and should return a value that implements
-
-    /// `IntoIterator`; the resulting iterators are concatenated (flattened) into the returned chain.
-
+    /// The closure `f` should produce a value that implements `IntoIterator` for each item; the
+    /// produced iterators are flattened in order.
     ///
-
     /// # Examples
-
     ///
-
     /// ```
-
     /// let data = vec![1, 2, 3];
-
     /// let result: Vec<_> = ChainBuilder::from_vec(data)
-
     ///     .flat_map(|x| vec![x, x * 2])
-
     ///     .collect();
-
     /// assert_eq!(result, vec![1, 2, 2, 4, 3, 6]);
-
     /// ```
     pub fn flat_map<J, U, F>(self, f: F) -> ChainBuilder<FlatMap<I, J, F>>
     where
@@ -357,7 +344,10 @@ impl<T> ChainBuilder<std::vec::IntoIter<T>> {
 pub mod patterns {
     use super::*;
 
-    /// Builds a processing pipeline from a vector, filters items with `filter_fn`, transforms them with `transform_fn`, and returns the collected results.
+    /// Filter and transform elements from a vector, returning a new collected vector of results.
+    ///
+    /// The function builds a processing pipeline that applies `filter_fn` to borrow-checked items
+    /// and then applies `transform_fn` to the owned items that pass the filter.
     ///
     /// # Examples
     ///
@@ -377,13 +367,13 @@ pub mod patterns {
             .collect()
     }
 
-    /// Builds a pipeline that applies `process_fn` to each element of `data` and returns the results in input order.
+    /// Applies a function to each element and returns the processed results in the original input order.
     ///
-    /// The function is designed with parallel processing in mind but currently executes the work sequentially.
+    /// This pipeline currently executes the processing sequentially (a parallel implementation may be introduced later).
     ///
     /// # Returns
     ///
-    /// A `Vec<U>` containing the processed outputs, preserving the original element order.
+    /// A `Vec<U>` containing the processed outputs in the same order as the input elements.
     ///
     /// # Examples
     ///

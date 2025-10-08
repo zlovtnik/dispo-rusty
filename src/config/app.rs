@@ -188,10 +188,10 @@ fn configure_tenant_admin_routes(cfg: &mut web::ServiceConfig) {
     );
 }
 
-/// Register tenant HTTP routes on the provided ServiceConfig.
+/// Registers tenant HTTP routes on the provided ServiceConfig.
 ///
-/// Configures collection routes (GET list, POST create), a filtered listing (GET /filter),
-/// and per-tenant operations by `id` (GET, PUT, DELETE).
+/// Configures collection routes (GET list, POST create), a filtered listing at `/filter` (GET),
+/// and per-tenant operations by `{id}` (GET, PUT, DELETE).
 ///
 /// # Examples
 ///

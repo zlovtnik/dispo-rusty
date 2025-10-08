@@ -145,6 +145,28 @@ impl Person {
             .execute(conn)
     }
 
+    /// Updates the person record with the specified id using values from `updated_person`.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use crate::{PersonDTO, update, Connection};
+    /// let mut conn: Connection = /* obtain connection */;
+    /// let dto = PersonDTO {
+    ///     name: "Alice".into(),
+    ///     gender: true,
+    ///     age: 30,
+    ///     address: "123 Main St".into(),
+    ///     phone: "555-0100".into(),
+    ///     email: "alice@example.com".into(),
+    /// };
+    /// let rows = update(1, dto, &mut conn).expect("update failed");
+    /// assert_eq!(rows, 1);
+    /// ```
+    ///
+    /// # Returns
+    ///
+    /// Number of rows updated on success.
     pub fn update(i: i32, updated_person: PersonDTO, conn: &mut Connection) -> QueryResult<usize> {
         diesel::update(people.find(i))
             .set(&updated_person)
@@ -153,21 +175,16 @@ impl Person {
 
     /// Deletes the person with the given id from the people table.
     ///
-    /// # Parameters
-    ///
-    /// - `i`: id of the person to delete.
-    ///
     /// # Returns
     ///
-    /// The number of rows deleted.
+    /// `usize` number of rows deleted.
     ///
     /// # Examples
     ///
-    /// ```
-    /// # use crate::db::Connection;
-    /// # // `conn` must be a mutable database connection.
+    /// ```no_run
+    /// use crate::db::Connection;
     /// let mut conn: Connection = /* obtain connection */ unimplemented!();
-    /// let deleted = delete(1, &mut conn).unwrap();
+    /// let deleted = crate::models::person::delete(1, &mut conn).unwrap();
     /// assert_eq!(deleted, 1);
     /// ```
     pub fn delete(i: i32, conn: &mut Connection) -> QueryResult<usize> {

@@ -56,15 +56,14 @@ struct TenantHealth {
     status: Status,
 }
 
-/// Performs a database connectivity check using the provided connection pool.
+/// Check whether the database accepts a simple health query using the provided connection pool.
 ///
-/// # Returns
-///
-/// `Ok(())` if the database responded to the health query, `Err` with an error otherwise.
+/// Returns `Ok(())` if a basic query succeeds and the database connection is healthy, `Err` with
+/// the underlying error otherwise.
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```
 /// # async fn example(pool: actix_web::web::Data<DatabasePool>) {
 /// let result = check_database_health_async(pool).await;
 /// assert!(result.is_ok());
@@ -76,16 +75,14 @@ async fn check_database_health_async(
     tokio::task::spawn_blocking(move || check_database_health(pool)).await?
 }
 
-/// Performs a cache health check using the provided Redis connection pool.
+/// Checks whether the Redis cache responds to a PING.
 ///
-/// Executes the synchronous cache probe on a blocking thread and returns `Ok(())` if the cache responds to a PING,
-/// or `Err(...)` if the probe fails or the blocking task fails.
+/// Returns `Ok(())` if the cache responds to a PING, `Err(...)` if the probe fails.
 ///
 /// # Examples
 ///
 /// ```
 /// # use actix_web::web;
-/// # use tokio_test::block_on;
 /// # async fn demo(pool: web::Data<crate::RedisPool>) {
 /// let result = crate::check_cache_health_async(pool).await;
 /// assert!(result.is_ok() || result.is_err());
@@ -99,20 +96,16 @@ async fn check_cache_health_async(
         .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync + 'static>)?
 }
 
-/// Responds with the current service and component health as JSON.
+/// Return a JSON health summary for the service.
 ///
-/// Builds a HealthResponse containing the overall `Status`, an RFC3339 `timestamp`,
-/// component statuses for `database` and `cache`, and no tenant list, then returns
-/// HTTP 200 with that payload wrapped in `ResponseBody::new(constants::MESSAGE_OK, ...)`.
+/// Includes the overall `Status`, an RFC3339 `timestamp`, and component statuses
+/// for `database` and `cache`. The `tenants` field is omitted.
 ///
 /// # Examples
 ///
 /// ```no_run
 /// use actix_web::{test, App};
 ///
-/// // Mount the handler and call the /health route in an integration-style test.
-/// // The handler is registered with `#[get("/health")]`, so registering the
-/// // service on an App allows exercising the endpoint.
 /// # async fn example() {
 /// let app = test::init_service(App::new().service(crate::health)).await;
 /// let req = test::TestRequest::get().uri("/health").to_request();
@@ -299,18 +292,15 @@ async fn health_detailed(
 
 /// Checks database connectivity by acquiring a connection from the pool and executing `SELECT 1`.
 ///
-/// # Returns
-///
-/// `Ok(())` if a connection is acquired and the validation query succeeds, `Err(...)` otherwise.
+/// Returns `Ok(())` if a connection is acquired and the validation query succeeds, `Err` with an error otherwise.
 ///
 /// # Examples
 ///
-/// ```
+/// ```rust
 /// use actix_web::web;
-/// // Given a `pool: web::Data<crate::DatabasePool>` from app data:
+/// // Assuming `pool: web::Data<crate::DatabasePool>`
 /// # fn example(pool: web::Data<crate::DatabasePool>) {
-/// let res = crate::check_database_health(pool);
-/// assert!(res.is_ok() || res.is_err());
+/// let _ = crate::check_database_health(pool);
 /// # }
 /// ```
 fn check_database_health(
@@ -359,13 +349,13 @@ fn check_cache_health(
     Ok(())
 }
 
-/// Streams server logs over Server-Sent Events (SSE) when log streaming is enabled.
+/// Streams the application's log file to clients over Server-Sent Events (SSE).
 ///
-/// When enabled via the `ENABLE_LOG_STREAM` environment variable and a valid log file
-/// exists at `LOG_FILE` (defaults to `/var/log/app.log`), this handler returns an
-/// `HttpResponse` that streams new log lines as SSE `data:` frames. If streaming is
-/// disabled, the handler responds with `405 MethodNotAllowed`. If the configured log
-/// file does not exist, the handler responds with `404 NotFound`.
+/// When `ENABLE_LOG_STREAM` is set to `"true"` and the file at `LOG_FILE` (defaults to
+/// `/var/log/app.log`) exists, this handler returns an `HttpResponse` that continuously
+/// streams new log lines as SSE `data:` frames. If streaming is disabled, the handler
+/// responds with `405 MethodNotAllowed`. If the configured log file does not exist, the
+/// handler responds with `404 NotFound`.
 ///
 /// # Examples
 ///
@@ -382,7 +372,7 @@ fn check_cache_health(
 /// let app = test::init_service(App::new().service(crate::logs)).await;
 /// let req = test::TestRequest::get().uri("/logs").to_request();
 /// let resp = test::call_service(&app, req).await;
-/// assert!(resp.status().is_success() || resp.status() == actix_web::http::StatusCode::OK);
+/// assert!(resp.status().is_success());
 /// # }
 /// ```
 #[get("/logs")]

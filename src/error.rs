@@ -24,11 +24,21 @@ pub enum ServiceError {
     Conflict { error_message: String },
 }
 impl error::ResponseError for ServiceError {
-    /// Maps a `ServiceError` variant to its corresponding HTTP status code.
+
+    /// Map a `ServiceError` variant to its corresponding HTTP status code.
+    ///
+    /// The mapping is:
+    /// - `Unauthorized` -> `401 UNAUTHORIZED`
+    /// - `InternalServerError` -> `500 INTERNAL_SERVER_ERROR`
+    /// - `BadRequest` -> `400 BAD_REQUEST`
+    /// - `NotFound` -> `404 NOT_FOUND`
+    /// - `Conflict` -> `409 CONFLICT`
     ///
     /// # Returns
     ///
-    /// The `StatusCode` associated with the error variant.
+    /// The `StatusCode` that represents the HTTP status for this error variant.
+    ///
+    /// # Examples
     ///
     /// # Examples
     /// ```
@@ -91,13 +101,25 @@ pub trait ErrorTransformer<T, E> {
     /// The transformed Result after applying the transformation logic.
     fn transform(&self, error: Result<T, E>) -> Result<T, E>;
 
-    /// Composes this transformer with another, allowing chaining of transformations.
+
+    /// Compose this transformer with another transformer, producing a closure that applies them in sequence.
+    ///
+    /// The returned closure applies `self.transform` to its input `Result`, then passes the intermediate
+    /// result to the provided transformer and returns that final result.
     ///
     /// This enables building pipelines where multiple transformations are applied in sequence.
     /// The returned transformer first applies `self`, then applies the other transformer.
     ///
-    /// # Parameters
-    /// * `other` - The transformer to compose with this one.
+    /// ```
+    /// use crate::error::ErrorTransformer;
+    ///
+    /// struct PrefixTransformer(pub String);
+    ///
+    /// impl<T, E> ErrorTransformer<T, E> for PrefixTransformer {
+    ///     fn transform(&self, r: Result<T, E>) -> Result<T, E> {
+    ///         r.map_err(|e| format!("{}{}", self.0, format!("{:?}", e)).into())
+    ///     }
+    /// }
     ///
     /// # Returns
     /// A composed transformer function that applies both transformations in order.
@@ -168,9 +190,8 @@ pub mod monadic {
 
     /// Lifts a function that returns an Option into Result<Option<_>> with error mapping.
     ///
-    /// # Parameters
-    /// * `result` - The Result<Option<T>> to process.
-    /// * `error_mapper` - Function to transform errors.
+    /// If the input is `Ok(Some(value))` returns `Ok(value)`. If the input is `Ok(None)` returns `Ok(T::default())`.
+    /// If the input is `Err(e)` returns `Err(error_mapper(e))`.
     ///
     /// # Returns
     /// A Result<T, E> where errors are mapped and nested Options are flattened.
@@ -247,6 +268,7 @@ pub mod error_pipeline {
     /// # Parameters
     /// * `results` - Iterator of Results to process.
     /// * `transform` - Function to apply to successful values.
+
     ///
     /// # Returns
     /// A vector of transformed successful results, ignoring errors.
@@ -256,16 +278,16 @@ pub mod error_pipeline {
     /// use std::vec;
     /// # use crate::error::error_pipeline::collect_successes;
     /// let results = vec![Ok(1), Err("bad"), Ok(2), Err("worse")];
-    /// let successes: Vec<i32> = collect_successes(results.into_iter(), |x| x * 2);
-    /// assert_eq!(successes, vec![2, 4]);
-    /// ```
+    /// use crate::error::error_pipeline::collect_successes;
+    ///
+    /// let results = vec![Ok(1), Err("bad"), Ok(2)];
+
     pub fn collect_successes<T, U, E>(
         results: impl Iterator<Item = Result<T, E>>,
         transform: impl Fn(T) -> U,
     ) -> Vec<U> {
         results.filter_map(|r| r.ok()).map(transform).collect()
     }
-
     /// Builds an error reporting function that collects and reports errors from a pipeline.
     ///
     /// # Parameters
@@ -274,6 +296,19 @@ pub mod error_pipeline {
     ///
     /// # Returns
     /// A function that can be used in a pipeline to collect errors.
+    /// Creates a closure that reports and collects errors produced by pipeline steps.
+    ///
+    /// The returned closure accepts a `Result<(), E>`; on `Err(e)` it invokes `reporter(&e)`
+    /// and attempts to append a clone of `e` to the shared `errors` vector (locks the mutex).
+    ///
+    /// # Parameters
+    ///
+    /// * `errors` - Shared `Arc<Mutex<Vec<E>>>` where encountered errors will be stored.
+    /// * `reporter` - Callback invoked with a reference to each reported error.
+    ///
+    /// # Returns
+    ///
+    /// A `FnMut(Result<(), E>)` closure that reports and stores errors on `Err` and does nothing on `Ok`.
     ///
     /// # Examples
     /// ```
@@ -349,19 +384,10 @@ pub mod error_logging {
     /// # Parameters
     /// * `predicate` - Function that determines whether to log the error.
     /// * `level` - Log level to use.
-    ///
-    /// # Returns
-    /// A Result transformer that conditionally logs errors.
-    ///
-    /// # Examples
-    /// ```
-    /// use log::Level;
-    /// # use crate::error::error_logging::log_errors_if;
-    /// let transformer = log_errors_if(|e: &&str| e.contains("critical"), Level::Error);
-    /// let result: Result<i32, &str> = Err("critical error");
-    /// let logged = transformer(result);
-    /// // Logs "critical error", result remains Err
-    /// ```
+
+    /// Returns the input `Result<T, E>` unchanged; if the input is `Err(e)` and `predicate(&e)`
+    /// is true, the error is logged at the provided `level` before being returned.
+
     pub fn log_errors_if<T, E: std::fmt::Debug + Clone>(
         predicate: impl Fn(&E) -> bool + 'static,
         level: log::Level,
@@ -377,6 +403,10 @@ pub mod error_logging {
     /// Chains logging with error transformation for comprehensive error handling.
     ///
     /// First logs the error if present, then applies a transformation function.
+    /// Applies a logging function to a `Result`, then applies a transformer to the logger's output.
+    ///
+    /// The returned closure first invokes `logger` with the input `Result`, then passes the returned
+    /// `Result` to `transformer` and returns the transformer's result.
     ///
     /// # Parameters
     /// * `logger` - The logging function to apply first.
