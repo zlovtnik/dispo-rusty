@@ -230,6 +230,19 @@ mod tests {
         assert_eq!(true, true);
     }
 
+    /// Starts an Actix HTTP server configured with CORS and a database pool to verify it can start without authentication middleware.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // This test starts a PostgreSQL test container, runs DB migrations,
+    /// // and launches an Actix server bound to localhost:8001 with permissive CORS
+    /// // and no authentication middleware to ensure startup succeeds.
+    /// #[actix_web::test]
+    /// async fn test_startup_without_auth_middleware_ok() {
+    ///     // setup test Postgres, pool, migrations, and start server...
+    /// }
+    /// ```
     #[actix_web::test]
     async fn test_startup_without_auth_middleware_ok() {
         let docker = clients::Cli::default();

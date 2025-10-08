@@ -146,9 +146,11 @@ where
         }
     }
 
-    /// Groups consecutive elements by a key derived from each item, yielding `(key, Vec<items>)` for each contiguous group.
+    /// Group consecutive elements by a derived key, yielding `(key, Vec<items>)` for each contiguous run.
     ///
-    /// The returned `IteratorChain` produces one tuple per run of adjacent elements that share the same key value.
+    /// The resulting `IteratorChain` produces one `(key, Vec<T>)` tuple for each sequence of adjacent
+    /// items whose derived keys are equal. Requires `T: Clone` because groups are collected into `Vec<T>`,
+    /// and `K: PartialEq` to compare adjacent keys.
     ///
     /// # Examples
     ///

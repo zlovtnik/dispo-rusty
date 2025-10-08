@@ -478,11 +478,10 @@ pub async fn create(
     Ok(HttpResponse::Created().json(ResponseBody::new(constants::MESSAGE_OK, tenant)))
 }
 
-/// Update an existing tenant by ID.
+/// Updates an existing tenant identified by `id`.
 ///
-/// Attempts to update the tenant identified by `id` using the provided `update_dto`.
-/// On success returns an HTTP 200 response containing the updated tenant; if the tenant
-/// is not found returns a `ServiceError::NotFound`, and other failures map to
+/// Attempts to apply `update_dto` and returns the updated tenant wrapped in an HTTP 200 response.
+/// Returns `ServiceError::NotFound` if the tenant does not exist; other failures map to
 /// `ServiceError::InternalServerError`.
 ///
 /// # Examples

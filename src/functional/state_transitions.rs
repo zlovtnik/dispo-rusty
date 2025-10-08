@@ -266,20 +266,21 @@ pub fn remove_app_config(
     }
 }
 
-/// Creates a transition that updates the application data entry for `key` by applying `transform`.
+/// Updates an application data entry identified by `key` by applying `transform`.
 ///
-/// If `key` is absent the `default_value` is passed to `transform`. If `transform` returns `Ok(new_value)`,
-/// the returned transition produces a new state with `app_data[key]` set to `new_value` and `last_updated` set
-/// to the current time. If `transform` returns `Err(_)`, the transition returns the original state unchanged.
+/// If `key` is absent, `default_value` is provided to `transform`. When `transform` returns `Ok(new_value)`,
+/// the produced transition sets `app_data[key]` to `new_value` and updates `last_updated` to the current time.
+/// If `transform` returns `Err(_)`, the transition returns the original state unchanged.
 ///
-/// `key` must not be empty or whitespace; otherwise the function returns `Err(TransitionError::InvalidParameters)`.
+/// `key` must not be empty or contain only whitespace; otherwise this function returns
+/// `Err(TransitionError::InvalidParameters)`.
 ///
 /// # Examples
 ///
-/// ```
+/// ```no_run
 /// use chrono::Utc;
 /// use serde_json::json;
-/// use your_crate::{TenantApplicationState, transform_app_data};
+/// use crate::{TenantApplicationState, transform_app_data};
 ///
 /// // Create a transition that increments an integer stored under "counter"
 /// let tr = transform_app_data(
@@ -326,11 +327,11 @@ where
     })
 }
 
-/// Appends a query result with a computed expiration to the tenant's query cache.
+/// Appends a query result with a computed expiration to a tenant's query cache.
 ///
 /// Validates that `query_id` and `data` are not empty and, on success, returns a transition
-/// closure which, when applied to a `TenantApplicationState`, clones the state, appends a
-/// `QueryResult { query_id, data, expires_at }` (where `expires_at = now + ttl_seconds`),
+/// closure that, when applied to a `TenantApplicationState`, clones the state, appends a
+/// `QueryResult { query_id, data, expires_at }` (with `expires_at = now + ttl_seconds`),
 /// updates `last_updated`, and returns the new state.
 ///
 /// # Errors
@@ -343,7 +344,10 @@ where
 /// let state = TenantApplicationState::default();
 /// let transition = cache_query_result("search:users?page=1", vec![1, 2, 3], 60).unwrap();
 /// let new_state = transition(&state);
-/// assert!(new_state.query_cache.iter().any(|entry| entry.query_id == "search:users?page=1"));
+/// assert!(new_state
+///     .query_cache
+///     .iter()
+///     .any(|entry| entry.query_id == "search:users?page=1"));
 /// ```
 pub fn cache_query_result(
     query_id: impl Into<String>,
@@ -382,16 +386,16 @@ pub fn cache_query_result(
 
 /// Removes expired entries from a tenant's query cache.
 ///
-/// The returned transition produces a new `TenantApplicationState` with all
-/// `query_cache` entries whose `expires_at` is less than or equal to the
-/// current time removed, and updates `last_updated` to the current timestamp.
+/// The produced transition returns a new `TenantApplicationState` containing only
+/// cache entries whose `expires_at` is greater than the current time and updates
+/// the state's `last_updated` timestamp to the current time.
 ///
 /// # Examples
 ///
 /// ```
 /// let transition = clean_expired_cache();
 /// let new_state = transition(&old_state);
-/// // `new_state.query_cache` contains only entries with `expires_at > now`.
+/// // `new_state.query_cache` contains only entries with `expires_at > Utc::now()`.
 /// ```
 pub fn clean_expired_cache() -> impl FnOnce(&TenantApplicationState) -> TenantApplicationState {
     move |state| {
@@ -421,16 +425,13 @@ pub fn clean_expired_cache() -> impl FnOnce(&TenantApplicationState) -> TenantAp
     }
 }
 
-/// Builds a chain of state transitions that perform a user login.
+/// Create a sequence of state transitions that perform a user login.
 ///
-/// The produced transitions, when applied in order to a tenant state, will:
-/// 1. remove expired query-cache entries,
-/// 2. create a new user session with a generated session ID, and
-/// 3. record the user's last-login timestamp in app data.
+/// The returned transitions, when applied in order to a tenant state, remove expired query-cache entries, create a new user session with a generated session ID, and record the user's last-login timestamp in app data.
 ///
 /// # Returns
 ///
-/// A vector of boxed transition functions that apply the three login-related updates in sequence.
+/// A vector of boxed transition functions that each take a `TenantApplicationState` and return an updated `TenantApplicationState`; applying them sequentially performs the login-related updates.
 ///
 /// # Examples
 ///
@@ -480,10 +481,10 @@ pub fn build_login_transitions(
     Ok(transitions)
 }
 
-/// Creates a sequence of state transitions that perform logout for the given session.
+/// Builds a logout transition sequence that removes a session and purges expired query cache.
 ///
-/// The returned transitions, when applied in order, remove the specified user session and then
-/// remove expired entries from the query cache. Returns a `TransitionError::InvalidParameters`
+/// The returned transitions, when applied in order, first remove the specified user session and
+/// then remove expired entries from the query cache. Returns `TransitionError::InvalidParameters`
 /// if `session_id` is empty or contains only whitespace.
 ///
 /// # Examples

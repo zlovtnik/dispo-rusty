@@ -142,9 +142,9 @@ pub trait ParallelIteratorExt<T: Send + Sync>: Iterator<Item = T> + Send + Sync 
         }
     }
 
-    /// Performs a fold (reduce) over the iterator using a per-item `fold` and a parallel `combine`, executing in parallel when the configured threshold is met.
+    /// Performs a fold (reduction) over the iterator, using `fold` per item and `combine` to merge partial results.
     ///
-    /// If the collected data length is less than `config.min_parallel_size`, the operation runs sequentially; otherwise it runs in parallel using Rayon. Returns a `ParallelResult` containing the folded value and associated `ParallelMetrics` (including total_time, thread_count, throughput, memory_usage, and efficiency).
+    /// Chooses a sequential fold when the collected input length is less than `config.min_parallel_size`; otherwise it performs a parallel fold and reduction using Rayon. The returned `ParallelResult` includes the folded value and `ParallelMetrics` (total time, thread count, throughput, memory usage, and an efficiency heuristic).
     ///
     /// # Examples
     ///
@@ -290,11 +290,20 @@ pub trait ParallelIteratorExt<T: Send + Sync>: Iterator<Item = T> + Send + Sync 
         }
     }
 
-    /// Groups items by a key computed from each item and returns the grouped map with performance metrics.
+    /// Group items by a computed key and record parallel execution metrics.
     ///
-    /// The provided `key_fn` is applied to each item to produce a key; items are moved into vectors
-    /// stored under their corresponding keys in the resulting `HashMap`. The order of items within
-    /// each vector is not guaranteed.
+    /// The provided `key_fn` is applied to each item to compute its grouping key; items are moved
+    /// into vectors stored under their respective keys. The relative order of items within each
+    /// group is not guaranteed.
+    ///
+    /// # Parameters
+    ///
+    /// - `key_fn`: Function applied to each item to produce its grouping key.
+    ///
+    /// # Returns
+    ///
+    /// A `ParallelResult` containing a `HashMap` that maps each key to a `Vec` of items grouped
+    /// under that key, along with `ParallelMetrics` describing the operation.
     ///
     /// # Examples
     ///
@@ -383,7 +392,20 @@ impl<T: Send + Sync, I: Iterator<Item = T> + Send + Sync> ParallelIteratorExt<T>
 
 // Standalone parallel processing functions for common patterns
 
-/// Parallel transform operation optimized for CPU-intensive work
+/// Applies a CPU-bound transformation to each element of `data`, using parallel execution when `config` permits.
+///
+/// Returns a `ParallelResult` containing the transformed `Vec<U>` and associated `ParallelMetrics`.
+///
+/// # Examples
+///
+/// ```
+/// use crate::{parallel_transform, ParallelConfig};
+///
+/// let cfg = ParallelConfig::default();
+/// let input = vec![1, 2, 3, 4];
+/// let result = parallel_transform(input, |n| n * 2, &cfg);
+/// assert_eq!(result.into_inner(), vec![2, 4, 6, 8]);
+/// ```
 pub fn parallel_transform<T, U, F>(
     data: Vec<T>,
     transform: F,
@@ -397,24 +419,22 @@ where
     data.into_iter().par_map(config, transform)
 }
 
-/// Performs an aggregated reduction over `data`, using a parallel fold when beneficial.
+/// Aggregates the elements of `data` into a single accumulator, using a parallel fold when the input size meets the configured threshold.
 ///
-/// Uses `aggregate` to fold items into per-thread accumulators and `combine` to merge those accumulators into a final result; falls back to a sequential fold when `data.len() < config.min_parallel_size`. The returned `ParallelResult` contains the aggregated value and measured execution metrics (time, thread count, throughput, memory usage, and a simplified efficiency estimate).
+/// Uses `aggregate` to incorporate each item into a per-thread accumulator and `combine` to merge those accumulators into the final result. If `data.len() < config.min_parallel_size`, a sequential fold is performed. The returned `ParallelResult` contains the aggregated value and measured execution metrics.
 ///
-/// # Parameters
+/// # Returns
 ///
-/// - `data`: input vector to reduce.
-/// - `init`: initial accumulator value.
-/// - `aggregate`: function that incorporates an item into an accumulator (`acc, item -> acc`).
-/// - `combine`: function that merges two accumulators (`acc_left, acc_right -> acc_merged`).
-/// - `config`: parallelization configuration controlling thresholds and chunking.
+/// A `ParallelResult` whose `data` is the final accumulator and whose `metrics` describe execution time, thread usage, throughput, memory usage, and a simple efficiency estimate.
 ///
 /// # Examples
 ///
 /// ```
-/// # use your_crate::{parallel_aggregate, ParallelConfig, ParallelResult};
+/// use crate::{parallel_aggregate, ParallelConfig};
+///
 /// let data: Vec<u32> = (1..=100u32).collect();
 /// let config = ParallelConfig::default();
+///
 /// let result = parallel_aggregate(
 ///     data,
 ///     0u32,
@@ -422,6 +442,7 @@ where
 ///     |a, b| a + b,
 ///     &config,
 /// );
+///
 /// assert_eq!(result.into_inner(), 5050);
 /// assert!(result.metrics().throughput > 0);
 /// ```
@@ -500,7 +521,21 @@ where
     data.into_iter().par_filter(config, predicate)
 }
 
-/// Utility function to estimate optimal thread count for dataset size
+/// Estimates a suggested number of worker threads based on the input dataset size.
+///
+/// The function returns `1` for very small datasets (< 1,000), `2` for small datasets
+/// (1,000..10,000), `4` for medium datasets (10,000..100,000), and `0` to indicate
+/// that the caller should delegate thread-count selection to Rayon for large datasets
+/// (>= 100,000).
+///
+/// # Examples
+///
+/// ```
+/// assert_eq!(estimate_thread_count(500), 1);
+/// assert_eq!(estimate_thread_count(5_000), 2);
+/// assert_eq!(estimate_thread_count(50_000), 4);
+/// assert_eq!(estimate_thread_count(200_000), 0);
+/// ```
 #[allow(dead_code)]
 pub fn estimate_thread_count(data_size: usize) -> usize {
     if data_size < 1000 {
@@ -515,25 +550,12 @@ pub fn estimate_thread_count(data_size: usize) -> usize {
     }
 }
 
-/// Build a ParallelConfig tuned for a dataset of the given size.
+/// Create a ParallelConfig tuned to the given dataset size.
 ///
-/// Returns a configuration with heuristics for thread pool size, minimum
-/// parallel threshold, work-stealing enabled, and a chunk size tuned to the
-/// provided `data_size`.
-///
-/// # Parameters
-///
-/// - `data_size`: Number of items expected to be processed; used to compute
-///   thread pool size, minimum size to enable parallelism, and chunk sizing.
-///
-/// # Returns
-///
-/// A `ParallelConfig` with:
-/// - `thread_pool_size` estimated from `data_size`,
-/// - `min_parallel_size` set to `usize::MAX` for very small inputs (< 1000)
-///   to force sequential execution or `data_size / 10` otherwise,
-/// - `enable_work_stealing` set to `true`,
-/// - `chunk_size` set to `max(data_size / thread_count, 100)`.
+/// For inputs smaller than 1000, `min_parallel_size` is set to `usize::MAX` to
+/// force sequential execution; otherwise `min_parallel_size` is `data_size / 10`.
+/// `thread_pool_size` is estimated by `estimate_thread_count(data_size)`,
+/// `enable_work_stealing` is `true`, and `chunk_size` is `max(data_size / max(thread_count, 1), 100)`.
 ///
 /// # Examples
 ///

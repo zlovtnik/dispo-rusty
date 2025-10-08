@@ -95,23 +95,14 @@ pub fn update(id: i32, updated_person: PersonDTO, pool: &Pool) -> Result<(), Ser
 
 /// Deletes the person record with the given id from the database.
 ///
-/// If a person with the provided `id` exists, the record is removed; otherwise the function
-/// returns a `ServiceError::NotFound`.
-///
-/// # Returns
-///
-/// `Ok(())` on successful deletion; `Err(ServiceError::NotFound)` if no record with the given `id` exists;
-/// `Err(ServiceError::InternalServerError)` if the deletion operation fails.
+/// Returns `Ok(())` if the record was deleted, `Err(ServiceError::NotFound)` if no person with
+/// the given id exists, or `Err(ServiceError::InternalServerError)` if the deletion operation fails.
 ///
 /// # Examples
 ///
 /// ```
 /// // assume `pool` is a valid database pool available in scope
-/// let result = delete(42, &pool);
-/// match result {
-///     Ok(()) => println!("Person deleted"),
-///     Err(e) => eprintln!("Delete failed: {:?}", e),
-/// }
+/// let _ = delete(42, &pool);
 /// ```
 pub fn delete(id: i32, pool: &Pool) -> Result<(), ServiceError> {
     match Person::find_by_id(id, &mut pool.get().unwrap()) {
