@@ -104,13 +104,16 @@ pub fn logout(authen_header: &HeaderValue, pool: &Pool) -> Result<(), ServiceErr
     })
 }
 
-/// Refreshes the authentication token contained in the Authorization header.
+/// Refreshes an access token extracted from an Authorization header.
 ///
-/// Validates the header and token, verifies the login session is still active, looks up
-/// the associated login information, and returns a newly issued `TokenBodyResponse`.
-/// Returns an `Unauthorized` `ServiceError` when the header or token is missing/invalid or
-/// the login session is not valid. Returns an `InternalServerError` `ServiceError` if
-/// generating or serializing the new token fails.
+/// Validates the header and token, verifies the login session is still valid, looks up
+/// the login information associated with the token, and returns a newly issued `TokenBodyResponse`.
+///
+/// Errors:
+/// - Returns `ServiceError::Unauthorized` when the header or token is missing or invalid,
+///   when the login session is no longer valid, or when login information cannot be found.
+/// - Returns `ServiceError::InternalServerError` when a database connection cannot be acquired
+///   or when generating/serializing the new token fails.
 ///
 /// # Examples
 ///

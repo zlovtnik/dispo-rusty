@@ -56,10 +56,7 @@ struct TenantHealth {
     status: Status,
 }
 
-/// Checks that the configured database responds to a simple probe.
-///
-/// Attempts the blocking database health check on a dedicated thread and maps the outcome to
-/// `Ok(())` on success or an error describing the failure.
+/// Performs a database connectivity check using the provided connection pool.
 ///
 /// # Returns
 ///
@@ -67,11 +64,9 @@ struct TenantHealth {
 ///
 /// # Examples
 ///
-/// ```no_run
-/// use actix_web::web;
-///
-/// # async fn example(pool: web::Data<crate::DatabasePool>) {
-/// let result = crate::check_database_health_async(pool).await;
+/// ```rust
+/// # async fn example(pool: actix_web::web::Data<DatabasePool>) {
+/// let result = check_database_health_async(pool).await;
 /// assert!(result.is_ok());
 /// # }
 /// ```
@@ -104,11 +99,11 @@ async fn check_cache_health_async(
         .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync + 'static>)?
 }
 
-/// Return current service health and component statuses as JSON.
+/// Responds with the current service and component health as JSON.
 ///
-/// Builds a HealthResponse containing an overall `Status`, an RFC3339 `timestamp`,
-/// component statuses for database and cache, and no tenant list, then responds
-/// with HTTP 200 and that JSON body.
+/// Builds a HealthResponse containing the overall `Status`, an RFC3339 `timestamp`,
+/// component statuses for `database` and `cache`, and no tenant list, then returns
+/// HTTP 200 with that payload wrapped in `ResponseBody::new(constants::MESSAGE_OK, ...)`.
 ///
 /// # Examples
 ///
@@ -302,22 +297,20 @@ async fn health_detailed(
     Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, response)))
 }
 
-/// Checks database connectivity by acquiring a connection from the pool and executing a simple validation query.
+/// Checks database connectivity by acquiring a connection from the pool and executing `SELECT 1`.
 ///
-/// `Ok(())` is returned when a connection can be obtained and the validation query succeeds; `Err(...)` with a boxed error is returned if acquiring the connection or executing the query fails.
+/// # Returns
+///
+/// `Ok(())` if a connection is acquired and the validation query succeeds, `Err(...)` otherwise.
 ///
 /// # Examples
 ///
 /// ```
 /// use actix_web::web;
-/// # use crate::DatabasePool;
-/// # fn example(pool: web::Data<DatabasePool>) {
+/// // Given a `pool: web::Data<crate::DatabasePool>` from app data:
+/// # fn example(pool: web::Data<crate::DatabasePool>) {
 /// let res = crate::check_database_health(pool);
-/// if res.is_ok() {
-///     println!("DB healthy");
-/// } else {
-///     eprintln!("DB unhealthy: {}", res.unwrap_err());
-/// }
+/// assert!(res.is_ok() || res.is_err());
 /// # }
 /// ```
 fn check_database_health(

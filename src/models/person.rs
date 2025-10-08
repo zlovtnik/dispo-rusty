@@ -151,17 +151,24 @@ impl Person {
             .execute(conn)
     }
 
-    /// Deletes the person record with the specified id.
+    /// Deletes the person with the given id from the people table.
+    ///
+    /// # Parameters
+    ///
+    /// - `i`: id of the person to delete.
     ///
     /// # Returns
-    /// The number of rows deleted as `usize` (`0` if no matching record).
+    ///
+    /// The number of rows deleted.
     ///
     /// # Examples
     ///
     /// ```
-    /// // assumes `conn` is a valid `&mut Connection` connected to the database
-    /// let result = delete(42, &mut conn).unwrap();
-    /// assert_eq!(result, 1);
+    /// # use crate::db::Connection;
+    /// # // `conn` must be a mutable database connection.
+    /// let mut conn: Connection = /* obtain connection */ unimplemented!();
+    /// let deleted = delete(1, &mut conn).unwrap();
+    /// assert_eq!(deleted, 1);
     /// ```
     pub fn delete(i: i32, conn: &mut Connection) -> QueryResult<usize> {
         diesel::delete(people.find(i)).execute(conn)

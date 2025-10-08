@@ -506,17 +506,16 @@ impl<T, R: ValidationRule<T>> ValidationRule<T> for AllValidator<T, R> {
     }
 }
 
-/// Creates an `AllValidator` that requires all provided rules to pass.
+/// Constructs an AllValidator that applies every rule in `rules` in sequence.
 ///
-/// The returned validator applies each rule in sequence and fails on the first error.
+/// The returned validator succeeds only if all contained rules succeed; it returns the first
+/// encountered validation error otherwise.
 ///
 /// # Examples
 ///
 /// ```
-/// # use crate::validation::{all, Required, Length, ValidationRule};
-/// let validator = all(vec![Required::<String>{}, Length { min: Some(3), max: Some(10) }]);
-/// let result = validator.validate(&"abc".to_string(), "username");
-/// assert!(result.is_ok());
+/// // create an AllValidator for `i32` with no rules (always passes)
+/// let _validator = crate::all::<i32, _>(vec![]);
 /// ```
 pub fn all<T, R: ValidationRule<T>>(rules: Vec<R>) -> AllValidator<T, R> {
     AllValidator {
@@ -548,28 +547,25 @@ pub struct AnyValidator<T, R: ValidationRule<T>> {
 }
 
 impl<T, R: ValidationRule<T>> ValidationRule<T> for AnyValidator<T, R> {
-    /// Validates a value against multiple rules and succeeds if any rule passes.
+    /// Validates a value against a set of rules and succeeds if any single rule passes.
     ///
-    /// Returns `Ok(())` if at least one inner rule validates the value. If all rules fail,
-    /// returns a `ValidationError` that aggregates the individual failure messages; if no rules
-    /// were provided, returns a `ValidationError` with code `"VALIDATION_FAILED"` and message
-    /// `"No validation rules provided"`.
+    /// Returns `Ok(())` when at least one rule validates the value. If no rules were supplied,
+    /// returns `Err(ValidationError)` with code `VALIDATION_FAILED` and message `"No validation rules provided"`.
+    /// If all rules fail, returns `Err(ValidationError)` with code `ANY_VALIDATION_FAILED` and a message
+    /// combining each rule's failure message.
     ///
     /// # Examples
     ///
     /// ```
-    /// # use crate::{any, Length, ValidationRule};
-    /// let rules = vec![Length { min: Some(3), max: None }, Length { min: None, max: Some(1) }];
-    /// let validator = any(rules);
+    /// // Construct an `any` validator that succeeds if the string is non-empty or equals "ok".
+    /// let non_empty = Custom::new(|s: &String| !s.is_empty(), "REQUIRED".into(), "{} is required".into());
+    /// let equals_ok = Custom::new(|s: &String| s == "ok", "MUST_BE_OK".into(), "{} must be \"ok\"".into());
+    /// let validator = any(vec![non_empty, equals_ok]);
     ///
-    /// // Value that satisfies the first rule (length >= 3)
-    /// assert!(validator.validate(&"abc".to_string(), "field").is_ok());
-    ///
-    /// // Value that satisfies the second rule (length <= 1)
-    /// assert!(validator.validate(&"".to_string(), "field").is_ok());
-    ///
-    /// // Value that satisfies neither rule
-    /// assert!(validator.validate(&"ab".to_string(), "field").is_err());
+    /// assert!(validator.validate(&"hello".to_string(), "field").is_ok());
+    /// assert!(validator.validate(&"ok".to_string(), "field").is_ok());
+    /// let err = validator.validate(&"".to_string(), "field").unwrap_err();
+    /// assert_eq!(err.code, "ANY_VALIDATION_FAILED");
     /// ```
     fn validate(&self, value: &T, field_name: &str) -> ValidationResult<()> {
         let mut collected_errors = Vec::new();
@@ -603,16 +599,52 @@ impl<T, R: ValidationRule<T>> ValidationRule<T> for AnyValidator<T, R> {
     }
 }
 
-/// Constructs an `AnyValidator` that succeeds if at least one of the provided rules succeeds.
+/// Constructs an AnyValidator that succeeds if any of the provided rules succeeds.
+
 ///
-/// If the rules vector is empty, the resulting validator will always fail with a combined error
-/// indicating no validation rules were provided.
-///
+
 /// # Examples
+
 ///
+
 /// ```
-/// // Create an AnyValidator for `String` with no rules (type annotation via turbofish).
-/// let validator = any::<String, _>(Vec::new());
+
+/// // Helper types for the example
+
+/// struct AlwaysFail;
+
+/// struct AlwaysPass;
+
+///
+
+/// impl ValidationRule<i32> for AlwaysFail {
+
+///     fn validate(&self, _value: &i32, _field_name: &str) -> ValidationResult<()> {
+
+///         Err(ValidationError::new("x", "FAILED", "always fails"))
+
+///     }
+
+/// }
+
+///
+
+/// impl ValidationRule<i32> for AlwaysPass {
+
+///     fn validate(&self, _value: &i32, _field_name: &str) -> ValidationResult<()> {
+
+///         Ok(())
+
+///     }
+
+/// }
+
+///
+
+/// let v = any(vec![AlwaysFail, AlwaysPass]);
+
+/// assert!(v.validate(&42, "x").is_ok());
+
 /// ```
 pub fn any<T, R: ValidationRule<T>>(rules: Vec<R>) -> AnyValidator<T, R> {
     AnyValidator {

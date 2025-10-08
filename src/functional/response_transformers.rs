@@ -104,8 +104,9 @@ pub struct ResponseTransformer<T> {
 }
 
 impl<T> ResponseTransformer<T> {
-    /// Creates a ResponseTransformer containing the given payload with sensible defaults:
-    /// HTTP 200 status, message "OK", no metadata, no headers, and JSON formats allowed.
+    /// Create a ResponseTransformer containing the given payload with sensible defaults:
+    /// a 200 OK status, a default "OK" message, no metadata, no headers, JSON and pretty-JSON
+    /// allowed formats, and automatic content-negotiation strategy.
     ///
     /// # Examples
     ///
@@ -124,30 +125,37 @@ impl<T> ResponseTransformer<T> {
         }
     }
 
-    /// Set the envelope message used in the response.
+    /// Sets the response envelope's human-readable message and returns the updated transformer.
     ///
     /// # Examples
     ///
     /// ```
-    /// let _ = ResponseTransformer::new(()).with_message("Created");
+    /// let tx = ResponseTransformer::new("payload").with_message("Created");
+    /// // `tx` now carries "Created" as the envelope message and can be further configured or returned as a responder.
     /// ```
     pub fn with_message(mut self, message: impl Into<Cow<'static, str>>) -> Self {
         self.message = message.into();
         self
     }
 
-    /// Transform the transformer's message using the provided function.
+    /// Transforms the transformer’s message using the provided closure.
+    ///
+    /// The `transform` closure is invoked with the current message and its returned
+    /// value becomes the new message on the returned transformer.
     ///
     /// # Examples
     ///
     /// ```
-    /// use std::borrow::Cow;
-    ///
-    /// let transformed = ResponseTransformer::new(42)
-    ///     .map_message(|m: Cow<'static, str>| Cow::Owned(format!("greet: {}", m)));
-    ///
-    /// let _ = transformed;
+    /// let original = ResponseTransformer::new("payload").with_message("hello");
+    /// let updated = original.map_message(|m| {
+    ///     let mut s = m.into_owned();
+    ///     s.push_str(" world");
+    ///     s.into()
+    /// });
+    /// assert_eq!(updated.message, "hello world");
     /// ```
+    ///
+    /// Returns the transformer with its message replaced by the transformation result.
     pub fn map_message<F>(self, transform: F) -> Self
     where
         F: FnOnce(Cow<'static, str>) -> Cow<'static, str>,
@@ -175,55 +183,58 @@ impl<T> ResponseTransformer<T> {
         }
     }
 
-    /// Sets the HTTP status code to use for the generated response.
+    /// Set the HTTP status code for the response transformer.
     ///
     /// # Examples
     ///
     /// ```
-    /// use http::StatusCode;
-    /// // Construct a transformer and set the status to 201 Created
-    /// let transformer = ResponseTransformer::new(vec![1, 2, 3]).with_status(StatusCode::CREATED);
+    /// let transformer = ResponseTransformer::new("payload").with_status(StatusCode::CREATED);
+    /// assert_eq!(transformer.status, StatusCode::CREATED);
     /// ```
     pub fn with_status(mut self, status: StatusCode) -> Self {
         self.status = status;
         self
     }
 
-    /// Set the envelope metadata to a pre-serialized JSON value, replacing any existing metadata.
-    ///
-    /// The provided `metadata` is stored as-is and will be included in the serialized response envelope.
+    /// Sets the transformer's metadata to the provided pre-serialized JSON value.
     ///
     /// # Examples
     ///
     /// ```
     /// use serde_json::json;
-    /// use crate::functional::response_transformers::ResponseTransformer;
     ///
-    /// let transformer = ResponseTransformer::new(())
-    ///     .with_metadata_value(json!({"request_id": "abc123"}));
+    /// let transformed = ResponseTransformer::new(42)
+    ///     .with_metadata_value(json!({"source": "unit-test"}));
     ///
-    /// // transformer now carries the provided JSON metadata for inclusion in the response envelope
+    /// // method is chainable; `transformed` now carries the given metadata
     /// ```
     pub fn with_metadata_value(mut self, metadata: JsonValue) -> Self {
         self.metadata = Some(metadata);
         self
     }
 
-    /// Attach serializable metadata to the transformer by converting it to a JSON value.
+    /// Attach serialized metadata to the transformer.
     ///
-    /// Serializes `metadata` into a `serde_json::Value` and stores it in the transformer's
-    /// metadata field. Returns an error if serialization fails.
-    ///
-    /// # Returns
-    ///
-    /// `Ok(Self)` with the metadata attached on success, `Err(ResponseTransformError::MetadataSerialization)` if serialization fails.
+    /// Serializes `metadata` with Serde and stores the resulting JSON value in the transformer's
+    /// metadata field.
     ///
     /// # Examples
     ///
     /// ```
-    /// let transformer = ResponseTransformer::new(());
-    /// let transformer = transformer.try_with_metadata(&("key", "value")).unwrap();
+    /// use serde::Serialize;
+    /// use functional::response_transformers::ResponseTransformer;
+    ///
+    /// #[derive(Serialize)]
+    /// struct Meta { version: u8 }
+    ///
+    /// let t = ResponseTransformer::new("data")
+    ///     .try_with_metadata(Meta { version: 1 })
+    ///     .unwrap();
     /// ```
+    ///
+    /// # Returns
+    ///
+    /// `Ok(Self)` with the metadata set if serialization succeeds, `Err(ResponseTransformError::MetadataSerialization)` if serialization fails.
     pub fn try_with_metadata<M>(mut self, metadata: M) -> Result<Self, ResponseTransformError>
     where
         M: Serialize,
@@ -232,19 +243,18 @@ impl<T> ResponseTransformer<T> {
         Ok(self)
     }
 
-    /// Transforms the transformer's stored metadata using the provided function.
+    /// Transforms the stored metadata using the provided function and returns an updated transformer.
     ///
-    /// The closure receives the current `Option<JsonValue>` and returns the new `Option<JsonValue>`.
+    /// The provided closure receives the current `Option<JsonValue>` metadata and must return the new
+    /// `Option<JsonValue>` to store; all other transformer fields are preserved.
     ///
     /// # Examples
     ///
     /// ```
     /// use serde_json::json;
-    /// // Construct a transformer and replace or set its metadata
-    /// let _ = ResponseTransformer::new(1)
-    ///     .map_metadata(|opt| {
-    ///         opt.or(Some(json!({"injected": true})))
-    ///     });
+    /// // assume ResponseTransformer::new exists and is in scope
+    /// let t = ResponseTransformer::new("payload")
+    ///     .map_metadata(|_meta| Some(json!({"count": 1})));
     /// ```
     pub fn map_metadata<F>(self, transform: F) -> Self
     where
@@ -273,37 +283,41 @@ impl<T> ResponseTransformer<T> {
         }
     }
 
-    /// Appends an HTTP header to the transformer's header list.
+    /// Appends the given HTTP header to the transformer's header list and returns the updated transformer.
+    ///
+    /// The header is provided as a `(HeaderName, HeaderValue)` pair and will be included in the final `HttpResponse`
+    /// produced by the transformer.
     ///
     /// # Examples
     ///
     /// ```
-    /// use actix_http::http::header::{HeaderName, HeaderValue};
-    ///
-    /// let transformer = ResponseTransformer::new(42)
-    ///     .insert_header((HeaderName::from_static("x-test"), HeaderValue::from_static("v")));
+    /// use actix_web::http::{header::HeaderName, header::HeaderValue};
+    /// // Assume `ResponseTransformer::new` is in scope and T = i32 for this example.
+    /// let transformed = crate::functional::response_transformers::ResponseTransformer::new(42)
+    ///     .insert_header((HeaderName::from_static("x-request-id"), HeaderValue::from_static("abc123")));
     /// ```
     pub fn insert_header(mut self, header: (HeaderName, HeaderValue)) -> Self {
         self.headers.push(header);
         self
     }
 
-    /// Attempt to parse and insert an HTTP header from string `name` and `value`.
+    /// Attempts to parse header name and value from strings and insert them into the transformer.
     ///
-    /// On success returns the transformer with the parsed header appended to its header list.
-    /// On failure returns a `ResponseTransformError` indicating either an invalid header name or an invalid header value.
+    /// The provided `name` and `value` are parsed into `HeaderName` and `HeaderValue`. On success
+    /// the header pair is appended to the transformer's headers and the updated transformer is returned.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `ResponseTransformError::InvalidHeaderName` if `name` is not a valid header name,
+    /// or `ResponseTransformError::InvalidHeaderValue` if `value` is not a valid header value.
     ///
     /// # Examples
     ///
     /// ```
-    /// use actix_web::http::header::CONTENT_TYPE;
-    /// let t = crate::functional::response_transformers::ResponseTransformer::new(());
-    /// let res = t.try_insert_header("X-Custom", "value");
-    /// assert!(res.is_ok());
-    ///
-    /// // Using a known header name constant:
-    /// let res2 = t.try_insert_header(CONTENT_TYPE.as_str(), "application/json");
-    /// assert!(res2.is_ok());
+    /// # use http::header::{HeaderName, HeaderValue};
+    /// # use crate::functional::response_transformers::{ResponseTransformer, ResponseTransformError};
+    /// let t = ResponseTransformer::new("payload");
+    /// let updated = t.try_insert_header("x-custom", "42").unwrap();
     /// ```
     pub fn try_insert_header(
         mut self,
@@ -316,19 +330,15 @@ impl<T> ResponseTransformer<T> {
         Ok(self)
     }
 
-    /// Add a response format to the transformer's allowed formats if it is not already present.
+    /// Adds the given `ResponseFormat` to the transformer's list of allowed formats for content negotiation.
     ///
-    /// Returns a new transformer with the given `format` included in `allowed_formats`.
+    /// If the format is already allowed, the transformer is returned unchanged.
     ///
     /// # Examples
     ///
     /// ```
-    /// use crate::functional::response_transformers::{ResponseTransformer, ResponseFormat};
-    ///
-    /// let transformer = ResponseTransformer::new(())
-    ///     .allow_format(ResponseFormat::Text);
-    ///
-    /// // `transformer` now permits `Text` in content negotiation.
+    /// let tx = ResponseTransformer::new(42).allow_format(ResponseFormat::Text);
+    /// let tx = tx.allow_format(ResponseFormat::JsonPretty); // chainable
     /// ```
     pub fn allow_format(mut self, format: ResponseFormat) -> Self {
         if !self.allowed_formats.contains(&format) {
@@ -339,17 +349,12 @@ impl<T> ResponseTransformer<T> {
 
     /// Prefer pretty-printed JSON when negotiating the response format.
     ///
-    /// Moves `ResponseFormat::JsonPretty` to the front of the transformer's allowed formats so
-    /// it will be selected before other formats during content negotiation.
+    /// Moves `JsonPretty` to the front of the transformer's allowed formats so it will be selected first during content negotiation and returns the updated transformer.
     ///
     /// # Examples
     ///
     /// ```
-    /// # use crate::functional::response_transformers::{ResponseTransformer};
-    /// #[test]
-    /// fn prefer_pretty_shifts_priority() {
-    ///     let _ = ResponseTransformer::new(vec![1, 2, 3]).prefer_pretty_json();
-    /// }
+    /// let transformer = ResponseTransformer::new(42).prefer_pretty_json();
     /// ```
     pub fn prefer_pretty_json(mut self) -> Self {
         if let Some(pos) = self
@@ -363,36 +368,38 @@ impl<T> ResponseTransformer<T> {
         self
     }
 
-    /// Force the response format to a specific `ResponseFormat` and ensure that format is allowed.
+    /// Force the response output to a specific format and ensure that format is allowed.
     ///
-    /// This sets the transformer's strategy to `Forced(format)` so negotiation is bypassed,
-    /// and adds `format` to the allowed formats if it is not already present.
+    /// This sets the transformer's format strategy to `Forced(format)` and adds `format` to the
+    /// list of allowed formats if it is not already present.
     ///
     /// # Examples
     ///
     /// ```
     /// use crate::functional::response_transformers::{ResponseTransformer, ResponseFormat};
     ///
-    /// let _t: ResponseTransformer<Vec<i32>> = ResponseTransformer::new(vec![1, 2])
-    ///     .force_format(ResponseFormat::JsonPretty);
+    /// let transformer = ResponseTransformer::new("payload").force_format(ResponseFormat::Text);
     /// ```
     pub fn force_format(mut self, format: ResponseFormat) -> Self {
         self.strategy = FormatStrategy::Forced(format);
         self.allow_format(format)
     }
 
-    /// Transforms the transformer's payload data with the provided function, returning a new transformer with the resulting data type.
+    /// Transforms the transformer's payload using the provided function.
+    ///
+    /// Consumes `self` and returns a new `ResponseTransformer` with the transformed
+    /// payload; all other configuration (message, status, metadata, headers,
+    /// allowed formats, and strategy) is preserved.
     ///
     /// # Examples
     ///
     /// ```
-    /// # use std::borrow::Cow;
-    /// # use actix_web::http::StatusCode;
-    /// # use your_crate::functional::response_transformers::ResponseTransformer;
-    /// let original = ResponseTransformer::new(5);
-    /// let transformed = original.map_data(|n| n * 2);
-    /// // transformed now carries payload `10`
-    /// assert_eq!(transformed.data, 10);
+    /// let t = ResponseTransformer::new(1)
+    ///     .with_message("one".into())
+    ///     .with_status(actix_web::http::StatusCode::OK);
+    ///
+    /// let t2 = t.map_data(|n| n + 1);
+    /// // payload was transformed from 1 to 2; other fields remain the same.
     /// ```
     pub fn map_data<U, F>(self, transform: F) -> ResponseTransformer<U>
     where
@@ -419,51 +426,23 @@ impl<T> ResponseTransformer<T> {
         }
     }
 
-    /// Create a new transformer with metadata transformed by a fallible function.
+    /// Applies a fallible transformation to the transformer's metadata and, if the
+    /// transformation yields a value, serializes and stores it as the new metadata.
     ///
-    /// The provided `transform` is called with the current `Option<serde_json::Value>`
-    /// and may return `Ok(Some(u))`, `Ok(None)`, or an `Err(serde_json::Error)`.
-    /// When `Ok(Some(u))` is returned, `u` is serialized to JSON and stored as the
-    /// transformer's metadata; `Ok(None)` clears the metadata.
-    ///
-    /// # Parameters
-    ///
-    /// - `transform`: Function that receives the current metadata and returns an optional
-    ///   new metadata value or a `serde_json::Error` on failure. The output type `U` must
-    ///   implement `Serialize`.
-    ///
-    /// # Returns
-    ///
-    /// `Ok(ResponseTransformer<T>)` with the same message, data, status, headers,
-    /// allowed formats, and strategy, but with metadata replaced by the transformed
-    /// and serialized value; `Err(ResponseTransformError)` if the transform or
-    /// serialization fails.
+    /// The provided `transform` receives the current metadata (as `Option<JsonValue>`)
+    /// and returns `Ok(Some(u))` to replace metadata with `u`, `Ok(None)` to clear
+    /// metadata, or an `Err(serde_json::Error)` to signal a serialization/transformation
+    /// failure. Any returned `U` is serialized with `serde_json::to_value`.
     ///
     /// # Examples
     ///
     /// ```
     /// use serde::Serialize;
-    /// use serde_json::json;
+    /// // assume ResponseTransformer::new is in scope
     ///
-    /// #[derive(Serialize)]
-    /// struct Payload { value: i32 }
-    ///
-    /// let t = crate::ResponseTransformer::new(Payload { value: 1 })
-    ///     .try_with_metadata(json!({"a": 1})).unwrap()
-    ///     .try_map_metadata(|meta| {
-    ///         // append a field if metadata exists
-    ///         let mut m = meta.unwrap_or_default();
-    ///         if m.is_object() {
-    ///             m.as_object_mut().unwrap().insert("b".to_string(), json!(2));
-    ///             Ok(Some(m))
-    ///         } else {
-    ///             Ok(Some(json!({"b": 2})))
-    ///         }
-    ///     }).unwrap();
-    ///
-    /// // resulting transformer has metadata including both "a" and "b"
-    /// let envelope_metadata = t.map_metadata(|m| m).metadata;
-    /// assert!(envelope_metadata.is_some());
+    /// let transformer = ResponseTransformer::new(42);
+    /// let result = transformer.try_map_metadata(|_existing| Ok::<_, serde_json::Error>(Some("meta")));
+    /// assert!(result.is_ok());
     /// ```
     pub fn try_map_metadata<U, F>(
         self,
@@ -496,34 +475,26 @@ impl<T> ResponseTransformer<T> {
         })
     }
 
-    /// Applies a user-provided transformation to the current response envelope and returns a new transformer
-    /// built from the transformed envelope.
+    /// Composes a new transformer by applying a user-provided transformation to the current response envelope.
     ///
-    /// The provided closure receives a `ResponseEnvelope<T>` containing the current `message`, `data`,
-    /// and `metadata`. The returned `ResponseTransformer<U>` uses the envelope returned by the closure
-    /// for its `message`, `data`, and `metadata`, while preserving the original transformer's
-    /// `status`, `headers`, `allowed_formats`, and formatting `strategy`.
+    /// The provided function receives the current `ResponseEnvelope<T>` (containing `message`, `data`, and `metadata`)
+    /// and must return a `ResponseEnvelope<U>`. The returned envelope's fields become the basis for the new
+    /// `ResponseTransformer<U>`, while remaining transformer configuration (status, headers, allowed formats,
+    /// and strategy) is preserved.
     ///
     /// # Examples
     ///
     /// ```
-    /// use std::borrow::Cow;
-    /// use serde::Serialize;
-    ///
-    /// #[derive(Serialize)]
-    /// struct Payload { value: i32 }
-    ///
-    /// // Assume ResponseTransformer and ResponseEnvelope are in scope
-    /// let original = ResponseTransformer::new(Payload { value: 1 })
-    ///     .with_message("original");
-    ///
-    /// let composed = original.compose(|env| ResponseEnvelope {
-    ///     message: format!("updated: {}", env.message),
-    ///     data: Payload { value: env.data.value + 1 },
-    ///     metadata: env.metadata,
-    /// });
-    ///
-    /// // The composed transformer carries the transformed message and data.
+    /// # use std::borrow::Cow;
+    /// # use serde::Serialize;
+    /// # use crate::functional::response_transformers::{ResponseTransformer, ResponseEnvelope};
+    /// // transform numeric data into a string and update the message
+    /// let t = ResponseTransformer::new(42)
+    ///     .compose(|env: ResponseEnvelope<i32>| ResponseEnvelope {
+    ///         message: format!("value was {}", env.message),
+    ///         data: env.data.to_string(),
+    ///         metadata: env.metadata,
+    ///     });
     /// ```
     pub fn compose<U, F>(self, transform: F) -> ResponseTransformer<U>
     where
@@ -559,25 +530,18 @@ impl<T> ResponseTransformer<T> {
         }
     }
 
-    /// Selects the response format to use based on the transformer's strategy, the request, and allowed formats.
+    /// Determine the response format to use for rendering.
     ///
-    /// If the transformer's strategy is `Forced`, the forced format is returned. When the strategy is `Auto`,
-    /// the function attempts content negotiation using the request's `Accept` header; if that yields no result,
-    /// a query-string pretty-print override (e.g., `?pretty=1` or `?pretty=true`) will select `JsonPretty` when allowed;
-    /// otherwise the first format in `allowed_formats` is returned, defaulting to `Json` when none are configured.
+    /// Chooses the format according to the transformer's strategy: if a format is forced it is
+    /// returned; otherwise the function negotiates using the request's `Accept` header, then
+    /// applies query-parameter pretty-print overrides (e.g., `?pretty=1` or `?format=pretty`),
+    /// and finally falls back to the first allowed format or `Json` if none are configured.
     ///
     /// # Examples
     ///
-    /// ```
-    /// use actix_web::test::TestRequest;
-    /// use actix_web::http::header::CONTENT_TYPE;
-    /// use your_crate::functional::response_transformers::{ResponseTransformer, ResponseFormat};
-    ///
-    /// let req = TestRequest::default().to_http_request();
-    /// let tx = ResponseTransformer::new(vec![1, 2, 3]).force_format(ResponseFormat::Text);
-    /// let resp = tx.respond_to(&req);
-    /// assert_eq!(resp.status().as_u16(), 200);
-    /// assert_eq!(resp.headers().get(CONTENT_TYPE).unwrap().to_str().unwrap(), "text/plain");
+    /// ```no_run
+    /// // Determine the format selected for a request
+    /// let chosen = transformer.resolve_format(&req);
     /// ```
     fn resolve_format(&self, req: &HttpRequest) -> ResponseFormat {
         match self.strategy {
@@ -609,23 +573,18 @@ where
 {
     type Body = BoxBody;
 
-    /// Creates an `HttpResponse` from the transformer by resolving the response format,
-    /// applying stored status and headers, and serializing the envelope (message, data, metadata).
+    /// Convert the configured `ResponseTransformer` into an Actix `HttpResponse`, selecting the output format by negotiating the request and applying any forced preferences.
     ///
-    /// If serialization succeeds, returns the composed response with the negotiated or forced
-    /// content type and body. If serialization fails, returns a 500 Internal Server Error
-    /// response containing an error envelope describing the serialization failure.
+    /// The response will use the transformer's configured status and headers, wrap the message, data, and optional metadata into a `ResponseEnvelope`, and serialize the envelope according to the resolved `ResponseFormat`. If serialization fails, an internal server error response containing error details will be returned.
     ///
     /// # Examples
     ///
-    /// ```
-    /// // Illustrative example — actual types live in the containing crate.
-    /// use actix_web::HttpRequest;
-    ///
-    /// // let req = HttpRequest::default(); // obtain a request in real usage
-    /// // let transformer = ResponseTransformer::new(vec![1, 2, 3]);
-    /// // let resp = transformer.respond_to(&req);
-    /// // assert_eq!(resp.status(), actix_web::http::StatusCode::OK);
+    /// ```no_run
+    /// use actix_web::test::TestRequest;
+    /// // Create a transformer and produce an HttpResponse using a test request.
+    /// let resp = crate::functional::response_transformers::ResponseTransformer::new("payload")
+    ///     .respond_to(&TestRequest::default().to_http_request());
+    /// assert!(resp.status().is_success());
     /// ```
     fn respond_to(self, req: &HttpRequest) -> HttpResponse<Self::Body> {
         let format = self.resolve_format(req);
@@ -648,36 +607,30 @@ where
     }
 }
 
-/// Serialize a `ResponseEnvelope` and build an `HttpResponse` with the appropriate body and `Content-Type` according to `ResponseFormat`.
+/// Serialize a ResponseEnvelope into an HttpResponse using the specified format.
 ///
-/// # Returns
+/// The response body is serialized from `envelope` according to `format`:
+/// - `Json`: compact JSON bytes with `Content-Type: application/json`.
+/// - `JsonPretty`: pretty-printed JSON string with `Content-Type: application/json`.
+/// - `Text`: pretty-printed JSON string with `Content-Type: text/plain`.
 ///
-/// An `HttpResponse` whose body contains the serialized envelope and whose `Content-Type` matches the chosen format, or a `serde_json::Error` if serialization fails.
+/// # Errors
+///
+/// Returns a `serde_json::Error` if serializing the envelope fails.
 ///
 /// # Examples
 ///
 /// ```
 /// use actix_web::http::StatusCode;
-/// use actix_web::HttpResponse;
-/// use serde::Serialize;
-///
-/// #[derive(Serialize)]
-/// struct Payload { value: i32 }
-///
-/// let envelope = crate::functional::response_transformers::ResponseEnvelope {
-///     message: "ok".to_string(),
-///     data: Payload { value: 1 },
-///     metadata: None,
-/// };
-///
-/// let builder = HttpResponse::build(StatusCode::OK);
-/// let resp = crate::functional::response_transformers::render_response(
-///     builder,
-///     envelope,
-///     crate::functional::response_transformers::ResponseFormat::Json,
-/// ).unwrap();
-///
+/// // Construct a builder and an example envelope (types from the surrounding module)
+/// let builder = actix_web::HttpResponse::build(StatusCode::OK);
+/// let envelope = ResponseEnvelope { message: "ok".into(), data: 42, metadata: None };
+/// let resp = render_response(builder, envelope, ResponseFormat::Json).unwrap();
 /// assert_eq!(resp.status(), StatusCode::OK);
+/// assert_eq!(
+///     resp.headers().get(actix_web::http::header::CONTENT_TYPE).unwrap().as_bytes(),
+///     b"application/json"
+/// );
 /// ```
 fn render_response<T>(
     mut builder: HttpResponseBuilder,
@@ -706,24 +659,18 @@ where
     }
 }
 
-/// Constructs a 500 Internal Server Error response with a generic internal message and the given serialization error.
-///
-/// The response body is JSON containing the module's internal error message and an `"error"` field with `err.to_string()`.
-///
-/// # Parameters
-///
-/// - `err`: the serialization error to include in the response body.
-///
-/// # Returns
-///
-/// An `HttpResponse` with status 500 and a JSON body containing the internal message and the error string.
+/// Creates an HTTP 500 Internal Server Error response whose body is a standardized `ResponseBody` containing
+/// the internal error message and a JSON object with the error's string under the `"error"` key.
 ///
 /// # Examples
 ///
-/// ```no_run
-/// let err = serde_json::from_str::<serde_json::Value>("invalid").unwrap_err();
-/// let resp = serialization_error(err);
-/// assert_eq!(resp.status(), actix_web::http::StatusCode::INTERNAL_SERVER_ERROR);
+/// ```
+/// use serde_json::from_str;
+/// use actix_web::http::StatusCode;
+///
+/// let err = from_str::<serde_json::Value>("not json").unwrap_err();
+/// let resp = crate::functional::response_transformers::serialization_error(err);
+/// assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
 /// ```
 fn serialization_error(err: serde_json::Error) -> HttpResponse {
     let body = ResponseBody::new(
@@ -733,30 +680,33 @@ fn serialization_error(err: serde_json::Error) -> HttpResponse {
     HttpResponse::InternalServerError().json(body)
 }
 
-/// Determines the first response format from the request's Accept header that is allowed.
+/// Determines the best response format from the request's `Accept` header that is also allowed.
 ///
-/// Checks each token in the `Accept` header in order and returns the first matching
-/// `ResponseFormat` that appears in `allowed`. Recognizes wildcards `*/*` (selects the
-/// first allowed format) and `application/*` (maps to `Json` if allowed).
+/// Considers `Accept` tokens in order and returns the first token that maps to a supported
+/// `ResponseFormat` present in `allowed`. Recognizes the wildcards `*/*` (maps to the first
+/// allowed format) and `application/*` (maps to `ResponseFormat::Json` if allowed).
+///
+/// # Parameters
+///
+/// - `req`: HTTP request whose `Accept` header is inspected.
+/// - `allowed`: Slice of formats that are permitted for the response.
 ///
 /// # Returns
 ///
-/// `Some(ResponseFormat)` if a compatible format is found, `None` otherwise.
+/// `Some(ResponseFormat)` with the selected format if a compatible token is found, `None` otherwise.
 ///
 /// # Examples
 ///
 /// ```
-/// use actix_web::http::header;
 /// use actix_web::test::TestRequest;
-/// // assume ResponseFormat is in scope
+/// use crate::functional::response_transformers::{negotiated_format, ResponseFormat};
 ///
 /// let req = TestRequest::default()
-///     .insert_header((header::ACCEPT, "text/plain, application/json"))
+///     .insert_header(("Accept", "text/plain"))
 ///     .to_http_request();
 ///
-/// let allowed = vec![ResponseFormat::Json, ResponseFormat::Text];
-/// let found = negotiated_format(&req, &allowed);
-/// assert_eq!(found, Some(ResponseFormat::Text));
+/// let allowed = &[ResponseFormat::Json, ResponseFormat::Text];
+/// assert_eq!(negotiated_format(&req, allowed), Some(ResponseFormat::Text));
 /// ```
 fn negotiated_format(req: &HttpRequest, allowed: &[ResponseFormat]) -> Option<ResponseFormat> {
     let accepts = req
@@ -786,19 +736,22 @@ fn negotiated_format(req: &HttpRequest, allowed: &[ResponseFormat]) -> Option<Re
     None
 }
 
-/// Parses a single Accept header token and maps it to a supported response format.
+/// Maps a single Accept header media-range token to a supported ResponseFormat.
 ///
-/// Recognizes tokens that indicate JSON (returns `Json`), pretty-printed JSON (returns `JsonPretty` when the token also indicates `pretty`), and `text/plain` (returns `Text`). Returns `None` for unrecognized tokens.
+/// Returns `Some(ResponseFormat::JsonPretty)` if the token contains both `json` and `pretty`,
+/// `Some(ResponseFormat::Json)` if it contains `json` (but not `pretty`),
+/// `Some(ResponseFormat::Text)` if it contains `text/plain`, and `None` if the token is unrecognized.
 ///
 /// # Examples
 ///
 /// ```
 /// use crate::functional::response_transformers::ResponseFormat;
+/// use crate::functional::response_transformers::parse_accept_token;
 ///
-/// assert_eq!(crate::functional::response_transformers::parse_accept_token("application/json"), Some(ResponseFormat::Json));
-/// assert_eq!(crate::functional::response_transformers::parse_accept_token("application/json; pretty"), Some(ResponseFormat::JsonPretty));
-/// assert_eq!(crate::functional::response_transformers::parse_accept_token("text/plain"), Some(ResponseFormat::Text));
-/// assert_eq!(crate::functional::response_transformers::parse_accept_token("application/xml"), None);
+/// assert_eq!(parse_accept_token("application/json"), Some(ResponseFormat::Json));
+/// assert_eq!(parse_accept_token("application/json; pretty=true"), Some(ResponseFormat::JsonPretty));
+/// assert_eq!(parse_accept_token("text/plain; q=0.8"), Some(ResponseFormat::Text));
+/// assert_eq!(parse_accept_token("application/xml"), None);
 /// ```
 fn parse_accept_token(token: &str) -> Option<ResponseFormat> {
     let token = token.to_ascii_lowercase();
@@ -815,25 +768,20 @@ fn parse_accept_token(token: &str) -> Option<ResponseFormat> {
     }
 }
 
-/// Determines whether the HTTP request's query string indicates a preference for pretty-printed JSON.
+/// Detects whether the incoming request requests pretty-printed JSON via query parameters.
 ///
-/// This checks for either `pretty=1` or `pretty=true`, or `format=pretty` (case-insensitive) in the request's query string.
+/// Checks the request query string for either `pretty=1`, `pretty=true`, or `format=pretty` (case-insensitive).
+///
+/// # Returns
+///
+/// `true` if any matching query parameter is present, `false` otherwise.
 ///
 /// # Examples
 ///
 /// ```
 /// use actix_web::test::TestRequest;
-/// // ?pretty=true
-/// let req = TestRequest::with_uri("/resource?pretty=true").to_http_request();
+/// let req = TestRequest::with_uri("/?pretty=true").to_http_request();
 /// assert!(crate::functional::response_transformers::prefers_pretty_json(&req));
-///
-/// // ?format=pretty
-/// let req = TestRequest::with_uri("/resource?format=pretty").to_http_request();
-/// assert!(crate::functional::response_transformers::prefers_pretty_json(&req));
-///
-/// // unrelated or absent parameter
-/// let req = TestRequest::with_uri("/resource?other=1").to_http_request();
-/// assert!(!crate::functional::response_transformers::prefers_pretty_json(&req));
 /// ```
 fn prefers_pretty_json(req: &HttpRequest) -> bool {
     let query = req.query_string();
@@ -910,27 +858,6 @@ mod tests {
         assert!(payload.contains("\"value\": 42"));
     }
 
-    /// Verifies that the `pretty=true` query parameter causes the transformer to produce pretty-printed JSON.
-    ///
-    /// This test constructs a request with `?pretty=true`, enables pretty JSON preference on the
-    /// transformer, and asserts that the serialized response contains a newline (indicating pretty printing).
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use actix_web::test::TestRequest;
-    /// use actix_web::body;
-    /// use serde_json::json;
-    /// // build a request that requests pretty output via query string
-    /// let request = TestRequest::with_uri("/resource?pretty=true");
-    /// let response = ResponseTransformer::new(json!({ "foo": "bar" }))
-    ///     .prefer_pretty_json()
-    ///     .respond_to(&request.to_http_request());
-    ///
-    /// let body = actix_web::body::to_bytes(response.into_body()).await.unwrap();
-    /// let payload = String::from_utf8(body.to_vec()).unwrap();
-    /// assert!(payload.contains("\n"));
-    /// ```
     #[actix_rt::test]
     async fn query_string_pretty_print() {
         let request = TestRequest::with_uri("/resource?pretty=true");

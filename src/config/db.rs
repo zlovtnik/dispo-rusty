@@ -51,11 +51,13 @@ pub fn try_init_db_pool(url: &str) -> Result<Pool, ServiceError> {
         })
 }
 
-/// Applies all embedded pending database migrations to the given PostgreSQL connection.
+/// Applies all embedded, pending database migrations to the provided PostgreSQL connection.
+///
+/// On success the database schema is advanced to the latest embedded migrations.
 ///
 /// # Errors
 ///
-/// Returns `ServiceError::InternalServerError` if applying migrations fails.
+/// Returns `Err(ServiceError::InternalServerError)` if applying migrations fails.
 ///
 /// # Examples
 ///
@@ -135,20 +137,29 @@ impl TenantPoolManager {
         self.main_pool.clone()
     }
 
-    /// Removes and returns the connection pool for the given tenant ID, if present.
+    /// Removes and returns the connection pool for the given tenant ID if one exists.
     ///
-    /// Returns `Ok(Some(pool))` with the removed pool if a pool existed for `tenant_id`,
-    /// `Ok(None)` if no pool was found for `tenant_id`, or `Err(ServiceError::InternalServerError { .. })`
-    /// if the tenant pools lock was poisoned.
+    /// If the tenant pools lock is poisoned, returns `ServiceError::InternalServerError` with the
+    /// message "Tenant pools lock was poisoned".
+    ///
+    /// # Returns
+    ///
+    /// `Ok(Some(pool))` if a pool was removed, `Ok(None)` if no pool existed for `tenant_id`, or
+    /// `Err(ServiceError::InternalServerError { error_message })` if the tenant pools lock is poisoned.
     ///
     /// # Examples
     ///
     /// ```no_run
     /// use crate::config::db::{TenantPoolManager, init_db_pool};
-    /// let main = init_db_pool("postgres://user:pass@localhost/db");
-    /// let manager = TenantPoolManager::new(main);
-    /// // Removes pool for "tenant_a" if it exists
-    /// let _ = manager.remove_tenant_pool("tenant_a");
+    /// let main_pool = init_db_pool("postgres://user:pass@localhost/db");
+    /// let manager = TenantPoolManager::new(main_pool.clone());
+    /// // Assume a tenant pool was added previously.
+    /// let res = manager.remove_tenant_pool("tenant_a");
+    /// match res {
+    ///     Ok(Some(_pool)) => println!("Removed tenant pool"),
+    ///     Ok(None) => println!("No pool for given tenant"),
+    ///     Err(e) => eprintln!("error: {:?}", e),
+    /// }
     /// ```
     pub fn remove_tenant_pool(&self, tenant_id: &str) -> Result<Option<Pool>, ServiceError> {
         match self.tenant_pools.write() {

@@ -25,7 +25,7 @@ pub struct Page<T> {
     pub next_cursor: Option<i32>,
 }
 impl<T> Page<T> {
-    /// Create a paginated Page containing a message, items, cursor, and pagination metadata.
+    /// Create a `Page<T>` carrying a message, items, cursor, and pagination metadata.
     ///
     /// # Examples
     ///

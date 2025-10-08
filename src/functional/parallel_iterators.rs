@@ -61,27 +61,20 @@ pub struct ParallelMetrics {
 
 /// Parallel iterator extension trait for functional programming
 pub trait ParallelIteratorExt<T: Send + Sync>: Iterator<Item = T> + Send + Sync {
-    /// Maps each item produced by the iterator through `f`, performing the work in parallel when the
-    /// input size meets the configured threshold and returning both the mapped results and execution
+    /// Maps each item of the iterator through `f`, running the operation in parallel when the input
+    /// size exceeds the configured threshold, and returns the mapped results together with runtime
     /// metrics.
     ///
-    /// The operation collects the iterator into a contiguous buffer, decides between sequential and
-    /// parallel execution based on `config.min_parallel_size`, and preserves the input order in the
-    /// resulting `Vec<U>`.
-    ///
-    /// # Returns
-    ///
-    /// A `ParallelResult<Vec<U>>` containing the mapped results and a `ParallelMetrics` instance with
-    /// timing, thread usage, throughput, memory usage, and a heuristic efficiency value.
+    /// The method collects the iterator into a vector, chooses between a sequential or Rayon-backed
+    /// parallel execution based on `config.min_parallel_size`, and records timing, thread usage,
+    /// throughput, memory estimate, and a simple efficiency heuristic in the returned `ParallelResult`.
     ///
     /// # Examples
     ///
     /// ```
-    /// use crate::{ParallelConfig, ParallelIteratorExt};
-    ///
     /// let cfg = ParallelConfig::default();
-    /// let result = vec![1, 2, 3].into_iter().par_map(&cfg, |x| x * 2);
-    /// assert_eq!(result.into_inner(), vec![2, 4, 6]);
+    /// let result = (0..8).into_iter().par_map(&cfg, |x| x * 2);
+    /// assert_eq!(result.into_inner(), vec![0, 2, 4, 6, 8, 10, 12, 14]);
     /// ```
     fn par_map<F, U>(self, config: &ParallelConfig, f: F) -> ParallelResult<Vec<U>>
     where
@@ -149,34 +142,21 @@ pub trait ParallelIteratorExt<T: Send + Sync>: Iterator<Item = T> + Send + Sync 
         }
     }
 
-    /// Performs a fold (reduce) over the iterator, using a parallel strategy when beneficial.
+    /// Performs a fold (reduce) over the iterator using a per-item `fold` and a parallel `combine`, executing in parallel when the configured threshold is met.
     ///
-    /// The iterator's items are combined into a single value by repeatedly applying `fold` to
-    /// accumulate per-chunk results and `combine` to merge partial results. If the collected
-    /// input length is smaller than `config.min_parallel_size`, the operation runs sequentially;
-    /// otherwise it runs in parallel and returns execution metrics alongside the result.
-    ///
-    /// # Arguments
-    ///
-    /// * `config` - Parallel execution tuning parameters (thread pool hints, thresholds, chunk sizes).
-    /// * `init` - Initial accumulator value.
-    /// * `fold` - Function to incorporate an item into a chunk-local accumulator: `(acc, item) -> acc`.
-    /// * `combine` - Function to merge two accumulators: `(acc_left, acc_right) -> acc_combined`.
-    ///
-    /// # Returns
-    ///
-    /// A `ParallelResult<B>` containing the final accumulated value and `ParallelMetrics` for the operation.
+    /// If the collected data length is less than `config.min_parallel_size`, the operation runs sequentially; otherwise it runs in parallel using Rayon. Returns a `ParallelResult` containing the folded value and associated `ParallelMetrics` (including total_time, thread_count, throughput, memory_usage, and efficiency).
     ///
     /// # Examples
     ///
     /// ```
     /// use crate::{ParallelConfig, ParallelIteratorExt};
     ///
-    /// let data = vec![1, 2, 3, 4];
-    /// let cfg = ParallelConfig { min_parallel_size: 2, ..Default::default() };
-    /// let res = data.into_iter().par_fold(&cfg, 0, |acc, x| acc + x, |a, b| a + b);
-    /// assert_eq!(res.data, 10);
-    /// assert!(res.metrics.throughput > 0);
+    /// let config = ParallelConfig::default();
+    /// let result = (0usize..100usize)
+    ///     .par_fold(&config, 0usize, |acc, x| acc + x, |a, b| a + b);
+    ///
+    /// assert_eq!(result.data, (0usize..100usize).sum());
+    /// assert!(result.metrics.throughput > 0);
     /// ```
     fn par_fold<F, B, C>(
         self,
@@ -239,18 +219,18 @@ pub trait ParallelIteratorExt<T: Send + Sync>: Iterator<Item = T> + Send + Sync 
         }
     }
 
-    /// Filters items using `predicate`, preserving the original input order, and returns the filtered items together with execution metrics.
+    /// Filters elements using `predicate`, processing in parallel when the dataset exceeds the configured threshold, and preserves the original input order.
     ///
-    /// Performs the predicate test on each item from the iterator. For small inputs (below `config.min_parallel_size`) the filter runs sequentially; otherwise it runs in parallel while preserving input order by tagging and re-sorting indices. Returns a `ParallelResult<Vec<T>>` containing the filtered values and a `ParallelMetrics` snapshot (total time, thread count, throughput, memory usage, efficiency).
+    /// If the collected input length is less than `config.min_parallel_size`, the function performs a sequential filter; otherwise it performs a parallel filter. The predicate is applied to references to elements (`&T`). The returned `ParallelResult` includes both the filtered `Vec<T>` and operation metrics (timing, thread count, throughput, memory usage, efficiency).
     ///
     /// # Examples
     ///
     /// ```
     /// let config = ParallelConfig::default();
-    /// let data = vec![0, 1, 2, 3, 4];
-    /// let result = data.into_iter().par_filter(&config, |&x| x % 2 == 0);
-    /// assert_eq!(result.data, vec![0, 2, 4]);
-    /// assert!(result.metrics.throughput > 0);
+    /// let data = vec![1, 2, 3, 4, 5];
+    /// let res = data.into_iter().par_filter(&config, |&x| x % 2 == 0);
+    /// assert_eq!(res.data, vec![2, 4]);
+    /// assert!(res.metrics.throughput > 0);
     /// ```
     fn par_filter<F>(self, config: &ParallelConfig, predicate: F) -> ParallelResult<Vec<T>>
     where
@@ -310,25 +290,25 @@ pub trait ParallelIteratorExt<T: Send + Sync>: Iterator<Item = T> + Send + Sync 
         }
     }
 
-    /// Groups items from the iterator by a key derived from each item.
+    /// Groups items by a key computed from each item and returns the grouped map with performance metrics.
     ///
-    /// Returns a HashMap that maps each key produced by `key_fn` to a Vec containing
-    /// all items from the iterator that correspond to that key. The operation is
-    /// performed using the provided `config` which may choose a parallel or
-    /// sequential execution path based on its settings.
+    /// The provided `key_fn` is applied to each item to produce a key; items are moved into vectors
+    /// stored under their corresponding keys in the resulting `HashMap`. The order of items within
+    /// each vector is not guaranteed.
     ///
     /// # Examples
     ///
     /// ```
-    /// use std::collections::HashMap;
-    /// # use crate::ParallelConfig;
-    /// // Group numbers by parity
-    /// let data = vec![0u32, 1, 2, 3, 4];
     /// let config = ParallelConfig::default();
-    /// let result = data.into_iter().par_group_by(&config, |&x| x % 2);
-    /// let map: HashMap<_, _> = result.into_inner();
-    /// assert_eq!(map.get(&0).map(|v| v.len()), Some(3)); // 0,2,4
-    /// assert_eq!(map.get(&1).map(|v| v.len()), Some(2)); // 1,3
+    /// let items = vec![1, 2, 3, 4, 5, 6];
+    /// let result = items.into_iter().par_group_by(&config, |&x| x % 2);
+    /// let groups = result.into_inner();
+    /// let mut evens = groups.get(&0).cloned().unwrap_or_default();
+    /// let mut odds = groups.get(&1).cloned().unwrap_or_default();
+    /// evens.sort();
+    /// odds.sort();
+    /// assert_eq!(evens, vec![2, 4, 6]);
+    /// assert_eq!(odds, vec![1, 3, 5]);
     /// ```
     fn par_group_by<K, F>(
         self,
@@ -417,31 +397,33 @@ where
     data.into_iter().par_map(config, transform)
 }
 
-/// Aggregates elements of a collection using a parallel fold and a combiner.
+/// Performs an aggregated reduction over `data`, using a parallel fold when beneficial.
 ///
-/// Performs a per-chunk fold with `aggregate` and merges partial results with `combine`.
-/// If the input length is smaller than `config.min_parallel_size`, the operation runs sequentially.
-/// The result is returned along with execution `ParallelMetrics` in a `ParallelResult`.
+/// Uses `aggregate` to fold items into per-thread accumulators and `combine` to merge those accumulators into a final result; falls back to a sequential fold when `data.len() < config.min_parallel_size`. The returned `ParallelResult` contains the aggregated value and measured execution metrics (time, thread count, throughput, memory usage, and a simplified efficiency estimate).
 ///
 /// # Parameters
 ///
-/// - `data`: input values to aggregate.
+/// - `data`: input vector to reduce.
 /// - `init`: initial accumulator value.
-/// - `aggregate`: function applied to an accumulator and an item to produce a new accumulator.
-/// - `combine`: function that merges two partial accumulators into one.
-/// - `config`: tuning parameters that influence parallelization and thresholds.
-///
-/// # Returns
-///
-/// A `ParallelResult<B>` containing the final aggregated value and associated performance metrics.
+/// - `aggregate`: function that incorporates an item into an accumulator (`acc, item -> acc`).
+/// - `combine`: function that merges two accumulators (`acc_left, acc_right -> acc_merged`).
+/// - `config`: parallelization configuration controlling thresholds and chunking.
 ///
 /// # Examples
 ///
 /// ```
-/// let cfg = ParallelConfig::default();
-/// let res = parallel_aggregate(vec![1, 2, 3, 4], 0, |acc, x| acc + x, |a, b| a + b, &cfg);
-/// assert_eq!(res.data, 10);
-/// assert!(res.metrics.throughput > 0);
+/// # use your_crate::{parallel_aggregate, ParallelConfig, ParallelResult};
+/// let data: Vec<u32> = (1..=100u32).collect();
+/// let config = ParallelConfig::default();
+/// let result = parallel_aggregate(
+///     data,
+///     0u32,
+///     |acc, x| acc + x,
+///     |a, b| a + b,
+///     &config,
+/// );
+/// assert_eq!(result.into_inner(), 5050);
+/// assert!(result.metrics().throughput > 0);
 /// ```
 pub fn parallel_aggregate<T, B, F, C>(
     data: Vec<T>,
@@ -533,21 +515,32 @@ pub fn estimate_thread_count(data_size: usize) -> usize {
     }
 }
 
-/// Creates a ParallelConfig tuned to the provided dataset size.
+/// Build a ParallelConfig tuned for a dataset of the given size.
 ///
-/// The returned configuration uses a heuristic thread pool size, enables work
-/// stealing, and picks a chunk size proportional to the data size. For small
-/// datasets (less than 1000) `min_parallel_size` is set to `usize::MAX` to
-/// prefer sequential execution; otherwise it is set to one-tenth of
-/// `data_size`.
+/// Returns a configuration with heuristics for thread pool size, minimum
+/// parallel threshold, work-stealing enabled, and a chunk size tuned to the
+/// provided `data_size`.
+///
+/// # Parameters
+///
+/// - `data_size`: Number of items expected to be processed; used to compute
+///   thread pool size, minimum size to enable parallelism, and chunk sizing.
+///
+/// # Returns
+///
+/// A `ParallelConfig` with:
+/// - `thread_pool_size` estimated from `data_size`,
+/// - `min_parallel_size` set to `usize::MAX` for very small inputs (< 1000)
+///   to force sequential execution or `data_size / 10` otherwise,
+/// - `enable_work_stealing` set to `true`,
+/// - `chunk_size` set to `max(data_size / thread_count, 100)`.
 ///
 /// # Examples
 ///
 /// ```
-/// let cfg = optimized_config(5000);
-/// assert!(cfg.thread_pool_size > 0 || cfg.thread_pool_size == 0); // heuristic may return 0 for automatic
-/// assert_eq!(cfg.enable_work_stealing, true);
-/// assert_eq!(cfg.min_parallel_size, 5000 / 10);
+/// let cfg = optimized_config(10_000);
+/// assert!(cfg.min_parallel_size <= 1_000);
+/// assert!(cfg.chunk_size >= 100);
 /// ```
 #[allow(dead_code)]
 pub fn optimized_config(data_size: usize) -> ParallelConfig {
