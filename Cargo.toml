@@ -61,7 +61,6 @@ opt-level = 1           # Basic optimizations for faster builds
 codegen-units = 16      # More codegen units for parallel compilation
 debug = true            # Keep debug info
 incremental = true      # Enable incremental compilation
-overflow-checks = false # Disable overflow checks in dev
 
 [profile.release]
 opt-level = 3           # Maximum optimization

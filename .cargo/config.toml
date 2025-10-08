@@ -1,13 +1,15 @@
 [build]
-# Use more jobs for parallel compilation
-jobs = 8
-
-# Target CPU optimizations
-rustflags = ["-C", "target-cpu=native"]
+# Build configuration - jobs defaults to logical CPU count
 
 [target.x86_64-unknown-linux-gnu]
 # Additional rustflags for Linux builds
-rustflags = ["-C", "target-cpu=native", "-C", "link-arg=-fuse-ld=lld"]
+# Note: lld linker can be enabled by setting RUSTFLAGS="-C link-arg=-fuse-ld=lld"
+# or by installing lld and using rustflags = ["-C", "link-arg=-fuse-ld=lld"] locally
+rustflags = []
+
+[profile.dev]
+# Optimize for local development machine
+rustflags = ["-C", "target-cpu=native"]
 
 [registries.crates-io]
 protocol = "sparse"
