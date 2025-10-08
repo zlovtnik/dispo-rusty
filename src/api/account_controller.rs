@@ -114,8 +114,7 @@ pub async fn refresh(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
         let pool = extract_tenant_pool(&req)?;
         match account_service::refresh(authen_header, &pool) {
             Ok(login_info) => {
-                Ok(HttpResponse::Ok()
-                    .json(ResponseBody::new(constants::MESSAGE_OK, login_info)))
+                Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, login_info)))
             }
             Err(err) => Err(err),
         }
@@ -148,8 +147,7 @@ pub async fn me(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
         let pool = extract_tenant_pool(&req)?;
         match account_service::me(authen_header, &pool) {
             Ok(login_info) => {
-                Ok(HttpResponse::Ok()
-                    .json(ResponseBody::new(constants::MESSAGE_OK, login_info)))
+                Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, login_info)))
             }
             Err(err) => Err(err),
         }

@@ -65,11 +65,10 @@ pub fn try_init_db_pool(url: &str) -> Result<Pool, ServiceError> {
 /// // run_migration(&mut conn)?;
 /// ```
 pub fn run_migration(conn: &mut PgConnection) -> Result<(), ServiceError> {
-    conn.run_pending_migrations(MIGRATIONS).map_err(|e| {
-        ServiceError::InternalServerError {
+    conn.run_pending_migrations(MIGRATIONS)
+        .map_err(|e| ServiceError::InternalServerError {
             error_message: format!("Migration failed: {e}"),
-        }
-    })?;
+        })?;
     Ok(())
 }
 

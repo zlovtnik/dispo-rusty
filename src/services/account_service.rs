@@ -131,14 +131,11 @@ pub fn refresh(
                 let mut conn = pool.get().map_err(|e| ServiceError::InternalServerError {
                     error_message: format!("Failed to get database connection: {}", e),
                 })?;
-                
+
                 // Validate the token and generate a new one
                 if User::is_valid_login_session(&token_data.claims, &mut conn) {
                     // Get login info and generate new token
-                    match User::find_login_info_by_token(
-                        &token_data.claims,
-                        &mut conn,
-                    ) {
+                    match User::find_login_info_by_token(&token_data.claims, &mut conn) {
                         Ok(login_info) => {
                             match serde_json::from_value(
                                 json!({ "token": UserToken::generate_token(&login_info), "token_type": "bearer" }),
@@ -204,7 +201,7 @@ pub fn me(authen_header: &HeaderValue, pool: &Pool) -> Result<LoginInfoDTO, Serv
                 let mut conn = pool.get().map_err(|e| ServiceError::InternalServerError {
                     error_message: format!("Failed to get database connection: {}", e),
                 })?;
-                
+
                 if let Ok(login_info) =
                     User::find_login_info_by_token(&token_data.claims, &mut conn)
                 {

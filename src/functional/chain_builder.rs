@@ -95,31 +95,31 @@ where
     }
 
     /// Maps each item to an iterable and flattens the produced iterators into a single sequence.
-    
+
     ///
-    
+
     /// The provided closure `f` is called for each item and should return a value that implements
-    
+
     /// `IntoIterator`; the resulting iterators are concatenated (flattened) into the returned chain.
-    
+
     ///
-    
+
     /// # Examples
-    
+
     ///
-    
+
     /// ```
-    
+
     /// let data = vec![1, 2, 3];
-    
+
     /// let result: Vec<_> = ChainBuilder::from_vec(data)
-    
+
     ///     .flat_map(|x| vec![x, x * 2])
-    
+
     ///     .collect();
-    
+
     /// assert_eq!(result, vec![1, 2, 2, 4, 3, 6]);
-    
+
     /// ```
     pub fn flat_map<J, U, F>(self, f: F) -> ChainBuilder<FlatMap<I, J, F>>
     where
@@ -397,7 +397,10 @@ pub mod patterns {
     /// let out = sequential_process(vec![1, 2, 3], |x| x * 2);
     /// assert_eq!(out, vec![2, 4, 6]);
     /// ```
-    pub fn sequential_process<T, U>(data: Vec<T>, process_fn: impl Fn(T) -> U + Send + Sync) -> Vec<U>
+    pub fn sequential_process<T, U>(
+        data: Vec<T>,
+        process_fn: impl Fn(T) -> U + Send + Sync,
+    ) -> Vec<U>
     where
         T: Send + Sync,
         U: Send,

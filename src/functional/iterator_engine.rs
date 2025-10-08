@@ -160,10 +160,13 @@ where
         let mut operations = self.operations;
         operations.push("chunk_by".to_string());
 
-        let chunks: Vec<(K, Vec<T>)> = self.iterator.chunk_by(f).into_iter()
+        let chunks: Vec<(K, Vec<T>)> = self
+            .iterator
+            .chunk_by(f)
+            .into_iter()
             .map(|(key, group)| (key, group.collect()))
             .collect();
-        
+
         IteratorChain {
             iterator: chunks.into_iter(),
             config: self.config,

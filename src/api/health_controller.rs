@@ -73,8 +73,7 @@ struct TenantHealth {
 async fn check_database_health_async(
     pool: web::Data<DatabasePool>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
-    tokio::task::spawn_blocking(move || check_database_health(pool))
-        .await?
+    tokio::task::spawn_blocking(move || check_database_health(pool)).await?
 }
 
 /// Performs a cache health check using the provided Redis connection pool.
@@ -122,7 +121,10 @@ async fn check_cache_health_async(
 /// # }
 /// ```
 #[get("/health")]
-async fn health(pool: web::Data<DatabasePool>, redis_pool: web::Data<RedisPool>) -> Result<HttpResponse, ServiceError> {
+async fn health(
+    pool: web::Data<DatabasePool>,
+    redis_pool: web::Data<RedisPool>,
+) -> Result<HttpResponse, ServiceError> {
     info!("Health check requested");
 
     // Check database with timeout
@@ -325,13 +327,18 @@ async fn health_detailed(
 /// }
 /// # }
 /// ```
-fn check_database_health(pool: web::Data<DatabasePool>) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
+fn check_database_health(
+    pool: web::Data<DatabasePool>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
     match pool.get() {
         Ok(mut conn) => {
             diesel::sql_query("SELECT 1").execute(&mut conn)?;
             Ok(())
         }
-        Err(e) => Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to get database connection: {}", e)))),
+        Err(e) => Err(Box::new(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("Failed to get database connection: {}", e),
+        ))),
     }
 }
 
@@ -430,7 +437,12 @@ async fn logs() -> Result<HttpResponse, ServiceError> {
 
         if let Err(e) = file.seek(SeekFrom::End(0)).await {
             error!("Failed to seek to end of log file: {}", e);
-            let _ = tx.send(Err(std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))).await;
+            let _ = tx
+                .send(Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    e.to_string(),
+                )))
+                .await;
             return;
         }
 

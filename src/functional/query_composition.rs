@@ -363,7 +363,7 @@ where
     #[cfg(test)]
     pub fn with_data(data: Vec<U>) -> Self {
         use std::time::Duration;
-        
+
         let composer = Arc::new(FunctionalQueryComposer {
             builder: TypeSafeQueryBuilder::new(),
             current_filter: None,
@@ -378,7 +378,7 @@ where
             },
             _phantom: PhantomData,
         });
-        
+
         Self {
             composer,
             current_chunk: data,
@@ -420,7 +420,7 @@ where
         // 4. self.chunk_position = 0
         // 5. self.offset += self.page_size
         // 6. return true
-        
+
         unimplemented!(
             "Chunked query execution is not implemented. \
              LazyQueryIterator::load_next_chunk requires a real database query executor \
@@ -480,7 +480,7 @@ where
                 self.exhausted = true;
                 return None;
             }
-            
+
             // FIXME: Chunk loading is not implemented yet - fail fast
             // When implementing, load_next_chunk() should return true if data was loaded,
             // false if no more data is available
@@ -533,10 +533,7 @@ pub struct SanitizationRule {
 /// Get the compiled regex for detecting SQL comments (--  |  /*  |  */)
 fn sql_comment_regex() -> &'static Regex {
     static SQL_COMMENT: OnceLock<Regex> = OnceLock::new();
-    SQL_COMMENT.get_or_init(|| {
-        Regex::new(r"--|/\*|\*/")
-            .expect("SQL comment regex should compile")
-    })
+    SQL_COMMENT.get_or_init(|| Regex::new(r"--|/\*|\*/").expect("SQL comment regex should compile"))
 }
 
 /// Get the compiled regex for detecting SQL keywords at word boundaries (case-insensitive)
@@ -551,10 +548,8 @@ fn sql_keyword_regex() -> &'static Regex {
 /// Get the compiled regex for detecting hexadecimal sequences (for percent-encoding detection)
 fn hex_sequence_regex() -> &'static Regex {
     static HEX_SEQUENCE: OnceLock<Regex> = OnceLock::new();
-    HEX_SEQUENCE.get_or_init(|| {
-        Regex::new(r"[0-9A-Fa-f]{2}")
-            .expect("Hex sequence regex should compile")
-    })
+    HEX_SEQUENCE
+        .get_or_init(|| Regex::new(r"[0-9A-Fa-f]{2}").expect("Hex sequence regex should compile"))
 }
 
 impl ParameterSanitizer {
@@ -666,23 +661,23 @@ impl ParameterSanitizer {
         match rule.name.as_str() {
             "no_sql_injection" => {
                 // Use compiled regexes for efficient pattern matching
-                
+
                 // 1. Reject SQL comment patterns (--|/*|*/)
                 if sql_comment_regex().is_match(value) {
                     return false;
                 }
-                
+
                 // 2. Reject SQL keywords at word boundaries (case-insensitive)
                 if sql_keyword_regex().is_match(value) {
                     return false;
                 }
-                
+
                 // 3. Reject percent-encoding attempts (e.g., %27 for single quote)
                 // Check if value contains '%' followed by hex digits
                 if value.contains('%') && hex_sequence_regex().is_match(value) {
                     return false;
                 }
-                
+
                 // 4. Reject semicolons (statement terminators)
                 !value.contains(';')
             }
