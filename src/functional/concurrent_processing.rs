@@ -67,96 +67,36 @@ impl<T> ImmutableDataset<T>
 where
     T: Clone + Send + Sync + 'static,
 {
-    /// Creates an ImmutableDataset from an owned Vec.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let ds = ImmutableDataset::new(vec![1, 2, 3]);
-    /// assert_eq!(ds.len(), 3);
-    /// ```
+    /// Create a new immutable dataset from an owned vector.
     pub fn new(data: Vec<T>) -> Self {
         Self {
             inner: Arc::<[T]>::from(data),
         }
     }
 
-    /// Create an ImmutableDataset by taking ownership of an existing `Arc<[T]>`.
-    ///
-    /// This reuses the provided shared slice without cloning its contents.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::sync::Arc;
-    /// let arc = Arc::from(vec![1, 2, 3].into_boxed_slice());
-    /// let ds = ImmutableDataset::from_arc(arc.clone());
-    /// assert_eq!(ds.len(), 3);
-    /// ```
+    /// Create an immutable dataset from an existing shared slice.
     pub fn from_arc(inner: Arc<[T]>) -> Self {
         Self { inner }
     }
 
-    /// Retrieve the number of elements contained in the dataset.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let ds = ImmutableDataset::new(vec![1, 2, 3]);
-    /// assert_eq!(ds.len(), 3);
-    /// ```
+    /// Returns the number of elements in the dataset.
     pub fn len(&self) -> usize {
         self.inner.len()
     }
 
-    /// Checks whether the dataset contains no elements.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::sync::Arc;
-    /// // Construct via Vec<T>
-    /// let ds = ImmutableDataset::new(vec![1, 2, 3]);
-    /// assert!(!ds.is_empty());
-    ///
-    /// // Empty dataset
-    /// let empty = ImmutableDataset::new(Vec::<i32>::new());
-    /// assert!(empty.is_empty());
-    /// ```
+    /// Returns `true` when the dataset has no elements.
     pub fn is_empty(&self) -> bool {
         self.inner.is_empty()
     }
 
-    /// Materializes the shared data into an owned vector.
+    /// Materialises the shared data into an owned vector.
     ///
-    /// Clones each element from the internal shared slice so the returned `Vec<T>` is independent
-    /// of the dataset's backing storage.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::sync::Arc;
-    /// // construct via public API; replace with the correct path if module is re-exported
-    /// let ds = ImmutableDataset::new(vec![1, 2, 3]);
-    /// let v = ds.to_vec();
-    /// assert_eq!(v, vec![1, 2, 3]);
-    /// ```
+    /// This clones each element, preserving immutability of the shared backing slice.
     pub fn to_vec(&self) -> Vec<T> {
         self.inner.iter().cloned().collect()
     }
 
-    /// Provides a read-only slice view of the dataset's contents.
-    ///
-    /// This borrow does not clone or move the underlying data; it yields a borrowed
-    /// slice into the internal shared storage.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let ds = ImmutableDataset::new(vec![1, 2, 3]);
-    /// let s = ds.as_slice();
-    /// assert_eq!(s, &[1, 2, 3]);
-    /// ```
+    /// Provides a read-only slice for inspection without cloning.
     pub fn as_slice(&self) -> &[T] {
         &self.inner
     }
@@ -170,20 +110,7 @@ pub struct ConcurrentProcessor {
 }
 
 impl ConcurrentProcessor {
-    /// Creates a ConcurrentProcessor configured with the provided `ParallelConfig`.
-    ///
-    /// Returns `Ok(ConcurrentProcessor)` when the internal Rayon thread pool is built successfully,
-    /// or `Err(ConcurrentProcessingError::ThreadPoolBuild(_))` when pool construction fails.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::sync::Arc;
-    /// // Assuming ParallelConfig implements Default
-    /// let cfg = ParallelConfig::default();
-    /// let proc = ConcurrentProcessor::new(cfg).expect("failed to build processor");
-    /// assert_eq!(proc.config().thread_pool_size, ParallelConfig::default().thread_pool_size);
-    /// ```
+    /// Construct a processor with the given parallel configuration.
     pub fn new(config: ParallelConfig) -> Result<Self, ConcurrentProcessingError> {
         let mut builder = ThreadPoolBuilder::new();
 
@@ -206,51 +133,17 @@ impl ConcurrentProcessor {
         Self::new(ParallelConfig::default())
     }
 
-    /// Get the active parallel configuration for this processor.
-    ///
-    /// This returns a shared reference to the processor's `ParallelConfig`.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let proc = ConcurrentProcessor::try_default().unwrap();
-    /// let _: &ParallelConfig = proc.config();
-    /// ```
+    /// Returns the active parallel configuration.
     pub fn config(&self) -> &ParallelConfig {
         &self.config
     }
 
-    /// Create a new `ConcurrentProcessor` using the provided `ParallelConfig`.
-    ///
-    /// The current instance is not mutated; this constructs a fresh processor configured
-    /// with `config` and returns it or an error if the underlying thread pool cannot be built.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let cfg = ParallelConfig::default();
-    /// let proc = ConcurrentProcessor::try_default().unwrap();
-    /// let new_proc = proc.with_config(cfg).unwrap();
-    /// assert_eq!(new_proc.config(), &ParallelConfig::default());
-    /// ```
+    /// Creates a new processor with a different configuration.
     pub fn with_config(&self, config: ParallelConfig) -> Result<Self, ConcurrentProcessingError> {
         Self::new(config)
     }
 
-    /// Applies `transform` to each element of `data` in parallel and returns a `Vec` of the results
-    /// with one output per input element.
-    ///
-    /// The function consumes the input iterator, executes the transformations using the processor's
-    /// configured thread pool, and returns the collected results.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use crate::functional::concurrent_processing::ConcurrentProcessor;
-    /// let proc = ConcurrentProcessor::try_default().unwrap();
-    /// let out = proc.map(vec![1, 2, 3], |x| x * 2).unwrap();
-    /// assert_eq!(out, vec![2, 4, 6]);
-    /// ```
+    /// Executes a parallel map transformation on the provided iterator.
     pub fn map<I, T, U, F>(&self, data: I, transform: F) -> ParallelResult<Vec<U>>
     where
         I: IntoIterator<Item = T>,
@@ -265,18 +158,7 @@ impl ConcurrentProcessor {
             .install(|| items.into_iter().par_map(&config, transform))
     }
 
-    /// Applies `transform` to each element of an immutable dataset in parallel and collects the results.
-    ///
-    /// Returns a `ParallelResult` containing a `Vec` of transformed items on success.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let processor = ConcurrentProcessor::try_default().unwrap();
-    /// let dataset = ImmutableDataset::new(vec![1, 2, 3]);
-    /// let doubled = processor.map_dataset(&dataset, |x| x * 2).unwrap();
-    /// assert_eq!(doubled, vec![2, 4, 6]);
-    /// ```
+    /// Executes a parallel map operation against an immutable dataset.
     pub fn map_dataset<T, U, F>(
         &self,
         data: &ImmutableDataset<T>,
@@ -291,24 +173,7 @@ impl ConcurrentProcessor {
         self.map(owned, transform)
     }
 
-    /// Performs a parallel fold (reduce) over the provided items using the processor's Rayon thread pool.
-    ///
-    /// The `fold` closure accumulates items into the accumulator `B` within each parallel partition; the `combine`
-    /// closure merges partial accumulators produced by different partitions into a single final accumulator.
-    ///
-    /// # Returns
-    ///
-    /// `ParallelResult<B>` containing the final accumulated value after processing all input items.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// let proc = ConcurrentProcessor::try_default().expect("build processor");
-    /// let items = vec![1, 2, 3, 4];
-    /// let result = proc.fold(items, 0, |acc, x| acc + x, |a, b| a + b)
-    ///     .expect("parallel fold succeeded");
-    /// assert_eq!(result, 10);
-    /// ```
+    /// Parallel fold/reduce operation.
     pub fn fold<I, T, B, F, C>(&self, data: I, init: B, fold: F, combine: C) -> ParallelResult<B>
     where
         I: IntoIterator<Item = T>,
@@ -324,18 +189,7 @@ impl ConcurrentProcessor {
             .install(|| items.into_iter().par_fold(&config, init, fold, combine))
     }
 
-    /// Filters items in parallel while preserving the input order.
-    ///
-    /// Returns a `Vec<T>` containing the items for which `predicate` returns `true`.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let processor = ConcurrentProcessor::try_default().unwrap();
-    /// let input = vec![1, 2, 3, 4];
-    /// let result = processor.filter(input, |&x| x % 2 == 0).unwrap();
-    /// assert_eq!(result, vec![2, 4]);
-    /// ```
+    /// Parallel filter operation that preserves order.
     pub fn filter<I, T, Filt>(&self, data: I, predicate: Filt) -> ParallelResult<Vec<T>>
     where
         I: IntoIterator<Item = T>,
@@ -349,19 +203,7 @@ impl ConcurrentProcessor {
             .install(|| items.into_iter().par_filter(&config, predicate))
     }
 
-    /// Groups items by a key produced from each element using the provided key function.
-    ///
-    /// The returned map contains each distinct key mapped to a `Vec<T>` of items that produced that key.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let proc = ConcurrentProcessor::try_default().unwrap();
-    /// let items = vec![1, 2, 3, 4, 5];
-    /// let grouped = proc.group_by(items, |&n| n % 2 == 0);
-    /// assert_eq!(grouped.get(&true).unwrap().len(), 2); // 2 and 4
-    /// assert_eq!(grouped.get(&false).unwrap().len(), 3); // 1, 3, 5
-    /// ```
+    /// Parallel group-by operation using a key function.
     pub fn group_by<I, T, K, KeyFn>(
         &self,
         data: I,
@@ -380,29 +222,7 @@ impl ConcurrentProcessor {
             .install(|| items.into_iter().par_group_by(&config, key_fn))
     }
 
-    /// Applies a transform to each item in parallel using the processor's Rayon thread pool via Tokio's blocking bridge.
-    ///
-    /// The input iterator is consumed; the transform is executed on the thread pool and the resulting collection is returned.
-    ///
-    /// # Returns
-    ///
-    /// `Ok(ParallelResult<Vec<U>>)` containing the transformed items on success; `Err(ConcurrentProcessingError::JoinError)` if the Tokio blocking task is cancelled or panics.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// // Run inside a Tokio runtime in tests or examples.
-    /// use crate::functional::concurrent_processing::{ConcurrentProcessor, ParallelConfig};
-    ///
-    /// let rt = tokio::runtime::Runtime::new().unwrap();
-    /// let proc = ConcurrentProcessor::try_default().unwrap();
-    ///
-    /// let out = rt.block_on(async {
-    ///     proc.map_async(0..4, |x| x * 2).await.unwrap().into_inner()
-    /// });
-    ///
-    /// assert_eq!(out, vec![0, 2, 4, 6]);
-    /// ```
+    /// Asynchronous parallel map using Tokio's blocking adapter.
     pub async fn map_async<I, T, U, F>(
         &self,
         data: I,
@@ -423,35 +243,7 @@ impl ConcurrentProcessor {
             .map_err(|_| ConcurrentProcessingError::JoinError)
     }
 
-    /// Performs a parallel fold over the provided items using the processor's Rayon thread pool,
-    /// running the computation inside Tokio's blocking adapter.
-    ///
-    /// The `fold` function is applied to each item to produce a partial accumulator; `combine`
-    /// merges partial accumulators from different threads into a final result.
-    ///
-    /// # Returns
-    ///
-    /// A `ParallelResult<B>` containing the final accumulated value on success, or
-    /// `ConcurrentProcessingError::JoinError` if the spawned blocking task was cancelled or panicked.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::sync::Arc;
-    /// # use crate::functional::concurrent_processing::{ConcurrentProcessor, ParallelConfig};
-    /// // create a runtime and a processor (adjust to your crate's public API as needed)
-    /// let rt = tokio::runtime::Runtime::new().unwrap();
-    /// rt.block_on(async {
-    ///     let proc = ConcurrentProcessor::try_default().unwrap();
-    ///     let items = vec![1u32, 2, 3, 4];
-    ///     let result = proc
-    ///         .fold_async(items, 0u32, |acc, x| acc + x, |a, b| a + b)
-    ///         .await
-    ///         .unwrap()
-    ///         .into_inner();
-    ///     assert_eq!(result, 10);
-    /// });
-    /// ```
+    /// Asynchronous parallel fold using Tokio's blocking adapter.
     pub async fn fold_async<I, T, B, F, C>(
         &self,
         data: I,
@@ -477,34 +269,7 @@ impl ConcurrentProcessor {
         .map_err(|_| ConcurrentProcessingError::JoinError)
     }
 
-    /// Runs a Rayon-parallel map over the provided input inside Actix Web's blocking adapter.
-    ///
-    /// This executes the given `transform` in parallel on the input values using the processor's
-    /// Rayon thread pool, but invoked through Actix Web's `web::block` so it can be awaited safely
-    /// from an Actix handler.
-    ///
-    /// # Returns
-    ///
-    /// `Ok(ParallelResult<Vec<U>>)` with the mapped results on success, or
-    /// `Err(ConcurrentProcessingError::ActixBlocking(_))` if the Actix blocking adapter fails.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use actix_web::{web, App, HttpServer, Responder};
-    ///
-    /// async fn handler(proc: web::Data<super::ConcurrentProcessor>) -> impl Responder {
-    ///     // run a CPU-bound transform inside Actix's blocking adapter, backed by Rayon
-    ///     let items = vec![1, 2, 3];
-    ///     let res = proc
-    ///         .map_actix_blocking(items, |n| n * 2)
-    ///         .await
-    ///         .expect("blocking map failed");
-    ///     format!("{:?}", res.unwrap_or_default())
-    /// }
-    ///
-    /// // Note: example omits full server setup for brevity.
-    /// ```
+    /// Runs a parallel map inside Actix Web's blocking helper, enabling usage directly inside handlers.
     pub async fn map_actix_blocking<I, T, U, F>(
         &self,
         data: I,
@@ -527,22 +292,7 @@ impl ConcurrentProcessor {
             })
     }
 
-    /// Convenience wrapper that processes a batch by delegating to `map_async`.
-    ///
-    /// Returns `Ok(ParallelResult<Vec<U>>)` with the mapped results on success, or
-    /// `Err(ConcurrentProcessingError)` if the asynchronous execution fails.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// // Assuming `proc` is a ready `ConcurrentProcessor` instance in scope.
-    /// # async fn example(proc: &super::ConcurrentProcessor) {
-    /// let input = vec![1, 2, 3];
-    /// let result = proc.process_batch(input, |x| x * 2).await.unwrap();
-    /// assert_eq!(result.len(), 3);
-    /// assert_eq!(result[0], 2);
-    /// # }
-    /// ```
+    /// Convenience wrapper mirroring the legacy `process_batch` helper.
     pub async fn process_batch<T, U, F>(
         &self,
         data: Vec<T>,
@@ -557,40 +307,7 @@ impl ConcurrentProcessor {
     }
 }
 
-/// Produces a consolidated ParallelMetrics by combining an iterator of metrics.
-///
-/// The returned `ParallelMetrics` sums `total_time`, `throughput`, and `memory_usage`,
-/// uses the maximum observed `thread_count`, and averages `efficiency` across inputs.
-///
-/// # Examples
-///
-/// ```
-/// use crate::functional::concurrent_processing::ParallelMetrics;
-/// use crate::functional::concurrent_processing::aggregate_metrics;
-///
-/// let a = ParallelMetrics {
-///     total_time: 10,
-///     thread_count: 4,
-///     throughput: 100,
-///     memory_usage: 256,
-///     efficiency: 0.8,
-/// };
-/// let b = ParallelMetrics {
-///     total_time: 5,
-///     thread_count: 8,
-///     throughput: 50,
-///     memory_usage: 128,
-///     efficiency: 0.6,
-/// };
-///
-/// let combined = aggregate_metrics([&a, &b].into_iter());
-/// assert_eq!(combined.total_time, 15);
-/// assert_eq!(combined.thread_count, 8);
-/// assert_eq!(combined.throughput, 150);
-/// assert_eq!(combined.memory_usage, 384);
-/// // efficiency is averaged: (0.8 + 0.6) / 2 = 0.7
-/// assert!((combined.efficiency - 0.7).abs() < 1e-12);
-/// ```
+/// Aggregates metrics from multiple parallel operations into a single summary.
 pub fn aggregate_metrics<'a, I>(metrics: I) -> ParallelMetrics
 where
     I: IntoIterator<Item = &'a ParallelMetrics>,
@@ -694,3 +411,268 @@ mod tests {
         assert_eq!(result.data.last().copied(), Some(192));
     }
 }
+
+    #[test]
+    fn immutable_dataset_creation() {
+        let data = vec\![1, 2, 3, 4, 5];
+        let dataset = ImmutableDataset::new(data);
+        
+        assert_eq\!(dataset.len(), 5);
+        assert\!(\!dataset.is_empty());
+        assert_eq\!(dataset.as_slice()[0], 1);
+    }
+
+    #[test]
+    fn immutable_dataset_to_vec_clones_data() {
+        let dataset = ImmutableDataset::new(vec\![10, 20, 30]);
+        let cloned = dataset.to_vec();
+        
+        assert_eq\!(cloned, vec\![10, 20, 30]);
+        assert_eq\!(dataset.len(), 3); // Original still intact
+    }
+
+    #[test]
+    fn immutable_dataset_from_arc() {
+        let arc_data = Arc::<[i32]>::from(vec\![1, 2, 3]);
+        let dataset = ImmutableDataset::from_arc(arc_data);
+        
+        assert_eq\!(dataset.len(), 3);
+        assert_eq\!(dataset.as_slice(), &[1, 2, 3]);
+    }
+
+    #[test]
+    fn immutable_dataset_empty() {
+        let dataset: ImmutableDataset<i32> = ImmutableDataset::new(vec\![]);
+        
+        assert_eq\!(dataset.len(), 0);
+        assert\!(dataset.is_empty());
+    }
+
+    #[test]
+    fn concurrent_processor_config() {
+        let config = ParallelConfig {
+            thread_pool_size: 4,
+            min_parallel_size: 10,
+            chunk_size: 100,
+        };
+        
+        let processor = ConcurrentProcessor::new(config).expect("should build processor");
+        assert_eq\!(processor.config().thread_pool_size, 4);
+        assert_eq\!(processor.config().min_parallel_size, 10);
+    }
+
+    #[test]
+    fn concurrent_processor_with_config() {
+        let processor = ConcurrentProcessor::try_default().unwrap();
+        let new_config = ParallelConfig {
+            thread_pool_size: 2,
+            min_parallel_size: 50,
+            chunk_size: 200,
+        };
+        
+        let new_processor = processor.with_config(new_config).expect("should build");
+        assert_eq\!(new_processor.config().thread_pool_size, 2);
+    }
+
+    #[test]
+    fn map_empty_collection() {
+        let processor = processor();
+        let data: Vec<i32> = vec\![];
+        
+        let result = processor.map(data, |x| x * 2);
+        
+        assert\!(result.data.is_empty());
+        assert_eq\!(result.metrics.thread_count, 1);
+    }
+
+    #[test]
+    fn map_large_dataset() {
+        let processor = processor();
+        let data: Vec<i32> = (0..10000).collect();
+        
+        let result = processor.map(data, |x| x + 1);
+        
+        assert_eq\!(result.data.len(), 10000);
+        assert_eq\!(result.data[0], 1);
+        assert_eq\!(result.data[9999], 10000);
+    }
+
+    #[test]
+    fn fold_accumulates_values() {
+        let processor = processor();
+        let data = vec\![1, 2, 3, 4, 5];
+        
+        let result = processor.fold(
+            data,
+            0,
+            |acc, x| acc + x,
+            |a, b| a + b,
+        );
+        
+        assert_eq\!(result.data, 15);
+    }
+
+    #[test]
+    fn fold_with_complex_accumulator() {
+        let processor = processor();
+        let data = vec\!["hello", "world", "rust"];
+        
+        let result = processor.fold(
+            data,
+            String::new(),
+            |mut acc, word| {
+                if \!acc.is_empty() {
+                    acc.push(' ');
+                }
+                acc.push_str(word);
+                acc
+            },
+            |mut a, b| {
+                if \!a.is_empty() && \!b.is_empty() {
+                    a.push(' ');
+                }
+                a.push_str(&b);
+                a
+            },
+        );
+        
+        assert\!(result.data.contains("hello"));
+        assert\!(result.data.contains("world"));
+        assert\!(result.data.contains("rust"));
+    }
+
+    #[test]
+    fn filter_preserves_matching_items() {
+        let processor = processor();
+        let data = vec\![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+        
+        let result = processor.filter(data, |x| x % 2 == 0);
+        
+        assert_eq\!(result.data, vec\![2, 4, 6, 8, 10]);
+    }
+
+    #[test]
+    fn filter_all_match() {
+        let processor = processor();
+        let data = vec\![2, 4, 6, 8];
+        
+        let result = processor.filter(data, |x| x % 2 == 0);
+        
+        assert_eq\!(result.data, vec\![2, 4, 6, 8]);
+    }
+
+    #[test]
+    fn filter_none_match() {
+        let processor = processor();
+        let data = vec\![1, 3, 5, 7];
+        
+        let result = processor.filter(data, |x| x % 2 == 0);
+        
+        assert\!(result.data.is_empty());
+    }
+
+    #[test]
+    fn group_by_creates_buckets() {
+        let processor = processor();
+        let data = vec\![1, 2, 3, 4, 5, 6];
+        
+        let result = processor.group_by(data, |x| x % 3);
+        
+        assert_eq\!(result.data.len(), 3); // Groups: 0, 1, 2
+        assert\!(result.data.contains_key(&0));
+        assert\!(result.data.contains_key(&1));
+        assert\!(result.data.contains_key(&2));
+    }
+
+    #[test]
+    fn group_by_string_keys() {
+        let processor = processor();
+        let data = vec\!["apple", "apricot", "banana", "blueberry", "cherry"];
+        
+        let result = processor.group_by(data, |word| {
+            word.chars().next().unwrap_or('_')
+        });
+        
+        assert_eq\!(result.data.get(&'a').unwrap().len(), 2);
+        assert_eq\!(result.data.get(&'b').unwrap().len(), 2);
+        assert_eq\!(result.data.get(&'c').unwrap().len(), 1);
+    }
+
+    #[actix_rt::test]
+    async fn fold_async_with_strings() {
+        let processor = processor();
+        let data = vec\!["a", "b", "c"];
+        
+        let result = processor
+            .fold_async(
+                data,
+                String::new(),
+                |mut acc, s| {
+                    acc.push_str(s);
+                    acc
+                },
+                |mut a, b| {
+                    a.push_str(&b);
+                    a
+                },
+            )
+            .await
+            .expect("fold_async should succeed");
+        
+        assert\!(result.data.contains('a'));
+        assert\!(result.data.contains('b'));
+        assert\!(result.data.contains('c'));
+    }
+
+    #[actix_rt::test]
+    async fn process_batch_legacy_api() {
+        let processor = processor();
+        let data = vec\![10, 20, 30, 40];
+        
+        let result = processor
+            .process_batch(data, |x| x / 10)
+            .await
+            .expect("process_batch should succeed");
+        
+        assert_eq\!(result.data, vec\![1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn aggregate_metrics_empty_iterator() {
+        let metrics: Vec<&ParallelMetrics> = vec\![];
+        let aggregated = aggregate_metrics(metrics);
+        
+        assert_eq\!(aggregated.throughput, 0);
+        assert_eq\!(aggregated.memory_usage, 0);
+        assert_eq\!(aggregated.total_time, Duration::from_secs(0));
+    }
+
+    #[test]
+    fn aggregate_metrics_single_metric() {
+        let mut m = ParallelMetrics::default();
+        m.throughput = 500;
+        m.memory_usage = 1024;
+        m.efficiency = 0.95;
+        m.total_time = Duration::from_millis(100);
+        m.thread_count = 4;
+        
+        let aggregated = aggregate_metrics([&m]);
+        
+        assert_eq\!(aggregated.throughput, 500);
+        assert_eq\!(aggregated.memory_usage, 1024);
+        assert_eq\!(aggregated.thread_count, 4);
+        assert\!((aggregated.efficiency - 0.95).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn concurrent_processing_error_invalid_thread_pool() {
+        let config = ParallelConfig {
+            thread_pool_size: 0,
+            min_parallel_size: 10,
+            chunk_size: 100,
+        };
+        
+        // Should succeed with 0 threads (uses default)
+        let result = ConcurrentProcessor::new(config);
+        assert\!(result.is_ok());
+    }
