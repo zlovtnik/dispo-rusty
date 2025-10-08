@@ -182,9 +182,12 @@ impl Person {
     /// # Examples
     ///
     /// ```no_run
-    /// use crate::db::Connection;
-    /// let mut conn: Connection = /* obtain connection */ unimplemented!();
-    /// let deleted = crate::models::person::delete(1, &mut conn).unwrap();
+    /// use crate::config::db::Connection;
+    /// use crate::models::person::Person;
+    ///
+    /// // `conn` must be a mutable database connection.
+    /// let mut conn: Connection = /* obtain connection */;
+    /// let deleted = Person::delete(1, &mut conn).unwrap();
     /// assert_eq!(deleted, 1);
     /// ```
     pub fn delete(i: i32, conn: &mut Connection) -> QueryResult<usize> {

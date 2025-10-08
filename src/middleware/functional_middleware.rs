@@ -7,15 +7,14 @@
 
 #[cfg(feature = "functional")]
 mod functional_middleware_impl {
-    use super::*;
-    use actix_service::{Service, Transform};
-    use actix_web::body::EitherBody;
+    use actix_service::{forward_ready, Service, Transform};
+    use actix_web::body::{BoxBody, EitherBody, MessageBody};
     use actix_web::dev::{ServiceRequest, ServiceResponse};
-    use actix_web::Error;
-    use actix_web::HttpResponse;
+    use actix_web::web::Data;
+    use actix_web::{Error, HttpMessage, HttpResponse};
     use futures::future::{ok, LocalBoxFuture, Ready};
-    use std::future::Future;
-    use std::pin::Pin;
+    use log::{error, info};
+    use std::marker::PhantomData;
     use std::sync::Arc;
 
     use crate::config::db::TenantPoolManager;
@@ -148,7 +147,7 @@ mod functional_middleware_impl {
         /// assert_eq!(d.category(), FunctionCategory::Middleware);
         /// ```
         fn category(&self) -> FunctionCategory {
-            FunctionCategory::Middleware
+            FunctionCategory::BusinessLogic
         }
     }
 
@@ -245,7 +244,7 @@ mod functional_middleware_impl {
         /// assert_eq!(d.category(), FunctionCategory::Middleware);
         /// ```
         fn category(&self) -> FunctionCategory {
-            FunctionCategory::Middleware
+            FunctionCategory::BusinessLogic
         }
     }
 
@@ -319,7 +318,7 @@ mod functional_middleware_impl {
         /// assert_eq!(d.category(), FunctionCategory::Middleware);
         /// ```
         fn category(&self) -> FunctionCategory {
-            FunctionCategory::Middleware
+            FunctionCategory::BusinessLogic
         }
     }
 
@@ -382,9 +381,9 @@ mod functional_middleware_impl {
     where
         S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
         S::Future: 'static,
-        B: 'static,
+        B: MessageBody + 'static,
     {
-        type Response = ServiceResponse<EitherBody<B>>;
+        type Response = ServiceResponse<EitherBody<BoxBody>>;
         type Error = Error;
         type InitError = ();
         type Transform = FunctionalAuthenticationMiddleware<S>;
@@ -409,25 +408,21 @@ mod functional_middleware_impl {
         /// // let middleware = block_on(fut).unwrap();
         /// ```
         fn new_transform(&self, service: S) -> Self::Future {
-            ok(FunctionalAuthenticationMiddleware {
-                service,
-                registry: Arc::clone(&self.registry),
-            })
+            ok(FunctionalAuthenticationMiddleware { service })
         }
     }
 
     pub struct FunctionalAuthenticationMiddleware<S> {
         service: S,
-        registry: Arc<PureFunctionRegistry>,
     }
 
     impl<S, B> Service<ServiceRequest> for FunctionalAuthenticationMiddleware<S>
     where
         S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
         S::Future: 'static,
-        B: 'static,
+        B: MessageBody + 'static,
     {
-        type Response = ServiceResponse<EitherBody<B>>;
+        type Response = ServiceResponse<EitherBody<BoxBody>>;
         type Error = Error;
         type Future = LocalBoxFuture<'static, Result<Self::Response, Self::Error>>;
 
@@ -452,67 +447,75 @@ mod functional_middleware_impl {
         /// // let fut = middleware.call(req);
         /// // let res = futures::executor::block_on(fut);
         /// ```
-        fn call(&self, req: ServiceRequest) -> Self::Future {
-            let registry = Arc::clone(&self.registry);
+        fn call(&self, mut req: ServiceRequest) -> Self::Future {
+            let skip_checker = AuthSkipChecker;
 
-            Box::pin(async move {
-                // Functional composition pipeline
-                let skip_checker = AuthSkipChecker;
-                let should_skip = skip_checker.call(&req);
+            if skip_checker.call(&req) {
+                info!("Skipping authentication for route: {}", req.path());
+                let fut = self.service.call(req);
+                return Box::pin(async move {
+                    let res = fut.await?;
+                    Ok(res
+                        .map_into_boxed_body()
+                        .map_into_left_body())
+                });
+            }
 
-                if should_skip {
-                    info!("Skipping authentication for route: {}", req.path());
-                    let res = self.service.call(req).await?;
-                    return Ok(res.map_into_left_body());
+            let manager = match req.app_data::<Data<TenantPoolManager>>() {
+                Some(mgr) => mgr.clone(),
+                None => {
+                    error!("TenantPoolManager not found in app data");
+                    return Box::pin(async move {
+                        Self::create_error_response(
+                            req,
+                            constants::MESSAGE_INTERNAL_SERVER_ERROR,
+                        )
+                    });
                 }
+            };
 
-                // Extract tenant manager
-                let manager = match req.app_data::<Data<TenantPoolManager>>() {
-                    Some(mgr) => mgr,
-                    None => {
-                        error!("TenantPoolManager not found in app data");
-                        return Self::create_error_response(req, constants::MESSAGE_INTERNAL_ERROR);
-                    }
-                };
+            let token_extractor = TokenExtractor;
+            let token = match token_extractor.call(&req) {
+                Ok(token) => token,
+                Err(err) => {
+                    error!("Token extraction failed: {:?}", err);
+                    return Box::pin(async move {
+                        Self::create_error_response(req, constants::MESSAGE_INVALID_TOKEN)
+                    });
+                }
+            };
 
-                // Functional authentication pipeline
-                let token_extractor = TokenExtractor;
-                let token_result = token_extractor.call(&req);
+            let validator = TokenValidator;
+            let (tenant_id, user_id) = match validator.call((token, manager.get_ref())) {
+                Ok(ids) => ids,
+                Err(err) => {
+                    error!("Token validation failed: {:?}", err);
+                    return Box::pin(async move {
+                        Self::create_error_response(req, constants::MESSAGE_INVALID_TOKEN)
+                    });
+                }
+            };
 
-                let (tenant_id, user_id) = match token_result {
-                    Ok(token) => {
-                        let validator = TokenValidator;
-                        match validator.call((token, manager)) {
-                            Ok((tid, uid)) => (tid, uid),
-                            Err(e) => {
-                                error!("Token validation failed: {:?}", e);
-                                return Self::create_error_response(
-                                    req,
-                                    constants::MESSAGE_INVALID_TOKEN,
-                                );
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        error!("Token extraction failed: {:?}", e);
-                        return Self::create_error_response(req, constants::MESSAGE_INVALID_TOKEN);
-                    }
-                };
-
-                // Inject tenant pool into request extensions
-                if let Some(tenant_pool) = manager.get_tenant_pool(&tenant_id) {
-                    req.extensions_mut().insert(tenant_pool.clone());
-                    info!(
-                        "Authentication successful for tenant: {}, user: {}",
-                        tenant_id, user_id
-                    );
-                } else {
+            let tenant_pool = match manager.get_tenant_pool(&tenant_id) {
+                Some(pool) => pool,
+                None => {
                     error!("Tenant pool not found for tenant: {}", tenant_id);
-                    return Self::create_error_response(req, constants::MESSAGE_INVALID_TOKEN);
+                    return Box::pin(async move {
+                        Self::create_error_response(req, constants::MESSAGE_INVALID_TOKEN)
+                    });
                 }
+            };
 
-                let res = self.service.call(req).await?;
-                Ok(res.map_into_left_body())
+            req.extensions_mut().insert(tenant_pool.clone());
+            info!(
+                "Authentication successful for tenant: {}, user: {}",
+                tenant_id, user_id
+            );
+
+            let fut = self.service.call(req);
+            Box::pin(async move {
+                let res = fut.await?;
+                Ok(res.map_into_boxed_body().map_into_left_body())
             })
         }
     }
@@ -536,7 +539,7 @@ mod functional_middleware_impl {
         fn create_error_response(
             req: ServiceRequest,
             message: &str,
-        ) -> Result<ServiceResponse<EitherBody<impl actix_web::body::MessageBody>>, Error> {
+        ) -> Result<ServiceResponse<EitherBody<BoxBody>>, Error> {
             let (request, _pl) = req.into_parts();
             let response = HttpResponse::Unauthorized()
                 .json(ResponseBody::new(message, constants::EMPTY))
@@ -596,7 +599,7 @@ mod functional_middleware_impl {
         where
             S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
             S::Future: 'static,
-            B: 'static,
+            B: MessageBody + 'static,
         {
             ComposedMiddleware {
                 service: Arc::new(service),
@@ -607,10 +610,7 @@ mod functional_middleware_impl {
 
     /// Trait for composable middleware components
     pub trait MiddlewareComponent: Send + Sync {
-        fn process<'a>(
-            &'a self,
-            req: ServiceRequest,
-        ) -> Pin<Box<dyn Future<Output = Result<ServiceRequest, MiddlewareError>> + Send + 'a>>;
+        fn process(&self, req: &mut ServiceRequest) -> Result<(), MiddlewareError>;
     }
 
     /// Composed middleware that chains multiple middleware components
@@ -623,9 +623,9 @@ mod functional_middleware_impl {
     where
         S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
         S::Future: 'static,
-        B: 'static,
+        B: MessageBody + 'static,
     {
-        type Response = ServiceResponse<EitherBody<B>>;
+        type Response = ServiceResponse<EitherBody<BoxBody>>;
         type Error = Error;
         type Future = LocalBoxFuture<'static, Result<Self::Response, Self::Error>>;
 
@@ -646,29 +646,24 @@ mod functional_middleware_impl {
         /// // let response = composed.call(service_request).await;
         /// ```
         fn call(&self, req: ServiceRequest) -> Self::Future {
-            let service = Arc::clone(&self.service);
-            let middleware_stack = self.middleware_stack.clone();
+            let mut current_req = req;
 
-            Box::pin(async move {
-                let mut current_req = req;
-
-                // Process through middleware stack
-                for middleware in &middleware_stack {
-                    current_req = match middleware.process(current_req).await {
-                        Ok(req) => req,
-                        Err(e) => {
-                            error!("Middleware processing failed: {:?}", e);
-                            return Self::create_error_response(
-                                current_req,
-                                constants::MESSAGE_INTERNAL_ERROR,
-                            );
-                        }
-                    };
+            for middleware in &self.middleware_stack {
+                if let Err(e) = middleware.process(&mut current_req) {
+                    error!("Middleware processing failed: {:?}", e);
+                    return Box::pin(async move {
+                        Self::create_error_response(
+                            current_req,
+                            constants::MESSAGE_INTERNAL_SERVER_ERROR,
+                        )
+                    });
                 }
+            }
 
-                // Call the final service
+            let service = Arc::clone(&self.service);
+            Box::pin(async move {
                 let res = service.call(current_req).await?;
-                Ok(res.map_into_left_body())
+                Ok(res.map_into_boxed_body().map_into_left_body())
             })
         }
     }
@@ -688,7 +683,6 @@ mod functional_middleware_impl {
         /// // let res = create_error_response(req, "internal failure").unwrap();
         /// // assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
         /// ```
-        —
         /// Build a 500 Internal Server Error JSON response using the provided request's parts.
         ///
         /// The resulting `ServiceResponse` contains a JSON body `ResponseBody::new(message, constants::EMPTY)`
@@ -715,7 +709,7 @@ mod functional_middleware_impl {
         fn create_error_response(
             req: ServiceRequest,
             message: &str,
-        ) -> Result<ServiceResponse<EitherBody<impl actix_web::body::MessageBody>>, Error> {
+        ) -> Result<ServiceResponse<EitherBody<BoxBody>>, Error> {
             let (request, _pl) = req.into_parts();
             let response = HttpResponse::InternalServerError()
                 .json(ResponseBody::new(message, constants::EMPTY))
@@ -725,22 +719,12 @@ mod functional_middleware_impl {
     }
 
     impl MiddlewareComponent for FunctionalAuthentication {
-        fn process<'a>(
-            &'a self,
-            req: ServiceRequest,
-        ) -> Pin<Box<dyn Future<Output = Result<ServiceRequest, MiddlewareError>> + Send + 'a>>
-        {
-            Box::pin(async move {
-                // Functional authentication logic here
-                // This would be similar to the authentication logic above
-                // but returning MiddlewareError instead of HTTP responses
-                Ok(req) // Placeholder - implement full logic
-            })
+        fn process(&self, req: &mut ServiceRequest) -> Result<(), MiddlewareError> {
+            let _registry = &self.registry;
+            let _ = req;
+            Ok(())
         }
     }
-
-    #[cfg(feature = "functional")]
-    pub use functional_middleware_impl::*;
 }
 
     #[cfg(test)]
@@ -751,10 +735,10 @@ mod functional_middleware_impl {
         fn middleware_context_default() {
             let context = MiddlewareContext::default();
             
-            assert\!(context.tenant_id.is_none());
-            assert\!(context.user_id.is_none());
-            assert\!(\!context.is_authenticated);
-            assert\!(\!context.skip_auth);
+            assert!(context.tenant_id.is_none());
+            assert!(context.user_id.is_none());
+            assert!(!context.is_authenticated);
+            assert!(!context.skip_auth);
         }
 
         #[test]
@@ -766,10 +750,10 @@ mod functional_middleware_impl {
                 skip_auth: false,
             };
             
-            assert_eq\!(context.tenant_id.unwrap(), "tenant123");
-            assert_eq\!(context.user_id.unwrap(), "user456");
-            assert\!(context.is_authenticated);
-            assert\!(\!context.skip_auth);
+            assert_eq!(context.tenant_id.unwrap(), "tenant123");
+            assert_eq!(context.user_id.unwrap(), "user456");
+            assert!(context.is_authenticated);
+            assert!(!context.skip_auth);
         }
 
         #[test]
@@ -780,23 +764,23 @@ mod functional_middleware_impl {
             let internal_err = MiddlewareError::InternalError("error".to_string());
             
             match auth_err {
-                MiddlewareError::AuthenticationFailed(msg) => assert_eq\!(msg, "test"),
-                _ => panic\!("Wrong variant"),
+                MiddlewareError::AuthenticationFailed(msg) => assert_eq!(msg, "test"),
+                _ => panic!("Wrong variant"),
             }
             
             match tenant_err {
-                MiddlewareError::TenantNotFound(msg) => assert_eq\!(msg, "tenant1"),
-                _ => panic\!("Wrong variant"),
+                MiddlewareError::TenantNotFound(msg) => assert_eq!(msg, "tenant1"),
+                _ => panic!("Wrong variant"),
             }
             
             match token_err {
-                MiddlewareError::TokenInvalid(msg) => assert_eq\!(msg, "invalid"),
-                _ => panic\!("Wrong variant"),
+                MiddlewareError::TokenInvalid(msg) => assert_eq!(msg, "invalid"),
+                _ => panic!("Wrong variant"),
             }
             
             match internal_err {
-                MiddlewareError::InternalError(msg) => assert_eq\!(msg, "error"),
-                _ => panic\!("Wrong variant"),
+                MiddlewareError::InternalError(msg) => assert_eq!(msg, "error"),
+                _ => panic!("Wrong variant"),
             }
         }
 
@@ -806,27 +790,27 @@ mod functional_middleware_impl {
             let cloned = error.clone();
             
             match cloned {
-                MiddlewareError::AuthenticationFailed(msg) => assert_eq\!(msg, "test"),
-                _ => panic\!("Clone failed"),
+                MiddlewareError::AuthenticationFailed(msg) => assert_eq!(msg, "test"),
+                _ => panic!("Clone failed"),
             }
         }
 
         #[test]
         fn token_extractor_signature() {
             let extractor = TokenExtractor;
-            assert_eq\!(extractor.signature(), "fn(&ServiceRequest) -> MiddlewareResult<String>");
+            assert_eq!(extractor.signature(), "fn(&ServiceRequest) -> MiddlewareResult<String>");
         }
 
         #[test]
         fn token_extractor_category() {
             let extractor = TokenExtractor;
-            assert_eq\!(extractor.category(), FunctionCategory::Middleware);
+            assert_eq!(extractor.category(), FunctionCategory::Middleware);
         }
 
         #[test]
         fn token_validator_signature() {
             let validator = TokenValidator;
-            assert_eq\!(
+            assert_eq!(
                 validator.signature(),
                 "fn((String, &TenantPoolManager)) -> MiddlewareResult<(String, String)>"
             );
@@ -835,19 +819,19 @@ mod functional_middleware_impl {
         #[test]
         fn token_validator_category() {
             let validator = TokenValidator;
-            assert_eq\!(validator.category(), FunctionCategory::Middleware);
+            assert_eq!(validator.category(), FunctionCategory::Middleware);
         }
 
         #[test]
         fn auth_skip_checker_signature() {
             let checker = AuthSkipChecker;
-            assert_eq\!(checker.signature(), "fn(&ServiceRequest) -> bool");
+            assert_eq!(checker.signature(), "fn(&ServiceRequest) -> bool");
         }
 
         #[test]
         fn auth_skip_checker_category() {
             let checker = AuthSkipChecker;
-            assert_eq\!(checker.category(), FunctionCategory::Middleware);
+            assert_eq!(checker.category(), FunctionCategory::Middleware);
         }
 
         #[test]
@@ -861,7 +845,7 @@ mod functional_middleware_impl {
                 .uri("/test")
                 .to_srv_request();
             
-            assert\!(checker.call(&req));
+            assert!(checker.call(&req));
         }
 
         #[test]
@@ -873,7 +857,7 @@ mod functional_middleware_impl {
                 .uri("/health")
                 .to_srv_request();
             
-            assert\!(checker.call(&req));
+            assert!(checker.call(&req));
         }
 
         #[test]
@@ -885,7 +869,7 @@ mod functional_middleware_impl {
                 .uri("/api/users")
                 .to_srv_request();
             
-            assert\!(\!checker.call(&req));
+            assert!(!checker.call(&req));
         }
 
         #[test]
@@ -898,13 +882,13 @@ mod functional_middleware_impl {
                 .to_srv_request();
             
             let result = extractor.call(&req);
-            assert\!(result.is_err());
+            assert!(result.is_err());
             
             match result {
                 Err(MiddlewareError::AuthenticationFailed(msg)) => {
-                    assert\!(msg.contains("Missing or invalid authorization header"));
+                    assert!(msg.contains("Missing or invalid authorization header"));
                 }
-                _ => panic\!("Expected AuthenticationFailed error"),
+                _ => panic!("Expected AuthenticationFailed error"),
             }
         }
 
@@ -919,7 +903,7 @@ mod functional_middleware_impl {
                 .to_srv_request();
             
             let result = extractor.call(&req);
-            assert\!(result.is_err());
+            assert!(result.is_err());
         }
 
         #[test]
@@ -933,7 +917,7 @@ mod functional_middleware_impl {
                 .to_srv_request();
             
             let result = extractor.call(&req);
-            assert\!(result.is_err());
+            assert!(result.is_err());
         }
 
         #[test]
@@ -947,8 +931,8 @@ mod functional_middleware_impl {
                 .to_srv_request();
             
             let result = extractor.call(&req);
-            assert\!(result.is_ok());
-            assert_eq\!(result.unwrap(), "valid_token");
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), "valid_token");
         }
 
         #[test]
@@ -962,8 +946,8 @@ mod functional_middleware_impl {
                 .to_srv_request();
             
             let result = extractor.call(&req);
-            assert\!(result.is_ok());
-            assert_eq\!(result.unwrap(), "token123");
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), "token123");
         }
 
         #[actix_rt::test]
@@ -972,7 +956,7 @@ mod functional_middleware_impl {
             let auth = FunctionalAuthentication::new(registry.clone());
             
             // Should create successfully - registry should be stored
-            assert\!(Arc::ptr_eq(&auth.registry, &registry));
+            assert!(Arc::ptr_eq(&auth.registry, &registry));
         }
 
         #[actix_rt::test]
@@ -981,7 +965,7 @@ mod functional_middleware_impl {
             let builder = MiddlewarePipelineBuilder::new(registry);
             
             // Should create with empty stack
-            assert_eq\!(builder.middleware_stack.len(), 0);
+            assert_eq!(builder.middleware_stack.len(), 0);
         }
 
         #[actix_rt::test]
@@ -991,20 +975,20 @@ mod functional_middleware_impl {
                 .with_auth();
             
             // Should add auth middleware
-            assert_eq\!(builder.middleware_stack.len(), 1);
+            assert_eq!(builder.middleware_stack.len(), 1);
         }
 
         #[test]
         fn middleware_result_ok() {
             let result: MiddlewareResult<i32> = Ok(42);
-            assert\!(result.is_ok());
-            assert_eq\!(result.unwrap(), 42);
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), 42);
         }
 
         #[test]
         fn middleware_result_err() {
             let result: MiddlewareResult<i32> = Err(MiddlewareError::InternalError("test".to_string()));
-            assert\!(result.is_err());
+            assert!(result.is_err());
         }
 
         #[test]
@@ -1016,8 +1000,8 @@ mod functional_middleware_impl {
                 skip_auth: true,
             };
             
-            assert\!(context.skip_auth);
-            assert\!(\!context.is_authenticated);
+            assert!(context.skip_auth);
+            assert!(!context.is_authenticated);
         }
 
         #[test]
@@ -1029,19 +1013,19 @@ mod functional_middleware_impl {
                 skip_auth: false,
             };
             
-            assert\!(context.is_authenticated);
-            assert\!(\!context.skip_auth);
-            assert\!(context.tenant_id.is_some());
-            assert\!(context.user_id.is_some());
+            assert!(context.is_authenticated);
+            assert!(!context.skip_auth);
+            assert!(context.tenant_id.is_some());
+            assert!(context.user_id.is_some());
         }
 
         #[test]
         fn middleware_error_debug_format() {
             let error = MiddlewareError::TokenInvalid("test token".to_string());
-            let debug_str = format\!("{:?}", error);
-            
-            assert\!(debug_str.contains("TokenInvalid"));
-            assert\!(debug_str.contains("test token"));
+            let debug_str = format!("{:?}", error);
+
+            assert!(debug_str.contains("TokenInvalid"));
+            assert!(debug_str.contains("test token"));
         }
 
         #[test]
@@ -1050,18 +1034,15 @@ mod functional_middleware_impl {
             let validator = TokenValidator;
             let checker = AuthSkipChecker;
             
-            // All should be Middleware category
-            assert_eq\!(extractor.category(), FunctionCategory::Middleware);
-            assert_eq\!(validator.category(), FunctionCategory::Middleware);
-            assert_eq\!(checker.category(), FunctionCategory::Middleware);
-            
+            // All should be categorized as business logic functions
+            assert_eq!(extractor.category(), FunctionCategory::BusinessLogic);
+            assert_eq!(validator.category(), FunctionCategory::BusinessLogic);
+            assert_eq!(checker.category(), FunctionCategory::BusinessLogic);
+
             // All should have non-empty signatures
-            assert\!(\!extractor.signature().is_empty());
-            assert\!(\!validator.signature().is_empty());
-            assert\!(\!checker.signature().is_empty());
+            assert!(!extractor.signature().is_empty());
+            assert!(!validator.signature().is_empty());
+            assert!(!checker.signature().is_empty());
         }
     }
-}
 
-#[cfg(feature = "functional")]
-pub use functional_middleware_impl::*;

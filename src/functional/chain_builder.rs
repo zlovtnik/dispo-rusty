@@ -381,14 +381,7 @@ pub mod patterns {
     /// let out = sequential_process(vec![1, 2, 3], |x| x * 2);
     /// assert_eq!(out, vec![2, 4, 6]);
     /// ```
-    pub fn sequential_process<T, U>(
-        data: Vec<T>,
-        process_fn: impl Fn(T) -> U + Send + Sync,
-    ) -> Vec<U>
-    where
-        T: Send + Sync,
-        U: Send,
-    {
+    pub fn sequential_process<T, U>(data: Vec<T>, process_fn: impl Fn(T) -> U) -> Vec<U> {
         // Sequential processing; parallel implementation (e.g., rayon) may be added later
         ChainBuilder::from_vec(data).map(process_fn).collect()
     }

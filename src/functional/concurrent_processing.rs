@@ -23,9 +23,6 @@
 //! **composable building blocks** so callers can compose functional
 //! pipelines without worrying about data races or thread management.
 
-#![allow(dead_code)]
-#![allow(unused_variables)]
-
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -473,7 +470,7 @@ impl ConcurrentProcessor {
 
         web::block(move || pool.install(|| items.into_iter().par_map(&config, transform)))
             .await
-            .map_err(|err: BlockingError<_>| {
+            .map_err(|err: BlockingError| {
                 ConcurrentProcessingError::ActixBlocking(err.to_string())
             })
     }
@@ -665,38 +662,38 @@ mod tests {
 
     #[test]
     fn immutable_dataset_creation() {
-        let data = vec\![1, 2, 3, 4, 5];
+        let data = vec![1, 2, 3, 4, 5];
         let dataset = ImmutableDataset::new(data);
         
-        assert_eq\!(dataset.len(), 5);
-        assert\!(\!dataset.is_empty());
-        assert_eq\!(dataset.as_slice()[0], 1);
+        assert_eq!(dataset.len(), 5);
+        assert!(!dataset.is_empty());
+        assert_eq!(dataset.as_slice()[0], 1);
     }
 
     #[test]
     fn immutable_dataset_to_vec_clones_data() {
-        let dataset = ImmutableDataset::new(vec\![10, 20, 30]);
+        let dataset = ImmutableDataset::new(vec![10, 20, 30]);
         let cloned = dataset.to_vec();
         
-        assert_eq\!(cloned, vec\![10, 20, 30]);
-        assert_eq\!(dataset.len(), 3); // Original still intact
+        assert_eq!(cloned, vec![10, 20, 30]);
+        assert_eq!(dataset.len(), 3); // Original still intact
     }
 
     #[test]
     fn immutable_dataset_from_arc() {
-        let arc_data = Arc::<[i32]>::from(vec\![1, 2, 3]);
+        let arc_data = Arc::<[i32]>::from(vec![1, 2, 3]);
         let dataset = ImmutableDataset::from_arc(arc_data);
         
-        assert_eq\!(dataset.len(), 3);
-        assert_eq\!(dataset.as_slice(), &[1, 2, 3]);
+        assert_eq!(dataset.len(), 3);
+        assert_eq!(dataset.as_slice(), &[1, 2, 3]);
     }
 
     #[test]
     fn immutable_dataset_empty() {
-        let dataset: ImmutableDataset<i32> = ImmutableDataset::new(vec\![]);
+        let dataset: ImmutableDataset<i32> = ImmutableDataset::new(vec![]);
         
-        assert_eq\!(dataset.len(), 0);
-        assert\!(dataset.is_empty());
+        assert_eq!(dataset.len(), 0);
+        assert!(dataset.is_empty());
     }
 
     #[test]
@@ -708,8 +705,8 @@ mod tests {
         };
         
         let processor = ConcurrentProcessor::new(config).expect("should build processor");
-        assert_eq\!(processor.config().thread_pool_size, 4);
-        assert_eq\!(processor.config().min_parallel_size, 10);
+    assert_eq!(processor.config().thread_pool_size, 4);
+    assert_eq!(processor.config().min_parallel_size, 10);
     }
 
     #[test]
@@ -722,18 +719,18 @@ mod tests {
         };
         
         let new_processor = processor.with_config(new_config).expect("should build");
-        assert_eq\!(new_processor.config().thread_pool_size, 2);
+    assert_eq!(new_processor.config().thread_pool_size, 2);
     }
 
     #[test]
     fn map_empty_collection() {
         let processor = processor();
-        let data: Vec<i32> = vec\![];
+    let data: Vec<i32> = vec![];
         
         let result = processor.map(data, |x| x * 2);
         
-        assert\!(result.data.is_empty());
-        assert_eq\!(result.metrics.thread_count, 1);
+    assert!(result.data.is_empty());
+    assert_eq!(result.metrics.thread_count, 1);
     }
 
     #[test]
@@ -743,15 +740,15 @@ mod tests {
         
         let result = processor.map(data, |x| x + 1);
         
-        assert_eq\!(result.data.len(), 10000);
-        assert_eq\!(result.data[0], 1);
-        assert_eq\!(result.data[9999], 10000);
+    assert_eq!(result.data.len(), 10000);
+    assert_eq!(result.data[0], 1);
+    assert_eq!(result.data[9999], 10000);
     }
 
     #[test]
     fn fold_accumulates_values() {
         let processor = processor();
-        let data = vec\![1, 2, 3, 4, 5];
+    let data = vec![1, 2, 3, 4, 5];
         
         let result = processor.fold(
             data,
@@ -760,26 +757,26 @@ mod tests {
             |a, b| a + b,
         );
         
-        assert_eq\!(result.data, 15);
+    assert_eq!(result.data, 15);
     }
 
     #[test]
     fn fold_with_complex_accumulator() {
         let processor = processor();
-        let data = vec\!["hello", "world", "rust"];
+    let data = vec!["hello", "world", "rust"];
         
         let result = processor.fold(
             data,
             String::new(),
             |mut acc, word| {
-                if \!acc.is_empty() {
+                if !acc.is_empty() {
                     acc.push(' ');
                 }
                 acc.push_str(word);
                 acc
             },
             |mut a, b| {
-                if \!a.is_empty() && \!b.is_empty() {
+                if !a.is_empty() && !b.is_empty() {
                     a.push(' ');
                 }
                 a.push_str(&b);
@@ -787,72 +784,72 @@ mod tests {
             },
         );
         
-        assert\!(result.data.contains("hello"));
-        assert\!(result.data.contains("world"));
-        assert\!(result.data.contains("rust"));
+    assert!(result.data.contains("hello"));
+    assert!(result.data.contains("world"));
+    assert!(result.data.contains("rust"));
     }
 
     #[test]
     fn filter_preserves_matching_items() {
         let processor = processor();
-        let data = vec\![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    let data = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
         
         let result = processor.filter(data, |x| x % 2 == 0);
         
-        assert_eq\!(result.data, vec\![2, 4, 6, 8, 10]);
+    assert_eq!(result.data, vec![2, 4, 6, 8, 10]);
     }
 
     #[test]
     fn filter_all_match() {
         let processor = processor();
-        let data = vec\![2, 4, 6, 8];
+    let data = vec![2, 4, 6, 8];
         
         let result = processor.filter(data, |x| x % 2 == 0);
         
-        assert_eq\!(result.data, vec\![2, 4, 6, 8]);
+    assert_eq!(result.data, vec![2, 4, 6, 8]);
     }
 
     #[test]
     fn filter_none_match() {
         let processor = processor();
-        let data = vec\![1, 3, 5, 7];
+    let data = vec![1, 3, 5, 7];
         
         let result = processor.filter(data, |x| x % 2 == 0);
         
-        assert\!(result.data.is_empty());
+    assert!(result.data.is_empty());
     }
 
     #[test]
     fn group_by_creates_buckets() {
         let processor = processor();
-        let data = vec\![1, 2, 3, 4, 5, 6];
+    let data = vec![1, 2, 3, 4, 5, 6];
         
         let result = processor.group_by(data, |x| x % 3);
         
-        assert_eq\!(result.data.len(), 3); // Groups: 0, 1, 2
-        assert\!(result.data.contains_key(&0));
-        assert\!(result.data.contains_key(&1));
-        assert\!(result.data.contains_key(&2));
+    assert_eq!(result.data.len(), 3); // Groups: 0, 1, 2
+    assert!(result.data.contains_key(&0));
+    assert!(result.data.contains_key(&1));
+    assert!(result.data.contains_key(&2));
     }
 
     #[test]
     fn group_by_string_keys() {
         let processor = processor();
-        let data = vec\!["apple", "apricot", "banana", "blueberry", "cherry"];
+    let data = vec!["apple", "apricot", "banana", "blueberry", "cherry"];
         
         let result = processor.group_by(data, |word| {
             word.chars().next().unwrap_or('_')
         });
         
-        assert_eq\!(result.data.get(&'a').unwrap().len(), 2);
-        assert_eq\!(result.data.get(&'b').unwrap().len(), 2);
-        assert_eq\!(result.data.get(&'c').unwrap().len(), 1);
+    assert_eq!(result.data.get(&'a').unwrap().len(), 2);
+    assert_eq!(result.data.get(&'b').unwrap().len(), 2);
+    assert_eq!(result.data.get(&'c').unwrap().len(), 1);
     }
 
     #[actix_rt::test]
     async fn fold_async_with_strings() {
         let processor = processor();
-        let data = vec\!["a", "b", "c"];
+    let data = vec!["a", "b", "c"];
         
         let result = processor
             .fold_async(
@@ -870,32 +867,32 @@ mod tests {
             .await
             .expect("fold_async should succeed");
         
-        assert\!(result.data.contains('a'));
-        assert\!(result.data.contains('b'));
-        assert\!(result.data.contains('c'));
+    assert!(result.data.contains('a'));
+    assert!(result.data.contains('b'));
+    assert!(result.data.contains('c'));
     }
 
     #[actix_rt::test]
     async fn process_batch_legacy_api() {
         let processor = processor();
-        let data = vec\![10, 20, 30, 40];
+    let data = vec![10, 20, 30, 40];
         
         let result = processor
             .process_batch(data, |x| x / 10)
             .await
             .expect("process_batch should succeed");
         
-        assert_eq\!(result.data, vec\![1, 2, 3, 4]);
+    assert_eq!(result.data, vec![1, 2, 3, 4]);
     }
 
     #[test]
     fn aggregate_metrics_empty_iterator() {
-        let metrics: Vec<&ParallelMetrics> = vec\![];
+    let metrics: Vec<&ParallelMetrics> = vec![];
         let aggregated = aggregate_metrics(metrics);
         
-        assert_eq\!(aggregated.throughput, 0);
-        assert_eq\!(aggregated.memory_usage, 0);
-        assert_eq\!(aggregated.total_time, Duration::from_secs(0));
+    assert_eq!(aggregated.throughput, 0);
+    assert_eq!(aggregated.memory_usage, 0);
+    assert_eq!(aggregated.total_time, Duration::from_secs(0));
     }
 
     #[test]
@@ -909,10 +906,10 @@ mod tests {
         
         let aggregated = aggregate_metrics([&m]);
         
-        assert_eq\!(aggregated.throughput, 500);
-        assert_eq\!(aggregated.memory_usage, 1024);
-        assert_eq\!(aggregated.thread_count, 4);
-        assert\!((aggregated.efficiency - 0.95).abs() < f64::EPSILON);
+    assert_eq!(aggregated.throughput, 500);
+    assert_eq!(aggregated.memory_usage, 1024);
+    assert_eq!(aggregated.thread_count, 4);
+    assert!((aggregated.efficiency - 0.95).abs() < f64::EPSILON);
     }
 
     #[test]
@@ -925,5 +922,5 @@ mod tests {
         
         // Should succeed with 0 threads (uses default)
         let result = ConcurrentProcessor::new(config);
-        assert\!(result.is_ok());
+    assert!(result.is_ok());
     }

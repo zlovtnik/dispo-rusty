@@ -306,6 +306,8 @@ impl Tenant {
     ///
     /// Supported fields and operators:
     /// - `id`, `name`, `db_url`: `contains`, `equals`.
+    ///   - Note: `contains` uses SQL LIKE; `%` and `_` characters in the value are treated as wildcards.
+    ///
     /// - `created_at`, `updated_at`: `gt`, `gte`, `lt`, `lte`, `equals`. Date/time values must use ISO-like format `YYYY-MM-DDTHH:MM:SS.sssZ` (for example `2023-12-25T10:00:00.000Z`).
     ///
     /// Unknown fields or unsupported operators are ignored. When `filter.page_size` is provided, the function applies `LIMIT`/`OFFSET` using `cursor` and enforces constraints: maximum page size 10,000, non-negative cursor, safe offset calculation to avoid overflow, and page size cannot be zero.
