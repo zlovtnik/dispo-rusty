@@ -606,29 +606,29 @@ where
     }
 
     /// Fetches the configured result limit for the query builder.
-    
+
     ///
-    
+
     /// # Returns
-    
+
     ///
-    
+
     /// `Some(limit)` if a limit has been set, `None` otherwise.
-    
+
     ///
-    
+
     /// # Examples
-    
+
     ///
-    
+
     /// ```
-    
+
     /// let builder = crate::functional::query_builder::TypeSafeQueryBuilder::<(), ()>::new()
-    
+
     ///     .limit(25);
-    
+
     /// assert_eq!(builder.limit_value(), Some(25));
-    
+
     /// ```
     pub fn limit_value(&self) -> Option<i64> {
         self.limit

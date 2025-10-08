@@ -13,12 +13,10 @@
 
 #![allow(dead_code)]
 
-use std::collections::HashMap;
-use chrono::{DateTime, Utc, Duration};
+use super::immutable_state::{PersistentVector, QueryResult, SessionData, TenantApplicationState};
+use chrono::{DateTime, Duration, Utc};
 use serde_json::Value as JsonValue;
-use super::immutable_state::{
-    TenantApplicationState, QueryResult, PersistentVector, SessionData,
-};
+use std::collections::HashMap;
 
 /// Result type for state transitions
 pub type TransitionResult<T> = Result<T, TransitionError>;
@@ -33,7 +31,10 @@ pub enum TransitionError {
     ValidationFailed { field: String, reason: String },
 
     #[error("Resource not found: {resource_type} '{resource_id}'")]
-    NotFound { resource_type: String, resource_id: String },
+    NotFound {
+        resource_type: String,
+        resource_id: String,
+    },
 
     #[error("Concurrency conflict: {details}")]
     ConcurrencyConflict { details: String },
@@ -125,7 +126,7 @@ pub fn update_user_session(
 
     if session_id.trim().is_empty() {
         return Err(TransitionError::InvalidParameters {
-            message: "Session ID cannot be empty".to_string()
+            message: "Session ID cannot be empty".to_string(),
         });
     }
 
@@ -137,7 +138,7 @@ pub fn update_user_session(
         }
 
         let mut new_state = state.clone();
-        
+
         // Get the existing session to preserve/update its data
         if let Some(existing_session) = state.user_sessions.get(&session_id) {
             let updated_session = SessionData {
@@ -150,7 +151,7 @@ pub fn update_user_session(
             };
             new_state.user_sessions = state.user_sessions.insert(session_id, updated_session);
         }
-        
+
         new_state.last_updated = Utc::now();
 
         new_state
@@ -219,7 +220,7 @@ where
 
     if key.trim().is_empty() {
         return Err(TransitionError::InvalidParameters {
-            message: "Configuration key cannot be empty".to_string()
+            message: "Configuration key cannot be empty".to_string(),
         });
     }
 
@@ -228,7 +229,7 @@ where
         if !validator(&value) {
             return Err(TransitionError::ValidationFailed {
                 field: key.clone(),
-                reason: "Configuration value failed validation".to_string()
+                reason: "Configuration value failed validation".to_string(),
             });
         }
     }
@@ -317,7 +318,7 @@ where
 
     if key.trim().is_empty() {
         return Err(TransitionError::InvalidParameters {
-            message: "Data key cannot be empty".to_string()
+            message: "Data key cannot be empty".to_string(),
         });
     }
 
@@ -373,13 +374,13 @@ pub fn cache_query_result(
 
     if query_id.trim().is_empty() {
         return Err(TransitionError::InvalidParameters {
-            message: "Query ID cannot be empty".to_string()
+            message: "Query ID cannot be empty".to_string(),
         });
     }
 
     if data.is_empty() {
         return Err(TransitionError::InvalidParameters {
-            message: "Query data cannot be empty".to_string()
+            message: "Query data cannot be empty".to_string(),
         });
     }
 
@@ -416,8 +417,7 @@ pub fn cache_query_result(
 /// let new_state = transition(&old_state);
 /// // `new_state.query_cache` contains only entries with `expires_at > now`.
 /// ```
-pub fn clean_expired_cache(
-) -> impl FnOnce(&TenantApplicationState) -> TenantApplicationState {
+pub fn clean_expired_cache() -> impl FnOnce(&TenantApplicationState) -> TenantApplicationState {
     move |state| {
         let now = Utc::now();
         let mut valid_entries = Vec::new();
@@ -466,35 +466,37 @@ pub fn build_login_transitions(
     user_id: impl Into<String>,
     session_data: String,
     session_ttl_seconds: u64,
-) -> Result<Vec<Box<dyn FnOnce(&TenantApplicationState) -> TenantApplicationState>>, TransitionError> {
+) -> Result<Vec<Box<dyn FnOnce(&TenantApplicationState) -> TenantApplicationState>>, TransitionError>
+{
     let user_id = user_id.into();
     let session_id = format!("session_{}_{}", user_id, Utc::now().timestamp());
 
     if user_id.trim().is_empty() {
         return Err(TransitionError::InvalidParameters {
-            message: "User ID cannot be empty".to_string()
+            message: "User ID cannot be empty".to_string(),
         });
     }
 
     let transitions: Vec<Box<dyn FnOnce(&TenantApplicationState) -> TenantApplicationState>> = vec![
         // Clean expired sessions
         Box::new(clean_expired_cache()),
-
         // Create new session
         Box::new(create_user_session(
             session_id.clone(),
             session_data,
-            session_ttl_seconds
+            session_ttl_seconds,
         )),
-
         // Update user's last login timestamp in app data
-        Box::new(transform_app_data(
-            format!("user_{}_last_login", user_id),
-            |_| Ok(JsonValue::String(Utc::now().to_rfc3339())),
-            JsonValue::Null
-        ).map_err(|_| TransitionError::InvalidParameters {
-            message: "Failed to create last login update".to_string()
-        })?),
+        Box::new(
+            transform_app_data(
+                format!("user_{}_last_login", user_id),
+                |_| Ok(JsonValue::String(Utc::now().to_rfc3339())),
+                JsonValue::Null,
+            )
+            .map_err(|_| TransitionError::InvalidParameters {
+                message: "Failed to create last login update".to_string(),
+            })?,
+        ),
     ];
 
     Ok(transitions)
@@ -514,19 +516,19 @@ pub fn build_login_transitions(
 /// ```
 pub fn build_logout_transitions(
     session_id: impl Into<String>,
-) -> Result<Vec<Box<dyn FnOnce(&TenantApplicationState) -> TenantApplicationState>>, TransitionError> {
+) -> Result<Vec<Box<dyn FnOnce(&TenantApplicationState) -> TenantApplicationState>>, TransitionError>
+{
     let session_id = session_id.into();
 
     if session_id.trim().is_empty() {
         return Err(TransitionError::InvalidParameters {
-            message: "Session ID cannot be empty".to_string()
+            message: "Session ID cannot be empty".to_string(),
         });
     }
 
     let transitions: Vec<Box<dyn FnOnce(&TenantApplicationState) -> TenantApplicationState>> = vec![
         // Remove the session
         Box::new(remove_user_session(session_id)),
-
         // Clean expired cache
         Box::new(clean_expired_cache()),
     ];
@@ -559,16 +561,20 @@ pub fn build_logout_transitions(
 /// ```
 pub fn build_config_updates(
     config_updates: HashMap<String, JsonValue>,
-) -> Result<Vec<Box<dyn FnOnce(&TenantApplicationState) -> TenantApplicationState + Send + Sync>>, TransitionError> {
+) -> Result<
+    Vec<Box<dyn FnOnce(&TenantApplicationState) -> TenantApplicationState + Send + Sync>>,
+    TransitionError,
+> {
     let mut transitions = Vec::new();
 
     for (key, value) in config_updates {
         // Use set_app_config to centralize validation and state mutation
         let transition_fn = set_app_config(key, value, None::<fn(&JsonValue) -> bool>)?;
-        
+
         // Box the transition function to match the return type
-        let boxed_transition: Box<dyn FnOnce(&TenantApplicationState) -> TenantApplicationState + Send + Sync> = 
-            Box::new(transition_fn);
+        let boxed_transition: Box<
+            dyn FnOnce(&TenantApplicationState) -> TenantApplicationState + Send + Sync,
+        > = Box::new(transition_fn);
 
         transitions.push(boxed_transition);
     }
@@ -618,7 +624,9 @@ mod tests {
             3600, // 1 hour TTL
         );
 
-        manager.apply_transition("test_tenant", |state| Ok(create_fn(state))).unwrap();
+        manager
+            .apply_transition("test_tenant", |state| Ok(create_fn(state)))
+            .unwrap();
 
         let state = manager.get_tenant_state("test_tenant").unwrap();
         let session = state.user_sessions.get(&"session123".to_string());
@@ -633,21 +641,17 @@ mod tests {
         manager.initialize_tenant(tenant).unwrap();
 
         // First create a session
-        let create_fn = create_user_session(
-            "session123".to_string(),
-            "old_data".to_string(),
-            3600,
-        );
-        manager.apply_transition("test_tenant", |state| Ok(create_fn(state))).unwrap();
+        let create_fn = create_user_session("session123".to_string(), "old_data".to_string(), 3600);
+        manager
+            .apply_transition("test_tenant", |state| Ok(create_fn(state)))
+            .unwrap();
 
         // Then update it
-        let update_fn = update_user_session(
-            "session123",
-            "new_data".to_string(),
-            None,
-        ).unwrap();
+        let update_fn = update_user_session("session123", "new_data".to_string(), None).unwrap();
 
-        manager.apply_transition("test_tenant", |state| Ok(update_fn(state))).unwrap();
+        manager
+            .apply_transition("test_tenant", |state| Ok(update_fn(state)))
+            .unwrap();
 
         let state = manager.get_tenant_state("test_tenant").unwrap();
         let session = state.user_sessions.get(&"session123".to_string());
@@ -666,12 +670,18 @@ mod tests {
             "app.theme",
             serde_json::json!("dark"),
             None::<fn(&serde_json::Value) -> bool>,
-        ).unwrap();
+        )
+        .unwrap();
 
-        manager.apply_transition("test_tenant", |state| Ok(config_fn(state))).unwrap();
+        manager
+            .apply_transition("test_tenant", |state| Ok(config_fn(state)))
+            .unwrap();
 
         let state = manager.get_tenant_state("test_tenant").unwrap();
-        assert_eq!(state.app_data.get(&"app.theme".to_string()), Some(&serde_json::json!("dark")));
+        assert_eq!(
+            state.app_data.get(&"app.theme".to_string()),
+            Some(&serde_json::json!("dark"))
+        );
     }
 
     #[test]
@@ -685,10 +695,13 @@ mod tests {
             "user123",
             "session_data".to_string(),
             1800, // 30 minutes
-        ).unwrap();
+        )
+        .unwrap();
 
         // Apply all transitions atomically
-        manager.apply_transitions("test_tenant", transitions).unwrap();
+        manager
+            .apply_transitions("test_tenant", transitions)
+            .unwrap();
 
         let state = manager.get_tenant_state("test_tenant").unwrap();
 
@@ -696,7 +709,10 @@ mod tests {
         assert!(!state.user_sessions.is_empty());
 
         // Check that user last login was recorded
-        assert!(state.app_data.get(&"user_user123_last_login".to_string()).is_some());
+        assert!(state
+            .app_data
+            .get(&"user_user123_last_login".to_string())
+            .is_some());
     }
 
     #[test]
@@ -706,12 +722,11 @@ mod tests {
         manager.initialize_tenant(tenant).unwrap();
 
         // Login first
-        let login_transitions = build_login_transitions(
-            "user123",
-            "session_data".to_string(),
-            1800,
-        ).unwrap();
-        manager.apply_transitions("test_tenant", login_transitions).unwrap();
+        let login_transitions =
+            build_login_transitions("user123", "session_data".to_string(), 1800).unwrap();
+        manager
+            .apply_transitions("test_tenant", login_transitions)
+            .unwrap();
 
         // Capture the session ID (this is a bit hacky for testing)
         let temp_state = manager.get_tenant_state("test_tenant").unwrap();
@@ -719,7 +734,9 @@ mod tests {
 
         // Logout
         let logout_transitions = build_logout_transitions(&session_id).unwrap();
-        manager.apply_transitions("test_tenant", logout_transitions).unwrap();
+        manager
+            .apply_transitions("test_tenant", logout_transitions)
+            .unwrap();
 
         let final_state = manager.get_tenant_state("test_tenant").unwrap();
 
@@ -743,14 +760,25 @@ mod tests {
         let transitions = build_config_updates(updates).unwrap();
 
         // Apply all config updates atomically
-        manager.apply_transitions("test_tenant", transitions).unwrap();
+        manager
+            .apply_transitions("test_tenant", transitions)
+            .unwrap();
 
         let state = manager.get_tenant_state("test_tenant").unwrap();
 
         // Verify all config values were set
-        assert_eq!(state.app_data.get(&"app.theme".to_string()), Some(&serde_json::json!("dark")));
-        assert_eq!(state.app_data.get(&"app.language".to_string()), Some(&serde_json::json!("en")));
-        assert_eq!(state.app_data.get(&"app.debug".to_string()), Some(&serde_json::json!(true)));
+        assert_eq!(
+            state.app_data.get(&"app.theme".to_string()),
+            Some(&serde_json::json!("dark"))
+        );
+        assert_eq!(
+            state.app_data.get(&"app.language".to_string()),
+            Some(&serde_json::json!("en"))
+        );
+        assert_eq!(
+            state.app_data.get(&"app.debug".to_string()),
+            Some(&serde_json::json!(true))
+        );
     }
 
     #[test]
@@ -759,6 +787,11 @@ mod tests {
         assert!(build_logout_transitions("").is_err());
 
         // Test empty config key validation
-        assert!(set_app_config("", serde_json::json!("value"), None::<fn(&serde_json::Value) -> bool>).is_err());
+        assert!(set_app_config(
+            "",
+            serde_json::json!("value"),
+            None::<fn(&serde_json::Value) -> bool>
+        )
+        .is_err());
     }
 }

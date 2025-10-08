@@ -506,7 +506,7 @@ impl<T, R: ValidationRule<T>> ValidationRule<T> for AllValidator<T, R> {
 }
 
 pub fn all<T, R: ValidationRule<T>>(rules: Vec<R>) -> AllValidator<T, R> {
-    AllValidator { 
+    AllValidator {
         rules,
         _phantom: std::marker::PhantomData,
     }
@@ -537,17 +537,21 @@ pub struct AnyValidator<T, R: ValidationRule<T>> {
 impl<T, R: ValidationRule<T>> ValidationRule<T> for AnyValidator<T, R> {
     fn validate(&self, value: &T, field_name: &str) -> ValidationResult<()> {
         let mut collected_errors = Vec::new();
-        
+
         for rule in &self.rules {
             match rule.validate(value, field_name) {
                 Ok(()) => return Ok(()), // Return immediately if any rule succeeds
                 Err(error) => collected_errors.push(error),
             }
         }
-        
+
         // All rules failed - return combined error
         if collected_errors.is_empty() {
-            Err(ValidationError::new(field_name, "VALIDATION_FAILED", "No validation rules provided"))
+            Err(ValidationError::new(
+                field_name,
+                "VALIDATION_FAILED",
+                "No validation rules provided",
+            ))
         } else {
             let combined_message = collected_errors
                 .iter()
@@ -555,16 +559,16 @@ impl<T, R: ValidationRule<T>> ValidationRule<T> for AnyValidator<T, R> {
                 .collect::<Vec<_>>()
                 .join("; ");
             Err(ValidationError::new(
-                field_name, 
-                "ANY_VALIDATION_FAILED", 
-                &format!("All validation rules failed: {}", combined_message)
+                field_name,
+                "ANY_VALIDATION_FAILED",
+                &format!("All validation rules failed: {}", combined_message),
             ))
         }
     }
 }
 
 pub fn any<T, R: ValidationRule<T>>(rules: Vec<R>) -> AnyValidator<T, R> {
-    AnyValidator { 
+    AnyValidator {
         rules,
         _phantom: std::marker::PhantomData,
     }

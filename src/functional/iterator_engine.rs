@@ -306,7 +306,7 @@ where
         T: Clone,
     {
         use itertools::Itertools;
-        
+
         let mut operations = self.operations;
         operations.push("cartesian_product".to_string());
 

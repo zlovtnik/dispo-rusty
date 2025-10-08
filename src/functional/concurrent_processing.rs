@@ -16,7 +16,7 @@ use crate::functional::parallel_iterators::{self, ParallelIteratorExt};
 use futures::Stream;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::{Semaphore, RwLock};
+use tokio::sync::{RwLock, Semaphore};
 use tokio::task;
 
 /// Concurrent processing configuration for Actix Web integration
@@ -121,7 +121,10 @@ impl ConcurrentProcessor {
 
         let handle = task::spawn(async move {
             // Acquire semaphore permit for controlled concurrency
-            let _permit = semaphore.acquire().await.map_err(|_| ConcurrentError::ConcurrencyLimit)?;
+            let _permit = semaphore
+                .acquire()
+                .await
+                .map_err(|_| ConcurrentError::ConcurrencyLimit)?;
 
             // Execute parallel processing
             let result = data.into_iter().par_map(&parallel_config, processor_clone);
@@ -181,7 +184,10 @@ impl ConcurrentProcessor {
         // Process stream items concurrently with semaphore control
         let mut stream = Box::pin(stream);
         while let Some(item) = stream.next().await {
-            let permit = semaphore.clone().acquire_owned().await
+            let permit = semaphore
+                .clone()
+                .acquire_owned()
+                .await
                 .map_err(|_| ConcurrentError::ConcurrencyLimit)?;
 
             let processor = processor_clone.clone();
@@ -241,7 +247,10 @@ impl ConcurrentProcessor {
             let mut tasks = Vec::new();
 
             for (index, item) in indexed_data {
-                let permit = semaphore.clone().acquire_owned().await
+                let permit = semaphore
+                    .clone()
+                    .acquire_owned()
+                    .await
                     .map_err(|_| ConcurrentError::ConcurrencyLimit)?;
                 let processor = processor_clone.clone();
 
@@ -263,7 +272,8 @@ impl ConcurrentProcessor {
 
             // Sort by original index to maintain order
             indexed_results.sort_by_key(|(index, _)| *index);
-            let ordered_results: Vec<U> = indexed_results.into_iter()
+            let ordered_results: Vec<U> = indexed_results
+                .into_iter()
                 .map(|(_, result)| result)
                 .collect();
 
@@ -284,10 +294,7 @@ impl ConcurrentProcessor {
     }
 
     /// Execute CPU-intensive operations with dedicated thread pool
-    pub async fn execute_cpu_intensive<F, T>(
-        &self,
-        operation: F,
-    ) -> Result<T, ConcurrentError>
+    pub async fn execute_cpu_intensive<F, T>(&self, operation: F) -> Result<T, ConcurrentError>
     where
         F: FnOnce() -> T + Send + 'static,
         T: Send + 'static,
@@ -296,9 +303,7 @@ impl ConcurrentProcessor {
 
         let timeout_duration = Duration::from_millis(self.config.operation_timeout_ms);
         match tokio::time::timeout(timeout_duration, handle).await {
-            Ok(result) => {
-                Ok(result.map_err(|_| ConcurrentError::TaskJoin)?)
-            }
+            Ok(result) => Ok(result.map_err(|_| ConcurrentError::TaskJoin)?),
             Err(_) => Err(ConcurrentError::Timeout),
         }
     }
@@ -403,7 +408,9 @@ where
 {
     let actix_proc = actix_processor();
     let proc_clone = processor.clone();
-    actix_proc.process_stream(stream, move |x| proc_clone(x)).await
+    actix_proc
+        .process_stream(stream, move |x| proc_clone(x))
+        .await
 }
 
 #[cfg(test)]
@@ -443,14 +450,16 @@ mod tests {
     async fn test_cpu_intensive_operation() {
         let processor = ConcurrentProcessor::new();
 
-        let result = processor.execute_cpu_intensive(|| {
-            // Simulate CPU-intensive work
-            let mut sum = 0u64;
-            for i in 0..1_000_000 {
-                sum += (i % 1000) as u64;
-            }
-            sum
-        }).await;
+        let result = processor
+            .execute_cpu_intensive(|| {
+                // Simulate CPU-intensive work
+                let mut sum = 0u64;
+                for i in 0..1_000_000 {
+                    sum += (i % 1000) as u64;
+                }
+                sum
+            })
+            .await;
 
         assert!(result.is_ok());
         assert!(result.unwrap() > 0);
@@ -474,11 +483,13 @@ mod tests {
         let processor = ConcurrentProcessor::with_config(config);
 
         let data = vec![1, 2, 3, 4, 5];
-        let result = processor.process_batch(data, |x| {
-            // Simulate slow operation
-            std::thread::sleep(Duration::from_millis(100));
-            x * 2
-        }).await;
+        let result = processor
+            .process_batch(data, |x| {
+                // Simulate slow operation
+                std::thread::sleep(Duration::from_millis(100));
+                x * 2
+            })
+            .await;
 
         assert!(matches!(result, Err(ConcurrentError::Timeout)));
     }

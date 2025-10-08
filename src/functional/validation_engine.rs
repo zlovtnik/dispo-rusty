@@ -566,33 +566,33 @@ where
     }
 
     /// Adds a validator to the pipeline and returns the pipeline for chaining.
-    
+
     ///
-    
+
     /// The provided `validator` will be invoked for each item when the pipeline is executed.
-    
+
     /// The validator must accept a reference to an item of type `T` and return a `ValidationResult<()>`.
-    
+
     ///
-    
+
     /// # Examples
-    
+
     ///
-    
+
     /// ```no_run
-    
+
     /// let data = vec!["a", "b", "c"];
-    
+
     /// let pipeline = ValidationPipeline::new(data.into_iter())
-    
+
     ///     .add_validator(|item: &str| {
-    
+
     ///         // return Ok(()) for valid, or an Err(...) with validation errors
-    
+
     ///         Ok(())
-    
+
     ///     });
-    
+
     /// ```
     pub fn add_validator<F>(mut self, validator: F) -> Self
     where
@@ -710,7 +710,7 @@ where
     {
         // Take ownership of validators before moving self.iterator
         let validators = self.validators;
-        
+
         // Use itertools for advanced validation patterns
         let mut valid_items = Vec::new();
         let mut invalid_items = Vec::new();
@@ -735,7 +735,7 @@ where
 
         let total_processed = valid_items.len() + invalid_items.len();
         let total_errors: usize = invalid_items.iter().map(|(_, errors)| errors.len()).sum();
-        
+
         ValidationPipelineResult {
             valid_items,
             invalid_items,
@@ -886,33 +886,33 @@ where
     }
 
     /// Adds a validator to the pipeline and returns the pipeline for chaining.
-    
+
     ///
-    
+
     /// The provided `validator` will be invoked for each item when the pipeline is executed.
-    
+
     /// The validator must accept a reference to an item of type `T` and return a `ValidationResult<()>`.
-    
+
     ///
-    
+
     /// # Examples
-    
+
     ///
-    
+
     /// ```no_run
-    
+
     /// let data = vec!["a", "b", "c"];
-    
+
     /// let pipeline = ValidationPipeline::new(data.into_iter())
-    
+
     ///     .add_validator(|item: &str| {
-    
+
     ///         // return Ok(()) for valid, or an Err(...) with validation errors
-    
+
     ///         Ok(())
-    
+
     ///     });
-    
+
     /// ```
     pub fn add_validator<F>(mut self, validator: F) -> Self
     where
@@ -1034,36 +1034,36 @@ mod tests {
     use crate::functional::validation_rules::{Email, Required};
 
     // Tests using concrete types for validation rules
-    
+
     #[test]
     fn test_single_field_validation_success() {
         let engine = ValidationEngine::new();
         let value = "test".to_string();
         let rules = vec![Required];
-        
+
         let result = engine.validate_field(&value, "field", rules);
         assert!(result.is_valid);
     }
-    
+
     #[test]
     fn test_single_field_validation_failure() {
         let engine = ValidationEngine::new();
         let value = "".to_string();
         let rules = vec![Required];
-        
+
         let result = engine.validate_field(&value, "field", rules);
         assert!(!result.is_valid);
     }
-    
+
     #[test]
     fn test_multiple_field_validation() {
         let engine = ValidationEngine::new();
         let value = "test@example.com".to_string();
         // Test each rule separately since they are different types
-        
+
         let result1 = engine.validate_field(&value, "email", vec![Required]);
         assert!(result1.is_valid);
-        
+
         let result2 = engine.validate_field(&value, "email", vec![Email]);
         assert!(result2.is_valid);
     }

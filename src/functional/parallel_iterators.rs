@@ -14,11 +14,11 @@
 //! - Thread-safe immutable data handling
 //! - Iterator-based parallel processing with itertools compatibility
 
+use rayon::prelude::*;
 use std::collections::HashMap;
 use std::fmt;
 use std::hash::Hash;
 use std::time::{Duration, Instant};
-use rayon::prelude::*;
 
 /// Parallel processing configuration for performance tuning
 #[derive(Debug, Clone)]
@@ -77,15 +77,18 @@ pub trait ParallelIteratorExt<T: Send + Sync>: Iterator<Item = T> + Send + Sync 
         if data_len < config.min_parallel_size {
             // Use sequential processing for small datasets
             let result = data.iter().map(f).collect();
-        let elapsed = start_time.elapsed();
-        let metrics = ParallelMetrics {
-            total_time: elapsed,
-            thread_count: 1,
-            throughput: (data_len as u64 * 1_000_000) / elapsed.as_micros().max(1) as u64,
-            memory_usage: (data_len * std::mem::size_of::<T>()) as u64,
-            efficiency: 1.0,
-        };
-            return ParallelResult { data: result, metrics };
+            let elapsed = start_time.elapsed();
+            let metrics = ParallelMetrics {
+                total_time: elapsed,
+                thread_count: 1,
+                throughput: (data_len as u64 * 1_000_000) / elapsed.as_micros().max(1) as u64,
+                memory_usage: (data_len * std::mem::size_of::<T>()) as u64,
+                efficiency: 1.0,
+            };
+            return ParallelResult {
+                data: result,
+                metrics,
+            };
         }
 
         // Parallel processing for large datasets
@@ -114,11 +117,15 @@ pub trait ParallelIteratorExt<T: Send + Sync>: Iterator<Item = T> + Send + Sync 
             total_time: elapsed,
             thread_count,
             throughput,
-            memory_usage: ((data_len * std::mem::size_of::<T>()) + (result.len() * std::mem::size_of::<U>())) as u64,
+            memory_usage: ((data_len * std::mem::size_of::<T>())
+                + (result.len() * std::mem::size_of::<U>())) as u64,
             efficiency,
         };
 
-        ParallelResult { data: result, metrics }
+        ParallelResult {
+            data: result,
+            metrics,
+        }
     }
 
     /// Parallel fold operation with combiner function
@@ -150,11 +157,17 @@ pub trait ParallelIteratorExt<T: Send + Sync>: Iterator<Item = T> + Send + Sync 
                 memory_usage: (data_len * std::mem::size_of::<T>()) as u64,
                 efficiency: 1.0,
             };
-            return ParallelResult { data: result, metrics };
+            return ParallelResult {
+                data: result,
+                metrics,
+            };
         }
 
         // Parallel fold with combiner
-        let result = data.into_par_iter().fold(|| init.clone(), fold).reduce(|| init.clone(), combine);
+        let result = data
+            .into_par_iter()
+            .fold(|| init.clone(), fold)
+            .reduce(|| init.clone(), combine);
 
         let elapsed = start_time.elapsed();
         let thread_count = rayon::current_num_threads();
@@ -171,7 +184,10 @@ pub trait ParallelIteratorExt<T: Send + Sync>: Iterator<Item = T> + Send + Sync 
             efficiency,
         };
 
-        ParallelResult { data: result, metrics }
+        ParallelResult {
+            data: result,
+            metrics,
+        }
     }
 
     /// Parallel filter operation preserving order
@@ -191,11 +207,15 @@ pub trait ParallelIteratorExt<T: Send + Sync>: Iterator<Item = T> + Send + Sync 
             let metrics = ParallelMetrics {
                 total_time: start_time.elapsed(),
                 thread_count: 1,
-                throughput: (data_len as u64 * 1_000_000) / (start_time.elapsed().as_micros() as u64).max(1),
+                throughput: (data_len as u64 * 1_000_000)
+                    / (start_time.elapsed().as_micros() as u64).max(1),
                 memory_usage: (data_len * std::mem::size_of::<T>()) as u64,
                 efficiency: 1.0,
             };
-            return ParallelResult { data: result, metrics };
+            return ParallelResult {
+                data: result,
+                metrics,
+            };
         }
 
         // Parallel filter with temporary indices to preserve order
@@ -207,7 +227,7 @@ pub trait ParallelIteratorExt<T: Send + Sync>: Iterator<Item = T> + Send + Sync 
 
         // Sort by original index to restore input order
         filtered.sort_unstable_by_key(|(idx, _)| *idx);
-        
+
         // Extract values in sorted order
         let result: Vec<T> = filtered.into_iter().map(|(_, item)| item).collect();
 
@@ -223,11 +243,18 @@ pub trait ParallelIteratorExt<T: Send + Sync>: Iterator<Item = T> + Send + Sync 
             efficiency: (throughput as f64 / (data_len as f64 / elapsed.as_secs_f64())).min(1.0),
         };
 
-        ParallelResult { data: result, metrics }
+        ParallelResult {
+            data: result,
+            metrics,
+        }
     }
 
     /// Parallel group by operation with key function
-    fn par_group_by<K, F>(self, config: &ParallelConfig, key_fn: F) -> ParallelResult<HashMap<K, Vec<T>>>
+    fn par_group_by<K, F>(
+        self,
+        config: &ParallelConfig,
+        key_fn: F,
+    ) -> ParallelResult<HashMap<K, Vec<T>>>
     where
         K: Hash + Eq + Send + Clone + Sync,
         F: Fn(&T) -> K + Send + Sync,
@@ -327,22 +354,29 @@ where
     // Manually implement the parallel fold logic directly on Vec
     let start_time = Instant::now();
     let data_len = data.len();
-    
+
     if data_len < config.min_parallel_size {
         // Sequential fold for small datasets
         let result = data.into_iter().fold(init.clone(), &aggregate);
         let metrics = ParallelMetrics {
             total_time: start_time.elapsed(),
             thread_count: 1,
-            throughput: (data_len as u64 * 1_000_000) / (start_time.elapsed().as_micros() as u64).max(1),
+            throughput: (data_len as u64 * 1_000_000)
+                / (start_time.elapsed().as_micros() as u64).max(1),
             memory_usage: (data_len * std::mem::size_of::<B>()) as u64,
             efficiency: 1.0,
         };
-        return ParallelResult { data: result, metrics };
+        return ParallelResult {
+            data: result,
+            metrics,
+        };
     }
 
     // Parallel fold with combiner
-    let result = data.into_par_iter().fold(|| init.clone(), aggregate).reduce(|| init.clone(), combine);
+    let result = data
+        .into_par_iter()
+        .fold(|| init.clone(), aggregate)
+        .reduce(|| init.clone(), combine);
 
     let elapsed = start_time.elapsed();
     let thread_count = rayon::current_num_threads();
@@ -359,7 +393,10 @@ where
         efficiency,
     };
 
-    ParallelResult { data: result, metrics }
+    ParallelResult {
+        data: result,
+        metrics,
+    }
 }
 
 /// Parallel filtering with configurable predicate
@@ -395,7 +432,11 @@ pub fn estimate_thread_count(data_size: usize) -> usize {
 #[allow(dead_code)]
 pub fn optimized_config(data_size: usize) -> ParallelConfig {
     let thread_count = estimate_thread_count(data_size);
-    let min_parallel_size = if data_size < 1000 { usize::MAX } else { data_size / 10 };
+    let min_parallel_size = if data_size < 1000 {
+        usize::MAX
+    } else {
+        data_size / 10
+    };
 
     ParallelConfig {
         thread_pool_size: thread_count,
@@ -436,12 +477,9 @@ mod tests {
         let data = vec![1, 2, 3, 4, 5];
         let config = ParallelConfig::default();
 
-        let result = data.into_iter().par_fold(
-            &config,
-            0,
-            |sum, x| sum + x,
-            |a, b| a + b,
-        );
+        let result = data
+            .into_iter()
+            .par_fold(&config, 0, |sum, x| sum + x, |a, b| a + b);
 
         assert_eq!(result.data, 15);
     }

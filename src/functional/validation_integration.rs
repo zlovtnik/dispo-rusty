@@ -200,16 +200,18 @@ pub fn validate_person_batch(people: Vec<PersonDTO>) -> Vec<ValidationOutcome<()
                 Err(outcome.errors.into_iter().next().unwrap())
             } else {
                 // Multiple errors - combine them
-                                    let combined_message = outcome.errors
-                                        .iter()
-                                        .map(|e| e.message.clone())
-                                        .collect::<Vec<String>>()
-                                        .join("; ");
-                let combined_field = outcome.errors
+                let combined_message = outcome
+                    .errors
+                    .iter()
+                    .map(|e| e.message.clone())
+                    .collect::<Vec<String>>()
+                    .join("; ");
+                let combined_field = outcome
+                    .errors
                     .first()
                     .map(|e| e.field.as_str())
                     .unwrap_or("multiple_fields");
-                    
+
                 Err(crate::functional::validation_rules::ValidationError::new(
                     combined_field,
                     "MULTIPLE_ERRORS",
