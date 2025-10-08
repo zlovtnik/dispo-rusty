@@ -4,6 +4,9 @@ use tokio::time::{timeout, Duration};
 
 use crate::config::cache::Pool as RedisPool;
 use crate::config::db::{Pool as DatabasePool, TenantPoolManager};
+use crate::constants;
+use crate::error::ServiceError;
+use crate::models::response::ResponseBody;
 use crate::models::tenant::Tenant;
 
 use actix_web::web::Bytes;
@@ -71,9 +74,7 @@ async fn check_database_health_async(
     pool: web::Data<DatabasePool>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
     tokio::task::spawn_blocking(move || check_database_health(pool))
-        .await
-        .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync + 'static>)?
-        .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync + 'static>)
+        .await?
 }
 
 /// Performs a cache health check using the provided Redis connection pool.
@@ -121,7 +122,7 @@ async fn check_cache_health_async(
 /// # }
 /// ```
 #[get("/health")]
-async fn health(pool: web::Data<DatabasePool>, redis_pool: web::Data<RedisPool>) -> HttpResponse {
+async fn health(pool: web::Data<DatabasePool>, redis_pool: web::Data<RedisPool>) -> Result<HttpResponse, ServiceError> {
     info!("Health check requested");
 
     // Check database with timeout
@@ -167,7 +168,7 @@ async fn health(pool: web::Data<DatabasePool>, redis_pool: web::Data<RedisPool>)
         tenants: None,
     };
 
-    HttpResponse::Ok().json(response)
+    Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, response)))
 }
 
 /// Produces a detailed health report that includes database, cache, and per-tenant statuses.
@@ -201,7 +202,7 @@ async fn health_detailed(
     pool: web::Data<DatabasePool>,
     redis_pool: web::Data<RedisPool>,
     main_conn: web::Data<DatabasePool>,
-) -> HttpResponse {
+) -> Result<HttpResponse, ServiceError> {
     let manager = req.app_data::<web::Data<TenantPoolManager>>();
     info!("Detailed health check requested");
 
@@ -291,7 +292,7 @@ async fn health_detailed(
         tenants,
     };
 
-    HttpResponse::Ok().json(response)
+    Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, response)))
 }
 
 /// Performs a simple connectivity check against the configured database.
@@ -324,16 +325,13 @@ async fn health_detailed(
 /// }
 /// # }
 /// ```
-fn check_database_health(pool: web::Data<DatabasePool>) -> Result<(), diesel::result::Error> {
+fn check_database_health(pool: web::Data<DatabasePool>) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
     match pool.get() {
         Ok(mut conn) => {
             diesel::sql_query("SELECT 1").execute(&mut conn)?;
             Ok(())
         }
-        Err(e) => Err(diesel::result::Error::DatabaseError(
-            diesel::result::DatabaseErrorKind::UnableToSendCommand,
-            Box::new(e.to_string()),
-        )),
+        Err(e) => Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to get database connection: {}", e)))),
     }
 }
 
@@ -395,13 +393,13 @@ fn check_cache_health(
 /// # }
 /// ```
 #[get("/logs")]
-async fn logs() -> HttpResponse {
+async fn logs() -> Result<HttpResponse, ServiceError> {
     // Check if log streaming is enabled
     if !std::env::var("ENABLE_LOG_STREAM")
         .map(|v| v == "true")
         .unwrap_or(false)
     {
-        return HttpResponse::MethodNotAllowed().body("Log streaming disabled");
+        return Ok(HttpResponse::MethodNotAllowed().body("Log streaming disabled"));
     }
 
     // Get log file path
@@ -409,7 +407,7 @@ async fn logs() -> HttpResponse {
     let path = Path::new(&log_file);
 
     if !path.exists() {
-        return HttpResponse::NotFound().body("Log file not found");
+        return Ok(HttpResponse::NotFound().body("Log file not found"));
     }
 
     // Channel for streaming log lines
@@ -432,7 +430,7 @@ async fn logs() -> HttpResponse {
 
         if let Err(e) = file.seek(SeekFrom::End(0)).await {
             error!("Failed to seek to end of log file: {}", e);
-            let _ = tx.send(Err(IoError::other(e.to_string()))).await;
+            let _ = tx.send(Err(std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))).await;
             return;
         }
 
@@ -538,11 +536,11 @@ async fn logs() -> HttpResponse {
     // Create the streaming response
     let stream = ReceiverStream::new(rx);
 
-    HttpResponse::Ok()
+    Ok(HttpResponse::Ok()
         .insert_header(("Content-Type", "text/event-stream"))
         .insert_header(("Cache-Control", "no-cache"))
         .insert_header(("Connection", "keep-alive"))
-        .streaming(stream)
+        .streaming(stream))
 }
 
 #[cfg(test)]

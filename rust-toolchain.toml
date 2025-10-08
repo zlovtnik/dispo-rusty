@@ -1,5 +1,5 @@
 [toolchain]
-channel = "1.75.0"  # Updated from 1.63.0 - modern stable with security fixes
+channel = "1.65.0"  # Updated to match regex 1.10 MSRV requirement
 components = ["rustc", "cargo", "rustfmt", "clippy"]
 targets = ["x86_64-unknown-linux-gnu"]
 profile = "default"

@@ -420,6 +420,60 @@ pub mod patterns {
     pub fn memory_efficient_process<T, U>(data: Vec<T>, process_fn: impl Fn(T) -> U) -> Vec<U> {
         ChainBuilder::from_vec(data).map(process_fn).collect()
     }
+
+    /// Groups consecutive elements by a key function into tuples of (key, group_items).
+    ///
+    /// This function groups consecutive elements that produce the same key value when
+    /// passed to `key_fn`. Each group is returned as a tuple containing the key and
+    /// a vector of all consecutive items that produced that key.
+    ///
+    /// # Parameters
+    ///
+    /// - `data`: input vector of items to group.
+    /// - `key_fn`: function that extracts a key from each item for grouping.
+    ///
+    /// # Returns
+    ///
+    /// A `Vec<(K, Vec<T>)>` containing tuples of (key, items) for each consecutive group.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use functional::chain_builder::patterns::group_by_key;
+    ///
+    /// let data = vec![1, 1, 2, 2, 3, 3, 3];
+    /// let result = group_by_key(data, |&x| x);
+    /// assert_eq!(result, vec![(1, vec![1, 1]), (2, vec![2, 2]), (3, vec![3, 3, 3])]);
+    /// ```
+    pub fn group_by_key<T, K, F>(data: Vec<T>, key_fn: F) -> Vec<(K, Vec<T>)>
+    where
+        K: PartialEq,
+        F: Fn(&T) -> K,
+    {
+        let mut result = Vec::new();
+        let mut iter = data.into_iter();
+
+        if let Some(first) = iter.next() {
+            let mut current_key = key_fn(&first);
+            let mut current_group = vec![first];
+
+            for item in iter {
+                let item_key = key_fn(&item);
+                if item_key == current_key {
+                    current_group.push(item);
+                } else {
+                    result.push((current_key, current_group));
+                    current_key = item_key;
+                    current_group = vec![item];
+                }
+            }
+
+            // Push the last group
+            result.push((current_key, current_group));
+        }
+
+        result
+    }
 }
 
 #[cfg(test)]
@@ -447,16 +501,15 @@ mod tests {
         assert_eq!(result, vec!["4", "5", "6"]);
     }
 
-    // Commented out to isolate the chunk_by compilation issue
-    // #[test]
-    // fn test_group_by_pattern() {
-    //     let data = vec![1, 1, 2, 2, 3, 3, 3];
+    #[test]
+    fn test_group_by_pattern() {
+        let data = vec![1, 1, 2, 2, 3, 3, 3];
 
-    //     let result = patterns::group_by_key(data, |&x| x);
+        let result = patterns::group_by_key(data, |&x| x);
 
-    //     assert_eq!(result.len(), 3);
-    //     assert_eq!(result[0], (1, vec![1, 1]));
-    //     assert_eq!(result[1], (2, vec![2, 2]));
-    //     assert_eq!(result[2], (3, vec![3, 3, 3]));
-    // }
+        assert_eq!(result.len(), 3);
+        assert_eq!(result[0], (1, vec![1, 1]));
+        assert_eq!(result[1], (2, vec![2, 2]));
+        assert_eq!(result[2], (3, vec![3, 3, 3]));
+    }
 }

@@ -80,7 +80,7 @@ impl Default for LazyEvaluationConfig {
 }
 
 /// Performance metrics for query composition and execution.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct QueryPerformanceMetrics {
     /// Total time spent composing the query
     pub composition_time: Duration,
@@ -124,7 +124,7 @@ pub struct ComposablePredicate<T> {
     metadata: PredicateMetadata,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct PredicateMetadata {
     /// Estimated selectivity (0.0 to 1.0, lower is more selective)
     pub selectivity: f64,
@@ -481,20 +481,11 @@ where
                 return None;
             }
             
-            // Try to load the next chunk
-            let loaded = self.load_next_chunk();
-            
-            if !loaded {
-                // No more data available - mark as exhausted
-                self.exhausted = true;
-                return None;
-            }
-            
-            // Verify we actually got data
-            if self.current_chunk.is_empty() {
-                self.exhausted = true;
-                return None;
-            }
+            // FIXME: Chunk loading is not implemented yet - fail fast
+            // When implementing, load_next_chunk() should return true if data was loaded,
+            // false if no more data is available
+            self.exhausted = true;
+            return None;
         }
 
         // Return the next item from the current chunk

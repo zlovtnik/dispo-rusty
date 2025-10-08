@@ -6,8 +6,13 @@
 
 #![allow(dead_code)]
 
+use once_cell::sync::Lazy;
 use regex::Regex;
 use std::collections::HashSet;
+
+/// Cached regex patterns for validation
+static EMAIL_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[^@\s]+@[^@\s]+\.[^@\s]+$").unwrap());
+static PHONE_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[\d\s\-\(\)\+]{7,20}$").unwrap());
 
 /// Validation result type for composable validation chains
 pub type ValidationResult<T> = Result<T, ValidationError>;
@@ -164,9 +169,7 @@ impl ValidationRule<String> for Email {
     /// ```
     fn validate(&self, value: &String, field_name: &str) -> ValidationResult<()> {
         // Simple email regex - in production you might want a more comprehensive one
-        let email_regex = Regex::new(r"^[^@\s]+@[^@\s]+\.[^@\s]+$").unwrap();
-
-        if !email_regex.is_match(value) {
+        if !EMAIL_REGEX.is_match(value) {
             return Err(ValidationError::new(
                 field_name,
                 "INVALID_EMAIL",
@@ -243,9 +246,7 @@ impl ValidationRule<String> for Phone {
     /// ```
     fn validate(&self, value: &String, field_name: &str) -> ValidationResult<()> {
         // Basic phone regex - allows digits, spaces, dashes, parentheses, plus
-        let phone_regex = Regex::new(r"^[\d\s\-\(\)\+]{7,20}$").unwrap();
-
-        if !phone_regex.is_match(value) {
+        if !PHONE_REGEX.is_match(value) {
             return Err(ValidationError::new(
                 field_name,
                 "INVALID_PHONE",
@@ -597,12 +598,30 @@ pub fn any<T, R: ValidationRule<T>>(rules: Vec<R>) -> AnyValidator<T, R> {
 /// assert!(negated.validate(&"ok".to_string(), "name").is_err());
 
 /// ```
-pub fn not<T, R: ValidationRule<T>>(rule: R) -> impl ValidationRule<T> {
-    Custom::new(
-        move |value: &T| rule.validate(value, "").is_err(),
-        "VALIDATION_FAILED",
-        "Validation rule should have failed but passed",
-    )
+/// Validator that succeeds when the inner rule fails
+pub struct NotValidator<T, R: ValidationRule<T>> {
+    rule: R,
+    _phantom: std::marker::PhantomData<T>,
+}
+
+impl<T, R: ValidationRule<T>> ValidationRule<T> for NotValidator<T, R> {
+    fn validate(&self, value: &T, field_name: &str) -> ValidationResult<()> {
+        match self.rule.validate(value, field_name) {
+            Ok(()) => Err(ValidationError::new(
+                field_name,
+                "VALIDATION_FAILED",
+                "Validation rule should have failed but passed",
+            )),
+            Err(_) => Ok(()),
+        }
+    }
+}
+
+pub fn not<T, R: ValidationRule<T>>(rule: R) -> NotValidator<T, R> {
+    NotValidator {
+        rule,
+        _phantom: std::marker::PhantomData,
+    }
 }
 
 /// Applies `rule` only when `condition` returns true for the value.
@@ -622,22 +641,41 @@ pub fn not<T, R: ValidationRule<T>>(rule: R) -> impl ValidationRule<T> {
 /// assert!(conditional.validate(&0, "n").is_ok());   // condition false, validation skipped
 /// assert!(conditional.validate(&20, "n").is_err()); // condition true, inner rule fails
 /// ```
-pub fn when<T, C, R>(condition: C, rule: R) -> impl ValidationRule<T>
+/// Validator that applies a rule conditionally based on a predicate
+pub struct WhenValidator<T, C, R>
 where
     C: Fn(&T) -> bool,
     R: ValidationRule<T>,
 {
-    Custom::new(
-        move |value: &T| {
-            if condition(value) {
-                rule.validate(value, "").is_ok()
-            } else {
-                true // Skip validation if condition not met
-            }
-        },
-        "CONDITIONAL_VALIDATION_FAILED",
-        "Conditional validation failed",
-    )
+    condition: C,
+    rule: R,
+    _phantom: std::marker::PhantomData<T>,
+}
+
+impl<T, C, R> ValidationRule<T> for WhenValidator<T, C, R>
+where
+    C: Fn(&T) -> bool,
+    R: ValidationRule<T>,
+{
+    fn validate(&self, value: &T, field_name: &str) -> ValidationResult<()> {
+        if (self.condition)(value) {
+            self.rule.validate(value, field_name)
+        } else {
+            Ok(()) // Skip validation if condition not met
+        }
+    }
+}
+
+pub fn when<T, C, R>(condition: C, rule: R) -> WhenValidator<T, C, R>
+where
+    C: Fn(&T) -> bool,
+    R: ValidationRule<T>,
+{
+    WhenValidator {
+        condition,
+        rule,
+        _phantom: std::marker::PhantomData,
+    }
 }
 
 #[cfg(test)]

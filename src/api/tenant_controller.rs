@@ -457,24 +457,23 @@ pub async fn create(
     })?;
 
     // Check for duplicate ID
-    if Tenant::find_by_id(&tenant_dto.id, &mut conn).is_ok() {
-        return Err(ServiceError::Conflict {
-            error_message: format!("Tenant with ID '{}' already exists", tenant_dto.id),
-        });
-    }
-
-    // Check for duplicate name
-    if Tenant::find_by_name(&tenant_dto.name, &mut conn).is_ok() {
-        return Err(ServiceError::Conflict {
-            error_message: format!("Tenant with name '{}' already exists", tenant_dto.name),
-        });
-    }
-
-    // Create the tenant
-    let tenant =
-        Tenant::create(tenant_dto.0, &mut conn).map_err(|e| ServiceError::InternalServerError {
-            error_message: format!("Failed to create tenant: {}", e),
-        })?;
+    // Create the tenant, relying on DB unique constraints to prevent duplicates
+    let tenant = match Tenant::create(tenant_dto.0, &mut conn) {
+        Ok(t) => t,
+        Err(diesel::result::Error::DatabaseError(
+            diesel::result::DatabaseErrorKind::UniqueViolation,
+            info,
+        )) => {
+            return Err(ServiceError::Conflict {
+                error_message: format!("Tenant unique constraint violated: {}", info.message()),
+            })
+        }
+        Err(e) => {
+            return Err(ServiceError::InternalServerError {
+                error_message: format!("Failed to create tenant: {}", e),
+            })
+        }
+    };
 
     Ok(HttpResponse::Created().json(ResponseBody::new(constants::MESSAGE_OK, tenant)))
 }

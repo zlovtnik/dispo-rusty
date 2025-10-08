@@ -56,11 +56,7 @@ pub trait PureFunction<Input, Output>: Send + Sync + 'static {
     /// let g_obj: &dyn PureFunction<i32, i32> = &g;
     /// assert!(f_obj.can_compose_with(g_obj));
     /// ```
-    fn can_compose_with(&self, _other: &dyn PureFunction<Output, Output>) -> bool
-    where
-        Output: Clone,
-    {
-        // Default implementation: functions can compose if output type matches input type
+    fn can_compose_with(&self, _: &dyn PureFunction<Output, Output>) -> bool {
         true
     }
 }
@@ -372,11 +368,6 @@ where
     fn call_boxed(&self, input: Box<dyn std::any::Any>) -> Box<dyn std::any::Any> {
         // Check type before downcast
         if (*input).type_id() != std::any::TypeId::of::<Input>() {
-            eprintln!(
-                "Type mismatch in callable: expected {:?}, got {:?}",
-                std::any::TypeId::of::<Input>(),
-                (*input).type_id()
-            );
             panic!("Type mismatch in callable");
         }
 

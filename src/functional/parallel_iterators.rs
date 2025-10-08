@@ -64,7 +64,7 @@ pub trait ParallelIteratorExt<T: Send + Sync>: Iterator<Item = T> + Send + Sync 
     /// Parallel map operation with automatic load balancing
     fn par_map<F, U>(self, config: &ParallelConfig, f: F) -> ParallelResult<Vec<U>>
     where
-        F: Fn(&T) -> U + Send + Sync,
+        F: Fn(T) -> U + Send + Sync,
         U: Send,
         Self: Sized,
     {
@@ -76,7 +76,7 @@ pub trait ParallelIteratorExt<T: Send + Sync>: Iterator<Item = T> + Send + Sync 
 
         if data_len < config.min_parallel_size {
             // Use sequential processing for small datasets
-            let result = data.iter().map(f).collect();
+            let result = data.into_iter().map(f).collect();
         let elapsed = start_time.elapsed();
         let metrics = ParallelMetrics {
             total_time: elapsed,
@@ -91,7 +91,7 @@ pub trait ParallelIteratorExt<T: Send + Sync>: Iterator<Item = T> + Send + Sync 
         // Parallel processing for large datasets
         let chunk_size = config.chunk_size.max(1);
         let result: Vec<U> = data
-            .par_iter()
+            .into_par_iter()
             .with_min_len(chunk_size)
             .with_max_len(chunk_size * 4)
             .map(f)
@@ -305,7 +305,7 @@ pub fn parallel_transform<T, U, F>(
 where
     T: Send + Sync,
     U: Send,
-    F: Fn(&T) -> U + Send + Sync,
+    F: Fn(T) -> U + Send + Sync,
 {
     data.into_iter().par_map(config, transform)
 }

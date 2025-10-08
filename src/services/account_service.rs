@@ -71,7 +71,7 @@ pub fn login(login: LoginDTO, pool: &Pool) -> Result<TokenBodyResponse, ServiceE
 ///
 /// # Returns
 ///
-/// `Ok(())` if the user's session was successfully cleared; `Err(ServiceError::InternalServerError)` if header parsing, token processing, user lookup, or database access fails.
+/// `Ok(())` if the user's session was successfully cleared; `Err(ServiceError::Unauthorized)` if header parsing, token processing, user lookup, or database access fails.
 ///
 /// # Examples
 ///
@@ -99,7 +99,7 @@ pub fn logout(authen_header: &HeaderValue, pool: &Pool) -> Result<(), ServiceErr
         }
     }
 
-    Err(ServiceError::InternalServerError {
+    Err(ServiceError::Unauthorized {
         error_message: constants::MESSAGE_PROCESS_TOKEN_ERROR.to_string(),
     })
 }
@@ -127,12 +127,17 @@ pub fn refresh(
         if token_utils::is_auth_header_valid(authen_header) {
             let token = authen_str[6..authen_str.len()].trim();
             if let Ok(token_data) = token_utils::decode_token(token.to_string()) {
+                // Acquire a single database connection
+                let mut conn = pool.get().map_err(|e| ServiceError::InternalServerError {
+                    error_message: format!("Failed to get database connection: {}", e),
+                })?;
+                
                 // Validate the token and generate a new one
-                if User::is_valid_login_session(&token_data.claims, &mut pool.get().unwrap()) {
+                if User::is_valid_login_session(&token_data.claims, &mut conn) {
                     // Get login info and generate new token
                     match User::find_login_info_by_token(
                         &token_data.claims,
-                        &mut pool.get().unwrap(),
+                        &mut conn,
                     ) {
                         Ok(login_info) => {
                             match serde_json::from_value(
@@ -175,7 +180,7 @@ pub fn refresh(
 ///
 /// # Errors
 ///
-/// Returns `ServiceError::InternalServerError` with a token-processing message if the header is
+/// Returns `ServiceError::Unauthorized` with a token-processing message if the header is
 /// invalid, the token cannot be decoded, or the login information cannot be retrieved.
 ///
 /// # Examples
@@ -195,8 +200,13 @@ pub fn me(authen_header: &HeaderValue, pool: &Pool) -> Result<LoginInfoDTO, Serv
         if token_utils::is_auth_header_valid(authen_header) {
             let token = authen_str[6..authen_str.len()].trim();
             if let Ok(token_data) = token_utils::decode_token(token.to_string()) {
+                // Acquire a single database connection
+                let mut conn = pool.get().map_err(|e| ServiceError::InternalServerError {
+                    error_message: format!("Failed to get database connection: {}", e),
+                })?;
+                
                 if let Ok(login_info) =
-                    User::find_login_info_by_token(&token_data.claims, &mut pool.get().unwrap())
+                    User::find_login_info_by_token(&token_data.claims, &mut conn)
                 {
                     return Ok(login_info);
                 }
@@ -204,7 +214,7 @@ pub fn me(authen_header: &HeaderValue, pool: &Pool) -> Result<LoginInfoDTO, Serv
         }
     }
 
-    Err(ServiceError::InternalServerError {
+    Err(ServiceError::Unauthorized {
         error_message: constants::MESSAGE_PROCESS_TOKEN_ERROR.to_string(),
     })
 }

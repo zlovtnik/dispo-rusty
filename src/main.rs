@@ -38,12 +38,19 @@ mod utils;
 /// ```
 #[actix_rt::main]
 async fn main() -> io::Result<()> {
-    dotenv::dotenv().map_err(|e| {
-        std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            format!("Failed to read .env file: {}", e),
-        )
-    })?;
+    if let Err(e) = dotenv::dotenv() {
+        match e {
+            dotenv::Error::Io(io_err) if io_err.kind() == std::io::ErrorKind::NotFound => {
+                log::warn!(".env file not found, environment variables will be read from system environment");
+            }
+            _ => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    format!("Failed to read .env file: {}", e),
+                ));
+            }
+        }
+    }
     env::set_var("RUST_LOG", "actix_web=debug");
 
     if let Ok(log_file_path) = env::var("LOG_FILE") {

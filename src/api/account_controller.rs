@@ -10,6 +10,16 @@ use crate::{
     },
     services::account_service,
 };
+
+/// Helper function to extract tenant pool from request extensions
+fn extract_tenant_pool(req: &HttpRequest) -> Result<Pool, ServiceError> {
+    match req.extensions().get::<Pool>() {
+        Some(pool) => Ok(pool.clone()),
+        None => Err(ServiceError::BadRequest {
+            error_message: "Tenant not found".to_string(),
+        }),
+    }
+}
 // POST api/auth/signup
 /// Processes a tenant-scoped user signup and returns an HTTP response.
 ///
@@ -70,17 +80,12 @@ pub async fn login(
 // POST api/auth/logout
 pub async fn logout(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
     if let Some(authen_header) = req.headers().get(constants::AUTHORIZATION) {
-        if let Some(pool) = req.extensions().get::<Pool>() {
-            account_service::logout(authen_header, pool);
-            Ok(HttpResponse::Ok().json(ResponseBody::new(
-                constants::MESSAGE_LOGOUT_SUCCESS,
-                constants::EMPTY,
-            )))
-        } else {
-            Err(ServiceError::InternalServerError {
-                error_message: "Pool not found".to_string(),
-            })
-        }
+        let pool = extract_tenant_pool(&req)?;
+        account_service::logout(authen_header, &pool);
+        Ok(HttpResponse::Ok().json(ResponseBody::new(
+            constants::MESSAGE_LOGOUT_SUCCESS,
+            constants::EMPTY,
+        )))
     } else {
         Err(ServiceError::BadRequest {
             error_message: constants::MESSAGE_TOKEN_MISSING.to_string(),
@@ -106,18 +111,13 @@ pub async fn logout(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
 /// ```
 pub async fn refresh(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
     if let Some(authen_header) = req.headers().get(constants::AUTHORIZATION) {
-        if let Some(pool) = req.extensions().get::<Pool>() {
-            match account_service::refresh(authen_header, pool) {
-                Ok(login_info) => {
-                    Ok(HttpResponse::Ok()
-                        .json(ResponseBody::new(constants::MESSAGE_OK, login_info)))
-                }
-                Err(err) => Err(err),
+        let pool = extract_tenant_pool(&req)?;
+        match account_service::refresh(authen_header, &pool) {
+            Ok(login_info) => {
+                Ok(HttpResponse::Ok()
+                    .json(ResponseBody::new(constants::MESSAGE_OK, login_info)))
             }
-        } else {
-            Err(ServiceError::InternalServerError {
-                error_message: "Pool not found".to_string(),
-            })
+            Err(err) => Err(err),
         }
     } else {
         Err(ServiceError::BadRequest {
@@ -145,18 +145,13 @@ pub async fn refresh(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
 /// ```
 pub async fn me(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
     if let Some(authen_header) = req.headers().get(constants::AUTHORIZATION) {
-        if let Some(pool) = req.extensions().get::<Pool>() {
-            match account_service::me(authen_header, pool) {
-                Ok(login_info) => {
-                    Ok(HttpResponse::Ok()
-                        .json(ResponseBody::new(constants::MESSAGE_OK, login_info)))
-                }
-                Err(err) => Err(err),
+        let pool = extract_tenant_pool(&req)?;
+        match account_service::me(authen_header, &pool) {
+            Ok(login_info) => {
+                Ok(HttpResponse::Ok()
+                    .json(ResponseBody::new(constants::MESSAGE_OK, login_info)))
             }
-        } else {
-            Err(ServiceError::InternalServerError {
-                error_message: "Pool not found".to_string(),
-            })
+            Err(err) => Err(err),
         }
     } else {
         Err(ServiceError::BadRequest {

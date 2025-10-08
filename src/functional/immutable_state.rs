@@ -94,7 +94,7 @@ impl<T> ImmutableRef<T> {
     /// assert_eq!(*r.get(), 5);
     /// ```
     pub fn get(&self) -> &T {
-        &self.data
+        self.data.as_ref()
     }
 }
 

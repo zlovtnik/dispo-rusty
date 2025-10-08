@@ -39,21 +39,38 @@ pub fn init_db_pool(url: &str) -> Pool {
         .expect("Failed to create pool.")
 }
 
+/// Prefer this non-panicking variant.
+pub fn try_init_db_pool(url: &str) -> Result<Pool, ServiceError> {
+    use log::info;
+    info!("Migrating and configuring database...");
+    let manager = ConnectionManager::<Connection>::new(url);
+    r2d2::Pool::builder()
+        .build(manager)
+        .map_err(|e| ServiceError::InternalServerError {
+            error_message: format!("Failed to create pool: {e}"),
+        })
+}
+
 /// Applies all embedded, pending database migrations against the provided PostgreSQL connection.
 ///
-/// # Panics
+/// # Returns
 ///
-/// Panics if running the pending migrations fails.
+/// `Ok(())` if migrations succeed, `Err(ServiceError)` if they fail.
 ///
 /// # Examples
 ///
 /// ```
 /// // Obtain a `PgConnection`, then apply migrations:
 /// // let mut conn = establish_connection(); // user-provided connection setup
-/// // run_migration(&mut conn);
+/// // run_migration(&mut conn)?;
 /// ```
-pub fn run_migration(conn: &mut PgConnection) {
-    conn.run_pending_migrations(MIGRATIONS).unwrap();
+pub fn run_migration(conn: &mut PgConnection) -> Result<(), ServiceError> {
+    conn.run_pending_migrations(MIGRATIONS).map_err(|e| {
+        ServiceError::InternalServerError {
+            error_message: format!("Migration failed: {e}"),
+        }
+    })?;
+    Ok(())
 }
 
 /// Manages database connection pools for tenants, using an RwLock for concurrency.
@@ -66,8 +83,16 @@ pub struct TenantPoolManager {
     pub tenant_pools: Arc<RwLock<HashMap<String, Pool>>>,
 }
 
+const LOCK_POISONED_ERROR: &str = "Tenant pools lock was poisoned";
+
 #[allow(dead_code)]
 impl TenantPoolManager {
+    /// Helper method to handle lock poisoning errors consistently
+    fn handle_lock_poisoned_error<T>() -> Result<T, ServiceError> {
+        Err(ServiceError::InternalServerError {
+            error_message: LOCK_POISONED_ERROR.to_string(),
+        })
+    }
     /// Creates a TenantPoolManager that uses `main_pool` as the primary connection pool and
     /// initializes an empty, thread-safe map for tenant-specific pools.
     ///
@@ -91,9 +116,7 @@ impl TenantPoolManager {
                 pools.insert(tenant_id, pool);
                 Ok(())
             }
-            Err(_) => Err(ServiceError::InternalServerError {
-                error_message: "Tenant pools lock was poisoned".to_string(),
-            }),
+            Err(_) => Self::handle_lock_poisoned_error(),
         }
     }
 
@@ -143,9 +166,7 @@ impl TenantPoolManager {
     pub fn remove_tenant_pool(&self, tenant_id: &str) -> Result<Option<Pool>, ServiceError> {
         match self.tenant_pools.write() {
             Ok(mut pools) => Ok(pools.remove(tenant_id)),
-            Err(_) => Err(ServiceError::InternalServerError {
-                error_message: "Tenant pools lock was poisoned".to_string(),
-            }),
+            Err(_) => Self::handle_lock_poisoned_error(),
         }
     }
 }

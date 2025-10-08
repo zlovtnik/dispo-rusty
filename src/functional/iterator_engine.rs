@@ -8,6 +8,9 @@ use std::collections::HashMap;
 use std::fmt;
 use std::hash::Hash;
 
+#[cfg(feature = "functional")]
+use itertools::Itertools;
+
 /// Iterator chain configuration for performance optimization
 #[derive(Debug, Clone)]
 pub struct IteratorConfig {
@@ -143,26 +146,30 @@ where
         }
     }
 
-    // FIXME: chunk_by returns ChunkBy which doesn't implement Iterator properly
-    // /// Group consecutive elements by key
-    // pub fn chunk_by<K, F>(
-    //     self,
-    //     f: F,
-    // ) -> IteratorChain<<ChunkBy<K, I, F> as Iterator>::Item, ChunkBy<K, I, F>>
-    // where
-    //     F: FnMut(&T) -> K,
-    //     K: PartialEq,
-    // {
-    //     let mut operations = self.operations;
-    //     operations.push("chunk_by".to_string());
-    //
-    //     let chunked = self.iterator.chunk_by(f);
-    //     IteratorChain {
-    //         iterator: chunked,
-    //         config: self.config,
-    //         operations,
-    //     }
-    // }
+    /// Group consecutive elements by key
+    #[cfg(feature = "functional")]
+    pub fn chunk_by<K, F>(
+        self,
+        f: F,
+    ) -> IteratorChain<(K, Vec<T>), impl Iterator<Item = (K, Vec<T>)>>
+    where
+        F: FnMut(&T) -> K,
+        K: PartialEq,
+        T: Clone,
+    {
+        let mut operations = self.operations;
+        operations.push("chunk_by".to_string());
+
+        let chunks: Vec<(K, Vec<T>)> = self.iterator.chunk_by(f).into_iter()
+            .map(|(key, group)| (key, group.collect()))
+            .collect();
+        
+        IteratorChain {
+            iterator: chunks.into_iter(),
+            config: self.config,
+            operations,
+        }
+    }
 
     // FIXME: KMerge type alias signature issue
     // /// K-way merge sorted iterators
@@ -271,26 +278,28 @@ where
         }
     }
 
-    // FIXME: cartesian_product requires U::IntoIter to be Clone
-    // /// Cartesian product with another iterator
-    // pub fn cartesian_product<U>(
-    //     self,
-    //     other: U,
-    // ) -> IteratorChain<(T, U::Item), itertools::Product<I, U::IntoIter>>
-    // where
-    //     U: IntoIterator,
-    //     T: Clone,
-    // {
-    //     let mut operations = self.operations;
-    //     operations.push("cartesian_product".to_string());
-    //
-    //     let product = self.iterator.cartesian_product(other);
-    //     IteratorChain {
-    //         iterator: product,
-    //         config: self.config,
-    //         operations,
-    //     }
-    // }
+    /// Cartesian product with another iterator
+    #[cfg(feature = "functional")]
+    pub fn cartesian_product<U>(
+        self,
+        other: U,
+    ) -> IteratorChain<(T, U::Item), impl Iterator<Item = (T, U::Item)>>
+    where
+        U: IntoIterator,
+        U::IntoIter: Clone,
+        T: Clone,
+        I: Clone,
+    {
+        let mut operations = self.operations;
+        operations.push("cartesian_product".to_string());
+
+        let product = self.iterator.cartesian_product(other);
+        IteratorChain {
+            iterator: product,
+            config: self.config,
+            operations,
+        }
+    }
 
     /// Collects all items from the chain into a `Vec`.
     ///
@@ -575,32 +584,30 @@ mod tests {
         assert_eq!(result, vec![4, 8]);
     }
 
-    // FIXME: chunk_by is commented out due to type issues
-    // #[test]
-    // fn test_chunk_by() {
-    //     let engine = IteratorEngine::new();
-    //     let data = vec![1, 1, 2, 2, 3, 3, 3];
-    //
-    //     let chunks: Vec<Vec<i32>> = engine
-    //         .from_vec(data)
-    //         .chunk_by(|&x| x)
-    //         .map(|(_key, group)| group.collect())
-    //         .collect();
-    //
-    //     assert_eq!(chunks, vec![vec![1, 1], vec![2, 2], vec![3, 3, 3]]);
-    // }
+    #[test]
+    fn test_chunk_by() {
+        let engine = IteratorEngine::new();
+        let data = vec![1, 1, 2, 2, 3, 3, 3];
 
-    // FIXME: cartesian_product is commented out due to Clone constraint issues
-    // #[test]
-    // fn test_cartesian_product() {
-    //     let engine = IteratorEngine::new();
-    //     let data1 = vec![1, 2];
-    //     let data2 = vec![3, 4];
-    //
-    //     let products: Vec<(i32, i32)> = engine.from_vec(data1).cartesian_product(data2).collect();
-    //
-    //     assert_eq!(products, vec![(1, 3), (1, 4), (2, 3), (2, 4)]);
-    // }
+        let chunks: Vec<Vec<i32>> = engine
+            .from_vec(data)
+            .chunk_by(|&x| x)
+            .map(|(_key, group)| group)
+            .collect();
+
+        assert_eq!(chunks, vec![vec![1, 1], vec![2, 2], vec![3, 3, 3]]);
+    }
+
+    #[test]
+    fn test_cartesian_product() {
+        let engine = IteratorEngine::new();
+        let data1 = vec![1, 2];
+        let data2 = vec![3, 4];
+
+        let products: Vec<(i32, i32)> = engine.from_vec(data1).cartesian_product(data2).collect();
+
+        assert_eq!(products, vec![(1, 3), (1, 4), (2, 3), (2, 4)]);
+    }
 
     #[test]
     fn test_zero_copy_processing() {

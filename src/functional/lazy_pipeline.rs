@@ -2,32 +2,7 @@
 //!
 //! Provides memory-efficient lazy evaluation patterns for processing large datasets,
 //! supporting datasets larger than available memory with improved response times
-//! for paginated endpoints. Implements deferred computation patter/// Lazy operation types for deferred computation
-pub enum LazyOp<I> {
-    /// Map operation with deferred execution
-    Map(Box<dyn Fn(I) -> I + Send + Sync>),
-    /// Filter operation with deferred execution
-    Filter(Box<dyn Fn(&I) -> bool + Send + Sync>),
-    /// Chunk by key operation with deferred execution
-    ChunkBy(Box<dyn Fn(&I) -> I + Send + Sync>),
-    /// Take first n items
-    Take(usize),
-    /// Skip first n items
-    Skip(usize),
-}
-
-// Manual Clone implementation for LazyOp
-impl<I> Clone for LazyOp<I> {
-    fn clone(&self) -> Self {
-        match self {
-            LazyOp::Map(_) => panic!("Cannot clone Map closure"),
-            LazyOp::Filter(_) => panic!("Cannot clone Filter closure"),
-            LazyOp::ChunkBy(_) => panic!("Cannot clone ChunkBy closure"),
-            LazyOp::Take(n) => LazyOp::Take(*n),
-            LazyOp::Skip(n) => LazyOp::Skip(*n),
-        }
-    }
-}ing
+//! for paginated endpoints. Implements deferred computation pattern
 //! response capabilities.
 //!
 //! ## Overview
