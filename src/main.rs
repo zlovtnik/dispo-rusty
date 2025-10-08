@@ -1,9 +1,9 @@
 #![allow(unused_must_use)]
 
 use std::default::Default;
-use std::{env, io, fs::OpenOptions};
 use std::io::LineWriter;
 use std::path::Path;
+use std::{env, fs::OpenOptions, io};
 
 use actix_cors::Cors;
 use actix_web::dev::Service;
@@ -15,14 +15,42 @@ mod api;
 mod config;
 mod constants;
 mod error;
+mod functional;
 mod middleware;
 mod models;
 mod schema;
 mod services;
 mod utils;
+/// Application entry point that configures logging and environment, initializes the database and Redis,
+/// registers tenant pools, configures CORS and middleware, and starts the Actix HTTP server.
+///
+/// This function reads required environment variables (APP_HOST, APP_PORT, DATABASE_URL, REDIS_URL),
+/// sets up logging (optionally to a file if LOG_FILE is provided), initializes the main DB pool and
+/// Redis client, registers a demonstration tenant, builds the Actix App with CORS and middleware, binds
+/// to the configured address, and runs the server until shutdown.
+///
+/// # Examples
+///
+/// ```no_run
+/// // Start the application (requires appropriate environment variables).
+/// // Typically invoked by the runtime; shown here for illustrative purposes only.
+/// let _ = futures::executor::block_on(crate::main());
+/// ```
 #[actix_rt::main]
 async fn main() -> io::Result<()> {
-    dotenv::dotenv().map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("Failed to read .env file: {}", e)))?;
+    if let Err(e) = dotenv::dotenv() {
+        match e {
+            dotenv::Error::Io(io_err) if io_err.kind() == std::io::ErrorKind::NotFound => {
+                log::warn!(".env file not found, environment variables will be read from system environment");
+            }
+            _ => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    format!("Failed to read .env file: {}", e),
+                ));
+            }
+        }
+    }
     env::set_var("RUST_LOG", "actix_web=debug");
 
     if let Ok(log_file_path) = env::var("LOG_FILE") {
@@ -35,17 +63,39 @@ async fn main() -> io::Result<()> {
             .append(true)
             .open(&log_file_path)?;
         env_logger::Builder::from_default_env()
-            .target(env_logger::Target::Pipe(Box::new(LineWriter::new(log_file))))
+            .target(env_logger::Target::Pipe(Box::new(LineWriter::new(
+                log_file,
+            ))))
             .init();
     } else {
         env_logger::init();
     }
 
-    let app_host = env::var("APP_HOST").map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("APP_HOST not found: {}", e)))?;
-    let app_port = env::var("APP_PORT").map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("APP_PORT not found: {}", e)))?;
+    let app_host = env::var("APP_HOST").map_err(|e| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("APP_HOST not found: {}", e),
+        )
+    })?;
+    let app_port = env::var("APP_PORT").map_err(|e| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("APP_PORT not found: {}", e),
+        )
+    })?;
     let app_url = format!("{}:{}", &app_host, &app_port);
-    let db_url = env::var("DATABASE_URL").map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("DATABASE_URL not found: {}", e)))?;
-    let redis_url = env::var("REDIS_URL").map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("REDIS_URL not found: {}", e)))?;
+    let db_url = env::var("DATABASE_URL").map_err(|e| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("DATABASE_URL not found: {}", e),
+        )
+    })?;
+    let redis_url = env::var("REDIS_URL").map_err(|e| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("REDIS_URL not found: {}", e),
+        )
+    })?;
 
     let main_pool = config::db::init_db_pool(&db_url);
     config::db::run_migration(&mut main_pool.get().unwrap());
@@ -66,7 +116,11 @@ async fn main() -> io::Result<()> {
 
             if let Ok(allowed_origins) = env::var("CORS_ALLOWED_ORIGINS") {
                 // Split comma-separated origins and add each one
-                for origin in allowed_origins.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()) {
+                for origin in allowed_origins
+                    .split(',')
+                    .map(|s| s.trim())
+                    .filter(|s| !s.is_empty())
+                {
                     builder = builder.allowed_origin(origin);
                 }
             } else {
@@ -80,7 +134,7 @@ async fn main() -> io::Result<()> {
                 .send_wildcard()
                 .allowed_origin("http://localhost:3000")
                 .allowed_origin("http://127.0.0.1:3000")
-                .allowed_origin("http://localhost:5173")  // Vite dev server
+                .allowed_origin("http://localhost:5173") // Vite dev server
                 .allowed_origin("http://127.0.0.1:5173") // Vite dev server
         };
 

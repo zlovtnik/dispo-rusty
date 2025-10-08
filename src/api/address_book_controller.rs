@@ -8,10 +8,29 @@ use crate::{
     services::address_book_service,
 };
 // GET api/address-book
+/// Retrieve all people from the address book and return them in a standard JSON response.
+///
+/// # Returns
+///
+/// `HttpResponse` containing a JSON `ResponseBody` with the list of people and an OK message,
+/// or a `ServiceError` if the database pool is missing or the service call fails.
+///
+/// # Examples
+///
+/// ```
+/// use actix_web::HttpRequest;
+/// // Construct a request with a Pool placed into its extensions before calling.
+/// // Here we show the call shape; setting up a real Pool is omitted for brevity.
+/// let req = HttpRequest::default();
+/// let result = actix_rt::System::new().block_on(crate::api::address_book_controller::find_all(req));
+/// // `result` will be `Ok(HttpResponse)` on success or `Err(ServiceError)` on failure.
+/// ```
 pub async fn find_all(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
     if let Some(pool) = req.extensions().get::<Pool>() {
         match address_book_service::find_all(pool) {
-            Ok(people) => Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, people))),
+            Ok(people) => {
+                Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, people)))
+            }
             Err(err) => Err(err),
         }
     } else {
@@ -22,13 +41,30 @@ pub async fn find_all(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
 }
 
 // GET api/address-book/{id}
+/// Retrieve a person by ID and return an HTTP 200 response containing the person as JSON.
+///
+/// On success returns an `HttpResponse::Ok` whose JSON body is a `ResponseBody` wrapping the found person.
+/// On failure returns a `ServiceError` (for example when the DB pool is missing or the service reports an error).
+///
+/// # Examples
+///
+/// ```
+/// # use actix_web::{test, web, HttpRequest};
+/// # use crate::api::address_book_controller::find_by_id;
+/// # async fn _example() {
+/// let req = test::TestRequest::default().to_http_request();
+/// let _ = find_by_id(web::Path::from(1), req).await;
+/// # }
+/// ```
 pub async fn find_by_id(
     id: web::Path<i32>,
     req: HttpRequest,
 ) -> Result<HttpResponse, ServiceError> {
     if let Some(pool) = req.extensions().get::<Pool>() {
         match address_book_service::find_by_id(id.into_inner(), pool) {
-            Ok(person) => Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, person))),
+            Ok(person) => {
+                Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, person)))
+            }
             Err(err) => Err(err),
         }
     } else {
@@ -74,6 +110,25 @@ pub async fn insert(
 }
 
 // PUT api/address-book/{id}
+/// Updates an existing person identified by `id` with the provided `updated_person` data.
+///
+/// On success returns an HTTP 200 response with a `ResponseBody` containing an OK message and an empty payload.
+/// Returns a `ServiceError::InternalServerError` with message "Pool not found" if the database pool is missing from the request extensions.
+/// Any service-layer error from `address_book_service::update` is propagated as the `Err` variant.
+///
+/// # Examples
+///
+/// ```no_run
+/// use actix_web::{HttpRequest, web};
+///
+/// // Assume `PersonDTO` can be constructed like this in your codebase.
+/// let id = web::Path::from(1);
+/// let updated = web::Json(PersonDTO { /* fields */ });
+/// let req = HttpRequest::default();
+///
+/// // Call from an async context
+/// let result = update(id, updated, req).await;
+/// ```
 pub async fn update(
     id: web::Path<i32>,
     updated_person: web::Json<PersonDTO>,
@@ -82,7 +137,8 @@ pub async fn update(
     if let Some(pool) = req.extensions().get::<Pool>() {
         match address_book_service::update(id.into_inner(), updated_person.0, pool) {
             Ok(()) => {
-                Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, constants::EMPTY)))
+                Ok(HttpResponse::Ok()
+                    .json(ResponseBody::new(constants::MESSAGE_OK, constants::EMPTY)))
             }
             Err(err) => Err(err),
         }
@@ -94,14 +150,29 @@ pub async fn update(
 }
 
 // DELETE api/address-book/{id}
-pub async fn delete(
-    id: web::Path<i32>,
-    req: HttpRequest,
-) -> Result<HttpResponse, ServiceError> {
+/// Deletes the person with the given ID from the address book.
+///
+/// On success returns an HTTP 200 response with a JSON `ResponseBody` containing an OK message and an empty payload.
+/// If the database pool is missing or the service fails, a `ServiceError` is returned (missing pool yields an InternalServerError with message "Pool not found").
+///
+/// # Examples
+///
+/// ```no_run
+/// # use actix_web::{web, HttpRequest};
+/// # use crate::api::address_book_controller::delete;
+/// # async fn run() -> Result<(), ()> {
+/// let req = HttpRequest::default(); // example placeholder
+/// let id = web::Path::from(1);
+/// let _res = delete(id, req).await;
+/// # Ok(())
+/// # }
+/// ```
+pub async fn delete(id: web::Path<i32>, req: HttpRequest) -> Result<HttpResponse, ServiceError> {
     if let Some(pool) = req.extensions().get::<Pool>() {
         match address_book_service::delete(id.into_inner(), pool) {
             Ok(()) => {
-                Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, constants::EMPTY)))
+                Ok(HttpResponse::Ok()
+                    .json(ResponseBody::new(constants::MESSAGE_OK, constants::EMPTY)))
             }
             Err(err) => Err(err),
         }
@@ -214,7 +285,7 @@ mod tests {
             .as_str(),
         );
         config::db::run_migration(&mut pool.get().unwrap());
-        
+
         let manager = TenantPoolManager::new(pool.clone());
 
         let _app = test::init_service(
@@ -235,16 +306,8 @@ mod tests {
         )
         .await;
 
-        assert!(insert_mock_data(1, &pool)
-            .await
-            .is_ok());
-        assert_eq!(
-            get_people_in_db(&pool)
-                .await
-                .unwrap()
-                .len(),
-            1
-        );
+        assert!(insert_mock_data(1, &pool).await.is_ok());
+        assert_eq!(get_people_in_db(&pool).await.unwrap().len(), 1);
     }
 
     #[actix_web::test]
@@ -261,7 +324,9 @@ mod tests {
         config::db::run_migration(&mut pool.get().unwrap());
 
         let manager = TenantPoolManager::new(pool.clone());
-        manager.add_tenant_pool("tenant1".to_string(), pool.clone()).unwrap();
+        manager
+            .add_tenant_pool("tenant1".to_string(), pool.clone())
+            .unwrap();
 
         let app = test::init_service(
             App::new()
@@ -300,13 +365,7 @@ mod tests {
                     .await;
 
                 assert_eq!(resp.status(), StatusCode::CREATED);
-                assert_eq!(
-                    get_people_in_db(&pool)
-                        .await
-                        .unwrap()
-                        .len(),
-                    1
-                );
+                assert_eq!(get_people_in_db(&pool).await.unwrap().len(), 1);
             }
             Err(err) => {
                 unreachable!("{}", err);
@@ -314,6 +373,21 @@ mod tests {
         };
     }
 
+    /// Verifies that POSTing invalid person payloads returns HTTP 400 and that no records are inserted.
+    ///
+    /// Sends three invalid requests (missing required email, empty body, and unrelated fields) to the
+    /// address-book insertion endpoint, asserts each response is `400 Bad Request`, and asserts the
+    /// database remains empty afterwards.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // Runs the integration test; the test itself sets up a temporary DB and Actix app.
+    /// #[actix_rt::test]
+    /// async fn run_test_insert_failed() {
+    ///     crate::api::address_book_controller::test_insert_failed().await;
+    /// }
+    /// ```
     #[actix_web::test]
     async fn test_insert_failed() {
         let docker = clients::Cli::default();
@@ -328,7 +402,9 @@ mod tests {
         config::db::run_migration(&mut pool.get().unwrap());
 
         let manager = TenantPoolManager::new(pool.clone());
-        manager.add_tenant_pool("tenant1".to_string(), pool.clone()).unwrap();
+        manager
+            .add_tenant_pool("tenant1".to_string(), pool.clone())
+            .unwrap();
 
         let app = test::init_service(
             App::new()
@@ -394,13 +470,7 @@ mod tests {
                 assert_eq!(resp_missing_email.status(), StatusCode::BAD_REQUEST);
                 assert_eq!(resp_empty.status(), StatusCode::BAD_REQUEST);
                 assert_eq!(resp_trash_value.status(), StatusCode::BAD_REQUEST);
-                assert_eq!(
-                    get_people_in_db(&pool)
-                        .await
-                        .unwrap()
-                        .len(),
-                    0
-                );
+                assert_eq!(get_people_in_db(&pool).await.unwrap().len(), 0);
             }
             Err(err) => {
                 unreachable!("{}", err);
@@ -422,7 +492,9 @@ mod tests {
         config::db::run_migration(&mut pool.get().unwrap());
 
         let manager = TenantPoolManager::new(pool.clone());
-        manager.add_tenant_pool("tenant1".to_string(), pool.clone()).unwrap();
+        manager
+            .add_tenant_pool("tenant1".to_string(), pool.clone())
+            .unwrap();
 
         let app = test::init_service(
             App::new()

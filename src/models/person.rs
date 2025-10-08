@@ -8,7 +8,7 @@ use crate::{
     schema::people::{self, dsl::*},
 };
 
-use super::{filters::PersonFilter, response::Page, pagination::HasId};
+use super::{filters::PersonFilter, pagination::HasId, response::Page};
 
 #[derive(Queryable, Serialize, Deserialize)]
 pub struct Person {
@@ -47,12 +47,12 @@ impl Person {
         people.find(i).get_result::<Person>(conn)
     }
 
-    /// Returns a paginated page of people matching the provided filter criteria.
+    /// Get a paginated Page of people matching the provided filter criteria.
     ///
-    /// Applies any of the following filters when present on `PersonFilter`:
+    /// Applies the following optional filters from `PersonFilter`:
     /// - `age`: exact match.
-    /// - `email`, `name`, `phone`: case-sensitive partial match using SQL `LIKE` with surrounding `%` wildcards.
-    /// - `gender`: accepts the strings `"male"` or `"female"` (case-insensitive) and maps them to the stored boolean value.
+    /// - `email`, `name`, `phone`: partial match using SQL `LIKE` with surrounding `%` wildcards (case-sensitive).
+    /// - `gender`: accepts `"male"` or `"female"` (case-insensitive) and maps to the stored boolean.
     ///
     /// Pagination uses `filter.cursor` as the page cursor (defaults to `0`) and `filter.page_size` as items per page (defaults to `crate::constants::DEFAULT_PER_PAGE`).
     ///
@@ -60,8 +60,18 @@ impl Person {
     ///
     /// ```
     /// // Construct a filter to find people with "example" in their email and use a DB connection.
-    /// let filter = PersonFilter { email: Some("example".into()), age: None, gender: None, name: None, phone: None, cursor: None, page_size: None };
+    /// let filter = PersonFilter {
+    ///     email: Some("example".into()),
+    ///     age: None,
+    ///     gender: None,
+    ///     name: None,
+    ///     phone: None,
+    ///     cursor: None,
+    ///     page_size: None,
+    /// };
+    ///
     /// let mut conn: Connection = /* obtain connection */;
+    ///
     /// let page = Person::filter(filter, &mut conn).expect("query failed");
     /// assert!(page.items.len() <= crate::constants::DEFAULT_PER_PAGE);
     /// ```
@@ -96,10 +106,7 @@ impl Person {
             .page_size
             .unwrap_or(crate::constants::DEFAULT_PER_PAGE);
         let records = query
-            .paginate(
-                people::id,
-                cursor,
-            )
+            .paginate(people::id, cursor)
             .per_page(page_size)
             .load_items::<Person>(conn)?;
         Ok(Page::new(

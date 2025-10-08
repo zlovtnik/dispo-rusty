@@ -21,7 +21,7 @@ pub struct TenantFilter {
 
 #[derive(Deserialize)]
 pub struct FieldFilter {
-    pub field: String, // "name", "id", "db_url", "created_at", "updated_at"
+    pub field: String,    // "name", "id", "db_url", "created_at", "updated_at"
     pub operator: String, // "contains", "equals", "gt", "lt", "gte", "lte"
     pub value: String,
 }

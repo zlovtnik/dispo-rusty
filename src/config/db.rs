@@ -1,3 +1,4 @@
+use crate::error::ServiceError;
 #[allow(unused_imports)]
 use diesel::{
     pg::PgConnection,
@@ -7,7 +8,6 @@ use diesel::{
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
-use crate::error::ServiceError;
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 
@@ -15,45 +15,62 @@ pub type Connection = PgConnection;
 
 pub type Pool = r2d2::Pool<ConnectionManager<Connection>>;
 
-/// Create and configure a new database connection pool from the given database URL.
+/// Create and configure a database connection pool for the given database URL.
 ///
 /// # Examples
 ///
 /// ```no_run
 /// let pool = init_db_pool("postgres://user:password@localhost/mydb");
-/// // Acquire a connection: `let conn = pool.get().unwrap();`
+/// // Acquire a connection:
+/// let conn = pool.get().unwrap();
 /// ```
 ///
 /// # Returns
 ///
-/// A configured r2d2 connection pool connected to the specified database URL.
+/// An `r2d2` connection pool connected to the specified database URL.
 pub fn init_db_pool(url: &str) -> Pool {
     use log::info;
 
     info!("Migrating and configuring database...");
     let manager = ConnectionManager::<Connection>::new(url);
-    
-    
+
     r2d2::Pool::builder()
         .build(manager)
         .expect("Failed to create pool.")
 }
 
+/// Prefer this non-panicking variant.
+pub fn try_init_db_pool(url: &str) -> Result<Pool, ServiceError> {
+    use log::info;
+    info!("Migrating and configuring database...");
+    let manager = ConnectionManager::<Connection>::new(url);
+    r2d2::Pool::builder()
+        .build(manager)
+        .map_err(|e| ServiceError::InternalServerError {
+            error_message: format!("Failed to create pool: {e}"),
+        })
+}
+
 /// Applies all embedded, pending database migrations against the provided PostgreSQL connection.
 ///
-/// # Panics
+/// # Returns
 ///
-/// Panics if running the pending migrations fails.
+/// `Ok(())` if migrations succeed, `Err(ServiceError)` if they fail.
 ///
 /// # Examples
 ///
 /// ```
 /// // Obtain a `PgConnection`, then apply migrations:
 /// // let mut conn = establish_connection(); // user-provided connection setup
-/// // run_migration(&mut conn);
+/// // run_migration(&mut conn)?;
 /// ```
-pub fn run_migration(conn: &mut PgConnection) {
-    conn.run_pending_migrations(MIGRATIONS).unwrap();
+pub fn run_migration(conn: &mut PgConnection) -> Result<(), ServiceError> {
+    conn.run_pending_migrations(MIGRATIONS).map_err(|e| {
+        ServiceError::InternalServerError {
+            error_message: format!("Migration failed: {e}"),
+        }
+    })?;
+    Ok(())
 }
 
 /// Manages database connection pools for tenants, using an RwLock for concurrency.
@@ -66,7 +83,26 @@ pub struct TenantPoolManager {
     pub tenant_pools: Arc<RwLock<HashMap<String, Pool>>>,
 }
 
+const LOCK_POISONED_ERROR: &str = "Tenant pools lock was poisoned";
+
+#[allow(dead_code)]
 impl TenantPoolManager {
+    /// Helper method to handle lock poisoning errors consistently
+    fn handle_lock_poisoned_error<T>() -> Result<T, ServiceError> {
+        Err(ServiceError::InternalServerError {
+            error_message: LOCK_POISONED_ERROR.to_string(),
+        })
+    }
+    /// Creates a TenantPoolManager that uses `main_pool` as the primary connection pool and
+    /// initializes an empty, thread-safe map for tenant-specific pools.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use std::sync::Arc;
+    /// // let main_pool = init_db_pool("postgres://user:pass@localhost/db");
+    /// // let manager = TenantPoolManager::new(main_pool);
+    /// ```
     pub fn new(main_pool: Pool) -> Self {
         TenantPoolManager {
             main_pool,
@@ -80,9 +116,7 @@ impl TenantPoolManager {
                 pools.insert(tenant_id, pool);
                 Ok(())
             }
-            Err(_) => Err(ServiceError::InternalServerError {
-                error_message: "Tenant pools lock was poisoned".to_string(),
-            }),
+            Err(_) => Self::handle_lock_poisoned_error(),
         }
     }
 
@@ -100,12 +134,39 @@ impl TenantPoolManager {
         self.main_pool.clone()
     }
 
+    /// Removes and returns the connection pool associated with a tenant ID, if present.
+    ///
+    /// If the internal tenant pools lock is poisoned, returns a `ServiceError::InternalServerError`
+    /// with the message "Tenant pools lock was poisoned".
+    ///
+    /// # Returns
+    ///
+    /// `Ok(Some(pool))` with the removed pool if a pool existed for `tenant_id`, `Ok(None)` if no
+    /// pool was found for `tenant_id`, or `Err(ServiceError::InternalServerError { ... })` if the
+    /// tenant pools lock is poisoned.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use crate::config::db::{TenantPoolManager, init_db_pool};
+    /// # use crate::error::ServiceError;
+    /// # let main_pool = init_db_pool("postgres://user:pass@localhost/db");
+    /// let manager = TenantPoolManager::new(main_pool.clone());
+    /// // Add a tenant pool elsewhere...
+    /// let removed = manager.remove_tenant_pool("tenant_a");
+    /// match removed {
+    ///     Ok(Some(pool)) => println!("Removed tenant pool"),
+    ///     Ok(None) => println!("No pool for given tenant"),
+    ///     Err(e) => match e {
+    ///         ServiceError::InternalServerError { error_message } => eprintln!("{}", error_message),
+    ///         _ => (),
+    ///     },
+    /// }
+    /// ```
     pub fn remove_tenant_pool(&self, tenant_id: &str) -> Result<Option<Pool>, ServiceError> {
         match self.tenant_pools.write() {
             Ok(mut pools) => Ok(pools.remove(tenant_id)),
-            Err(_) => Err(ServiceError::InternalServerError {
-                error_message: "Tenant pools lock was poisoned".to_string(),
-            }),
+            Err(_) => Self::handle_lock_poisoned_error(),
         }
     }
 }

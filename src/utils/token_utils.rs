@@ -9,6 +9,17 @@ use crate::{
     },
 };
 
+/// Decode a JWT string into `TokenData<UserToken>`.
+///
+/// The token is validated using the crate-level secret `KEY` and `jsonwebtoken`'s default validation settings.
+/// Any decoding or validation error from `jsonwebtoken` is propagated to the caller.
+///
+/// # Examples
+///
+/// ```
+/// let res = decode_token("invalid-token".to_string());
+/// assert!(res.is_err());
+/// ```
 pub fn decode_token(token: String) -> jsonwebtoken::errors::Result<TokenData<UserToken>> {
     jsonwebtoken::decode::<UserToken>(
         &token,
@@ -17,10 +28,18 @@ pub fn decode_token(token: String) -> jsonwebtoken::errors::Result<TokenData<Use
     )
 }
 
-pub fn verify_token(
-    token_data: &TokenData<UserToken>,
-    pool: &Pool,
-) -> Result<String, String> {
+/// Verifies that the JWT claims represent a valid login session and returns the associated user identifier.
+///
+/// # Returns
+/// `Ok(String)` containing the user identifier when the session is valid, `Err(String)` with `"Invalid token"` otherwise.
+///
+/// # Examples
+///
+/// ```
+/// // Given a decoded `token_data: jsonwebtoken::TokenData<UserToken>` and a `pool: Pool`
+/// // let user_id = verify_token(&token_data, &pool)?;
+/// ```
+pub fn verify_token(token_data: &TokenData<UserToken>, pool: &Pool) -> Result<String, String> {
     if User::is_valid_login_session(&token_data.claims, &mut pool.get().unwrap()) {
         Ok(token_data.claims.user.to_string())
     } else {

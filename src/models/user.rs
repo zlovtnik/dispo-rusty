@@ -6,6 +6,7 @@ use uuid::Uuid;
 use crate::{
     config::db::Connection,
     constants,
+    error::ServiceError,
     models::{login_history::LoginHistory, user_token::UserToken},
     schema::users::{self, dsl::*},
 };
@@ -110,6 +111,19 @@ impl User {
         }
     }
 
+    /// Checks whether the provided UserToken matches an existing user's current login session.
+    ///
+    /// # Returns
+    ///
+    /// `true` if a user record exists with the same username and login_session as the token, `false` otherwise.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // Given a connection `conn` and a token for a logged-in user:
+    /// let token = UserToken { user: "alice".into(), login_session: "some-session-uuid".into(), tenant_id: 1 };
+    /// assert!(is_valid_login_session(&token, &mut conn));
+    /// ```
     pub fn is_valid_login_session(user_token: &UserToken, conn: &mut Connection) -> bool {
         users
             .filter(username.eq(&user_token.user))
@@ -118,21 +132,56 @@ impl User {
             .is_ok()
     }
 
-    pub fn find_login_info_by_token(user_token: &UserToken, conn: &mut Connection) -> Result<LoginInfoDTO, String> {
+    /// Looks up a user's login information by matching the provided token's username and session.
+    ///
+    /// Returns `Ok(LoginInfoDTO)` when a user with the same username and `login_session` is found,
+    /// `Err(ServiceError::NotFound)` when no matching user is found, or `Err(ServiceError::InternalServerError)`
+    /// for other database errors.
+    ///
+    /// # Parameters
+    ///
+    /// - `user_token` — token containing the username, login_session, and tenant_id to validate.
+    /// - `conn` — database connection used to query the users table.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use crate::{UserToken, LoginInfoDTO, User};
+    ///
+    /// let token = UserToken {
+    ///     user: "alice".to_string(),
+    ///     login_session: "some-session-uuid".to_string(),
+    ///     tenant_id: "tenant-1".to_string(),
+    /// };
+    /// // `conn` would be a valid DB connection in real usage
+    /// let result = User::find_login_info_by_token(&token, &mut conn);
+    /// match result {
+    ///     Ok(info) => assert_eq!(info.username, "alice"),
+    ///     Err(e) => println!("not found: {}", e),
+    /// }
+    /// ```
+    pub fn find_login_info_by_token(
+        user_token: &UserToken,
+        conn: &mut Connection,
+    ) -> Result<LoginInfoDTO, ServiceError> {
         let user_result = users
-        .filter(username.eq(&user_token.user))
-        .filter(login_session.eq(&user_token.login_session))
-        .get_result::<User>(conn);
+            .filter(username.eq(&user_token.user))
+            .filter(login_session.eq(&user_token.login_session))
+            .get_result::<User>(conn);
 
-        if let Ok(user) = user_result {
-            return Ok(LoginInfoDTO {
+        match user_result {
+            Ok(user) => Ok(LoginInfoDTO {
                 username: user.username,
                 login_session: user.login_session,
                 tenant_id: user_token.tenant_id.clone(),
-            });
+            }),
+            Err(diesel::result::Error::NotFound) => Err(ServiceError::NotFound {
+                error_message: "User not found".to_string(),
+            }),
+            Err(e) => Err(ServiceError::InternalServerError {
+                error_message: format!("Database error: {}", e),
+            }),
         }
-
-        Err("User not found!".to_string())
     }
 
     pub fn find_user_by_username(un: &str, conn: &mut Connection) -> QueryResult<User> {
@@ -158,11 +207,36 @@ impl User {
         }
     }
 
+    /// Get the total number of users in the database.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // assume `conn` is a `&mut Connection`
+    /// let total = User::count_all(&mut conn).unwrap();
+    /// assert!(total >= 0);
+    /// ```
     pub fn count_all(conn: &mut Connection) -> QueryResult<i64> {
         users.count().get_result(conn)
     }
 
+    /// Counts users with an active login session.
+    ///
+    /// # Returns
+    ///
+    /// The number of users whose `login_session` is neither null nor the empty string.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut conn = establish_connection(); // obtain a test database connection
+    /// let logged_in = count_logged_in(&mut conn).expect("failed to count logged-in users");
+    /// assert!(logged_in >= 0);
+    /// ```
     pub fn count_logged_in(conn: &mut Connection) -> QueryResult<i64> {
-        users.filter(login_session.is_not_null().and(login_session.ne(""))).count().get_result(conn)
+        users
+            .filter(login_session.is_not_null().and(login_session.ne("")))
+            .count()
+            .get_result(conn)
     }
 }

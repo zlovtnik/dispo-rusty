@@ -66,13 +66,41 @@ where
     Col: diesel::Expression + QueryFragment<Pg> + Copy,
     i32: diesel::serialize::ToSql<Col::SqlType, Pg>,
 {
+    /// Set the number of items to return per page for this paginated query.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// // Adjust the page size to 50 items
+    /// let paginated = some_query.paginate(cursor_column, 0).per_page(50);
+    /// ```
     pub fn per_page(self, per_page: i64) -> Self {
-        SortedAndPaginated {
-            per_page,
-            ..self
-        }
+        SortedAndPaginated { per_page, ..self }
     }
 
+    /// Loads a page of records from the underlying query using the configured cursor and page size.
+    ///
+    /// The method executes the inner query, returns the loaded records wrapped in a `Page<U>`,
+    /// sets `current_cursor` to the `cursor` stored on `self`, and sets `next_cursor` to the `id`
+    /// of the last record if any were returned. No total count is computed.
+    ///
+    /// # Returns
+    ///
+    /// A `QueryResult<Page<U>>` containing the fetched records, pagination metadata, and an optional
+    /// `next_cursor` which is the `id` of the last returned record.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use diesel::prelude::*;
+    /// # use crate::{SortedAndPaginated, HasId};
+    /// # let mut conn: diesel::pg::PgConnection = unimplemented!();
+    /// # let col = unimplemented!();
+    /// // `query` is any Diesel query that loads items of a type implementing `HasId`.
+    /// let paginated = SortedAndPaginated { query: /* query */ unimplemented!(), cursor_column: col, cursor: 0, per_page: 10 };
+    /// let page = paginated.load_items::<YourModel>(&mut conn).expect("load page");
+    /// println!("Loaded {} records, next cursor: {:?}", page.records.len(), page.next_cursor);
+    /// ```
     pub fn load_items<'a, U>(self, conn: &mut PgConnection) -> QueryResult<Page<U>>
     where
         Self: LoadQuery<'a, PgConnection, U>,
@@ -95,8 +123,6 @@ where
             next_cursor,
         ))
     }
-
-
 }
 
 impl<T: Query, Col> Query for SortedAndPaginated<T, Col> {

@@ -7,8 +7,8 @@ use actix_web::http::{
 };
 use actix_web::web::Data;
 use actix_web::Error;
-use actix_web::HttpResponse;
 use actix_web::HttpMessage;
+use actix_web::HttpResponse;
 use futures::future::{ok, LocalBoxFuture, Ready};
 use log::{error, info};
 
@@ -52,6 +52,18 @@ where
 
     forward_ready!(service);
 
+    /// Authenticate the incoming request and either forward it to the inner service or return a 401 Unauthorized response.
+    ///
+    /// On success the request is forwarded to the wrapped service and its response body is preserved as the left variant; on failure an Unauthorized response with a JSON error payload is returned as the right variant.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // Given `middleware` that wraps an inner service and a `req: ServiceRequest`:
+    /// // let fut = middleware.call(req);
+    /// // let result = futures::executor::block_on(fut);
+    /// // `result` will be `Ok(ServiceResponse)` containing either the inner response (left) or a 401 JSON response (right).
+    /// ```
     fn call(&self, req: ServiceRequest) -> Self::Future {
         let mut authenticate_pass: bool = false;
 
@@ -81,8 +93,11 @@ where
                             let token = authen_str[6..authen_str.len()].trim();
                             if let Ok(token_data) = token_utils::decode_token(token.to_string()) {
                                 info!("Decoding token...");
-                                if let Some(tenant_pool) = manager.get_tenant_pool(&token_data.claims.tenant_id) {
-                                    if token_utils::verify_token(&token_data, &tenant_pool).is_ok() {
+                                if let Some(tenant_pool) =
+                                    manager.get_tenant_pool(&token_data.claims.tenant_id)
+                                {
+                                    if token_utils::verify_token(&token_data, &tenant_pool).is_ok()
+                                    {
                                         info!("Valid token");
                                         req.extensions_mut().insert(tenant_pool.clone());
                                         authenticate_pass = true;
