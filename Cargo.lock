@@ -202,46 +202,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rcs"
-version = "0.1.0"
-dependencies = [
- "actix-cors",
- "actix-rt",
- "actix-service",
- "actix-web",
- "base64 0.21.7",
- "bcrypt",
- "chrono",
- "derive_more 0.99.20",
- "diesel",
- "diesel_migrations",
- "dotenv",
- "env_logger",
- "futures",
- "im",
- "itertools",
- "jsonwebtoken",
- "log",
- "notify",
- "num_cpus",
- "once_cell",
- "r2d2",
- "rayon",
- "redis",
- "regex",
- "serde",
- "serde_derive",
- "serde_json",
- "tempfile",
- "testcontainers",
- "thiserror",
- "tokio",
- "tokio-stream",
- "url",
- "uuid",
-]
-
-[[package]]
 name = "addr2line"
 version = "0.25.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1815,6 +1775,46 @@ checksum = "22e18b0f0062d30d4230b2e85ff77fdfe4326feb054b9783a3460d8435c8ab91"
 dependencies = [
  "crossbeam-deque",
  "crossbeam-utils",
+]
+
+[[package]]
+name = "rcs"
+version = "0.1.0"
+dependencies = [
+ "actix-cors",
+ "actix-rt",
+ "actix-service",
+ "actix-web",
+ "base64 0.21.7",
+ "bcrypt",
+ "chrono",
+ "derive_more 0.99.20",
+ "diesel",
+ "diesel_migrations",
+ "dotenv",
+ "env_logger",
+ "futures",
+ "im",
+ "itertools",
+ "jsonwebtoken",
+ "log",
+ "notify",
+ "num_cpus",
+ "once_cell",
+ "r2d2",
+ "rayon",
+ "redis",
+ "regex",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "tempfile",
+ "testcontainers",
+ "thiserror",
+ "tokio",
+ "tokio-stream",
+ "url",
+ "uuid",
 ]
 
 [[package]]
