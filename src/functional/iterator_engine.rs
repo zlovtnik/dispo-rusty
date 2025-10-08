@@ -271,26 +271,52 @@ where
         }
     }
 
-    // FIXME: cartesian_product requires U::IntoIter to be Clone
-    // /// Cartesian product with another iterator
-    // pub fn cartesian_product<U>(
-    //     self,
-    //     other: U,
-    // ) -> IteratorChain<(T, U::Item), itertools::Product<I, U::IntoIter>>
-    // where
-    //     U: IntoIterator,
-    //     T: Clone,
-    // {
-    //     let mut operations = self.operations;
-    //     operations.push("cartesian_product".to_string());
-    //
-    //     let product = self.iterator.cartesian_product(other);
-    //     IteratorChain {
-    //         iterator: product,
-    //         config: self.config,
-    //         operations,
-    //     }
-    // }
+    /// Computes the Cartesian product of this iterator with another iterator.
+    ///
+    /// Returns an `IteratorChain` that produces all pairs `(a, b)` where `a` is from
+    /// this iterator and `b` is from the other iterator. The pairs are generated in
+    /// lexicographic order: all pairs with the first element of this iterator come first,
+    /// then all pairs with the second element, and so on.
+    ///
+    /// # Type Parameters
+    ///
+    /// * `U` - The type that can be converted into an iterator. Its `IntoIter` must
+    ///   implement `Clone` to allow the iterator to be reused for each element from
+    ///   the first iterator.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use crate::functional::iterator_engine::{IteratorEngine, IteratorChain};
+    /// let engine = IteratorEngine::new();
+    /// let data1 = vec![1, 2];
+    /// let data2 = vec![3, 4];
+    ///
+    /// let products: Vec<(i32, i32)> = engine.from_vec(data1).cartesian_product(data2).collect();
+    ///
+    /// assert_eq!(products, vec![(1, 3), (1, 4), (2, 3), (2, 4)]);
+    /// ```
+    pub fn cartesian_product<U>(
+        self,
+        other: U,
+    ) -> IteratorChain<(T, U::Item), itertools::Product<I, U::IntoIter>>
+    where
+        U: IntoIterator,
+        U::IntoIter: Clone,
+        T: Clone,
+    {
+        use itertools::Itertools;
+        
+        let mut operations = self.operations;
+        operations.push("cartesian_product".to_string());
+
+        let product = self.iterator.cartesian_product(other);
+        IteratorChain {
+            iterator: product,
+            config: self.config,
+            operations,
+        }
+    }
 
     /// Collects all items from the chain into a `Vec`.
     ///
@@ -590,17 +616,16 @@ mod tests {
     //     assert_eq!(chunks, vec![vec![1, 1], vec![2, 2], vec![3, 3, 3]]);
     // }
 
-    // FIXME: cartesian_product is commented out due to Clone constraint issues
-    // #[test]
-    // fn test_cartesian_product() {
-    //     let engine = IteratorEngine::new();
-    //     let data1 = vec![1, 2];
-    //     let data2 = vec![3, 4];
-    //
-    //     let products: Vec<(i32, i32)> = engine.from_vec(data1).cartesian_product(data2).collect();
-    //
-    //     assert_eq!(products, vec![(1, 3), (1, 4), (2, 3), (2, 4)]);
-    // }
+    #[test]
+    fn test_cartesian_product() {
+        let engine = IteratorEngine::new();
+        let data1 = vec![1, 2];
+        let data2 = vec![3, 4];
+
+        let products: Vec<(i32, i32)> = engine.from_vec(data1).cartesian_product(data2).collect();
+
+        assert_eq!(products, vec![(1, 3), (1, 4), (2, 3), (2, 4)]);
+    }
 
     #[test]
     fn test_zero_copy_processing() {
