@@ -148,7 +148,7 @@ React 18.3.1+ + TypeScript 5.9+
 
 ## 📋 Prerequisites
 
-- **Rust**: 1.70+ with diesel_cli for database migrations
+- **Rust**: 1.86.0+ with diesel_cli for database migrations
 - **PostgreSQL**: 13+ with development database
 - **Redis**: 6+ for caching and sessions
 - **Diesel CLI**: `cargo install diesel_cli --no-default-features --features postgres`

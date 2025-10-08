@@ -1,5 +1,5 @@
 [toolchain]
-channel = "1.80.0"  # Updated from 1.65.0 to support lock file version 4
+channel = "1.86.0"
 components = ["rustc", "cargo", "rustfmt", "clippy"]
 targets = ["x86_64-unknown-linux-gnu"]
 profile = "default"
