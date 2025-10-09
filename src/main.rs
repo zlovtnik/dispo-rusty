@@ -191,14 +191,12 @@ mod tests {
     use actix_web::{http, App, HttpServer};
     use futures::FutureExt;
     use testcontainers::clients;
-    use testcontainers::Container;
     use testcontainers::images::postgres::Postgres;
+    use testcontainers::Container;
 
     use crate::config;
 
-    fn try_run_postgres<'a>(
-        docker: &'a clients::Cli,
-    ) -> Option<Container<'a, Postgres>> {
+    fn try_run_postgres<'a>(docker: &'a clients::Cli) -> Option<Container<'a, Postgres>> {
         catch_unwind(AssertUnwindSafe(|| docker.run(Postgres::default()))).ok()
     }
 

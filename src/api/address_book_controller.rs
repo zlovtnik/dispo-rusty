@@ -13,14 +13,11 @@ use crate::{
 /// Returns the pool if present, otherwise returns a ServiceError indicating
 /// that the tenant pool is missing from the request extensions.
 fn extract_pool(req: &HttpRequest) -> Result<Pool, ServiceError> {
-    req.extensions()
-        .get::<Pool>()
-        .cloned()
-        .ok_or_else(|| {
-            ServiceError::internal_server_error("Pool not found")
-                .with_detail("Missing tenant pool in request extensions")
-                .with_tag("tenant")
-        })
+    req.extensions().get::<Pool>().cloned().ok_or_else(|| {
+        ServiceError::internal_server_error("Pool not found")
+            .with_detail("Missing tenant pool in request extensions")
+            .with_tag("tenant")
+    })
 }
 // GET api/address-book
 /// Retrieve all people from the address book and return them in a standard JSON response.
@@ -43,9 +40,7 @@ fn extract_pool(req: &HttpRequest) -> Result<Pool, ServiceError> {
 pub async fn find_all(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
     let pool = extract_pool(&req)?;
     match address_book_service::find_all(&pool) {
-        Ok(people) => {
-            Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, people)))
-        }
+        Ok(people) => Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, people))),
         Err(err) => Err(err),
     }
 }
@@ -72,9 +67,7 @@ pub async fn find_by_id(
 ) -> Result<HttpResponse, ServiceError> {
     let pool = extract_pool(&req)?;
     match address_book_service::find_by_id(id.into_inner(), &pool) {
-        Ok(person) => {
-            Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, person)))
-        }
+        Ok(person) => Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, person))),
         Err(err) => Err(err),
     }
 }
@@ -132,8 +125,7 @@ pub async fn update(
     let pool = extract_pool(&req)?;
     match address_book_service::update(id.into_inner(), updated_person.0, &pool) {
         Ok(()) => {
-            Ok(HttpResponse::Ok()
-                .json(ResponseBody::new(constants::MESSAGE_OK, constants::EMPTY)))
+            Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, constants::EMPTY)))
         }
         Err(err) => Err(err),
     }
@@ -161,8 +153,7 @@ pub async fn delete(id: web::Path<i32>, req: HttpRequest) -> Result<HttpResponse
     let pool = extract_pool(&req)?;
     match address_book_service::delete(id.into_inner(), &pool) {
         Ok(()) => {
-            Ok(HttpResponse::Ok()
-                .json(ResponseBody::new(constants::MESSAGE_OK, constants::EMPTY)))
+            Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, constants::EMPTY)))
         }
         Err(err) => Err(err),
     }
@@ -184,8 +175,8 @@ mod tests {
     use http::header;
     use serde_json::json;
     use testcontainers::clients;
-    use testcontainers::Container;
     use testcontainers::images::postgres::Postgres;
+    use testcontainers::Container;
 
     use crate::config;
     use crate::config::db::TenantPoolManager;
@@ -196,9 +187,7 @@ mod tests {
     pub type Connection = PgConnection;
     pub type Pool = r2d2::Pool<ConnectionManager<Connection>>;
 
-    fn try_run_postgres<'a>(
-        docker: &'a clients::Cli,
-    ) -> Option<Container<'a, Postgres>> {
+    fn try_run_postgres<'a>(docker: &'a clients::Cli) -> Option<Container<'a, Postgres>> {
         catch_unwind(AssertUnwindSafe(|| docker.run(Postgres::default()))).ok()
     }
 

@@ -3,7 +3,7 @@ use actix_web::body::EitherBody;
 use actix_web::dev::{Service, ServiceRequest, ServiceResponse, Transform};
 use actix_web::http::{
     header::{HeaderName, HeaderValue},
-    Method, StatusCode,
+    Method,
 };
 use actix_web::web::Data;
 use actix_web::Error;
@@ -52,27 +52,27 @@ where
 
     forward_ready!(service);
 
-        /// Authenticate a ServiceRequest and either forward it to the inner service or return a 401 Unauthorized response.
-        ///
-        /// On success, forwards the (possibly augmented) request to the wrapped service and returns its response as the left variant of `EitherBody`. On failure, returns a 401 Unauthorized JSON response as the right variant.
-        ///
-        /// # Returns
-        ///
-        /// A future resolving to a `ServiceResponse` whose body is `EitherBody<B>`: the left variant contains the inner service response when authentication succeeds, and the right variant contains a 401 Unauthorized JSON payload when authentication fails.
-        ///
-        /// # Examples
-        ///
-        /// ```
-        /// // Given `middleware` that wraps an inner service and a `req: ServiceRequest`:
-        /// // let fut = middleware.call(req);
-        /// // let res = futures::executor::block_on(fut).unwrap();
-        /// // match res.into_body() {
-        /// //     EitherBody::Left(body) => { /* authenticated path */ },
-        /// //     EitherBody::Right(body) => { /* unauthorized response */ },
-        /// // }
-        /// ```
-        fn call(&self, req: ServiceRequest) -> Self::Future {
-            let mut authenticate_pass: bool = false;
+    /// Authenticate a ServiceRequest and either forward it to the inner service or return a 401 Unauthorized response.
+    ///
+    /// On success, forwards the (possibly augmented) request to the wrapped service and returns its response as the left variant of `EitherBody`. On failure, returns a 401 Unauthorized JSON response as the right variant.
+    ///
+    /// # Returns
+    ///
+    /// A future resolving to a `ServiceResponse` whose body is `EitherBody<B>`: the left variant contains the inner service response when authentication succeeds, and the right variant contains a 401 Unauthorized JSON payload when authentication fails.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // Given `middleware` that wraps an inner service and a `req: ServiceRequest`:
+    /// // let fut = middleware.call(req);
+    /// // let res = futures::executor::block_on(fut).unwrap();
+    /// // match res.into_body() {
+    /// //     EitherBody::Left(body) => { /* authenticated path */ },
+    /// //     EitherBody::Right(body) => { /* unauthorized response */ },
+    /// // }
+    /// ```
+    fn call(&self, req: ServiceRequest) -> Self::Future {
+        let mut authenticate_pass: bool = false;
 
         // Bypass some account routes
         let mut headers = req.headers().clone();
@@ -101,14 +101,14 @@ where
                                 error!("Authorization header missing bearer token");
                             } else {
                                 let token = authen_str[7..].trim();
-                                if let Ok(token_data) =
-                                    token_utils::decode_token(token.to_string())
+                                if let Ok(token_data) = token_utils::decode_token(token.to_string())
                                 {
                                     info!("Decoding token...");
                                     if let Some(tenant_pool) =
                                         manager.get_tenant_pool(&token_data.claims.tenant_id)
                                     {
-                                        if token_utils::verify_token(&token_data, &tenant_pool).is_ok()
+                                        if token_utils::verify_token(&token_data, &tenant_pool)
+                                            .is_ok()
                                         {
                                             info!("Valid token");
                                             req.extensions_mut().insert(tenant_pool.clone());
@@ -127,21 +127,21 @@ where
             }
         }
 
-            if !authenticate_pass {
-                let (request, _pl) = req.into_parts();
-                let response = HttpResponse::Unauthorized()
-                    .json(ResponseBody::new(
-                        constants::MESSAGE_INVALID_TOKEN,
-                        constants::EMPTY,
-                    ))
-                    .map_into_right_body();
+        if !authenticate_pass {
+            let (request, _pl) = req.into_parts();
+            let response = HttpResponse::Unauthorized()
+                .json(ResponseBody::new(
+                    constants::MESSAGE_INVALID_TOKEN,
+                    constants::EMPTY,
+                ))
+                .map_into_right_body();
 
-                return Box::pin(async { Ok(ServiceResponse::new(request, response)) });
-            }
+            return Box::pin(async { Ok(ServiceResponse::new(request, response)) });
+        }
 
-            let fut = self.service.call(req);
+        let fut = self.service.call(req);
 
-            Box::pin(async move { fut.await.map(ServiceResponse::map_into_left_body) })
+        Box::pin(async move { fut.await.map(ServiceResponse::map_into_left_body) })
     }
 }
 
@@ -150,9 +150,9 @@ where
 #[cfg(feature = "functional")]
 mod functional_auth {
     use super::*;
-    use actix_web::body::BoxBody;
     use crate::functional::function_traits::FunctionCategory;
     use crate::functional::pure_function_registry::PureFunctionRegistry;
+    use actix_web::body::BoxBody;
     use std::sync::Arc;
 
     /// Enhanced authentication middleware using functional programming patterns
@@ -298,26 +298,32 @@ mod functional_auth {
                     error!("TenantPoolManager not found in app data");
                     let (request, _pl) = req.into_parts();
                     let response = HttpResponse::Unauthorized()
-                        .json(ResponseBody::new(constants::MESSAGE_INVALID_TOKEN, constants::EMPTY))
+                        .json(ResponseBody::new(
+                            constants::MESSAGE_INVALID_TOKEN,
+                            constants::EMPTY,
+                        ))
                         .map_into_right_body();
                     return Box::pin(async move { Ok(ServiceResponse::new(request, response)) });
                 }
             };
 
-            let (tenant_id, user_id, tenant_pool) = match Self::process_authentication(
-                &req,
-                manager.get_ref(),
-            ) {
-                Ok(data) => data,
-                Err(auth_error) => {
-                    error!("Functional authentication failed: {:?}", auth_error);
-                    let (request, _pl) = req.into_parts();
-                    let response = HttpResponse::Unauthorized()
-                        .json(ResponseBody::new(constants::MESSAGE_INVALID_TOKEN, constants::EMPTY))
-                        .map_into_right_body();
-                    return Box::pin(async move { Ok(ServiceResponse::new(request, response)) });
-                }
-            };
+            let (tenant_id, user_id, tenant_pool) =
+                match Self::process_authentication(&req, manager.get_ref()) {
+                    Ok(data) => data,
+                    Err(auth_error) => {
+                        error!("Functional authentication failed: {:?}", auth_error);
+                        let (request, _pl) = req.into_parts();
+                        let response = HttpResponse::Unauthorized()
+                            .json(ResponseBody::new(
+                                constants::MESSAGE_INVALID_TOKEN,
+                                constants::EMPTY,
+                            ))
+                            .map_into_right_body();
+                        return Box::pin(
+                            async move { Ok(ServiceResponse::new(request, response)) },
+                        );
+                    }
+                };
 
             req.extensions_mut().insert(tenant_pool);
             info!(
@@ -465,8 +471,8 @@ pub use functional_auth::*;
 #[cfg(all(test, feature = "functional"))]
 mod tests {
     use super::*;
-    use actix_web::{test, web, App, HttpResponse};
     use crate::functional::pure_function_registry::PureFunctionRegistry;
+    use actix_web::{test, web, App, HttpResponse};
     use std::sync::Arc;
 
     async fn test_handler() -> HttpResponse {
@@ -477,15 +483,15 @@ mod tests {
     async fn functional_auth_middleware_creates_default() {
         let middleware = FunctionalAuthentication::default();
         // Should create successfully
-    assert!(!middleware.has_registry());
+        assert!(!middleware.has_registry());
     }
 
     #[actix_rt::test]
     async fn functional_auth_middleware_with_registry() {
         let registry = Arc::new(PureFunctionRegistry::new());
         let middleware = FunctionalAuthentication::with_registry(registry.clone());
-        
-    assert!(middleware.has_registry());
+
+        assert!(middleware.has_registry());
     }
 
     #[actix_rt::test]
@@ -493,7 +499,7 @@ mod tests {
         let app = test::init_service(
             App::new()
                 .wrap(FunctionalAuthentication::new())
-                .route("/test", web::get().to(test_handler))
+                .route("/test", web::get().to(test_handler)),
         )
         .await;
 
@@ -503,7 +509,7 @@ mod tests {
 
         let resp = test::call_service(&app, req).await;
         // OPTIONS should pass through without auth
-    assert!(resp.status().is_success() || resp.status() == StatusCode::METHOD_NOT_ALLOWED);
+        assert!(resp.status().is_success() || resp.status() == StatusCode::METHOD_NOT_ALLOWED);
     }
 
     #[actix_rt::test]
@@ -511,25 +517,23 @@ mod tests {
         let app = test::init_service(
             App::new()
                 .wrap(FunctionalAuthentication::new())
-                .route("/protected", web::get().to(test_handler))
+                .route("/protected", web::get().to(test_handler)),
         )
         .await;
 
-        let req = test::TestRequest::get()
-            .uri("/protected")
-            .to_request();
+        let req = test::TestRequest::get().uri("/protected").to_request();
 
         let resp = test::call_service(&app, req).await;
-    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
     }
 
     #[test]
     async fn functional_auth_extract_token_missing_header() {
         let req = test::TestRequest::get().uri("/test").to_srv_request();
         let result = FunctionalAuthenticationMiddleware::<()>::extract_token(&req);
-        
-    assert!(result.is_err());
-    assert_eq!(result.unwrap_err(), "Missing authorization header");
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "Missing authorization header");
     }
 
     #[test]
@@ -538,11 +542,11 @@ mod tests {
             .uri("/test")
             .insert_header((constants::AUTHORIZATION, "Basic abc123"))
             .to_srv_request();
-        
+
         let result = FunctionalAuthenticationMiddleware::<()>::extract_token(&req);
-        
-    assert!(result.is_err());
-    assert_eq!(result.unwrap_err(), "Invalid authorization scheme");
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "Invalid authorization scheme");
     }
 
     #[test]
@@ -551,11 +555,11 @@ mod tests {
             .uri("/test")
             .insert_header((constants::AUTHORIZATION, "Bearer "))
             .to_srv_request();
-        
+
         let result = FunctionalAuthenticationMiddleware::<()>::extract_token(&req);
-        
-    assert!(result.is_err());
-    assert_eq!(result.unwrap_err(), "Empty token");
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "Empty token");
     }
 
     #[test]
@@ -564,31 +568,29 @@ mod tests {
             .uri("/test")
             .insert_header((constants::AUTHORIZATION, "Bearer valid_token_here"))
             .to_srv_request();
-        
+
         let result = FunctionalAuthenticationMiddleware::<()>::extract_token(&req);
-        
-    assert!(result.is_ok());
-    assert_eq!(result.unwrap(), "valid_token_here");
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "valid_token_here");
     }
 
     #[test]
     async fn functional_auth_should_skip_health_endpoint() {
-        let req = test::TestRequest::get()
-            .uri("/health")
-            .to_srv_request();
-        
-        let should_skip = FunctionalAuthenticationMiddleware::<()>::should_skip_authentication(&req);
-    assert!(should_skip);
+        let req = test::TestRequest::get().uri("/health").to_srv_request();
+
+        let should_skip =
+            FunctionalAuthenticationMiddleware::<()>::should_skip_authentication(&req);
+        assert!(should_skip);
     }
 
     #[test]
     async fn functional_auth_should_skip_api_doc() {
-        let req = test::TestRequest::get()
-            .uri("/api-doc")
-            .to_srv_request();
-        
-        let should_skip = FunctionalAuthenticationMiddleware::<()>::should_skip_authentication(&req);
-    assert!(should_skip);
+        let req = test::TestRequest::get().uri("/api-doc").to_srv_request();
+
+        let should_skip =
+            FunctionalAuthenticationMiddleware::<()>::should_skip_authentication(&req);
+        assert!(should_skip);
     }
 
     #[test]
@@ -596,8 +598,9 @@ mod tests {
         let req = test::TestRequest::get()
             .uri("/api/protected")
             .to_srv_request();
-        
-        let should_skip = FunctionalAuthenticationMiddleware::<()>::should_skip_authentication(&req);
-    assert!(!should_skip);
+
+        let should_skip =
+            FunctionalAuthenticationMiddleware::<()>::should_skip_authentication(&req);
+        assert!(!should_skip);
     }
 }

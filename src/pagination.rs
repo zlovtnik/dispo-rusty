@@ -68,7 +68,7 @@ impl Pagination {
         if total_count == 0 {
             0
         } else {
-            (total_count + self.page_size - 1) / self.page_size
+            total_count.saturating_add(self.page_size.saturating_sub(1)) / self.page_size
         }
     }
 }
@@ -174,11 +174,7 @@ where
     }
 }
 
-impl<I> FusedIterator for PagedIterator<I>
-where
-    I: FusedIterator,
-{
-}
+impl<I> FusedIterator for PagedIterator<I> where I: FusedIterator {}
 
 /// Iterator extension helpers enabling chunked and cursor-based pagination.
 pub trait PaginateExt: Iterator + Sized {
@@ -229,7 +225,7 @@ pub fn total_pages(total_count: usize, per_page: usize) -> usize {
     if per_page == 0 {
         0
     } else {
-        (total_count + per_page - 1) / per_page
+        total_count.saturating_add(per_page.saturating_sub(1)) / per_page
     }
 }
 
@@ -285,7 +281,8 @@ mod tests {
     fn helper_functions_cover_total_pages_and_map_items() {
         let pagination = Pagination::new(0, 5);
         assert_eq!(pagination.total_pages(23), 5);
-    assert_eq!(super::total_pages(23, 5), 5);
+        assert_eq!(pagination.total_pages(23), 5);
+        assert_eq!(super::total_pages(23, 5), 5);
 
         let page = paginate_into_iter(0..5, pagination);
         let mapped = page.map_items(|value| value * 2);
