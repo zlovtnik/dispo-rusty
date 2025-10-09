@@ -7,6 +7,11 @@ use crate::{
     models::{filters::PersonFilter, person::PersonDTO, response::ResponseBody},
     services::address_book_service,
 };
+
+#[cfg(feature = "functional")]
+use actix_web::Responder;
+#[cfg(feature = "functional")]
+use crate::functional::response_transformers::ResponseTransformer;
 // GET api/address-book
 /// Retrieve all people from the address book and return them in a standard JSON response.
 ///
@@ -26,17 +31,25 @@ use crate::{
 /// // `result` will be `Ok(HttpResponse)` on success or `Err(ServiceError)` on failure.
 /// ```
 pub async fn find_all(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
-    if let Some(pool) = req.extensions().get::<Pool>() {
-        match address_book_service::find_all(pool) {
-            Ok(people) => {
-                Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, people)))
-            }
-            Err(err) => Err(err),
-        }
-    } else {
-        Err(ServiceError::InternalServerError {
+    let pool = req
+        .extensions()
+        .get::<Pool>()
+        .cloned()
+        .ok_or_else(|| ServiceError::InternalServerError {
             error_message: "Pool not found".to_string(),
-        })
+        })?;
+
+    let people = address_book_service::find_all(&pool)?;
+
+    #[cfg(feature = "functional")]
+    {
+        Ok(ResponseTransformer::new(people)
+            .with_message(constants::MESSAGE_OK)
+            .respond_to(&req))
+    }
+    #[cfg(not(feature = "functional"))]
+    {
+        Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, people)))
     }
 }
 
@@ -60,17 +73,25 @@ pub async fn find_by_id(
     id: web::Path<i32>,
     req: HttpRequest,
 ) -> Result<HttpResponse, ServiceError> {
-    if let Some(pool) = req.extensions().get::<Pool>() {
-        match address_book_service::find_by_id(id.into_inner(), pool) {
-            Ok(person) => {
-                Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, person)))
-            }
-            Err(err) => Err(err),
-        }
-    } else {
-        Err(ServiceError::InternalServerError {
+    let pool = req
+        .extensions()
+        .get::<Pool>()
+        .cloned()
+        .ok_or_else(|| ServiceError::InternalServerError {
             error_message: "Pool not found".to_string(),
-        })
+        })?;
+
+    let person = address_book_service::find_by_id(id.into_inner(), &pool)?;
+
+    #[cfg(feature = "functional")]
+    {
+        Ok(ResponseTransformer::new(person)
+            .with_message(constants::MESSAGE_OK)
+            .respond_to(&req))
+    }
+    #[cfg(not(feature = "functional"))]
+    {
+        Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, person)))
     }
 }
 
@@ -79,15 +100,25 @@ pub async fn filter(
     web::Query(filter): web::Query<PersonFilter>,
     req: HttpRequest,
 ) -> Result<HttpResponse, ServiceError> {
-    if let Some(pool) = req.extensions().get::<Pool>() {
-        match address_book_service::filter(filter, pool) {
-            Ok(page) => Ok(HttpResponse::Ok().json(page)),
-            Err(err) => Err(err),
-        }
-    } else {
-        Err(ServiceError::InternalServerError {
+    let pool = req
+        .extensions()
+        .get::<Pool>()
+        .cloned()
+        .ok_or_else(|| ServiceError::InternalServerError {
             error_message: "Pool not found".to_string(),
-        })
+        })?;
+
+    let page = address_book_service::filter(filter, &pool)?;
+
+    #[cfg(feature = "functional")]
+    {
+        Ok(ResponseTransformer::new(page)
+            .with_message(constants::MESSAGE_OK)
+            .respond_to(&req))
+    }
+    #[cfg(not(feature = "functional"))]
+    {
+        Ok(HttpResponse::Ok().json(page))
     }
 }
 
@@ -96,16 +127,28 @@ pub async fn insert(
     new_person: web::Json<PersonDTO>,
     req: HttpRequest,
 ) -> Result<HttpResponse, ServiceError> {
-    if let Some(pool) = req.extensions().get::<Pool>() {
-        match address_book_service::insert(new_person.0, pool) {
-            Ok(()) => Ok(HttpResponse::Created()
-                .json(ResponseBody::new(constants::MESSAGE_OK, constants::EMPTY))),
-            Err(err) => Err(err),
-        }
-    } else {
-        Err(ServiceError::InternalServerError {
+    let pool = req
+        .extensions()
+        .get::<Pool>()
+        .cloned()
+        .ok_or_else(|| ServiceError::InternalServerError {
             error_message: "Pool not found".to_string(),
-        })
+        })?;
+
+    address_book_service::insert(new_person.0, &pool)?;
+
+    #[cfg(feature = "functional")]
+    {
+        use actix_web::http::StatusCode;
+        Ok(ResponseTransformer::new(constants::EMPTY)
+            .with_message(constants::MESSAGE_OK)
+            .with_status(StatusCode::CREATED)
+            .respond_to(&req))
+    }
+    #[cfg(not(feature = "functional"))]
+    {
+        Ok(HttpResponse::Created()
+            .json(ResponseBody::new(constants::MESSAGE_OK, constants::EMPTY)))
     }
 }
 
@@ -134,18 +177,26 @@ pub async fn update(
     updated_person: web::Json<PersonDTO>,
     req: HttpRequest,
 ) -> Result<HttpResponse, ServiceError> {
-    if let Some(pool) = req.extensions().get::<Pool>() {
-        match address_book_service::update(id.into_inner(), updated_person.0, pool) {
-            Ok(()) => {
-                Ok(HttpResponse::Ok()
-                    .json(ResponseBody::new(constants::MESSAGE_OK, constants::EMPTY)))
-            }
-            Err(err) => Err(err),
-        }
-    } else {
-        Err(ServiceError::InternalServerError {
+    let pool = req
+        .extensions()
+        .get::<Pool>()
+        .cloned()
+        .ok_or_else(|| ServiceError::InternalServerError {
             error_message: "Pool not found".to_string(),
-        })
+        })?;
+
+    address_book_service::update(id.into_inner(), updated_person.0, &pool)?;
+
+    #[cfg(feature = "functional")]
+    {
+        Ok(ResponseTransformer::new(constants::EMPTY)
+            .with_message(constants::MESSAGE_OK)
+            .respond_to(&req))
+    }
+    #[cfg(not(feature = "functional"))]
+    {
+        Ok(HttpResponse::Ok()
+            .json(ResponseBody::new(constants::MESSAGE_OK, constants::EMPTY)))
     }
 }
 
@@ -168,18 +219,26 @@ pub async fn update(
 /// # }
 /// ```
 pub async fn delete(id: web::Path<i32>, req: HttpRequest) -> Result<HttpResponse, ServiceError> {
-    if let Some(pool) = req.extensions().get::<Pool>() {
-        match address_book_service::delete(id.into_inner(), pool) {
-            Ok(()) => {
-                Ok(HttpResponse::Ok()
-                    .json(ResponseBody::new(constants::MESSAGE_OK, constants::EMPTY)))
-            }
-            Err(err) => Err(err),
-        }
-    } else {
-        Err(ServiceError::InternalServerError {
+    let pool = req
+        .extensions()
+        .get::<Pool>()
+        .cloned()
+        .ok_or_else(|| ServiceError::InternalServerError {
             error_message: "Pool not found".to_string(),
-        })
+        })?;
+
+    address_book_service::delete(id.into_inner(), &pool)?;
+
+    #[cfg(feature = "functional")]
+    {
+        Ok(ResponseTransformer::new(constants::EMPTY)
+            .with_message(constants::MESSAGE_OK)
+            .respond_to(&req))
+    }
+    #[cfg(not(feature = "functional"))]
+    {
+        Ok(HttpResponse::Ok()
+            .json(ResponseBody::new(constants::MESSAGE_OK, constants::EMPTY)))
     }
 }
 

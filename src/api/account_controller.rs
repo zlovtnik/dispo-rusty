@@ -11,6 +11,11 @@ use crate::{
     services::account_service,
 };
 
+#[cfg(feature = "functional")]
+use actix_web::Responder;
+#[cfg(feature = "functional")]
+use crate::functional::response_transformers::ResponseTransformer;
+
 /// Helper function to extract tenant pool from request extensions
 fn extract_tenant_pool(req: &HttpRequest) -> Result<Pool, ServiceError> {
     match req.extensions().get::<Pool>() {
@@ -82,10 +87,20 @@ pub async fn logout(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
     if let Some(authen_header) = req.headers().get(constants::AUTHORIZATION) {
         let pool = extract_tenant_pool(&req)?;
         account_service::logout(authen_header, &pool);
-        Ok(HttpResponse::Ok().json(ResponseBody::new(
-            constants::MESSAGE_LOGOUT_SUCCESS,
-            constants::EMPTY,
-        )))
+
+        #[cfg(feature = "functional")]
+        {
+            Ok(ResponseTransformer::new(constants::EMPTY)
+                .with_message(constants::MESSAGE_LOGOUT_SUCCESS)
+                .respond_to(&req))
+        }
+        #[cfg(not(feature = "functional"))]
+        {
+            Ok(HttpResponse::Ok().json(ResponseBody::new(
+                constants::MESSAGE_LOGOUT_SUCCESS,
+                constants::EMPTY,
+            )))
+        }
     } else {
         Err(ServiceError::BadRequest {
             error_message: constants::MESSAGE_TOKEN_MISSING.to_string(),
@@ -112,11 +127,17 @@ pub async fn logout(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
 pub async fn refresh(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
     if let Some(authen_header) = req.headers().get(constants::AUTHORIZATION) {
         let pool = extract_tenant_pool(&req)?;
-        match account_service::refresh(authen_header, &pool) {
-            Ok(login_info) => {
-                Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, login_info)))
-            }
-            Err(err) => Err(err),
+        let login_info = account_service::refresh(authen_header, &pool)?;
+
+        #[cfg(feature = "functional")]
+        {
+            Ok(ResponseTransformer::new(login_info)
+                .with_message(constants::MESSAGE_OK)
+                .respond_to(&req))
+        }
+        #[cfg(not(feature = "functional"))]
+        {
+            Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, login_info)))
         }
     } else {
         Err(ServiceError::BadRequest {
@@ -148,11 +169,17 @@ pub async fn refresh(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
 pub async fn me(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
     if let Some(authen_header) = req.headers().get(constants::AUTHORIZATION) {
         let pool = extract_tenant_pool(&req)?;
-        match account_service::me(authen_header, &pool) {
-            Ok(login_info) => {
-                Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, login_info)))
-            }
-            Err(err) => Err(err),
+        let login_info = account_service::me(authen_header, &pool)?;
+
+        #[cfg(feature = "functional")]
+        {
+            Ok(ResponseTransformer::new(login_info)
+                .with_message(constants::MESSAGE_OK)
+                .respond_to(&req))
+        }
+        #[cfg(not(feature = "functional"))]
+        {
+            Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, login_info)))
         }
     } else {
         Err(ServiceError::BadRequest {
