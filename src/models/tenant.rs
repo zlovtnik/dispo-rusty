@@ -5,13 +5,15 @@ use url::Url;
 
 use crate::{
     constants::{self, MESSAGE_OK},
-    functional::pagination::{PaginatedPage, Pagination as IteratorPagination},
+    pagination::{PaginatedPage, Pagination as IteratorPagination},
     models::{
         filters::TenantFilter,
         response::Page,
     },
     schema::tenants::{self, dsl::*},
 };
+
+const MAX_PAGE_SIZE: i64 = 10_000;
 
 #[derive(Clone, Identifiable, Queryable, Serialize, Deserialize)]
 #[diesel(table_name = tenants)]
@@ -135,22 +137,20 @@ impl Tenant {
     /// assert!(all.len() <= 10_000);
     /// ```
     pub fn list_all(conn: &mut crate::config::db::Connection) -> QueryResult<Vec<Tenant>> {
-        const MAX_LIMIT: i64 = 10000;
-
         // Check total count first
         let total_count: i64 = tenants.count().get_result(conn)?;
 
-        if total_count > MAX_LIMIT {
+        if total_count > MAX_PAGE_SIZE {
             return Err(diesel::result::Error::DatabaseError(
                 diesel::result::DatabaseErrorKind::Unknown,
                 Box::new(format!(
                     "Tenant count ({}) exceeds maximum limit ({}). Use paginated methods instead.",
-                    total_count, MAX_LIMIT
+                    total_count, MAX_PAGE_SIZE
                 )),
             ));
         }
 
-        tenants.limit(MAX_LIMIT).load::<Tenant>(conn)
+        tenants.limit(MAX_PAGE_SIZE).load::<Tenant>(conn)
     }
 
     /// Loads tenant records with an optional limit; defaults to 1,000 and is capped at 10,000.
@@ -169,7 +169,7 @@ impl Tenant {
         limit: Option<i64>,
         conn: &mut crate::config::db::Connection,
     ) -> QueryResult<Vec<Tenant>> {
-        let limit = limit.unwrap_or(1000).max(0).min(10000);
+        let limit = limit.unwrap_or(1000).max(0).min(MAX_PAGE_SIZE);
         tenants.limit(limit).load::<Tenant>(conn)
     }
 
@@ -439,8 +439,6 @@ impl Tenant {
             filter.page_size,
             default_page_size,
         );
-
-        const MAX_PAGE_SIZE: i64 = 10_000;
 
         let mut page_size_i64 = i64::try_from(pagination.page_size())
             .map_err(|_| {

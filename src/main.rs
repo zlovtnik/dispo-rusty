@@ -18,6 +18,7 @@ mod error;
 mod functional;
 mod middleware;
 mod models;
+mod pagination;
 mod schema;
 mod services;
 mod utils;

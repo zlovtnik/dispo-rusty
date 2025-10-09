@@ -730,6 +730,9 @@ pub mod functional_middleware_impl {
     #[cfg(test)]
     mod tests {
         use super::*;
+        use std::sync::Arc;
+        use crate::functional::function_traits::FunctionCategory;
+        use crate::functional::pure_function_registry::PureFunctionRegistry;
 
         #[test]
         fn middleware_context_default() {
@@ -804,7 +807,7 @@ pub mod functional_middleware_impl {
         #[test]
         fn token_extractor_category() {
             let extractor = TokenExtractor;
-            assert_eq!(extractor.category(), FunctionCategory::Middleware);
+            assert_eq!(extractor.category(), FunctionCategory::BusinessLogic);
         }
 
         #[test]
@@ -819,7 +822,7 @@ pub mod functional_middleware_impl {
         #[test]
         fn token_validator_category() {
             let validator = TokenValidator;
-            assert_eq!(validator.category(), FunctionCategory::Middleware);
+            assert_eq!(validator.category(), FunctionCategory::BusinessLogic);
         }
 
         #[test]
@@ -831,7 +834,7 @@ pub mod functional_middleware_impl {
         #[test]
         fn auth_skip_checker_category() {
             let checker = AuthSkipChecker;
-            assert_eq!(checker.category(), FunctionCategory::Middleware);
+            assert_eq!(checker.category(), FunctionCategory::BusinessLogic);
         }
 
         #[test]

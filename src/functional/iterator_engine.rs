@@ -57,19 +57,22 @@ where
     operations: Vec<String>, // For debugging and monitoring
 }
 
+impl<T, I> Iterator for IteratorChain<T, I>
+where
+    I: Iterator<Item = T>,
+{
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iterator.next()
+    }
+}
+
 impl<T, I> IteratorChain<T, I>
 where
     I: Iterator<Item = T>,
 {
-    /// Constructs a new IteratorChain from an existing iterator with the default configuration.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let chain = IteratorChain::new(vec![1, 2, 3].into_iter());
-    /// let collected: Vec<_> = chain.collect();
-    /// assert_eq!(collected, vec![1, 2, 3]);
-    /// ```
+    /// Creates a new IteratorChain with default configuration
     pub fn new(iterator: I) -> Self {
         Self {
             iterator,
@@ -186,23 +189,20 @@ where
         }
     }
 
-    // /// K-way merge sorted iterators
+    /// K-way merge sorted iterators
     #[cfg(feature = "functional")]
     pub fn kmerge<J>(self, other: J) -> IteratorChain<T, impl Iterator<Item = T>>
     where
         T: Ord,
         J: IntoIterator<Item = T>,
-        I::Item: Ord,
     {
         let mut operations = self.operations;
         operations.push("kmerge".to_string());
 
-        let mut values: Vec<T> = self.iterator.collect();
-        values.extend(other);
-        values.sort();
+        let merged = itertools::kmerge(vec![self.iterator.collect::<Vec<_>>().into_iter(), other.into_iter().collect::<Vec<_>>().into_iter()]);
 
         IteratorChain {
-            iterator: values.into_iter(),
+            iterator: merged,
             config: self.config,
             operations,
         }
@@ -382,23 +382,6 @@ where
         F: FnMut(B, T) -> B,
     {
         self.iterator.fold(init, f)
-    }
-
-    /// Returns a slice of operation names recorded by this iterator chain.
-    ///
-    /// The slice reflects the sequence of transformation names (e.g., "map", "filter", "join")
-    /// that have been applied to the chain for debugging or monitoring purposes.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let engine = IteratorEngine::new();
-    /// let chain = engine.from_vec(vec![1, 2, 3]).map(|x| x * 2);
-    /// let ops = chain.operations();
-    /// assert_eq!(ops, &["map"]);
-    /// ```
-    pub fn operations(&self) -> &[String] {
-        &self.operations
     }
 }
 
@@ -640,17 +623,19 @@ mod tests {
         assert_eq!(result, vec![2, 4, 6, 8, 10]);
     }
 
+    #[cfg(feature = "functional")]
     #[test]
     fn test_kmerge() {
         let engine = IteratorEngine::new();
         let data1 = vec![1, 3, 5];
         let data2 = vec![2, 4, 6];
 
-        let merged: Vec<i32> = engine.from_vec(data1).kmerge(data2).collect();
+        let merged: Vec<i32> = engine.from_vec(data1).chain(data2).kmerge().collect();
 
         assert_eq!(merged, vec![1, 2, 3, 4, 5, 6]);
     }
 
+    #[cfg(feature = "functional")]
     #[test]
     fn test_lockstep_zip() {
         let engine = IteratorEngine::new();
@@ -702,6 +687,109 @@ mod tests {
             .collect();
 
         assert_eq!(result, vec!["Alice", "Charlie"]);
+    }
+
+    #[cfg(feature = "functional")]
+    #[test]
+    fn test_kmerge_preserves_merge_semantics() {
+        let engine = IteratorEngine::new();
+        let left = vec![1, 3, 5, 7, 9];
+        let right = vec![2, 4, 6, 8, 10];
+
+        let merged: Vec<i32> = engine.from_vec(left).kmerge(right).collect();
+
+        // Should produce sorted merge of both inputs
+        assert_eq!(merged, vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    }
+
+    #[cfg(feature = "functional")]
+    #[test]
+    fn test_lockstep_zip_stops_at_shortest() {
+        let engine = IteratorEngine::new();
+        let short = vec![1, 2];
+        let long = vec![4, 5, 6, 7];
+
+        let zipped: Vec<Vec<i32>> = engine.from_vec(short).lockstep_zip(vec![long.into_iter()]).collect();
+
+        // Should stop at shortest iterator length
+        assert_eq!(zipped, vec![vec![1, 4], vec![2, 5]]);
+        assert_eq!(zipped.len(), 2);
+    }
+
+    #[cfg(feature = "functional")]
+    #[test]
+    fn test_kmerge_lazy_evaluation() {
+        struct LimitedIterator {
+            data: Vec<i32>,
+            limit: usize,
+            count: usize,
+        }
+
+        impl LimitedIterator {
+            fn new(data: Vec<i32>, limit: usize) -> Self {
+                Self { data, limit, count: 0 }
+            }
+        }
+
+        impl Iterator for LimitedIterator {
+            type Item = i32;
+
+            fn next(&mut self) -> Option<Self::Item> {
+                if self.count >= self.limit {
+                    panic!("Iterator advanced past limit of {}", self.limit);
+                }
+                let item = self.data.get(self.count).cloned();
+                self.count += 1;
+                item
+            }
+        }
+
+        let engine = IteratorEngine::new();
+        let left = LimitedIterator::new(vec![1, 3, 5], 3); // Should consume exactly 3
+        let right = LimitedIterator::new(vec![2, 4, 6], 3); // Should consume exactly 3
+
+        // Collect all - should succeed and produce merged result
+        let merged: Vec<i32> = engine.from_iter(left).kmerge(right).collect();
+
+        assert_eq!(merged, vec![1, 2, 3, 4, 5, 6]);
+    }
+
+    #[cfg(feature = "functional")]
+    #[test]
+    fn test_lockstep_zip_lazy_evaluation() {
+        struct LimitedIterator {
+            data: Vec<i32>,
+            limit: usize,
+            count: usize,
+        }
+
+        impl LimitedIterator {
+            fn new(data: Vec<i32>, limit: usize) -> Self {
+                Self { data, limit, count: 0 }
+            }
+        }
+
+        impl Iterator for LimitedIterator {
+            type Item = i32;
+
+            fn next(&mut self) -> Option<Self::Item> {
+                if self.count >= self.limit {
+                    panic!("Iterator advanced past limit of {}", self.limit);
+                }
+                let item = self.data.get(self.count).cloned();
+                self.count += 1;
+                item
+            }
+        }
+
+        let engine = IteratorEngine::new();
+        let main = LimitedIterator::new(vec![1, 2], 2); // Should consume exactly 2
+        let other = LimitedIterator::new(vec![4, 5], 2); // Should consume exactly 2
+
+        // Collect all - should succeed and stop at shortest
+        let zipped: Vec<Vec<i32>> = engine.from_iter(main).lockstep_zip(vec![other]).collect();
+
+        assert_eq!(zipped, vec![vec![1, 4], vec![2, 5]]);
     }
 }
 

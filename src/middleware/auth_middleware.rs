@@ -3,7 +3,7 @@ use actix_web::body::EitherBody;
 use actix_web::dev::{Service, ServiceRequest, ServiceResponse, Transform};
 use actix_web::http::{
     header::{HeaderName, HeaderValue},
-    Method,
+    Method, StatusCode,
 };
 use actix_web::web::Data;
 use actix_web::Error;
@@ -200,6 +200,11 @@ mod functional_auth {
                 registry: Some(registry),
             }
         }
+
+        /// Returns true if this authentication has a registry configured.
+        pub fn has_registry(&self) -> bool {
+            self.registry.is_some()
+        }
     }
 
     impl Default for FunctionalAuthentication {
@@ -331,7 +336,7 @@ mod functional_auth {
 
     impl<S> FunctionalAuthenticationMiddleware<S> {
         /// Pure function to determine if authentication should be skipped
-        fn should_skip_authentication(req: &ServiceRequest) -> bool {
+        pub(crate) fn should_skip_authentication(req: &ServiceRequest) -> bool {
             // Skip OPTIONS preflight requests
             if req.method() == Method::OPTIONS {
                 return true;
@@ -472,7 +477,7 @@ mod tests {
     async fn functional_auth_middleware_creates_default() {
         let middleware = FunctionalAuthentication::default();
         // Should create successfully
-    assert!(middleware.registry.is_none());
+    assert!(!middleware.has_registry());
     }
 
     #[actix_rt::test]
@@ -480,7 +485,7 @@ mod tests {
         let registry = Arc::new(PureFunctionRegistry::new());
         let middleware = FunctionalAuthentication::with_registry(registry.clone());
         
-    assert!(middleware.registry.is_some());
+    assert!(middleware.has_registry());
     }
 
     #[actix_rt::test]
@@ -519,7 +524,7 @@ mod tests {
     }
 
     #[test]
-    fn functional_auth_extract_token_missing_header() {
+    async fn functional_auth_extract_token_missing_header() {
         let req = test::TestRequest::get().uri("/test").to_srv_request();
         let result = FunctionalAuthenticationMiddleware::<()>::extract_token(&req);
         
@@ -528,7 +533,7 @@ mod tests {
     }
 
     #[test]
-    fn functional_auth_extract_token_invalid_scheme() {
+    async fn functional_auth_extract_token_invalid_scheme() {
         let req = test::TestRequest::get()
             .uri("/test")
             .insert_header((constants::AUTHORIZATION, "Basic abc123"))
@@ -541,7 +546,7 @@ mod tests {
     }
 
     #[test]
-    fn functional_auth_extract_token_empty_token() {
+    async fn functional_auth_extract_token_empty_token() {
         let req = test::TestRequest::get()
             .uri("/test")
             .insert_header((constants::AUTHORIZATION, "Bearer "))
@@ -554,7 +559,7 @@ mod tests {
     }
 
     #[test]
-    fn functional_auth_extract_token_success() {
+    async fn functional_auth_extract_token_success() {
         let req = test::TestRequest::get()
             .uri("/test")
             .insert_header((constants::AUTHORIZATION, "Bearer valid_token_here"))
@@ -567,7 +572,7 @@ mod tests {
     }
 
     #[test]
-    fn functional_auth_should_skip_health_endpoint() {
+    async fn functional_auth_should_skip_health_endpoint() {
         let req = test::TestRequest::get()
             .uri("/health")
             .to_srv_request();
@@ -577,7 +582,7 @@ mod tests {
     }
 
     #[test]
-    fn functional_auth_should_skip_api_doc() {
+    async fn functional_auth_should_skip_api_doc() {
         let req = test::TestRequest::get()
             .uri("/api-doc")
             .to_srv_request();
@@ -587,7 +592,7 @@ mod tests {
     }
 
     #[test]
-    fn functional_auth_should_not_skip_protected_route() {
+    async fn functional_auth_should_not_skip_protected_route() {
         let req = test::TestRequest::get()
             .uri("/api/protected")
             .to_srv_request();

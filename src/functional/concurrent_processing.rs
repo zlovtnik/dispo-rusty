@@ -566,26 +566,27 @@ where
 }
 
 #[cfg(test)]
+/// Create a default `ConcurrentProcessor` for tests and examples.
+///
+/// The returned processor is configured with `ParallelConfig::default()`.
+///
+/// # Panics
+///
+/// Panics if the underlying Rayon thread pool cannot be constructed.
+///
+/// # Examples
+///
+/// ```
+/// let proc = processor();
+/// // use `proc` to run parallel operations in tests
+/// ```
+pub fn processor() -> ConcurrentProcessor {
+    ConcurrentProcessor::try_default().expect("thread pool should build")
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
-
-    /// Create a default `ConcurrentProcessor` for tests and examples.
-    ///
-    /// The returned processor is configured with `ParallelConfig::default()`.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the underlying Rayon thread pool cannot be constructed.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let proc = processor();
-    /// // use `proc` to run parallel operations in tests
-    /// ```
-    fn processor() -> ConcurrentProcessor {
-        ConcurrentProcessor::try_default().expect("thread pool should build")
-    }
 
     #[test]
     fn map_parallel_basic() {
@@ -701,6 +702,7 @@ mod tests {
         let config = ParallelConfig {
             thread_pool_size: 4,
             min_parallel_size: 10,
+            enable_work_stealing: true,
             chunk_size: 100,
         };
         
@@ -715,6 +717,7 @@ mod tests {
         let new_config = ParallelConfig {
             thread_pool_size: 2,
             min_parallel_size: 50,
+            enable_work_stealing: false,
             chunk_size: 200,
         };
         
@@ -917,6 +920,7 @@ mod tests {
         let config = ParallelConfig {
             thread_pool_size: 0,
             min_parallel_size: 10,
+            enable_work_stealing: true,
             chunk_size: 100,
         };
         

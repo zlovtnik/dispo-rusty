@@ -1076,7 +1076,7 @@ mod tests {
         let result = ResponseTransformer::new(1)
             .with_metadata_value(json!({"value": 10}))
             .try_map_metadata(|_| {
-                Err(serde_json::Error::custom("transformation failed"))
+                Err(serde_json::from_str::<serde_json::Value>("invalid json").unwrap_err())
             });
 
     assert!(result.is_err());
