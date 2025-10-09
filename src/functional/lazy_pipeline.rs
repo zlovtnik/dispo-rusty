@@ -235,7 +235,10 @@ impl PipelineMetrics {
     /// Records timing for a specific operation
     pub fn record_operation(&mut self, operation: &str, duration: Duration) {
         self.operations_count += 1;
-        *self.operation_times.entry(operation.to_string()).or_insert(Duration::default()) += duration;
+        *self
+            .operation_times
+            .entry(operation.to_string())
+            .or_insert(Duration::default()) += duration;
     }
 
     /// Updates memory usage estimate
@@ -378,18 +381,18 @@ where
             key.into()
         };
         self.operations.push(LazyOp::ChunkBy(Box::new(key_mapper)));
-// Manual Clone implementation for LazyOp
-impl<I> Clone for LazyOp<I> {
-    fn clone(&self) -> Self {
-        match self {
-            LazyOp::Map(_) => panic!("Cannot clone Map closure"),
-            LazyOp::Filter(_) => panic!("Cannot clone Filter closure"),
-            LazyOp::ChunkBy(_) => panic!("Cannot clone ChunkBy closure"),
-            LazyOp::Take(n) => LazyOp::Take(*n),
-            LazyOp::Skip(n) => LazyOp::Skip(*n),
+        // Manual Clone implementation for LazyOp
+        impl<I> Clone for LazyOp<I> {
+            fn clone(&self) -> Self {
+                match self {
+                    LazyOp::Map(_) => panic!("Cannot clone Map closure"),
+                    LazyOp::Filter(_) => panic!("Cannot clone Filter closure"),
+                    LazyOp::ChunkBy(_) => panic!("Cannot clone ChunkBy closure"),
+                    LazyOp::Take(n) => LazyOp::Take(*n),
+                    LazyOp::Skip(n) => LazyOp::Skip(*n),
+                }
+            }
         }
-    }
-}
         self
     }
 
@@ -482,11 +485,11 @@ impl<I> Clone for LazyOp<I> {
                     skip_remaining -= 1;
                     continue;
                 }
-                
+
                 if take_remaining == 0 {
                     break;
                 }
-                
+
                 result.push(processed_item);
                 take_remaining -= 1;
                 self.metrics.items_processed += 1;
@@ -690,8 +693,7 @@ pub mod patterns {
     where
         T: Clone + Send + Sync + 'static,
     {
-        LazyPipeline::new(data.into_iter())
-            .paginate(page, per_page)
+        LazyPipeline::new(data.into_iter()).paginate(page, per_page)
     }
 
     /// Creates a streaming pipeline for memory-constrained environments
@@ -729,8 +731,7 @@ mod tests {
     #[test]
     fn test_pagination_pipeline() {
         let data = (1..=100).collect::<Vec<_>>();
-        let pipeline = LazyPipeline::new(data.into_iter())
-            .paginate(1, 10); // Page 2, 10 items per page
+        let pipeline = LazyPipeline::new(data.into_iter()).paginate(1, 10); // Page 2, 10 items per page
 
         let result = pipeline.collect().unwrap();
         assert_eq!(result.len(), 10);
@@ -748,15 +749,16 @@ mod tests {
         let pipeline = LazyPipeline::with_config(data.into_iter(), config);
 
         let result = pipeline.collect();
-        assert!(matches!(result, Err(LazyPipelineError::MemoryLimitExceeded(_))));
+        assert!(matches!(
+            result,
+            Err(LazyPipelineError::MemoryLimitExceeded(_))
+        ));
     }
 
     #[test]
     fn test_streaming_iterator() {
         let data = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-        let mut stream = LazyPipeline::new(data.into_iter())
-            .stream()
-            .unwrap();
+        let mut stream = LazyPipeline::new(data.into_iter()).stream().unwrap();
 
         let chunk1 = stream.next_chunk(3).unwrap().unwrap();
         assert_eq!(chunk1, &[1, 2, 3]);
@@ -781,21 +783,17 @@ mod tests {
             .filter(|&x| x % 2 == 0)
             .map(|x| x * 2);
 
-    let _result = pipeline.collect().unwrap();
-    let metrics_ref = pipeline.metrics_ref();
-    assert_eq!(metrics_ref.items_processed, 2); // Only even numbers processed
-    assert!(metrics_ref.total_time > Duration::default());
-    assert!(metrics_ref.operations_count > 0);
+        let _result = pipeline.collect().unwrap();
+        let metrics_ref = pipeline.metrics_ref();
+        assert_eq!(metrics_ref.items_processed, 2); // Only even numbers processed
+        assert!(metrics_ref.total_time > Duration::default());
+        assert!(metrics_ref.operations_count > 0);
     }
 
     #[test]
     fn test_patterns_filter_map() {
         let data = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-        let pipeline = patterns::filter_map_pipeline(
-            data,
-            |&x| x > 5,
-            |x| x * 2,
-        );
+        let pipeline = patterns::filter_map_pipeline(data, |&x| x > 5, |x| x * 2);
 
         let result = pipeline.collect().unwrap();
         assert_eq!(result, vec![12, 16, 18, 20]); // 6*2, 7*2, 8*2, 9*2, 10*2 but filtered
