@@ -287,6 +287,12 @@ mod functional_auth {
             let registry = self.registry.clone();
 
             if Self::should_skip_authentication(&req) {
+                if Method::OPTIONS == *req.method() {
+                    let (request, _pl) = req.into_parts();
+                    let response = HttpResponse::Ok().finish().map_into_right_body();
+                    return Box::pin(async { Ok(ServiceResponse::new(request, response)) });
+                }
+
                 info!("Skipping authentication for route: {}", req.path());
                 let fut = self.service.call(req);
                 return Box::pin(async move { fut.await.map(ServiceResponse::map_into_left_body) });

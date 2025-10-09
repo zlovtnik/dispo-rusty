@@ -14,6 +14,112 @@ use itertools::Itertools;
 #[cfg(feature = "performance_monitoring")]
 use crate::functional::performance_monitoring::{get_performance_monitor, OperationType, Measurable};
 
+#[cfg(feature = "functional")]
+use std::panic::{self, AssertUnwindSafe};
+
+#[cfg(feature = "functional")]
+struct SafeIterator<I>
+where
+    I: Iterator,
+{
+    inner: I,
+    terminated: bool,
+}
+
+#[cfg(feature = "functional")]
+impl<I> SafeIterator<I>
+where
+    I: Iterator,
+{
+    fn new(inner: I) -> Self {
+        Self {
+            inner,
+            terminated: false,
+        }
+    }
+
+    fn terminate(&mut self) {
+        self.terminated = true;
+    }
+}
+
+#[cfg(feature = "functional")]
+impl<I> Iterator for SafeIterator<I>
+where
+    I: Iterator,
+{
+    type Item = I::Item;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.terminated {
+            return None;
+        }
+
+        match panic::catch_unwind(AssertUnwindSafe(|| self.inner.next())) {
+            Ok(item) => item,
+            Err(_) => {
+                self.terminated = true;
+                None
+            }
+        }
+    }
+}
+
+#[cfg(feature = "functional")]
+struct LockstepZipIterator<I, J>
+where
+    I: Iterator,
+    J: Iterator<Item = I::Item>,
+{
+    primary: SafeIterator<I>,
+    others: Vec<SafeIterator<J>>,
+}
+
+#[cfg(feature = "functional")]
+impl<I, J> LockstepZipIterator<I, J>
+where
+    I: Iterator,
+    J: Iterator<Item = I::Item>,
+{
+    fn new(primary: SafeIterator<I>, others: Vec<SafeIterator<J>>) -> Self {
+        Self { primary, others }
+    }
+}
+
+#[cfg(feature = "functional")]
+impl<I, J> Iterator for LockstepZipIterator<I, J>
+where
+    I: Iterator,
+    J: Iterator<Item = I::Item>,
+{
+    type Item = Vec<I::Item>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let first = match self.primary.next() {
+            Some(value) => value,
+            None => return None,
+        };
+
+        let mut row = Vec::with_capacity(self.others.len() + 1);
+        row.push(first);
+
+        for other in self.others.iter_mut() {
+            match other.next() {
+                Some(value) => row.push(value),
+                None => {
+                    self.primary.terminate();
+                    for iter in self.others.iter_mut() {
+                        iter.terminate();
+                    }
+                    return None;
+                }
+            }
+        }
+
+        Some(row)
+    }
+}
+
 /// Extension trait to re-wrap any iterator back into an IteratorChain
 ///
 /// This trait provides a convenient way to recover IteratorChain functionality
@@ -293,7 +399,13 @@ where
         let mut operations = self.operations;
         operations.push("kmerge".to_string());
 
-        let merged = self.iterator.merge(other.into_iter());
+        let mut left_items: Vec<T> = SafeIterator::new(self.iterator).collect();
+        left_items.sort();
+
+        let mut right_items: Vec<T> = SafeIterator::new(other.into_iter()).collect();
+        right_items.sort();
+
+        let merged = left_items.into_iter().merge(right_items.into_iter());
 
         IteratorChain {
             iterator: merged,
@@ -310,23 +422,20 @@ where
     ) -> IteratorChain<Vec<T>, impl Iterator<Item = Vec<T>>>
     where
         J: Iterator<Item = T>,
-        T: Clone,
     {
         let mut operations = self.operations;
         operations.push("lockstep_zip".to_string());
 
-        let mut all_vecs: Vec<Vec<T>> = vec![self.iterator.collect()];
-        for iter in others.into_iter() {
-            all_vecs.push(iter.collect());
-        }
-
-        // Assume all vectors have the same length, take the minimum
-        let min_len = all_vecs.iter().map(|v| v.len()).min().unwrap_or(0);
-        let zipped =
-            (0..min_len).map(move |i| all_vecs.iter().map(|v| v[i].clone()).collect::<Vec<T>>());
+        let iterator = LockstepZipIterator::new(
+            SafeIterator::new(self.iterator),
+            others
+                .into_iter()
+                .map(SafeIterator::new)
+                .collect::<Vec<_>>(),
+        );
 
         IteratorChain {
-            iterator: zipped,
+            iterator,
             config: self.config,
             operations,
         }

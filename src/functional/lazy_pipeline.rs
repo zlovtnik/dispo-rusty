@@ -302,6 +302,18 @@ impl<I> fmt::Debug for LazyOp<I> {
     }
 }
 
+impl<I> Clone for LazyOp<I> {
+    fn clone(&self) -> Self {
+        match self {
+            LazyOp::Map(_) => panic!("Cannot clone Map closure"),
+            LazyOp::Filter(_) => panic!("Cannot clone Filter closure"),
+            LazyOp::ChunkBy(_) => panic!("Cannot clone ChunkBy closure"),
+            LazyOp::Take(n) => LazyOp::Take(*n),
+            LazyOp::Skip(n) => LazyOp::Skip(*n),
+        }
+    }
+}
+
 /// Core lazy evaluation pipeline
 pub struct LazyPipeline<T, I>
 where
@@ -381,18 +393,6 @@ where
             key.into()
         };
         self.operations.push(LazyOp::ChunkBy(Box::new(key_mapper)));
-        // Manual Clone implementation for LazyOp
-        impl<I> Clone for LazyOp<I> {
-            fn clone(&self) -> Self {
-                match self {
-                    LazyOp::Map(_) => panic!("Cannot clone Map closure"),
-                    LazyOp::Filter(_) => panic!("Cannot clone Filter closure"),
-                    LazyOp::ChunkBy(_) => panic!("Cannot clone ChunkBy closure"),
-                    LazyOp::Take(n) => LazyOp::Take(*n),
-                    LazyOp::Skip(n) => LazyOp::Skip(*n),
-                }
-            }
-        }
         self
     }
 
