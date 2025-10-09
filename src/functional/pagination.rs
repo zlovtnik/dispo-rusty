@@ -280,4 +280,17 @@ mod tests {
         assert_eq!(chunks.next(), Some(vec![8, 9, 10]));
         assert_eq!(chunks.next(), None);
     }
+
+    #[test]
+    fn helper_functions_cover_total_pages_and_map_items() {
+        let pagination = Pagination::new(0, 5);
+        assert_eq!(pagination.total_pages(23), 5);
+    assert_eq!(super::total_pages(23, 5), 5);
+
+        let page = paginate_into_iter(0..5, pagination);
+        let mapped = page.map_items(|value| value * 2);
+
+        assert_eq!(mapped.items, vec![0, 2, 4, 6, 8]);
+        assert_eq!(mapped.summary.has_more, false);
+    }
 }
