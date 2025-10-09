@@ -706,7 +706,7 @@ pub fn generate_functional_test_report(results: &FunctionalTestResults) -> Strin
         ("Integration Tests", &results.integration_tests),
     ];
 
-    for (name, category) in categories {
+    for (name, category) in &categories {
         report.push_str(&format!("### {}\n\n", name));
         report.push_str(&format!("- **Tests Run:** {}\n", category.tests_run));
         report.push_str(&format!("- **Tests Passed:** {}\n", category.tests_passed));

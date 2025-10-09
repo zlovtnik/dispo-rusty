@@ -270,19 +270,29 @@ impl PerformanceMonitor {
             }
         });
         
+        // Get previous count before incrementing
+        let prev_count = metric.operation_count;
+        
         // Update operation count
         metric.operation_count += 1;
         
         // Update timing statistics
-        let total_time = metric.avg_execution_time * metric.operation_count as u32 + duration;
-        metric.avg_execution_time = total_time / metric.operation_count as u32;
-        
-        if duration < metric.min_execution_time {
+        if prev_count == 0 {
+            // First sample - set avg, min, and max to duration
+            metric.avg_execution_time = duration;
             metric.min_execution_time = duration;
-        }
-        
-        if duration > metric.max_execution_time {
             metric.max_execution_time = duration;
+        } else {
+            // Rolling average: new_avg = (old_avg * prev_count + duration) / new_count
+            metric.avg_execution_time = (metric.avg_execution_time * prev_count as u32 + duration) / metric.operation_count as u32;
+            
+            if duration < metric.min_execution_time {
+                metric.min_execution_time = duration;
+            }
+            
+            if duration > metric.max_execution_time {
+                metric.max_execution_time = duration;
+            }
         }
         
         // Update memory statistics
@@ -451,14 +461,19 @@ macro_rules! measure_operation {
         let result = $block;
         
         if let Some(m) = measurement {
-            if result.is_ok() {
-                m.complete();
-            } else {
-                m.complete_with_error();
+            match result {
+                Ok(v) => {
+                    m.complete();
+                    Ok(v)
+                }
+                Err(e) => {
+                    m.complete_with_error();
+                    Err(e)
+                }
             }
+        } else {
+            result
         }
-        
-        result
     }};
 }
 

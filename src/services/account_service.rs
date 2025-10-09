@@ -13,6 +13,8 @@
 //! - **Lazy evaluation**: Database queries defer execution until results are needed
 
 use actix_web::http::header::HeaderValue;
+use once_cell::sync::Lazy;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -30,6 +32,11 @@ use crate::{
     utils::token_utils,
 };
 
+// Email validation regex - pragmatic pattern for production use
+static EMAIL_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^[^@\s]+@[^@\s]+\.[^@\s]+$").expect("Invalid email regex")
+});
+
 /// Iterator-based validation using functional combinator pattern for UserDTO
 fn create_user_validator() -> Validator<UserDTO> {
     Validator::new()
@@ -45,10 +52,11 @@ fn create_user_validator() -> Validator<UserDTO> {
             }
         })
         .rule(|dto: &UserDTO| {
-            if dto.password.len() < 6 {
-                Err(ServiceError::bad_request("Password too short (min 6 characters)"))
-            } else if dto.password.len() > 128 {
-                Err(ServiceError::bad_request("Password too long (max 128 characters)"))
+            let char_count = dto.password.chars().count();
+            if char_count < 8 {
+                Err(ServiceError::bad_request("Password too short (min 8 characters)"))
+            } else if char_count > 64 {
+                Err(ServiceError::bad_request("Password too long (max 64 characters)"))
             } else {
                 Ok(())
             }
@@ -56,7 +64,7 @@ fn create_user_validator() -> Validator<UserDTO> {
         .rule(|dto: &UserDTO| {
             if dto.email.trim().is_empty() {
                 Err(ServiceError::bad_request("Email cannot be empty"))
-            } else if !dto.email.contains('@') {
+            } else if !EMAIL_REGEX.is_match(&dto.email) {
                 Err(ServiceError::bad_request("Invalid email format"))
             } else if dto.email.len() > 255 {
                 Err(ServiceError::bad_request("Email too long (max 255 characters)"))

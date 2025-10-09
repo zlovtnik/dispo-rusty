@@ -14,7 +14,7 @@ use std::pin::Pin;
 
 /// Simple validation trait for basic validation patterns
 pub trait SimpleValidation<T> {
-    fn validate(&self, data: &T) -> Result<(), String>;
+    fn validate(&self, data: &T) -> ServiceResult<()>;
 }
 
 /// Functional service pipeline for database operations
@@ -72,14 +72,12 @@ where
         F: FnOnce(T, &mut PgConnection) -> Result<R, ServiceError>,
     {
         let data = self.data.ok_or_else(|| {
-            ServiceError::internal_server_error("No data provided to pipeline")
+            ServiceError::bad_request("No data provided to pipeline")
         })?;
 
         // Run validations using functional iterator pattern
         for validation in &self.validations {
-            if let Err(msg) = validation.validate(&data) {
-                return Err(ServiceError::bad_request(format!("Validation failed: {}", msg)));
-            }
+            validation.validate(&data)?;
         }
 
         // Apply transformations using functional pipeline
@@ -92,10 +90,9 @@ where
         self.pool
             .get()
             .map_err(|e| {
-                ServiceError::internal_server_error(format!(
-                    "Failed to get database connection: {}",
-                    e
-                ))
+                ServiceError::internal_server_error("Failed to get database connection")
+                    .with_tag("db")
+                    .with_detail(e.to_string())
             })
             .and_then(|mut conn| operation(transformed_data, &mut conn))
     }
@@ -119,10 +116,9 @@ impl FunctionalQueryService {
         self.pool
             .get()
             .map_err(|e| {
-                ServiceError::internal_server_error(format!(
-                    "Failed to get database connection: {}",
-                    e
-                ))
+                ServiceError::internal_server_error("Failed to get database connection")
+                    .with_tag("db")
+                    .with_detail(e.to_string())
             })
             .and_then(|mut conn| query_builder(&mut conn))
     }
@@ -237,8 +233,6 @@ impl DataTransformer {
 
 /// Async functional operations for future service enhancements
 pub trait AsyncFunctionalOps<T> {
-    type Output;
-    
     /// Map async operations functionally
     fn map_async<F, U, Fut>(self, f: F) -> Pin<Box<dyn Future<Output = ServiceResult<U>> + Send>>
     where
@@ -252,8 +246,6 @@ impl<T> AsyncFunctionalOps<T> for ServiceResult<T>
 where
     T: Send + 'static,
 {
-    type Output = T;
-
     fn map_async<F, U, Fut>(self, f: F) -> Pin<Box<dyn Future<Output = ServiceResult<U>> + Send>>
     where
         F: FnOnce(T) -> Fut + Send + 'static,
@@ -273,9 +265,9 @@ where
 pub struct NonEmptyStringValidation;
 
 impl SimpleValidation<String> for NonEmptyStringValidation {
-    fn validate(&self, data: &String) -> Result<(), String> {
+    fn validate(&self, data: &String) -> ServiceResult<()> {
         if data.trim().is_empty() {
-            Err("String cannot be empty".to_string())
+            Err(ServiceError::bad_request("String cannot be empty"))
         } else {
             Ok(())
         }
@@ -288,12 +280,12 @@ pub struct LengthValidation {
 }
 
 impl SimpleValidation<String> for LengthValidation {
-    fn validate(&self, data: &String) -> Result<(), String> {
-        let len = data.len();
+    fn validate(&self, data: &String) -> ServiceResult<()> {
+        let len = data.chars().count();
         if len < self.min {
-            Err(format!("String too short, minimum length is {}", self.min))
+            Err(ServiceError::bad_request(format!("String too short, minimum length is {}", self.min)))
         } else if len > self.max {
-            Err(format!("String too long, maximum length is {}", self.max))
+            Err(ServiceError::bad_request(format!("String too long, maximum length is {}", self.max)))
         } else {
             Ok(())
         }
@@ -307,11 +299,11 @@ mod tests {
     struct TestValidation;
 
     impl SimpleValidation<i32> for TestValidation {
-        fn validate(&self, data: &i32) -> Result<(), String> {
+        fn validate(&self, data: &i32) -> ServiceResult<()> {
             if *data > 0 {
                 Ok(())
             } else {
-                Err("Value must be positive".to_string())
+                Err(ServiceError::bad_request("Value must be positive"))
             }
         }
     }

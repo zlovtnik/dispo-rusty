@@ -547,7 +547,7 @@ impl From<ValidationError> for ServiceError {
             ValidationError::InvalidFormat(field) => 
                 ServiceError::bad_request(format!("{} has invalid format", field)),
             ValidationError::BusinessRule(msg) => 
-                ServiceError::business_rule_violation(msg),
+                ServiceError::conflict(msg),
         }
     }
 }

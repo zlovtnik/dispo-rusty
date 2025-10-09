@@ -38,7 +38,7 @@
 use std::borrow::Cow;
 use std::str::FromStr;
 
-use actix_web::body::BoxBody;
+use actix_web::body::{self, BoxBody};
 use actix_web::http::header::{
     self, HeaderName, HeaderValue, InvalidHeaderName, InvalidHeaderValue,
 };
@@ -1059,16 +1059,16 @@ mod tests {
         assert!(payload["metadata"]["original"].is_object());
     }
 
-    // #[test]
-    // fn try_map_metadata_error() {
-    //     let result = ResponseTransformer::new(1)
-    //         .with_metadata_value(json!({"value": 10}))
-    //         .try_map_metadata(|_| -> Result<Option<serde_json::Value>, serde_json::Error> {
-    //             Err(serde_json::from_str::<serde_json::Value>("invalid json").unwrap_err())
-    //         });
+    #[test]
+    fn try_map_metadata_error() {
+        let result = ResponseTransformer::new(1)
+            .with_metadata_value(json!({"value": 10}))
+            .try_map_metadata(|_| -> Result<Option<serde_json::Value>, serde_json::Error> {
+                Err(serde_json::from_str::<serde_json::Value>("invalid json").unwrap_err())
+            });
 
-    //     assert!(result.is_err());
-    // }
+        assert!(result.is_err());
+    }
 
     #[actix_rt::test]
     async fn complex_transformation_pipeline() {

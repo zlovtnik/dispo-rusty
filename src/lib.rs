@@ -14,3 +14,6 @@ pub mod pagination;
 pub mod schema;
 pub mod services;
 pub mod utils;
+
+#[cfg(test)]
+mod integration_test_fixes;
