@@ -120,14 +120,14 @@ impl Tenant {
         tenants.filter(id.eq(t_id)).get_result::<Tenant>(conn)
     }
 
-    /// Loads tenants up to an enforced maximum; errors if the total tenant count exceeds 10,000.
+    /// Loads tenants up to an enforced maximum; errors if the total tenant count exceeds MAX_PAGE_SIZE.
     ///
     /// This function first counts tenants and returns an error if the total exceeds the hard limit
-    /// of 10,000. If the total is within the limit, it loads and returns up to 10,000 tenant records.
+    /// of MAX_PAGE_SIZE. If the total is within the limit, it loads and returns up to MAX_PAGE_SIZE tenant records.
     ///
     /// # Errors
     ///
-    /// Returns a `DatabaseError` when the total tenant count is greater than 10,000 and suggests
+    /// Returns a `DatabaseError` when the total tenant count is greater than MAX_PAGE_SIZE and suggests
     /// using paginated methods instead.
     ///
     /// # Examples
@@ -153,9 +153,9 @@ impl Tenant {
         tenants.limit(MAX_PAGE_SIZE).load::<Tenant>(conn)
     }
 
-    /// Loads tenant records with an optional limit; defaults to 1,000 and is capped at 10,000.
+    /// Loads tenant records with an optional limit; defaults to 1,000 and is capped at MAX_PAGE_SIZE.
     ///
-    /// The `limit` value, if provided, will be clamped to a maximum of 10,000. If `None` is
+    /// The `limit` value, if provided, will be clamped to a maximum of MAX_PAGE_SIZE. If `None` is
     /// supplied, a default limit of 1,000 is used.
     ///
     /// # Examples
