@@ -297,22 +297,11 @@ pub async fn find_all(
     Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, response)))
 }
 
-/// Filter tenants using query-encoded field filters and optional pagination.
+/// Parse query-encoded field filters and optional pagination and return matching tenants.
 ///
-/// Parses query parameters of the form `filters[N][field]`, `filters[N][operator]`, and
-/// `filters[N][value]` into a `TenantFilter` and returns the matching tenants. Also accepts
-/// `cursor` and `page_size` for pagination; numeric parsing failures for those parameters are
-/// ignored (treated as absent).
-///
-/// # Parameters
-///
-/// - `query`: map of raw query string parameters where filter and pagination keys are expected.
-/// - `pool`: database connection pool used to obtain a DB connection.
-///
-/// # Returns
-///
-/// HTTP 200 response whose JSON payload is a `ResponseBody` containing the vector of tenants
-/// that match the provided filters.
+/// This handler accepts query parameters of the form `filters[N][field]`, `filters[N][operator]`,
+/// and `filters[N][value]` which are parsed into a `TenantFilter`. It also accepts `cursor` and
+/// `page_size` for pagination; values that fail numeric parsing are ignored (treated as absent).
 ///
 /// # Examples
 ///
@@ -326,7 +315,7 @@ pub async fn find_all(
 /// q.insert("filters[0][value]".to_string(), "acme".to_string());
 /// q.insert("page_size".to_string(), "25".to_string());
 ///
-/// // When passed to the controller, these entries will be parsed into a TenantFilter
+/// // When parsed by the handler, these entries produce a TenantFilter
 /// // with one FieldFilter: field = "name", operator = "eq", value = "acme", and page_size = Some(25).
 /// ```
 pub async fn filter(
@@ -382,7 +371,7 @@ pub async fn filter(
             error_message: format!("Failed to filter tenants: {}", e),
         })?;
 
-    Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, tenants)))
+    Ok(HttpResponse::Ok().json(tenants))
 }
 
 /// Fetches a tenant by ID and returns it wrapped in the standard `ResponseBody`.
