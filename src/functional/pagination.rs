@@ -15,17 +15,8 @@ pub struct Pagination {
 }
 
 impl Pagination {
-    /// Constructs a `Pagination` with the given zero-based cursor and page size.
-    ///
-    /// If `page_size` is `0`, it will be treated as `1`.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let p = Pagination::new(2, 0);
-    /// assert_eq!(p.cursor(), 2);
-    /// assert_eq!(p.page_size(), 1);
-    /// ```
+    /// Creates a new pagination descriptor. A page size of zero defaults to
+    /// `1` to prevent invalid divisions.
     pub fn new(cursor: usize, page_size: usize) -> Self {
         Self {
             cursor,
@@ -33,47 +24,8 @@ impl Pagination {
         }
     }
 
-    /// Creates a `Pagination` from optional integer inputs, normalizing missing or out-of-range values.
-    
-    ///
-    
-    /// If `cursor` is `None` it defaults to `0`; negative cursor values are clamped to `0`.
-    
-    /// If `page_size` is `None` the `default_page_size` is used; provided or default page sizes less
-    
-    /// than `1` are coerced to `1`.
-    
-    ///
-    
-    /// # Examples
-    
-    ///
-    
-    /// ```
-    
-    /// let p = Pagination::from_optional(Some(2), Some(5), 10);
-    
-    /// assert_eq!(p.cursor(), 2);
-    
-    /// assert_eq!(p.page_size(), 5);
-    
-    ///
-    
-    /// let p_default = Pagination::from_optional(None, None, 8);
-    
-    /// assert_eq!(p_default.cursor(), 0);
-    
-    /// assert_eq!(p_default.page_size(), 8);
-    
-    ///
-    
-    /// let p_clamped = Pagination::from_optional(Some(-3), Some(0), 4);
-    
-    /// assert_eq!(p_clamped.cursor(), 0);
-    
-    /// assert_eq!(p_clamped.page_size(), 1);
-    
-    /// ```
+    /// Builds a pagination descriptor from optional parameters and a default
+    /// page size. Negative values are clamped to zero.
     pub fn from_optional(
         cursor: Option<i64>,
         page_size: Option<i64>,
@@ -87,60 +39,22 @@ impl Pagination {
         Pagination::new(cursor, page_size)
     }
 
-    /// The current zero-based page index.
-    ///
-    /// Returns the current page index (zero-based).
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let p = Pagination::new(2, 10);
-    /// assert_eq!(p.cursor(), 2);
-    /// ```
+    /// Returns the zero-based page cursor.
     pub fn cursor(&self) -> usize {
         self.cursor
     }
 
-    /// Configured number of items per page.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let p = Pagination::new(0, 10);
-    /// assert_eq!(p.page_size(), 10);
-    /// ```
+    /// Returns the configured page size.
     pub fn page_size(&self) -> usize {
         self.page_size
     }
 
-    /// Compute the zero-based index of the first element for this pagination page.
-    ///
-    /// The value is calculated as `cursor * page_size` using saturating multiplication,
-    /// so it will not overflow and will cap at `usize::MAX` if the product would exceed it.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let p = Pagination::new(2, 10);
-    /// assert_eq!(p.offset(), 20);
-    /// ```
+    /// Returns the offset in elements to start reading for this page.
     pub fn offset(&self) -> usize {
         self.cursor.saturating_mul(self.page_size)
     }
 
     /// Computes the cursor for the next page if there is additional data.
-    ///
-    /// # Returns
-    ///
-    /// `Some(next_cursor)` if `has_more` is true, `None` otherwise.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let p = Pagination::new(2, 10);
-    /// assert_eq!(p.next_cursor(true), Some(3));
-    /// assert_eq!(p.next_cursor(false), None);
-    /// ```
     pub fn next_cursor(&self, has_more: bool) -> Option<usize> {
         if has_more {
             Some(self.cursor + 1)
@@ -149,20 +63,7 @@ impl Pagination {
         }
     }
 
-    /// Computes how many pages are required to contain `total_count` items using this pagination's page size.
-    ///
-    /// # Returns
-    ///
-    /// The number of pages needed to contain `total_count` items; `0` if `total_count` is `0`.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let p = Pagination::new(0, 10);
-    /// assert_eq!(p.total_pages(95), 10);
-    /// assert_eq!(p.total_pages(0), 0);
-    /// assert_eq!(p.total_pages(10), 1);
-    /// ```
+    /// Calculates the total number of pages for a known total count.
     pub fn total_pages(&self, total_count: usize) -> usize {
         if total_count == 0 {
             0
@@ -183,51 +84,6 @@ pub struct PaginationSummary {
 }
 
 impl PaginationSummary {
-    /// Constructs a PaginationSummary from a Pagination, a `has_more` flag, and an optional total element count.
-    
-    ///
-    
-    /// The resulting summary contains the pagination's current cursor and page size, the provided
-    
-    /// `total` as `total_elements`, the provided `has_more` flag, and a `next_cursor` computed from
-    
-    /// the pagination and `has_more`.
-    
-    ///
-    
-    /// # Parameters
-    
-    ///
-    
-    /// - `pagination`: source pagination state (cursor and page size).
-    
-    /// - `has_more`: whether there are additional elements after the current page.
-    
-    /// - `total`: optional total number of elements across all pages.
-    
-    ///
-    
-    /// # Examples
-    
-    ///
-    
-    /// ```
-    
-    /// let pagination = Pagination::new(2, 5);
-    
-    /// let summary = PaginationSummary::new(pagination, true, Some(123));
-    
-    /// assert_eq!(summary.current_cursor, 2);
-    
-    /// assert_eq!(summary.page_size, 5);
-    
-    /// assert_eq!(summary.total_elements, Some(123));
-    
-    /// assert_eq!(summary.has_more, true);
-    
-    /// assert_eq!(summary.next_cursor, Some(3));
-    
-    /// ```
     fn new(pagination: Pagination, has_more: bool, total: Option<usize>) -> Self {
         Self {
             current_cursor: pagination.cursor(),
@@ -247,19 +103,7 @@ pub struct PaginatedPage<T> {
 }
 
 impl<T> PaginatedPage<T> {
-    /// Constructs a PaginatedPage from already-collected items and associated pagination metadata.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let pagination = Pagination::new(0, 3);
-    /// let page = PaginatedPage::from_items(vec![1, 2], pagination, false, Some(5));
-    /// assert_eq!(page.items, vec![1, 2]);
-    /// assert_eq!(page.summary.current_cursor, 0);
-    /// assert_eq!(page.summary.page_size, 3);
-    /// assert_eq!(page.summary.total_elements, Some(5));
-    /// assert_eq!(page.summary.has_more, false);
-    /// ```
+    /// Creates a page from pre-fetched items.
     pub fn from_items(
         items: Vec<T>,
         pagination: Pagination,
@@ -272,19 +116,7 @@ impl<T> PaginatedPage<T> {
         }
     }
 
-    /// Maps each item in the page using `f`, preserving the page's pagination metadata.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let pagination = Pagination::new(0, 2);
-    /// let page = PaginatedPage::from_items(vec![1, 2], pagination, true, Some(5));
-    /// let mapped = page.map_items(|n| n.to_string());
-    /// assert_eq!(mapped.items, vec!["1".to_string(), "2".to_string()]);
-    /// assert_eq!(mapped.summary.current_cursor, 0);
-    /// assert_eq!(mapped.summary.page_size, 2);
-    /// assert!(mapped.summary.has_more);
-    /// ```
+    /// Maps the contained items using `f`, preserving pagination metadata.
     pub fn map_items<U, F>(self, mut f: F) -> PaginatedPage<U>
     where
         F: FnMut(T) -> U,
@@ -310,23 +142,6 @@ impl<I> PagedIterator<I>
 where
     I: Iterator,
 {
-    /// Creates a paged iterator that yields fixed-size chunks from `inner`.
-    ///
-    /// The provided `page_size` is treated as a minimum of 1; values less than 1 are clamped to 1.
-    ///
-    /// # Parameters
-    ///
-    /// - `inner`: The underlying iterator to paginate.
-    /// - `page_size`: Desired number of items per page; values less than 1 are treated as 1.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let mut paged = PagedIterator::new(vec![1, 2, 3, 4].into_iter(), 2);
-    /// assert_eq!(paged.next(), Some(vec![1, 2]));
-    /// assert_eq!(paged.next(), Some(vec![3, 4]));
-    /// assert_eq!(paged.next(), None);
-    /// ```
     fn new(inner: I, page_size: usize) -> Self {
         Self {
             inner,
@@ -341,17 +156,6 @@ where
 {
     type Item = Vec<I::Item>;
 
-    /// Advances the iterator and yields the next page as a `Vec` containing up to `page_size` items.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let mut pages = (1..6).into_iter().chunked(2);
-    /// assert_eq!(pages.next(), Some(vec![1, 2]));
-    /// assert_eq!(pages.next(), Some(vec![3, 4]));
-    /// assert_eq!(pages.next(), Some(vec![5]));
-    /// assert_eq!(pages.next(), None);
-    /// ```
     fn next(&mut self) -> Option<Self::Item> {
         let mut chunk = Vec::with_capacity(self.page_size);
 
@@ -390,39 +194,10 @@ impl<I> PaginateExt for I
 where
     I: Iterator,
 {
-    /// Creates an iterator that yields the source items in fixed-size chunks.
-    ///
-    /// The returned iterator produces `Vec<T>` pages containing up to `page_size` items each;
-    /// a `page_size` of zero is treated as `1`.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let pages: Vec<_> = (1..8).into_iter().chunked(3).collect();
-    /// assert_eq!(pages, vec![vec![1,2,3], vec![4,5,6], vec![7]]);
-    /// ```
     fn chunked(self, page_size: usize) -> PagedIterator<Self> {
         PagedIterator::new(self, page_size)
     }
 
-    /// Materializes a single page of items from the iterator according to the provided pagination.
-    ///
-    /// The returned `PaginatedPage` contains the items for the requested cursor and a `PaginationSummary`
-    /// that reflects the current cursor, configured page size, whether more items follow, and the next cursor when applicable.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use your_crate::pagination::{Pagination, PaginateExt};
-    ///
-    /// let items = (1..=5).into_iter();
-    /// let page = items.paginate(Pagination::new(1, 2)); // second page, page_size = 2
-    /// assert_eq!(page.items, vec![3, 4]);
-    /// assert_eq!(page.summary.current_cursor, 1);
-    /// assert_eq!(page.summary.page_size, 2);
-    /// assert_eq!(page.summary.has_more, true);
-    /// assert_eq!(page.summary.next_cursor, Some(2));
-    /// ```
     fn paginate(self, pagination: Pagination) -> PaginatedPage<Self::Item> {
         let pagination = Pagination::new(pagination.cursor(), pagination.page_size());
         let mut iter = self.skip(pagination.offset());
@@ -449,18 +224,7 @@ where
     iterable.into_iter().paginate(pagination)
 }
 
-/// Computes the number of pages needed to hold `total_count` items with `per_page` items per page.
-///
-/// Returns `0` if `per_page` is `0` or `total_count` is `0`; otherwise returns the smallest number of pages
-/// such that `pages * per_page >= total_count`.
-///
-/// # Examples
-///
-/// ```
-/// assert_eq!(total_pages(0, 10), 0);
-/// assert_eq!(total_pages(25, 10), 3);
-/// assert_eq!(total_pages(10, 10), 1);
-/// ```
+/// Calculates the total number of pages for a given count and page size.
 pub fn total_pages(total_count: usize, per_page: usize) -> usize {
     if per_page == 0 {
         0
@@ -528,5 +292,641 @@ mod tests {
 
         assert_eq!(mapped.items, vec![0, 2, 4, 6, 8]);
         assert_eq!(mapped.summary.has_more, false);
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        assert_eq!(mapped.items, vec![0, 2, 4, 6, 8]);
+        assert_eq!(mapped.summary.has_more, false);
+    }
+
+    // Additional comprehensive tests for Pagination::new
+    #[test]
+    fn pagination_new_with_zero_page_size_defaults_to_one() {
+        let pagination = Pagination::new(5, 0);
+        assert_eq\!(pagination.page_size(), 1);
+        assert_eq\!(pagination.cursor(), 5);
+    }
+
+    #[test]
+    fn pagination_new_with_large_values() {
+        let pagination = Pagination::new(usize::MAX - 1, 1000);
+        assert_eq\!(pagination.cursor(), usize::MAX - 1);
+        assert_eq\!(pagination.page_size(), 1000);
+    }
+
+    // Tests for Pagination::from_optional
+    #[test]
+    fn pagination_from_optional_with_all_none_uses_defaults() {
+        let pagination = Pagination::from_optional(None, None, 50);
+        assert_eq\!(pagination.cursor(), 0);
+        assert_eq\!(pagination.page_size(), 50);
+    }
+
+    #[test]
+    fn pagination_from_optional_clamps_negative_cursor() {
+        let pagination = Pagination::from_optional(Some(-10), Some(20), 30);
+        assert_eq\!(pagination.cursor(), 0);
+        assert_eq\!(pagination.page_size(), 20);
+    }
+
+    #[test]
+    fn pagination_from_optional_clamps_zero_page_size() {
+        let pagination = Pagination::from_optional(Some(2), Some(0), 15);
+        assert_eq\!(pagination.cursor(), 2);
+        assert_eq\!(pagination.page_size(), 1);
+    }
+
+    #[test]
+    fn pagination_from_optional_clamps_negative_page_size() {
+        let pagination = Pagination::from_optional(Some(1), Some(-5), 10);
+        assert_eq\!(pagination.cursor(), 1);
+        assert_eq\!(pagination.page_size(), 1);
+    }
+
+    #[test]
+    fn pagination_from_optional_uses_default_when_page_size_none() {
+        let pagination = Pagination::from_optional(Some(3), None, 25);
+        assert_eq\!(pagination.cursor(), 3);
+        assert_eq\!(pagination.page_size(), 25);
+    }
+
+    #[test]
+    fn pagination_from_optional_with_large_positive_values() {
+        let pagination = Pagination::from_optional(Some(1000000), Some(5000), 10);
+        assert_eq\!(pagination.cursor(), 1000000);
+        assert_eq\!(pagination.page_size(), 5000);
+    }
+
+    // Tests for Pagination::offset with edge cases
+    #[test]
+    fn pagination_offset_at_first_page() {
+        let pagination = Pagination::new(0, 10);
+        assert_eq\!(pagination.offset(), 0);
+    }
+
+    #[test]
+    fn pagination_offset_saturating_multiplication() {
+        let pagination = Pagination::new(usize::MAX, 10);
+        // Should saturate rather than overflow
+        assert_eq\!(pagination.offset(), usize::MAX);
+    }
+
+    #[test]
+    fn pagination_offset_with_very_large_cursor_and_page_size() {
+        let pagination = Pagination::new(usize::MAX / 2, 2);
+        // Should handle large values without panic
+        let offset = pagination.offset();
+        assert\!(offset <= usize::MAX);
+    }
+
+    // Tests for Pagination::total_pages
+    #[test]
+    fn pagination_total_pages_with_zero_count() {
+        let pagination = Pagination::new(0, 10);
+        assert_eq\!(pagination.total_pages(0), 0);
+    }
+
+    #[test]
+    fn pagination_total_pages_exact_multiple() {
+        let pagination = Pagination::new(0, 10);
+        assert_eq\!(pagination.total_pages(100), 10);
+    }
+
+    #[test]
+    fn pagination_total_pages_with_remainder() {
+        let pagination = Pagination::new(0, 10);
+        assert_eq\!(pagination.total_pages(95), 10);
+        assert_eq\!(pagination.total_pages(101), 11);
+    }
+
+    #[test]
+    fn pagination_total_pages_single_item() {
+        let pagination = Pagination::new(0, 10);
+        assert_eq\!(pagination.total_pages(1), 1);
+    }
+
+    // Tests for total_pages helper function
+    #[test]
+    fn total_pages_with_zero_per_page() {
+        assert_eq\!(total_pages(100, 0), 0);
+    }
+
+    #[test]
+    fn total_pages_with_zero_count() {
+        assert_eq\!(total_pages(0, 10), 0);
+    }
+
+    #[test]
+    fn total_pages_boundary_cases() {
+        assert_eq\!(total_pages(1, 1), 1);
+        assert_eq\!(total_pages(10, 1), 10);
+        assert_eq\!(total_pages(1, 10), 1);
+    }
+
+    // Tests for PaginatedPage and map_items
+    #[test]
+    fn paginated_page_map_items_transforms_all_items() {
+        let pagination = Pagination::new(0, 3);
+        let page = PaginatedPage::from_items(vec\![1, 2, 3], pagination, true, Some(10));
+        let mapped = page.map_items(|x| x.to_string());
+        
+        assert_eq\!(mapped.items, vec\!["1", "2", "3"]);
+        assert_eq\!(mapped.summary.current_cursor, 0);
+        assert_eq\!(mapped.summary.has_more, true);
+        assert_eq\!(mapped.summary.total_elements, Some(10));
+    }
+
+    #[test]
+    fn paginated_page_map_items_preserves_metadata() {
+        let pagination = Pagination::new(5, 20);
+        let page = PaginatedPage::from_items(vec\!["a", "b"], pagination, false, Some(102));
+        let mapped = page.map_items(|s| s.to_uppercase());
+        
+        assert_eq\!(mapped.items, vec\!["A", "B"]);
+        assert_eq\!(mapped.summary.current_cursor, 5);
+        assert_eq\!(mapped.summary.page_size, 20);
+        assert_eq\!(mapped.summary.has_more, false);
+        assert_eq\!(mapped.summary.next_cursor, None);
+    }
+
+    #[test]
+    fn paginated_page_with_empty_items() {
+        let pagination = Pagination::new(10, 5);
+        let page: PaginatedPage<i32> = PaginatedPage::from_items(vec\![], pagination, false, Some(50));
+        
+        assert\!(page.items.is_empty());
+        assert_eq\!(page.summary.current_cursor, 10);
+        assert\!(\!page.summary.has_more);
+    }
+
+    // Tests for paginate extension trait with edge cases
+    #[test]
+    fn paginate_first_page_of_small_dataset() {
+        let data = vec\![1, 2, 3];
+        let pagination = Pagination::new(0, 10);
+        let page = data.into_iter().paginate(pagination);
+        
+        assert_eq\!(page.items, vec\![1, 2, 3]);
+        assert\!(\!page.summary.has_more);
+        assert_eq\!(page.summary.next_cursor, None);
+    }
+
+    #[test]
+    fn paginate_beyond_available_data() {
+        let data = vec\![1, 2, 3];
+        let pagination = Pagination::new(5, 10);
+        let page = data.into_iter().paginate(pagination);
+        
+        assert\!(page.items.is_empty());
+        assert\!(\!page.summary.has_more);
+    }
+
+    #[test]
+    fn paginate_exact_page_size_boundary() {
+        let data = vec\![1, 2, 3, 4, 5, 6];
+        let pagination = Pagination::new(1, 3);
+        let page = data.into_iter().paginate(pagination);
+        
+        assert_eq\!(page.items, vec\![4, 5, 6]);
+        assert\!(\!page.summary.has_more);
+    }
+
+    #[test]
+    fn paginate_with_page_size_one() {
+        let data = vec\![10, 20, 30, 40];
+        let pagination = Pagination::new(2, 1);
+        let page = data.into_iter().paginate(pagination);
+        
+        assert_eq\!(page.items, vec\![30]);
+        assert\!(page.summary.has_more);
+        assert_eq\!(page.summary.next_cursor, Some(3));
+    }
+
+    #[test]
+    fn paginate_empty_iterator() {
+        let data: Vec<i32> = vec\![];
+        let pagination = Pagination::new(0, 10);
+        let page = data.into_iter().paginate(pagination);
+        
+        assert\!(page.items.is_empty());
+        assert\!(\!page.summary.has_more);
+    }
+
+    #[test]
+    fn paginate_large_page_size() {
+        let data: Vec<_> = (0..100).collect();
+        let pagination = Pagination::new(0, 1000);
+        let page = data.into_iter().paginate(pagination);
+        
+        assert_eq\!(page.items.len(), 100);
+        assert\!(\!page.summary.has_more);
+    }
+
+    // Tests for chunked iterator
+    #[test]
+    fn chunked_with_empty_iterator() {
+        let data: Vec<i32> = vec\![];
+        let mut chunks = data.into_iter().chunked(5);
+        
+        assert_eq\!(chunks.next(), None);
+    }
+
+    #[test]
+    fn chunked_with_page_size_zero_treated_as_one() {
+        let data = vec\![1, 2, 3];
+        let mut chunks = data.into_iter().chunked(0);
+        
+        assert_eq\!(chunks.next(), Some(vec\![1]));
+        assert_eq\!(chunks.next(), Some(vec\![2]));
+        assert_eq\!(chunks.next(), Some(vec\![3]));
+        assert_eq\!(chunks.next(), None);
+    }
+
+    #[test]
+    fn chunked_single_element() {
+        let data = vec\![42];
+        let mut chunks = data.into_iter().chunked(10);
+        
+        assert_eq\!(chunks.next(), Some(vec\![42]));
+        assert_eq\!(chunks.next(), None);
+    }
+
+    #[test]
+    fn chunked_exactly_one_chunk() {
+        let data = vec\![1, 2, 3];
+        let mut chunks = data.into_iter().chunked(3);
+        
+        assert_eq\!(chunks.next(), Some(vec\![1, 2, 3]));
+        assert_eq\!(chunks.next(), None);
+    }
+
+    #[test]
+    fn chunked_larger_page_than_data() {
+        let data = vec\![1, 2];
+        let mut chunks = data.into_iter().chunked(10);
+        
+        assert_eq\!(chunks.next(), Some(vec\![1, 2]));
+        assert_eq\!(chunks.next(), None);
+    }
+
+    // Tests for paginate_into_iter helper
+    #[test]
+    fn paginate_into_iter_with_vec() {
+        let data = vec\![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+        let pagination = Pagination::new(1, 4);
+        let page = paginate_into_iter(data, pagination);
+        
+        assert_eq\!(page.items, vec\![5, 6, 7, 8]);
+        assert\!(page.summary.has_more);
+        assert_eq\!(page.summary.next_cursor, Some(2));
+    }
+
+    #[test]
+    fn paginate_into_iter_with_range() {
+        let pagination = Pagination::new(0, 5);
+        let page = paginate_into_iter(1..=20, pagination);
+        
+        assert_eq\!(page.items, vec\![1, 2, 3, 4, 5]);
+        assert\!(page.summary.has_more);
+    }
+
+    // Tests with custom types
+    #[test]
+    fn paginate_with_strings() {
+        let data = vec\!["apple", "banana", "cherry", "date", "elderberry"];
+        let pagination = Pagination::new(1, 2);
+        let page = data.into_iter().paginate(pagination);
+        
+        assert_eq\!(page.items, vec\!["cherry", "date"]);
+        assert\!(page.summary.has_more);
+    }
+
+    #[test]
+    fn paginate_with_tuples() {
+        let data = vec\![(1, "a"), (2, "b"), (3, "c"), (4, "d")];
+        let pagination = Pagination::new(0, 3);
+        let page = data.into_iter().paginate(pagination);
+        
+        assert_eq\!(page.items, vec\![(1, "a"), (2, "b"), (3, "c")]);
+        assert\!(page.summary.has_more);
+    }
+
+    #[test]
+    fn map_items_with_complex_transformation() {
+        #[derive(Debug, Clone, PartialEq)]
+        struct User {
+            id: i32,
+            name: String,
+        }
+        
+        let pagination = Pagination::new(0, 2);
+        let users = vec\![
+            User { id: 1, name: "Alice".to_string() },
+            User { id: 2, name: "Bob".to_string() },
+        ];
+        let page = PaginatedPage::from_items(users, pagination, false, None);
+        let ids = page.map_items(|user| user.id);
+        
+        assert_eq\!(ids.items, vec\![1, 2]);
+        assert\!(\!ids.summary.has_more);
+    }
+
+    // Test PaginationSummary construction
+    #[test]
+    fn pagination_summary_reflects_correct_state() {
+        let pagination = Pagination::new(3, 15);
+        let summary = PaginationSummary::new(pagination, true, Some(100));
+        
+        assert_eq\!(summary.current_cursor, 3);
+        assert_eq\!(summary.page_size, 15);
+        assert_eq\!(summary.total_elements, Some(100));
+        assert_eq\!(summary.next_cursor, Some(4));
+        assert\!(summary.has_more);
+    }
+
+    #[test]
+    fn pagination_summary_no_more_pages() {
+        let pagination = Pagination::new(10, 5);
+        let summary = PaginationSummary::new(pagination, false, Some(55));
+        
+        assert_eq\!(summary.next_cursor, None);
+        assert\!(\!summary.has_more);
+    }
+
+    // Boundary and stress tests
+    #[test]
+    fn paginate_stress_test_with_large_offset() {
+        // Test that skip works correctly with large offsets
+        let data: Vec<_> = (0..10000).collect();
+        let pagination = Pagination::new(999, 5);
+        let page = data.into_iter().paginate(pagination);
+        
+        assert_eq\!(page.items, vec\![4995, 4996, 4997, 4998, 4999]);
+        assert\!(\!page.summary.has_more);
+    }
+
+    #[test]
+    fn chunked_stress_test_many_small_chunks() {
+        let data: Vec<_> = (0..100).collect();
+        let chunks: Vec<_> = data.into_iter().chunked(1).collect();
+        
+        assert_eq\!(chunks.len(), 100);
+        for (i, chunk) in chunks.iter().enumerate() {
+            assert_eq\!(chunk, &vec\![i]);
+        }
+    }
+
+    #[test]
+    fn pagination_next_cursor_with_sequential_pages() {
+        let pagination1 = Pagination::new(0, 10);
+        assert_eq\!(pagination1.next_cursor(true), Some(1));
+        
+        let pagination2 = Pagination::new(1, 10);
+        assert_eq\!(pagination2.next_cursor(true), Some(2));
+        
+        let pagination3 = Pagination::new(2, 10);
+        assert_eq\!(pagination3.next_cursor(false), None);
+    }
+
+    // FusedIterator behavior test
+    #[test]
+    fn chunked_iterator_continues_returning_none_after_exhaustion() {
+        let data = vec\![1, 2];
+        let mut chunks = data.into_iter().chunked(10);
+        
+        assert_eq\!(chunks.next(), Some(vec\![1, 2]));
+        assert_eq\!(chunks.next(), None);
+        assert_eq\!(chunks.next(), None); // Should continue returning None
     }
 }
