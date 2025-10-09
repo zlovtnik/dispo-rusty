@@ -29,9 +29,9 @@ use crate::{
 fn extract_tenant_pool(req: &HttpRequest) -> Result<Pool, ServiceError> {
     match req.extensions().get::<Pool>() {
         Some(pool) => Ok(pool.clone()),
-        None => Err(ServiceError::BadRequest {
-            error_message: "Tenant not found".to_string(),
-        }),
+        None => Err(ServiceError::bad_request("Tenant not found")
+            .with_tag("tenant")
+            .with_detail("Missing tenant pool in request extensions")),
     }
 }
 
@@ -61,9 +61,12 @@ pub async fn signup(
     };
 
     // Use functional composition for tenant pool lookup and signup
-    manager.get_tenant_pool(&user_dto.tenant_id)
-        .ok_or_else(|| ServiceError::BadRequest {
-            error_message: "Tenant not found".to_string(),
+    manager
+        .get_tenant_pool(&user_dto.tenant_id)
+        .ok_or_else(|| {
+            ServiceError::bad_request("Tenant not found")
+                .with_metadata("tenant_id", user_dto.tenant_id.clone())
+                .with_tag("tenant")
         })
         .and_then(|pool| account_service::signup(user_db, &pool))
         .and_then(|message| {
@@ -85,9 +88,11 @@ pub async fn login(
             Err(err) => Err(err),
         }
     } else {
-        Err(ServiceError::BadRequest {
-            error_message: "Tenant not found".to_string(),
-        })
+        Err(
+            ServiceError::bad_request("Tenant not found")
+                .with_tag("tenant")
+                .with_detail("Tenant pool missing for login request"),
+        )
     }
 }
 
@@ -101,9 +106,9 @@ pub async fn logout(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
             constants::EMPTY,
         )))
     } else {
-        Err(ServiceError::BadRequest {
-            error_message: constants::MESSAGE_TOKEN_MISSING.to_string(),
-        })
+        Err(ServiceError::bad_request(constants::MESSAGE_TOKEN_MISSING)
+            .with_tag("auth")
+            .with_detail("Authorization header missing"))
     }
 }
 
@@ -133,9 +138,9 @@ pub async fn refresh(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
             Err(err) => Err(err),
         }
     } else {
-        Err(ServiceError::BadRequest {
-            error_message: constants::MESSAGE_TOKEN_MISSING.to_string(),
-        })
+        Err(ServiceError::bad_request(constants::MESSAGE_TOKEN_MISSING)
+            .with_tag("auth")
+            .with_detail("Authorization header missing"))
     }
 }
 
@@ -169,9 +174,9 @@ pub async fn me(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
             Err(err) => Err(err),
         }
     } else {
-        Err(ServiceError::BadRequest {
-            error_message: constants::MESSAGE_TOKEN_MISSING.to_string(),
-        })
+        Err(ServiceError::bad_request(constants::MESSAGE_TOKEN_MISSING)
+            .with_tag("auth")
+            .with_detail("Authorization header missing"))
     }
 }
 
