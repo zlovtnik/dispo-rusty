@@ -275,21 +275,24 @@ impl Tenant {
 
     /// Inserts multiple tenants in a single database transaction after validating each DTO.
     ///
-    /// Each `TenantDTO` is validated (ID and name) and its `db_url` is validated; if any validation or insertion fails, the entire transaction is rolled back.
+    /// Validates each `TenantDTO` (id and name) and each `db_url`; if any validation or insertion fails,
+    /// the transaction is rolled back.
     ///
     /// # Returns
     ///
-    /// Number of rows inserted.
+    /// The number of rows inserted.
     ///
     /// # Examples
     ///
     /// ```no_run
     /// use crate::models::tenant::{Tenant, TenantDTO};
+    ///
     /// let dtos = vec![TenantDTO {
     ///     id: "t1".into(),
     ///     name: "Tenant 1".into(),
     ///     db_url: "postgres://user:pass@localhost/db".into(),
     /// }];
+    ///
     /// let mut conn = crate::config::db::establish_connection();
     /// let inserted = Tenant::batch_create(dtos, &mut conn).unwrap();
     /// assert_eq!(inserted, 1);
@@ -307,21 +310,16 @@ impl Tenant {
         })
     }
 
-    /// Filter tenants by field-based conditions with iterator-backed pagination.
+    /// Filter tenants by field-based conditions using iterator-backed pagination.
     ///
     /// Supported fields and operators:
     /// - `id`, `name`, `db_url`: `contains`, `equals`.
-    ///   - Note: `contains` uses SQL LIKE; `%` and `_` characters in the value are treated as wildcards.
-    ///
+    ///   - `contains` is implemented with SQL `LIKE`; `%` and `_` in the value act as wildcards.
     /// - `created_at`, `updated_at`: `gt`, `gte`, `lt`, `lte`, `equals`. Date/time values must use ISO-like format `YYYY-MM-DDTHH:MM:SS.sssZ` (for example `2023-12-25T10:00:00.000Z`).
     ///
-    /// Unknown fields or unsupported operators are ignored. Pagination parameters are normalised
-    /// through [`crate::functional::pagination::Pagination`], enabling consistent behaviour across
-    /// endpoints. An extra record is fetched per page to determine whether more data exists without
-    /// materialising the full dataset.
+    /// Unknown fields or unsupported operators are ignored. Pagination parameters are normalized via the iterator-based pagination helper; an extra record is fetched per page to detect whether more data exists without materializing the full result set.
     ///
-    /// Returns a `DatabaseError` if a date value cannot be parsed or if pagination parameters
-    /// overflow the supported bounds.
+    /// Returns a `DatabaseError` when a date value cannot be parsed or when pagination parameters overflow supported bounds.
     ///
     /// # Examples
     ///
