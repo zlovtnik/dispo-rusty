@@ -12,7 +12,20 @@ use crate::{
     services::account_service,
 };
 
-/// Helper function to extract tenant pool from request extensions
+/// Extracts the tenant Pool stored in the request's extensions.
+///
+/// # Returns
+///
+/// `Ok(pool)` with a clone of the tenant `Pool` if present in the request extensions, `Err(ServiceError::BadRequest)` with message `"Tenant not found"` otherwise.
+///
+/// # Examples
+///
+/// ```no_run
+/// use actix_web::HttpRequest;
+/// // assume `Pool` and `ServiceError` are in scope
+/// // let req: HttpRequest = /* request with Pool inserted into extensions */ ;
+/// // let pool = extract_tenant_pool(&req)?;
+/// ```
 fn extract_tenant_pool(req: &HttpRequest) -> Result<Pool, ServiceError> {
     match req.extensions().get::<Pool>() {
         Some(pool) => Ok(pool.clone()),
@@ -22,10 +35,10 @@ fn extract_tenant_pool(req: &HttpRequest) -> Result<Pool, ServiceError> {
     }
 }
 
-/// Processes a tenant-scoped user signup and returns an HTTP response.
+/// Process a tenant-scoped user signup and produce an HTTP response.
 ///
 /// On success returns an `HttpResponse::Ok` with a JSON `ResponseBody` containing the signup message and an empty payload.
-/// On failure returns a `ServiceError` (e.g., tenant not found or account service error).
+/// Returns `Err(ServiceError)` when the tenant cannot be found or when the account service returns an error.
 ///
 /// # Examples
 ///

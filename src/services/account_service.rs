@@ -18,6 +18,22 @@ pub struct TokenBodyResponse {
     pub token_type: String,
 }
 
+/// Creates a new user account and returns a string describing the signup result.
+///
+/// # Returns
+///
+/// `Ok` with a string describing the signup result, `Err(ServiceError)` on failure.
+///
+/// # Examples
+///
+/// ```
+/// // Construct a UserDTO and a database pool in your test setup.
+/// let user = UserDTO { /* fill required fields */ };
+/// let pool = get_test_pool();
+///
+/// let result = signup(user, &pool);
+/// assert!(result.is_ok());
+/// ```
 pub fn signup(user: UserDTO, pool: &Pool) -> Result<String, ServiceError> {
     pool.get()
         .map_err(|e| ServiceError::InternalServerError {
@@ -29,6 +45,22 @@ pub fn signup(user: UserDTO, pool: &Pool) -> Result<String, ServiceError> {
         })
 }
 
+/// Authenticates the provided credentials and returns a bearer token response.
+///
+/// On success, returns a `TokenBodyResponse` containing a generated JWT-like token and the
+/// token type `"bearer"`. Returns `ServiceError::Unauthorized` when the user is not found
+/// or the user's login session is invalid/empty. Returns `ServiceError::InternalServerError`
+/// when a database connection cannot be obtained or when token construction fails.
+///
+/// # Examples
+///
+/// ```
+/// // Construct credentials and obtain a DB pool appropriate for your application.
+/// // let login = LoginDTO { username: "alice".into(), password: "s3cr3t".into() };
+/// // let pool = get_db_pool();
+/// // let resp = login(login, &pool);
+/// // assert!(resp.is_ok());
+/// ```
 pub fn login(login: LoginDTO, pool: &Pool) -> Result<TokenBodyResponse, ServiceError> {
     pool.get()
         .map_err(|e| ServiceError::InternalServerError {
@@ -64,6 +96,20 @@ pub fn login(login: LoginDTO, pool: &Pool) -> Result<TokenBodyResponse, ServiceE
         })
 }
 
+/// Invalidates the session associated with the bearer token provided in the Authorization header.
+///
+/// Extracts and validates a "Bearer" token from `authen_header`, decodes and verifies it against
+/// the database, locates the corresponding user, and clears that user's login session.
+///
+/// # Examples
+///
+/// ```
+/// use actix_web::http::header::HeaderValue;
+/// // `pool` must be a valid database Pool connected to your application's DB.
+/// let header = HeaderValue::from_static("Bearer invalid.token.here");
+/// let result = logout(&header, &pool);
+/// assert!(result.is_err());
+/// ```
 pub fn logout(authen_header: &HeaderValue, pool: &Pool) -> Result<(), ServiceError> {
     authen_header.to_str()
         .map_err(|_| ServiceError::Unauthorized {
@@ -107,6 +153,26 @@ pub fn logout(authen_header: &HeaderValue, pool: &Pool) -> Result<(), ServiceErr
         })
 }
 
+/// Refreshes an access token using the provided Authorization header.
+///
+/// Attempts to validate and decode the bearer token from `authen_header`, verifies the associated
+/// login session in the database, locates the corresponding login info, and returns a new token
+/// packaged as a `TokenBodyResponse`.
+///
+/// # Returns
+///
+/// A `TokenBodyResponse` containing a newly generated JWT in `token` and the token type set to
+/// `"bearer"`.
+///
+/// # Examples
+///
+/// ```no_run
+/// use actix_web::http::header::HeaderValue;
+/// // let pool: Pool = ...; // obtain your DB pool
+/// // let auth_header = HeaderValue::from_str("Bearer <existing_token>").unwrap();
+/// // let resp = refresh(&auth_header, &pool).unwrap();
+/// // assert_eq!(resp.token_type, "bearer");
+/// ```
 pub fn refresh(
     authen_header: &HeaderValue,
     pool: &Pool,
@@ -165,6 +231,26 @@ pub fn refresh(
         })
 }
 
+/// Returns the LoginInfoDTO associated with the bearer token in the Authorization header.
+///
+/// Extracts and validates the bearer token from `authen_header`, decodes it, and looks up
+/// the corresponding login information in the database using `pool`. On success returns the
+/// found `LoginInfoDTO`; on failure returns an appropriate `ServiceError` (for example,
+/// `Unauthorized` when the header or token are invalid, or `InternalServerError` when a
+/// database connection cannot be obtained).
+///
+/// # Examples
+///
+/// ```no_run
+/// use actix_web::http::header::HeaderValue;
+/// // assume `pool` is a configured database pool and `me` is in scope
+/// let auth = HeaderValue::from_static("Bearer <token>");
+/// let result = my_module::me(&auth, &pool);
+/// match result {
+///     Ok(login_info) => println!("username: {}", login_info.username),
+///     Err(err) => eprintln!("error: {:?}", err),
+/// }
+/// ```
 pub fn me(authen_header: &HeaderValue, pool: &Pool) -> Result<LoginInfoDTO, ServiceError> {
     authen_header.to_str()
         .map_err(|_| ServiceError::Unauthorized {

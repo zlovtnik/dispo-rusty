@@ -146,11 +146,13 @@ where
         }
     }
 
-    /// Group consecutive elements by a derived key, yielding `(key, Vec<items>)` for each contiguous run.
+    /// Groups consecutive elements by a derived key, yielding one `(key, Vec<items>)` tuple for each contiguous run.
     ///
-    /// The resulting `IteratorChain` produces one `(key, Vec<T>)` tuple for each sequence of adjacent
-    /// items whose derived keys are equal. Requires `T: Clone` because groups are collected into `Vec<T>`,
-    /// and `K: PartialEq` to compare adjacent keys.
+    /// Requires `T: Clone` because groups are collected into `Vec<T>`, and `K: PartialEq` to compare adjacent keys.
+    ///
+    /// # Returns
+    ///
+    /// An `IteratorChain` that yields `(K, Vec<T>)` for each sequence of adjacent items whose derived keys are equal.
     ///
     /// # Examples
     ///
@@ -187,6 +189,20 @@ where
     }
 
     // /// K-way merge sorted iterators
+    /// Merges this chain with another sequence and returns a new chain that yields all elements in sorted order.
+    ///
+    /// The other sequence is consumed, its items are appended to this chain's items, and the combined collection is sorted
+    /// before producing the resulting iterator. The resulting chain records the `"kmerge"` operation in its operations log.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[cfg(feature = "functional")] {
+    /// let chain = IteratorChain::new(vec![1, 3, 5].into_iter()).kmerge(vec![2, 4, 6]);
+    /// let result: Vec<_> = chain.collect();
+    /// assert_eq!(result, vec![1, 2, 3, 4, 5, 6]);
+    /// # }
+    /// ```
     #[cfg(feature = "functional")]
     pub fn kmerge<J>(self, other: J) -> IteratorChain<T, impl Iterator<Item = T>>
     where
@@ -208,7 +224,22 @@ where
         }
     }
 
-    /// Lockstep iteration over multiple iterators (zip all with equal lengths)
+    /// Aligns multiple iterators by index and yields a vector of corresponding items from each source.
+    ///
+    /// Collects the chain's underlying iterator and each iterator in `others`, truncates to the
+    /// shortest length, and produces an iterator that yields a `Vec<T>` for each index containing
+    /// the i-th item from every source. Each item is cloned as needed.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // Create a chain from a vector iterator, then lockstep zip with another iterator.
+    /// let chain = IteratorChain::new(vec![1, 2, 3].into_iter());
+    /// let result: Vec<Vec<i32>> = chain
+    ///     .lockstep_zip(vec![vec![4, 5, 6].into_iter()])
+    ///     .collect();
+    /// assert_eq!(result, vec![vec![1, 4], vec![2, 5], vec![3, 6]]);
+    /// ```
     #[cfg(feature = "functional")]
     pub fn lockstep_zip<Iterators>(self, others: Iterators) -> IteratorChain<Vec<T>, impl Iterator<Item = Vec<T>>>
     where
