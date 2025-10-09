@@ -5,7 +5,6 @@
 //! performance-critical paths. The system enables reusable middleware components through
 //! functional composition and immutable request/response transformations.
 
-#[cfg(feature = "functional")]
 pub mod functional_middleware_impl {
     use actix_service::{forward_ready, Service, Transform};
     use actix_web::body::{BoxBody, EitherBody, MessageBody};
@@ -17,11 +16,17 @@ pub mod functional_middleware_impl {
     use std::marker::PhantomData;
     use std::sync::Arc;
 
+    #[cfg(feature = "functional")]
     use crate::config::db::TenantPoolManager;
+    #[cfg(feature = "functional")]
     use crate::constants;
+    #[cfg(feature = "functional")]
     use crate::functional::function_traits::{FunctionCategory, PureFunction};
+    #[cfg(feature = "functional")]
     use crate::functional::pure_function_registry::PureFunctionRegistry;
+    #[cfg(feature = "functional")]
     use crate::models::response::ResponseBody;
+    #[cfg(feature = "functional")]
     use crate::utils::token_utils;
 
     /// Result type for middleware operations
@@ -69,6 +74,7 @@ pub mod functional_middleware_impl {
         }
     }
 
+    #[cfg(feature = "functional")]
     /// Pure function for extracting authentication token from request
     pub struct TokenExtractor;
 
@@ -375,6 +381,12 @@ pub mod functional_middleware_impl {
         pub fn new(registry: Arc<PureFunctionRegistry>) -> Self {
             Self { registry }
         }
+
+        /// Returns a reference to the registry (for testing purposes)
+        #[cfg(test)]
+        pub fn registry(&self) -> &Arc<PureFunctionRegistry> {
+            &self.registry
+        }
     }
 
     impl<S, B> Transform<S, ServiceRequest> for FunctionalAuthentication
@@ -447,7 +459,7 @@ pub mod functional_middleware_impl {
         /// // let fut = middleware.call(req);
         /// // let res = futures::executor::block_on(fut);
         /// ```
-        fn call(&self, mut req: ServiceRequest) -> Self::Future {
+        fn call(&self, req: ServiceRequest) -> Self::Future {
             let skip_checker = AuthSkipChecker;
 
             if skip_checker.call(&req) {
@@ -590,6 +602,12 @@ pub mod functional_middleware_impl {
             self
         }
 
+        /// Returns the number of middleware components in the stack (for testing purposes)
+        #[cfg(test)]
+        pub fn stack_len(&self) -> usize {
+            self.middleware_stack.len()
+        }
+
         pub fn build<S, B>(self, service: S) -> ComposedMiddleware<S>
         where
             S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
@@ -722,12 +740,13 @@ pub mod functional_middleware_impl {
     }
 }
 
-#[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::functional::function_traits::FunctionCategory;
-    use crate::functional::pure_function_registry::PureFunctionRegistry;
-    use std::sync::Arc;
+    
+    
+    
+    
+    
+    
 
     #[test]
     fn middleware_context_default() {
@@ -951,7 +970,7 @@ mod tests {
         let auth = FunctionalAuthentication::new(registry.clone());
 
         // Should create successfully - registry should be stored
-        assert!(Arc::ptr_eq(&auth.registry, &registry));
+        assert!(Arc::ptr_eq(auth.registry(), &registry));
     }
 
     #[actix_rt::test]
@@ -960,7 +979,7 @@ mod tests {
         let builder = MiddlewarePipelineBuilder::new(registry);
 
         // Should create with empty stack
-        assert_eq!(builder.middleware_stack.len(), 0);
+        assert_eq!(builder.stack_len(), 0);
     }
 
     #[actix_rt::test]
@@ -969,7 +988,7 @@ mod tests {
         let builder = MiddlewarePipelineBuilder::new(registry).with_auth();
 
         // Should add auth middleware
-        assert_eq!(builder.middleware_stack.len(), 1);
+        assert_eq!(builder.stack_len(), 1);
     }
 
     #[test]

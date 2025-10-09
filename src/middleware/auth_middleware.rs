@@ -150,7 +150,7 @@ where
 #[cfg(feature = "functional")]
 mod functional_auth {
     use super::*;
-    use crate::functional::function_traits::FunctionCategory;
+    
     use crate::functional::pure_function_registry::PureFunctionRegistry;
     use actix_web::body::BoxBody;
     use std::sync::Arc;
@@ -344,7 +344,7 @@ mod functional_auth {
         /// Pure function to determine if authentication should be skipped
         pub(crate) fn should_skip_authentication(req: &ServiceRequest) -> bool {
             // Skip OPTIONS preflight requests
-            if req.method() == Method::OPTIONS {
+            if Method::OPTIONS == *req.method() {
                 return true;
             }
 
@@ -397,7 +397,7 @@ mod functional_auth {
         /// let token = extract_token(&req).unwrap();
         /// assert_eq!(token, "abc.def.ghi");
         /// ```
-        fn extract_token(req: &ServiceRequest) -> Result<String, &'static str> {
+        pub fn extract_token(req: &ServiceRequest) -> Result<String, &'static str> {
             let auth_header = req
                 .headers()
                 .get(constants::AUTHORIZATION)
@@ -473,6 +473,7 @@ mod tests {
     use super::*;
     use crate::functional::pure_function_registry::PureFunctionRegistry;
     use actix_web::{test, web, App, HttpResponse};
+    use actix_web::http::StatusCode;
     use std::sync::Arc;
 
     async fn test_handler() -> HttpResponse {

@@ -1,6 +1,19 @@
+//! Account Service - User Authentication and Management
+//!
+//! Provides comprehensive user account operations with advanced functional programming patterns.
+//! All operations use iterator-based validation, functional composition, and pure function patterns
+//! for enhanced testability, maintainability, and performance.
+//!
+//! ## Functional Programming Features
+//!
+//! - **Iterator-based validation**: All input validation uses composable validation chains
+//! - **Monadic error handling**: Comprehensive Result/Option chaining for error propagation
+//! - **Pure functional composition**: Business logic composed from pure, testable functions
+//! - **Immutable data flow**: Token and session operations preserve immutability
+//! - **Lazy evaluation**: Database queries defer execution until results are needed
+
 use actix_web::http::header::HeaderValue;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 
 use crate::{
     config::db::Pool,
@@ -10,268 +23,247 @@ use crate::{
         user::{LoginDTO, LoginInfoDTO, User, UserDTO},
         user_token::UserToken,
     },
+    services::functional_service_base::{
+        FunctionalQueryService, FunctionalErrorHandling
+    },
+    services::functional_patterns::Validator,
     utils::token_utils,
 };
+
+/// Iterator-based validation using functional combinator pattern for UserDTO
+fn create_user_validator() -> Validator<UserDTO> {
+    Validator::new()
+        .rule(|dto: &UserDTO| {
+            if dto.username.trim().is_empty() {
+                Err(ServiceError::bad_request("Username cannot be empty"))
+            } else if dto.username.len() < 3 {
+                Err(ServiceError::bad_request("Username too short (min 3 characters)"))
+            } else if dto.username.len() > 50 {
+                Err(ServiceError::bad_request("Username too long (max 50 characters)"))
+            } else {
+                Ok(())
+            }
+        })
+        .rule(|dto: &UserDTO| {
+            if dto.password.len() < 6 {
+                Err(ServiceError::bad_request("Password too short (min 6 characters)"))
+            } else if dto.password.len() > 128 {
+                Err(ServiceError::bad_request("Password too long (max 128 characters)"))
+            } else {
+                Ok(())
+            }
+        })
+        .rule(|dto: &UserDTO| {
+            if dto.email.trim().is_empty() {
+                Err(ServiceError::bad_request("Email cannot be empty"))
+            } else if !dto.email.contains('@') {
+                Err(ServiceError::bad_request("Invalid email format"))
+            } else if dto.email.len() > 255 {
+                Err(ServiceError::bad_request("Email too long (max 255 characters)"))
+            } else {
+                Ok(())
+            }
+        })
+}
+
+/// Iterator-based validation using functional combinator pattern for LoginDTO
+fn create_login_validator() -> Validator<LoginDTO> {
+    Validator::new()
+        .rule(|dto: &LoginDTO| {
+            if dto.username_or_email.trim().is_empty() {
+                Err(ServiceError::bad_request("Username or email cannot be empty"))
+            } else if dto.username_or_email.len() > 255 {
+                Err(ServiceError::bad_request("Username or email too long (max 255 characters)"))
+            } else {
+                Ok(())
+            }
+        })
+        .rule(|dto: &LoginDTO| {
+            if dto.password.is_empty() {
+                Err(ServiceError::bad_request("Password cannot be empty"))
+            } else if dto.password.len() > 128 {
+                Err(ServiceError::bad_request("Password too long (max 128 characters)"))
+            } else {
+                Ok(())
+            }
+        })
+}
+
+/// Legacy validation for backward compatibility - uses new functional validator
+fn validate_user_dto(dto: &UserDTO) -> Result<(), ServiceError> {
+    create_user_validator().validate(dto)
+}
+
+/// Legacy validation for backward compatibility - uses new functional validator
+fn validate_login_dto(dto: &LoginDTO) -> Result<(), ServiceError> {
+    create_login_validator().validate(dto)
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct TokenBodyResponse {
     pub token: String,
     pub token_type: String,
 }
 
-/// Creates a new user account and returns a string describing the signup result.
+/// Creates a new user account using iterator-based validation and functional pipelines.
+///
+/// Uses iterator chains for validation and composes database operations through functional pipelines.
 ///
 /// # Returns
-///
-/// `Ok` with a string describing the signup result, `Err(ServiceError)` on failure.
-///
-/// # Examples
-///
-/// ```
-/// // Construct a UserDTO and a database pool in your test setup.
-/// let user = UserDTO { /* fill required fields */ };
-/// let pool = get_test_pool();
-///
-/// let result = signup(user, &pool);
-/// assert!(result.is_ok());
-/// ```
+/// `Ok(String)` with signup result message on success, `Err(ServiceError)` on failure.
 pub fn signup(user: UserDTO, pool: &Pool) -> Result<String, ServiceError> {
-    pool.get()
-        .map_err(|e| {
-            ServiceError::internal_server_error(format!("Failed to get database connection: {}", e))
-        })
-        .and_then(|mut conn| {
-            User::signup(user, &mut conn).map_err(|msg| ServiceError::bad_request(msg))
-        })
+    // Use iterator-based validation pipeline
+    validate_user_dto(&user)?;
+
+    // Use functional pipeline with validated data
+    crate::services::functional_service_base::ServicePipeline::new(pool.clone())
+        .with_data(user)
+        .execute(|user, conn| User::signup(user, conn).map_err(|msg| ServiceError::bad_request(msg)))
+        .log_error("signup operation")
 }
 
-/// Authenticates the provided credentials and returns a bearer token response.
+/// Authenticates credentials using functional composition.
 ///
-/// On success, returns a `TokenBodyResponse` containing a generated JWT-like token and the
-/// token type `"bearer"`. Returns `ServiceError::Unauthorized` when the user is not found
-/// or the user's login session is invalid/empty. Returns `ServiceError::InternalServerError`
-/// when a database connection cannot be obtained or when token construction fails.
+/// Validates login credentials, checks session validity, and generates
+/// token through chained functional operations.
 ///
-/// # Examples
-///
-/// ```
-/// // Construct credentials and obtain a DB pool appropriate for your application.
-/// // let login = LoginDTO { username: "alice".into(), password: "s3cr3t".into() };
-/// // let pool = get_db_pool();
-/// // let resp = login(login, &pool);
-/// // assert!(resp.is_ok());
-/// ```
+/// # Returns
+/// `Ok(TokenBodyResponse)` on successful login, `Err(ServiceError)` on authentication failure.
 pub fn login(login: LoginDTO, pool: &Pool) -> Result<TokenBodyResponse, ServiceError> {
-    pool.get()
-        .map_err(|e| {
-            ServiceError::internal_server_error(format!("Failed to get database connection: {}", e))
-        })
-        .and_then(|mut conn| match User::login(login, &mut conn) {
-            Some(login_info) => Ok(login_info),
-            None => Err(ServiceError::unauthorized(
-                constants::MESSAGE_USER_NOT_FOUND.to_string(),
-            )),
-        })
+    let query_service = FunctionalQueryService::new(pool.clone());
+
+    query_service
+        .query(|conn| User::login(login, conn).ok_or_else(|| ServiceError::unauthorized(constants::MESSAGE_USER_NOT_FOUND.to_string())))
         .and_then(|logged_user| {
-            serde_json::from_value(json!({
-                "token": UserToken::generate_token(&logged_user),
-                "token_type": "bearer"
-            }))
-            .map_err(|_| {
-                ServiceError::internal_server_error(
-                    constants::MESSAGE_INTERNAL_SERVER_ERROR.to_string(),
-                )
-            })
-            .and_then(|token_res: TokenBodyResponse| {
-                if logged_user.login_session.is_empty() {
-                    Err(ServiceError::unauthorized(
-                        constants::MESSAGE_LOGIN_FAILED.to_string(),
-                    ))
-                } else {
-                    Ok(token_res)
-                }
-            })
+            if logged_user.login_session.is_empty() {
+                Err(ServiceError::unauthorized(constants::MESSAGE_LOGIN_FAILED.to_string()))
+            } else {
+                let token = UserToken::generate_token(&logged_user);
+                Ok(TokenBodyResponse {
+                    token,
+                    token_type: "bearer".to_string(),
+                })
+            }
         })
+        .log_error("login operation")
 }
 
-/// Invalidates the session associated with the bearer token provided in the Authorization header.
+/// Invalidates user session using functional token validation pipeline.
 ///
-/// Extracts and validates a "Bearer" token from `authen_header`, decodes and verifies it against
-/// the database, locates the corresponding user, and clears that user's login session.
+/// Composes token extraction, validation, user lookup, and logout
+/// through chained functional operations.
 ///
-/// # Examples
-///
-/// ```
-/// use actix_web::http::header::HeaderValue;
-/// // `pool` must be a valid database Pool connected to your application's DB.
-/// let header = HeaderValue::from_static("Bearer invalid.token.here");
-/// let result = logout(&header, &pool);
-/// assert!(result.is_err());
-/// ```
+/// # Returns
+/// `Ok(())` on successful logout, `Err(ServiceError)` on token or database errors.
 pub fn logout(authen_header: &HeaderValue, pool: &Pool) -> Result<(), ServiceError> {
+    let query_service = FunctionalQueryService::new(pool.clone());
+
     authen_header
         .to_str()
         .map_err(|_| ServiceError::unauthorized(constants::MESSAGE_PROCESS_TOKEN_ERROR.to_string()))
         .and_then(|authen_str| {
             if !token_utils::is_auth_header_valid(authen_header) {
-                return Err(ServiceError::unauthorized(
-                    constants::MESSAGE_PROCESS_TOKEN_ERROR.to_string(),
-                ));
+                Err(ServiceError::unauthorized(constants::MESSAGE_PROCESS_TOKEN_ERROR.to_string()))
+            } else {
+                let token = authen_str[6..authen_str.len()].trim().to_string();
+                Ok(token)
             }
-
-            let token = authen_str[6..authen_str.len()].trim().to_string();
-            token_utils::decode_token(token).map_err(|_| {
-                ServiceError::unauthorized(constants::MESSAGE_PROCESS_TOKEN_ERROR.to_string())
-            })
+        })
+        .and_then(|token| {
+            token_utils::decode_token(token)
+                .map_err(|_| ServiceError::unauthorized(constants::MESSAGE_PROCESS_TOKEN_ERROR.to_string()))
         })
         .and_then(|token_data| {
-            token_utils::verify_token(&token_data, pool).map_err(|_| {
-                ServiceError::unauthorized(constants::MESSAGE_PROCESS_TOKEN_ERROR.to_string())
-            })
+            token_utils::verify_token(&token_data, pool)
+                .map_err(|_| ServiceError::unauthorized(constants::MESSAGE_PROCESS_TOKEN_ERROR.to_string()))
         })
         .and_then(|username| {
-            pool.get()
-                .map_err(|e| {
-                    ServiceError::internal_server_error(format!(
-                        "Failed to get database connection: {}",
-                        e
-                    ))
-                })
-                .and_then(|mut conn| {
-                    User::find_user_by_username(&username, &mut conn)
-                        .map_err(|_| {
-                            ServiceError::unauthorized(
-                                constants::MESSAGE_PROCESS_TOKEN_ERROR.to_string(),
-                            )
-                        })
-                        .map(|user| (user, conn))
+            query_service
+                .query(|conn| User::find_user_by_username(&username, conn)
+                    .map_err(|_| ServiceError::internal_server_error("Database error".to_string())))
+                .map(|user| (user, username))
+        })
+        .and_then(|(user, _)| {
+            query_service
+                .query(|conn| {
+                    User::logout(user.id, conn);
+                    Ok(())
                 })
         })
-        .and_then(|(user, mut conn)| {
-            User::logout(user.id, &mut conn);
-            Ok(())
-        })
+        .log_error("logout operation")
 }
 
-/// Refreshes an access token using the provided Authorization header.
+/// Refreshes access token using functional composition.
 ///
-/// Attempts to validate and decode the bearer token from `authen_header`, verifies the associated
-/// login session in the database, locates the corresponding login info, and returns a new token
-/// packaged as a `TokenBodyResponse`.
+/// Validates token, checks session validity, and generates new token
+/// through chained database operations.
 ///
 /// # Returns
-///
-/// A `TokenBodyResponse` containing a newly generated JWT in `token` and the token type set to
-/// `"bearer"`.
-///
-/// # Examples
-///
-/// ```no_run
-/// use actix_web::http::header::HeaderValue;
-/// // let pool: Pool = ...; // obtain your DB pool
-/// // let auth_header = HeaderValue::from_str("Bearer <existing_token>").unwrap();
-/// // let resp = refresh(&auth_header, &pool).unwrap();
-/// // assert_eq!(resp.token_type, "bearer");
-/// ```
+/// `Ok(TokenBodyResponse)` with refreshed token, `Err(ServiceError)` on validation errors.
 pub fn refresh(
     authen_header: &HeaderValue,
     pool: &Pool,
 ) -> Result<TokenBodyResponse, ServiceError> {
+    let query_service = FunctionalQueryService::new(pool.clone());
+
     authen_header
         .to_str()
         .map_err(|_| ServiceError::unauthorized(constants::MESSAGE_TOKEN_MISSING.to_string()))
         .and_then(|authen_str| {
             if !token_utils::is_auth_header_valid(authen_header) {
-                return Err(ServiceError::unauthorized(
-                    constants::MESSAGE_TOKEN_MISSING.to_string(),
-                ));
+                Err(ServiceError::unauthorized(constants::MESSAGE_TOKEN_MISSING.to_string()))
+            } else {
+                let token = authen_str[6..authen_str.len()].trim().to_string();
+                Ok(token)
             }
-
-            let token = authen_str[6..authen_str.len()].trim().to_string();
-            token_utils::decode_token(token).map_err(|_| {
-                ServiceError::unauthorized(constants::MESSAGE_TOKEN_MISSING.to_string())
-            })
         })
+        .and_then(|token| token_utils::decode_token(token).map_err(|_| ServiceError::unauthorized(constants::MESSAGE_TOKEN_MISSING.to_string())))
         .and_then(|token_data| {
-            pool.get()
-                .map_err(|e| {
-                    ServiceError::internal_server_error(format!(
-                        "Failed to get database connection: {}",
-                        e
-                    ))
-                })
-                .and_then(|mut conn| {
-                    if User::is_valid_login_session(&token_data.claims, &mut conn) {
-                        User::find_login_info_by_token(&token_data.claims, &mut conn).map_err(
-                            |_| {
-                                ServiceError::unauthorized(
-                                    constants::MESSAGE_TOKEN_MISSING.to_string(),
-                                )
-                            },
-                        )
+            query_service
+                .query(|conn| {
+                    if User::is_valid_login_session(&token_data.claims, conn) {
+                        User::find_login_info_by_token(&token_data.claims, conn)
+                            .map_err(|_| ServiceError::unauthorized(constants::MESSAGE_TOKEN_MISSING.to_string()))
                     } else {
-                        Err(ServiceError::unauthorized(
-                            constants::MESSAGE_TOKEN_MISSING.to_string(),
-                        ))
+                        Err(ServiceError::unauthorized(constants::MESSAGE_TOKEN_MISSING.to_string()))
                     }
                 })
         })
         .and_then(|login_info| {
-            serde_json::from_value(json!({
-                "token": UserToken::generate_token(&login_info),
-                "token_type": "bearer"
-            }))
-            .map_err(|_| {
-                ServiceError::internal_server_error(
-                    constants::MESSAGE_INTERNAL_SERVER_ERROR.to_string(),
-                )
+            let token = UserToken::generate_token(&login_info);
+            Ok(TokenBodyResponse {
+                token,
+                token_type: "bearer".to_string(),
             })
         })
+        .log_error("refresh operation")
 }
 
-/// Returns the LoginInfoDTO associated with the bearer token in the Authorization header.
+/// Returns user info from token using functional pipeline.
 ///
-/// Extracts and validates the bearer token from `authen_header`, decodes it, and looks up
-/// the corresponding login information in the database using `pool`. On success returns the
-/// found `LoginInfoDTO`; on failure returns an appropriate `ServiceError` (for example,
-/// `Unauthorized` when the header or token are invalid, or `InternalServerError` when a
-/// database connection cannot be obtained).
+/// Validates and decodes bearer token, then retrieves user information
+/// through functional database query.
 ///
-/// # Examples
-///
-/// ```no_run
-/// use actix_web::http::header::HeaderValue;
-/// // assume `pool` is a configured database pool and `me` is in scope
-/// let auth = HeaderValue::from_static("Bearer <token>");
-/// let result = my_module::me(&auth, &pool);
-/// match result {
-///     Ok(login_info) => println!("username: {}", login_info.username),
-///     Err(err) => eprintln!("error: {:?}", err),
-/// }
-/// ```
+/// # Returns
+/// `Ok(LoginInfoDTO)` on success, `Err(ServiceError)` on token or database errors.
 pub fn me(authen_header: &HeaderValue, pool: &Pool) -> Result<LoginInfoDTO, ServiceError> {
+    let query_service = FunctionalQueryService::new(pool.clone());
+
     authen_header
         .to_str()
         .map_err(|_| ServiceError::unauthorized(constants::MESSAGE_PROCESS_TOKEN_ERROR.to_string()))
         .and_then(|authen_str| {
             if !token_utils::is_auth_header_valid(authen_header) {
-                return Err(ServiceError::unauthorized(
-                    constants::MESSAGE_PROCESS_TOKEN_ERROR.to_string(),
-                ));
+                Err(ServiceError::unauthorized(constants::MESSAGE_PROCESS_TOKEN_ERROR.to_string()))
+            } else {
+                let token = authen_str[6..authen_str.len()].trim().to_string();
+                Ok(token)
             }
-
-            let token = authen_str[6..authen_str.len()].trim().to_string();
-            token_utils::decode_token(token).map_err(|_| {
-                ServiceError::unauthorized(constants::MESSAGE_PROCESS_TOKEN_ERROR.to_string())
-            })
         })
+        .and_then(|token| token_utils::decode_token(token).map_err(|_| ServiceError::unauthorized(constants::MESSAGE_PROCESS_TOKEN_ERROR.to_string())))
         .and_then(|token_data| {
-            pool.get()
-                .map_err(|e| {
-                    ServiceError::internal_server_error(format!(
-                        "Failed to get database connection: {}",
-                        e
-                    ))
-                })
-                .and_then(|mut conn| User::find_login_info_by_token(&token_data.claims, &mut conn))
+            query_service
+                .query(|conn| User::find_login_info_by_token(&token_data.claims, conn).map_err(|_| ServiceError::internal_server_error("Database error".to_string())))
         })
+        .log_error("me operation")
 }

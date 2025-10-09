@@ -11,7 +11,7 @@ mod tests {
     use actix_web::{http, http::StatusCode, test};
     use futures::FutureExt;
 
-    use crate::App;
+    use actix_web::App;
 
     #[actix_web::test]
     async fn test_ping_ok() {

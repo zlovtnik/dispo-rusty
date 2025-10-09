@@ -194,8 +194,9 @@ mod tests {
     use testcontainers::Container;
     use testcontainers::images::postgres::Postgres;
 
+    use actix_web::App;
     use crate::config::db::TenantPoolManager;
-    use crate::{config, App};
+    use crate::config;
 
     fn try_run_postgres<'a>(
         docker: &'a clients::Cli,

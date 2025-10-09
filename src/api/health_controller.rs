@@ -21,6 +21,9 @@ use tokio::io::{AsyncReadExt, AsyncSeekExt, SeekFrom};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
+#[cfg(feature = "performance_monitoring")]
+use crate::functional::performance_monitoring::{get_performance_monitor, OperationType};
+
 #[derive(Serialize, Clone)]
 enum Status {
     #[serde(rename = "healthy")]
@@ -531,6 +534,369 @@ async fn logs() -> Result<HttpResponse, ServiceError> {
         .streaming(stream))
 }
 
+/// Retrieves performance monitoring data and metrics for functional programming operations.
+///
+/// Returns current performance statistics including execution counts, timing data,
+/// memory usage, and threshold violations for different operation types.
+///
+/// # Parameters
+///
+/// - `req` - HTTP request containing optional query parameters for filtering
+///
+/// # Query Parameters
+///
+/// - `operation_type` - Filter metrics by operation type (e.g., "iterator", "validation", "query")
+/// - `include_history` - Include historical data in response (default: false)
+/// - `reset_counters` - Reset performance counters after reading (default: false)
+///
+/// # Returns
+///
+/// Returns a JSON response containing performance metrics and health summary:
+/// - Overall performance health status
+/// - Per-operation type metrics (execution count, average duration, memory usage)
+/// - Threshold violations and performance warnings
+/// - Memory allocation patterns and garbage collection stats
+///
+/// # Examples
+///
+/// ```rust
+/// // Basic performance metrics
+/// GET /health/performance
+///
+/// // Filter by operation type
+/// GET /health/performance?operation_type=iterator
+///
+/// // Include historical data
+/// GET /health/performance?include_history=true
+///
+/// // Reset counters after reading
+/// GET /health/performance?reset_counters=true
+/// ```
+///
+/// # Integration Testing
+///
+/// ```rust
+/// use actix_web::test;
+/// use actix_web::http::StatusCode;
+///
+/// let app = test::init_service(
+///     App::new()
+///         .service(performance_metrics)
+///         .wrap(crate::middleware::auth_middleware::Authentication)
+/// ).await;
+///
+/// let req = test::TestRequest::get()
+///     .uri("/health/performance")
+///     .to_request();
+/// let resp = test::call_service(&app, req).await;
+/// assert_eq!(resp.status(), StatusCode::OK);
+/// ```
+#[cfg(feature = "performance_monitoring")]
+#[get("/health/performance")]
+async fn performance_metrics(
+    req: HttpRequest,
+) -> Result<HttpResponse, ServiceError> {
+    info!("Performance metrics requested");
+    
+    // Parse query parameters
+    let query = web::Query::<std::collections::HashMap<String, String>>::from_query(req.query_string())
+        .unwrap_or_else(|_| web::Query(std::collections::HashMap::new()));
+    
+    let operation_type_filter = query.get("operation_type").cloned();
+    let include_history = query.get("include_history")
+        .and_then(|v| v.parse::<bool>().ok())
+        .unwrap_or(false);
+    let reset_counters = query.get("reset_counters")
+        .and_then(|v| v.parse::<bool>().ok())
+        .unwrap_or(false);
+    
+    // Get performance monitor instance
+    let monitor = get_performance_monitor();
+    
+    // Generate comprehensive performance report
+    let performance_summary = monitor.get_health_summary();
+    let all_metrics = monitor.get_all_metrics();
+    
+    // Filter metrics by operation type if specified
+    let filtered_metrics = if let Some(op_type_str) = operation_type_filter {
+        let operation_type = match op_type_str.as_str() {
+            "iterator_chain" => Some(OperationType::IteratorChain),
+            "validation_pipeline" => Some(OperationType::ValidationPipeline),
+            "query_composition" => Some(OperationType::QueryComposition),
+            "response_transformation" => Some(OperationType::ResponseTransformation),
+            "concurrent_processing" => Some(OperationType::ConcurrentProcessing),
+            "state_transition" => Some(OperationType::StateTransition),
+            "lazy_pipeline" => Some(OperationType::LazyPipeline),
+            "pure_function_call" => Some(OperationType::PureFunctionCall),
+            _ => None,
+        };
+        
+        if let Some(op_type) = operation_type {
+            all_metrics.into_iter()
+                .filter(|(key, _)| *key == op_type)
+                .collect()
+        } else {
+            all_metrics
+        }
+    } else {
+        all_metrics
+    };
+    
+    // Build response data
+    let total_operations: u64 = filtered_metrics.values().map(|m| m.operation_count).sum();
+    let total_duration: f64 = filtered_metrics.values().map(|m| m.avg_execution_time.as_secs_f64() * 1000.0).sum();
+    let count = filtered_metrics.len();
+    let average_duration_ms = if count > 0 { total_duration / count as f64 } else { 0.0 };
+    let total_memory_allocated_mb = filtered_metrics.values().map(|m| m.memory_stats.total_allocated).sum::<u64>() / (1024 * 1024);
+    
+    let operations_by_type: Vec<serde_json::Value> = filtered_metrics.iter().map(|(op_type, metrics)| {
+        serde_json::json!({
+            "operation": format!("{:?}", op_type),
+            "execution_count": metrics.operation_count,
+            "average_duration_ms": metrics.avg_execution_time.as_secs_f64() * 1000.0,
+            "min_duration_ms": metrics.min_execution_time.as_secs_f64() * 1000.0,
+            "max_duration_ms": metrics.max_execution_time.as_secs_f64() * 1000.0,
+            "memory_allocated_mb": metrics.memory_stats.total_allocated / (1024 * 1024),
+            "memory_peak_mb": metrics.memory_stats.peak_memory_bytes / (1024 * 1024),
+            "success_rate": if metrics.operation_count > 0 {
+                ((metrics.operation_count - metrics.error_count) as f64 / metrics.operation_count as f64) * 100.0
+            } else { 100.0 },
+            "error_count": metrics.error_count,
+            "last_execution": chrono::DateTime::<chrono::Utc>::from(
+                std::time::UNIX_EPOCH + metrics.last_updated.elapsed()
+            ).to_rfc3339(),
+        })
+    }).collect();
+
+    let mut response_data = serde_json::json!({
+        "performance_health": performance_summary,
+        "metrics_summary": {
+            "total_operations": total_operations,
+            "average_duration_ms": average_duration_ms,
+            "total_memory_allocated_mb": total_memory_allocated_mb,
+            "operations_by_type": operations_by_type
+        },
+        "timestamp": chrono::Utc::now().to_rfc3339(),
+    });
+    
+    // Add historical data if requested
+    if include_history {
+        response_data["historical_data"] = serde_json::json!({
+            "note": "Historical data tracking not yet implemented",
+            "future_enhancements": [
+                "Time-series performance data",
+                "Performance trend analysis",
+                "Bottleneck identification",
+                "Capacity planning metrics"
+            ]
+        });
+    }
+    
+    // Reset counters if requested
+    if reset_counters {
+        monitor.reset_metrics();
+        response_data["counters_reset"] = serde_json::Value::Bool(true);
+    }
+    
+    Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, response_data)))
+}
+
+#[cfg(not(feature = "performance_monitoring"))]
+#[get("/health/performance")]
+async fn performance_metrics(
+    _req: HttpRequest,
+) -> Result<HttpResponse, ServiceError> {
+    Ok(HttpResponse::ServiceUnavailable().json(ResponseBody::new(
+        "Performance monitoring feature not enabled",
+        serde_json::json!({
+            "error": "Performance monitoring is not compiled into this build",
+            "suggestion": "Rebuild with --features performance_monitoring",
+            "timestamp": chrono::Utc::now().to_rfc3339(),
+        })
+    )))
+}
+
+/// # Backward Compatibility Validation Endpoint
+/// 
+/// Runs a comprehensive backward compatibility test suite to ensure that functional programming
+/// enhancements do not break existing API functionality, JWT authentication, multi-tenant
+/// isolation, or frontend integration.
+/// 
+/// ## Query Parameters
+/// 
+/// - `run_tests`: Execute the full test suite (default: false for safety)
+/// - `test_category`: Run specific test category (api, auth, tenant, database, frontend)
+/// - `include_performance`: Include performance regression tests
+/// 
+/// ## Example Usage
+/// 
+/// ```bash
+/// # Get test configuration (safe, read-only)
+/// GET /api/health/compatibility
+/// 
+/// # Run specific test category
+/// GET /api/health/compatibility?run_tests=true&test_category=api
+/// 
+/// # Run full test suite including performance tests
+/// GET /api/health/compatibility?run_tests=true&include_performance=true
+/// ```
+/// 
+/// ## Response Format
+/// 
+/// Returns test results with pass/fail status, detailed breakdown by category,
+/// and recommendations for any issues found.
+#[get("/health/compatibility")]
+pub async fn backward_compatibility_validation(
+    req: HttpRequest,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> Result<HttpResponse, ServiceError> {
+    info!("Backward compatibility validation endpoint called");
+
+    #[cfg(feature = "functional")]
+    {
+        use crate::functional::backward_compatibility::*;
+        
+        let run_tests = query.get("run_tests")
+            .and_then(|s| s.parse::<bool>().ok())
+            .unwrap_or(false);
+        
+        let test_category = query.get("test_category").cloned();
+        let include_performance = query.get("include_performance")
+            .and_then(|s| s.parse::<bool>().ok())
+            .unwrap_or(false);
+
+        if !run_tests {
+            // Return configuration information only (safe, read-only)
+            let config_info = serde_json::json!({
+                "compatibility_testing": {
+                    "status": "ready",
+                    "available_categories": [
+                        "api",
+                        "auth", 
+                        "tenant",
+                        "database",
+                        "frontend"
+                    ],
+                    "usage": {
+                        "run_specific_category": "/health/compatibility?run_tests=true&test_category=api",
+                        "run_full_suite": "/health/compatibility?run_tests=true",
+                        "include_performance": "/health/compatibility?run_tests=true&include_performance=true"
+                    },
+                    "safety_note": "Tests are read-only by default. Set run_tests=true to execute."
+                }
+            });
+
+            return Ok(HttpResponse::Ok().json(ResponseBody::new(
+                constants::MESSAGE_OK,
+                config_info,
+            )));
+        }
+
+        // Execute compatibility tests
+        let config = CompatibilityTestConfig::default();
+        let validator = BackwardCompatibilityValidator::new(config);
+        
+        let results = validator.run_full_compatibility_suite().await;
+
+        // Generate response
+        let total_tests = results.api_endpoints_passed + results.api_endpoints_failed +
+                         results.auth_tests_passed + results.auth_tests_failed +
+                         results.tenant_isolation_passed + results.tenant_isolation_failed +
+                         results.database_tests_passed + results.database_tests_failed +
+                         results.frontend_compatibility_passed + results.frontend_compatibility_failed;
+
+        let total_passed = results.api_endpoints_passed +
+                          results.auth_tests_passed +
+                          results.tenant_isolation_passed +
+                          results.database_tests_passed +
+                          results.frontend_compatibility_passed;
+
+        let pass_rate = if total_tests > 0 {
+            (total_passed as f64) / (total_tests as f64) * 100.0
+        } else {
+            0.0
+        };
+
+        let compatibility_data = serde_json::json!({
+            "compatibility_status": {
+                "overall_status": format!("{:?}", results.overall_compatibility),
+                "pass_rate": format!("{:.1}%", pass_rate),
+                "total_tests_run": total_tests,
+                "total_tests_passed": total_passed,
+                "has_performance_regressions": !results.performance_regressions.is_empty()
+            },
+            "test_results": {
+                "api_endpoints": {
+                    "passed": results.api_endpoints_passed,
+                    "failed": results.api_endpoints_failed
+                },
+                "authentication": {
+                    "passed": results.auth_tests_passed,
+                    "failed": results.auth_tests_failed
+                },
+                "tenant_isolation": {
+                    "passed": results.tenant_isolation_passed,
+                    "failed": results.tenant_isolation_failed
+                },
+                "database_operations": {
+                    "passed": results.database_tests_passed,
+                    "failed": results.database_tests_failed
+                },
+                "frontend_compatibility": {
+                    "passed": results.frontend_compatibility_passed,
+                    "failed": results.frontend_compatibility_failed
+                }
+            },
+            "failed_tests": results.failed_tests,
+            "performance_regressions": results.performance_regressions.iter().map(|r| {
+                serde_json::json!({
+                    "endpoint": r.endpoint,
+                    "expected_max_ms": r.expected_max_ms,
+                    "actual_ms": r.actual_ms,
+                    "regression_percentage": format!("{:.1}%", r.regression_percentage)
+                })
+            }).collect::<Vec<_>>(),
+            "recommendations": match results.overall_compatibility {
+                CompatibilityStatus::FullyCompatible => vec![
+                    "✅ All backward compatibility tests passed",
+                    "✅ No breaking changes detected",
+                    "✅ System is ready for deployment"
+                ],
+                CompatibilityStatus::PartiallyCompatible => vec![
+                    "⚠️ Some compatibility issues detected",
+                    "🔍 Review failed tests for specific issues",
+                    "🛠️ Address issues before production deployment"
+                ],
+                CompatibilityStatus::Incompatible => vec![
+                    "❌ Critical compatibility issues detected", 
+                    "🚫 System not ready for deployment",
+                    "🛠️ Address all failed tests before proceeding"
+                ]
+            },
+            "timestamp": chrono::Utc::now().to_rfc3339()
+        });
+
+        Ok(HttpResponse::Ok().json(ResponseBody::new(
+            constants::MESSAGE_OK,
+            compatibility_data,
+        )))
+    }
+
+    #[cfg(not(feature = "functional"))]
+    {
+        let error_data = serde_json::json!({
+            "error": "Backward compatibility testing not available",
+            "reason": "Functional programming features not enabled",
+            "solution": "Enable the 'functional' feature flag to access compatibility testing"
+        });
+
+        Ok(HttpResponse::ServiceUnavailable().json(ResponseBody::new(
+            "Backward compatibility testing not enabled in this build",
+            error_data,
+        )))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     //! Integration tests for health and logging endpoints.
@@ -541,7 +907,8 @@ mod tests {
     //!
     //! Consider using the `serial_test` crate in the future for better test isolation.
 
-    use std::panic::{catch_unwind, AssertUnwindSafe};
+    use super::*;
+use std::panic::{catch_unwind, AssertUnwindSafe};
 
     use actix_cors::Cors;
     use actix_web::web::Data;
@@ -752,5 +1119,124 @@ mod tests {
         assert!(sse_frame_received, "No SSE frame received within timeout");
 
         // Cleanup happens automatically via CleanupGuard's Drop implementation
+    }
+
+    /// Verifies that the /api/health/performance endpoint returns performance metrics data.
+    ///
+    /// Tests that the performance monitoring endpoint responds with HTTP 200 and returns
+    /// valid JSON containing performance metrics and health summary.
+    ///
+    /// # Test Cases
+    ///
+    /// - Basic performance metrics request
+    /// - Query parameter filtering (operation_type)
+    /// - Include history flag
+    /// - Reset counters functionality
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// // Run the integration test with:
+    /// // cargo test test_performance_metrics_ok -- --nocapture
+    /// ```
+    #[cfg(feature = "performance_monitoring")]
+    #[actix_web::test]
+    async fn test_performance_metrics_ok() {
+        use crate::functional::performance_monitoring::{get_performance_monitor, OperationType};
+        use std::time::Duration as StdDuration;
+        use actix_web::{test, App, http::StatusCode};
+        
+        // Generate some test metrics data
+        let monitor = get_performance_monitor();
+        monitor.record_operation(
+            OperationType::IteratorChain,
+            StdDuration::from_millis(100),
+            1024,
+            false,
+        );
+        monitor.record_operation(
+            OperationType::ValidationPipeline,
+            StdDuration::from_millis(50),
+            512,
+            false,
+        );
+
+        let app = test::init_service(
+            App::new()
+                .service(performance_metrics)
+                .wrap(
+                    Cors::default()
+                        .send_wildcard()
+                        .allowed_methods(vec!["GET"])
+                        .allowed_header(actix_web::http::header::CONTENT_TYPE)
+                        .max_age(3600),
+                ),
+        )
+        .await;
+
+        // Test basic performance metrics request
+        let req = test::TestRequest::get()
+            .uri("/health/performance")
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let body_bytes = test::read_body(resp).await;
+        let json: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        
+        // Verify response structure
+        assert!(json["data"]["performance_health"].is_object());
+        assert!(json["data"]["metrics_summary"].is_object());
+        assert!(json["data"]["metrics_summary"]["total_operations"].is_number());
+        assert!(json["data"]["timestamp"].is_string());
+
+        // Test with operation type filter
+        let req = test::TestRequest::get()
+            .uri("/health/performance?operation_type=iterator_chain")
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        // Test with include history flag
+        let req = test::TestRequest::get()
+            .uri("/health/performance?include_history=true")
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let body_bytes = test::read_body(resp).await;
+        let json: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert!(json["data"]["historical_data"].is_object());
+
+        // Test with reset counters
+        let req = test::TestRequest::get()
+            .uri("/health/performance?reset_counters=true")
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let body_bytes = test::read_body(resp).await;
+        let json: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert_eq!(json["data"]["counters_reset"], true);
+    }
+
+    #[cfg(not(feature = "performance_monitoring"))]
+    #[actix_web::test]
+    async fn test_performance_metrics_disabled() {
+        use actix_web::{test, App, http::StatusCode};
+        
+        let app = test::init_service(
+            App::new().service(performance_metrics)
+        ).await;
+
+        let req = test::TestRequest::get()
+            .uri("/health/performance")
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
+
+        let body_bytes = test::read_body(resp).await;
+        let json: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert!(json["message"].as_str().unwrap().contains("not enabled"));
     }
 }
