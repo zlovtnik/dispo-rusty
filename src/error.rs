@@ -665,4 +665,236 @@ mod tests {
         };
     assert_eq!(format!("{}", error), "Invalid token");
     }
+
+    // Tests for Clone trait implementation on ServiceError
+    #[test]
+    fn service_error_clone_unauthorized() {
+        let error = ServiceError::Unauthorized {
+            error_message: "Invalid credentials".to_string(),
+        };
+        let cloned = error.clone();
+        
+        match (&error, &cloned) {
+            (
+                ServiceError::Unauthorized { error_message: msg1 },
+                ServiceError::Unauthorized { error_message: msg2 },
+            ) => {
+                assert_eq\!(msg1, msg2);
+                assert_eq\!(msg1, "Invalid credentials");
+            }
+            _ => panic\!("Cloned error has different variant"),
+        }
+    }
+
+    #[test]
+    fn service_error_clone_bad_request() {
+        let error = ServiceError::BadRequest {
+            error_message: "Missing field".to_string(),
+        };
+        let cloned = error.clone();
+        
+        match (&error, &cloned) {
+            (
+                ServiceError::BadRequest { error_message: msg1 },
+                ServiceError::BadRequest { error_message: msg2 },
+            ) => {
+                assert_eq\!(msg1, msg2);
+            }
+            _ => panic\!("Cloned error has different variant"),
+        }
+    }
+
+    #[test]
+    fn service_error_clone_not_found() {
+        let error = ServiceError::NotFound {
+            error_message: "Resource not found".to_string(),
+        };
+        let cloned = error.clone();
+        
+        match (&error, &cloned) {
+            (
+                ServiceError::NotFound { error_message: msg1 },
+                ServiceError::NotFound { error_message: msg2 },
+            ) => {
+                assert_eq\!(msg1, msg2);
+            }
+            _ => panic\!("Cloned error has different variant"),
+        }
+    }
+
+    #[test]
+    fn service_error_clone_internal_server_error() {
+        let error = ServiceError::InternalServerError {
+            error_message: "Database connection failed".to_string(),
+        };
+        let cloned = error.clone();
+        
+        match (&error, &cloned) {
+            (
+                ServiceError::InternalServerError { error_message: msg1 },
+                ServiceError::InternalServerError { error_message: msg2 },
+            ) => {
+                assert_eq\!(msg1, msg2);
+            }
+            _ => panic\!("Cloned error has different variant"),
+        }
+    }
+
+    #[test]
+    fn service_error_clone_conflict() {
+        let error = ServiceError::Conflict {
+            error_message: "Duplicate entry".to_string(),
+        };
+        let cloned = error.clone();
+        
+        match (&error, &cloned) {
+            (
+                ServiceError::Conflict { error_message: msg1 },
+                ServiceError::Conflict { error_message: msg2 },
+            ) => {
+                assert_eq\!(msg1, msg2);
+            }
+            _ => panic\!("Cloned error has different variant"),
+        }
+    }
+
+    #[test]
+    fn service_error_clone_independence() {
+        let mut error = ServiceError::BadRequest {
+            error_message: "original".to_string(),
+        };
+        let cloned = error.clone();
+        
+        // Modify original (by reassigning, since fields are private)
+        error = ServiceError::BadRequest {
+            error_message: "modified".to_string(),
+        };
+        
+        // Cloned should still have original value
+        match cloned {
+            ServiceError::BadRequest { error_message } => {
+                assert_eq\!(error_message, "original");
+            }
+            _ => panic\!("Wrong variant"),
+        }
+    }
+
+    #[test]
+    fn service_error_clone_in_vec() {
+        let errors = vec\![
+            ServiceError::Unauthorized {
+                error_message: "error1".to_string(),
+            },
+            ServiceError::BadRequest {
+                error_message: "error2".to_string(),
+            },
+            ServiceError::NotFound {
+                error_message: "error3".to_string(),
+            },
+        ];
+        
+        let cloned_errors = errors.clone();
+        
+        assert_eq\!(errors.len(), cloned_errors.len());
+        for (orig, clone) in errors.iter().zip(cloned_errors.iter()) {
+            match (orig, clone) {
+                (
+                    ServiceError::Unauthorized { error_message: msg1 },
+                    ServiceError::Unauthorized { error_message: msg2 },
+                ) => assert_eq\!(msg1, msg2),
+                (
+                    ServiceError::BadRequest { error_message: msg1 },
+                    ServiceError::BadRequest { error_message: msg2 },
+                ) => assert_eq\!(msg1, msg2),
+                (
+                    ServiceError::NotFound { error_message: msg1 },
+                    ServiceError::NotFound { error_message: msg2 },
+                ) => assert_eq\!(msg1, msg2),
+                _ => panic\!("Mismatched variants"),
+            }
+        }
+    }
+
+    #[test]
+    fn service_error_clone_in_result() {
+        let result: Result<i32, ServiceError> = Err(ServiceError::InternalServerError {
+            error_message: "Failed".to_string(),
+        });
+        
+        let cloned_result = result.clone();
+        
+        assert\!(result.is_err());
+        assert\!(cloned_result.is_err());
+        
+        if let (Err(orig), Err(clone)) = (result, cloned_result) {
+            match (orig, clone) {
+                (
+                    ServiceError::InternalServerError { error_message: msg1 },
+                    ServiceError::InternalServerError { error_message: msg2 },
+                ) => {
+                    assert_eq\!(msg1, msg2);
+                }
+                _ => panic\!("Mismatched errors"),
+            }
+        }
+    }
+
+    #[test]
+    fn service_error_clone_preserves_response_error_trait() {
+        let error = ServiceError::BadRequest {
+            error_message: "test".to_string(),
+        };
+        let cloned = error.clone();
+        
+        // Both should implement ResponseError
+        assert_eq\!(error.status_code(), cloned.status_code());
+        assert_eq\!(error.status_code(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn service_error_clone_with_empty_message() {
+        let error = ServiceError::Unauthorized {
+            error_message: "".to_string(),
+        };
+        let cloned = error.clone();
+        
+        match cloned {
+            ServiceError::Unauthorized { error_message } => {
+                assert_eq\!(error_message, "");
+            }
+            _ => panic\!("Wrong variant"),
+        }
+    }
+
+    #[test]
+    fn service_error_clone_with_unicode() {
+        let error = ServiceError::BadRequest {
+            error_message: "Erreur: données invalides 🚫".to_string(),
+        };
+        let cloned = error.clone();
+        
+        match cloned {
+            ServiceError::BadRequest { error_message } => {
+                assert_eq\!(error_message, "Erreur: données invalides 🚫");
+            }
+            _ => panic\!("Wrong variant"),
+        }
+    }
+
+    #[test]
+    fn service_error_clone_with_long_message() {
+        let long_message = "a".repeat(10000);
+        let error = ServiceError::InternalServerError {
+            error_message: long_message.clone(),
+        };
+        let cloned = error.clone();
+        
+        match cloned {
+            ServiceError::InternalServerError { error_message } => {
+                assert_eq\!(error_message, long_message);
+                assert_eq\!(error_message.len(), 10000);
+            }
+            _ => panic\!("Wrong variant"),
+        }
+    }
 }

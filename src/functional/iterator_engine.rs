@@ -146,13 +146,11 @@ where
         }
     }
 
-    /// Groups consecutive elements by a derived key, yielding one `(key, Vec<items>)` tuple for each contiguous run.
+    /// Group consecutive elements by a derived key, yielding `(key, Vec<items>)` for each contiguous run.
     ///
-    /// Requires `T: Clone` because groups are collected into `Vec<T>`, and `K: PartialEq` to compare adjacent keys.
-    ///
-    /// # Returns
-    ///
-    /// An `IteratorChain` that yields `(K, Vec<T>)` for each sequence of adjacent items whose derived keys are equal.
+    /// The resulting `IteratorChain` produces one `(key, Vec<T>)` tuple for each sequence of adjacent
+    /// items whose derived keys are equal. Requires `T: Clone` because groups are collected into `Vec<T>`,
+    /// and `K: PartialEq` to compare adjacent keys.
     ///
     /// # Examples
     ///
@@ -189,20 +187,6 @@ where
     }
 
     // /// K-way merge sorted iterators
-    /// Merges this chain with another sequence and returns a new chain that yields all elements in sorted order.
-    ///
-    /// The other sequence is consumed, its items are appended to this chain's items, and the combined collection is sorted
-    /// before producing the resulting iterator. The resulting chain records the `"kmerge"` operation in its operations log.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #[cfg(feature = "functional")] {
-    /// let chain = IteratorChain::new(vec![1, 3, 5].into_iter()).kmerge(vec![2, 4, 6]);
-    /// let result: Vec<_> = chain.collect();
-    /// assert_eq!(result, vec![1, 2, 3, 4, 5, 6]);
-    /// # }
-    /// ```
     #[cfg(feature = "functional")]
     pub fn kmerge<J>(self, other: J) -> IteratorChain<T, impl Iterator<Item = T>>
     where
@@ -224,22 +208,7 @@ where
         }
     }
 
-    /// Aligns multiple iterators by index and yields a vector of corresponding items from each source.
-    ///
-    /// Collects the chain's underlying iterator and each iterator in `others`, truncates to the
-    /// shortest length, and produces an iterator that yields a `Vec<T>` for each index containing
-    /// the i-th item from every source. Each item is cloned as needed.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// // Create a chain from a vector iterator, then lockstep zip with another iterator.
-    /// let chain = IteratorChain::new(vec![1, 2, 3].into_iter());
-    /// let result: Vec<Vec<i32>> = chain
-    ///     .lockstep_zip(vec![vec![4, 5, 6].into_iter()])
-    ///     .collect();
-    /// assert_eq!(result, vec![vec![1, 4], vec![2, 5], vec![3, 6]]);
-    /// ```
+    /// Lockstep iteration over multiple iterators (zip all with equal lengths)
     #[cfg(feature = "functional")]
     pub fn lockstep_zip<Iterators>(self, others: Iterators) -> IteratorChain<Vec<T>, impl Iterator<Item = Vec<T>>>
     where
@@ -733,5 +702,522 @@ mod tests {
             .collect();
 
         assert_eq!(result, vec!["Alice", "Charlie"]);
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        assert_eq!(result, vec!["Alice", "Charlie"]);
+    }
+
+    // Comprehensive tests for kmerge
+    #[test]
+    fn test_kmerge_with_empty_iterators() {
+        let engine = IteratorEngine::new();
+        let data1: Vec<i32> = vec\![];
+        let data2: Vec<i32> = vec\![];
+
+        let merged: Vec<i32> = engine.from_vec(data1).kmerge(data2).collect();
+
+        assert_eq\!(merged, vec\![]);
+    }
+
+    #[test]
+    fn test_kmerge_with_one_empty_iterator() {
+        let engine = IteratorEngine::new();
+        let data1 = vec\![1, 2, 3];
+        let data2: Vec<i32> = vec\![];
+
+        let merged: Vec<i32> = engine.from_vec(data1).kmerge(data2).collect();
+
+        assert_eq\!(merged, vec\![1, 2, 3]);
+    }
+
+    #[test]
+    fn test_kmerge_with_first_empty() {
+        let engine = IteratorEngine::new();
+        let data1: Vec<i32> = vec\![];
+        let data2 = vec\![4, 5, 6];
+
+        let merged: Vec<i32> = engine.from_vec(data1).kmerge(data2).collect();
+
+        assert_eq\!(merged, vec\![4, 5, 6]);
+    }
+
+    #[test]
+    fn test_kmerge_with_unsorted_input() {
+        let engine = IteratorEngine::new();
+        let data1 = vec\![3, 1, 5];
+        let data2 = vec\![6, 2, 4];
+
+        let merged: Vec<i32> = engine.from_vec(data1).kmerge(data2).collect();
+
+        // kmerge sorts the combined result
+        assert_eq\!(merged, vec\![1, 2, 3, 4, 5, 6]);
+    }
+
+    #[test]
+    fn test_kmerge_with_duplicates() {
+        let engine = IteratorEngine::new();
+        let data1 = vec\![1, 2, 2, 3];
+        let data2 = vec\![2, 3, 4, 4];
+
+        let merged: Vec<i32> = engine.from_vec(data1).kmerge(data2).collect();
+
+        assert_eq\!(merged, vec\![1, 2, 2, 2, 3, 3, 4, 4]);
+    }
+
+    #[test]
+    fn test_kmerge_with_single_elements() {
+        let engine = IteratorEngine::new();
+        let data1 = vec\![5];
+        let data2 = vec\![3];
+
+        let merged: Vec<i32> = engine.from_vec(data1).kmerge(data2).collect();
+
+        assert_eq\!(merged, vec\![3, 5]);
+    }
+
+    #[test]
+    fn test_kmerge_with_negative_numbers() {
+        let engine = IteratorEngine::new();
+        let data1 = vec\![-3, -1, 2];
+        let data2 = vec\![-2, 0, 1];
+
+        let merged: Vec<i32> = engine.from_vec(data1).kmerge(data2).collect();
+
+        assert_eq\!(merged, vec\![-3, -2, -1, 0, 1, 2]);
+    }
+
+    #[test]
+    fn test_kmerge_with_strings() {
+        let engine = IteratorEngine::new();
+        let data1 = vec\!["banana", "cherry"];
+        let data2 = vec\!["apple", "date"];
+
+        let merged: Vec<&str> = engine.from_vec(data1).kmerge(data2).collect();
+
+        assert_eq\!(merged, vec\!["apple", "banana", "cherry", "date"]);
+    }
+
+    #[test]
+    fn test_kmerge_preserves_operation_tracking() {
+        let engine = IteratorEngine::new();
+        let data1 = vec\![1, 3];
+        let data2 = vec\![2, 4];
+
+        let chain = engine.from_vec(data1).kmerge(data2);
+        
+        // Verify the operation is tracked
+        assert\!(chain.operations.contains(&"kmerge".to_string()));
+    }
+
+    #[test]
+    fn test_kmerge_with_large_dataset() {
+        let engine = IteratorEngine::new();
+        let data1: Vec<i32> = (0..1000).filter(|x| x % 2 == 0).collect();
+        let data2: Vec<i32> = (0..1000).filter(|x| x % 2 == 1).collect();
+
+        let merged: Vec<i32> = engine.from_vec(data1).kmerge(data2).collect();
+
+        assert_eq\!(merged.len(), 1000);
+        // Verify it's sorted
+        for i in 0..999 {
+            assert\!(merged[i] <= merged[i + 1]);
+        }
+    }
+
+    // Comprehensive tests for lockstep_zip
+    #[test]
+    fn test_lockstep_zip_with_empty_iterators() {
+        let engine = IteratorEngine::new();
+        let data1: Vec<i32> = vec\![];
+        let data2: Vec<i32> = vec\![];
+
+        let zipped: Vec<Vec<i32>> = engine
+            .from_vec(data1)
+            .lockstep_zip(vec\![data2.into_iter()])
+            .collect();
+
+        assert_eq\!(zipped, Vec::<Vec<i32>>::new());
+    }
+
+    #[test]
+    fn test_lockstep_zip_with_different_lengths() {
+        let engine = IteratorEngine::new();
+        let data1 = vec\![1, 2, 3, 4, 5];
+        let data2 = vec\![10, 20, 30];
+
+        let zipped: Vec<Vec<i32>> = engine
+            .from_vec(data1)
+            .lockstep_zip(vec\![data2.into_iter()])
+            .collect();
+
+        // Should truncate to shortest length
+        assert_eq\!(zipped, vec\![vec\![1, 10], vec\![2, 20], vec\![3, 30]]);
+    }
+
+    #[test]
+    fn test_lockstep_zip_with_first_shorter() {
+        let engine = IteratorEngine::new();
+        let data1 = vec\![1, 2];
+        let data2 = vec\![10, 20, 30, 40];
+
+        let zipped: Vec<Vec<i32>> = engine
+            .from_vec(data1)
+            .lockstep_zip(vec\![data2.into_iter()])
+            .collect();
+
+        assert_eq\!(zipped, vec\![vec\![1, 10], vec\![2, 20]]);
+    }
+
+    #[test]
+    fn test_lockstep_zip_multiple_iterators() {
+        let engine = IteratorEngine::new();
+        let data1 = vec\![1, 2, 3];
+        let data2 = vec\![10, 20, 30];
+        let data3 = vec\![100, 200, 300];
+
+        let zipped: Vec<Vec<i32>> = engine
+            .from_vec(data1)
+            .lockstep_zip(vec\![data2.into_iter(), data3.into_iter()])
+            .collect();
+
+        assert_eq\!(
+            zipped,
+            vec\![vec\![1, 10, 100], vec\![2, 20, 200], vec\![3, 30, 300]]
+        );
+    }
+
+    #[test]
+    fn test_lockstep_zip_multiple_with_different_lengths() {
+        let engine = IteratorEngine::new();
+        let data1 = vec\![1, 2, 3, 4];
+        let data2 = vec\![10, 20];
+        let data3 = vec\![100, 200, 300];
+
+        let zipped: Vec<Vec<i32>> = engine
+            .from_vec(data1)
+            .lockstep_zip(vec\![data2.into_iter(), data3.into_iter()])
+            .collect();
+
+        // Truncates to length 2 (shortest)
+        assert_eq\!(zipped, vec\![vec\![1, 10, 100], vec\![2, 20, 200]]);
+    }
+
+    #[test]
+    fn test_lockstep_zip_single_element() {
+        let engine = IteratorEngine::new();
+        let data1 = vec\![42];
+        let data2 = vec\![100];
+
+        let zipped: Vec<Vec<i32>> = engine
+            .from_vec(data1)
+            .lockstep_zip(vec\![data2.into_iter()])
+            .collect();
+
+        assert_eq\!(zipped, vec\![vec\![42, 100]]);
+    }
+
+    #[test]
+    fn test_lockstep_zip_with_strings() {
+        let engine = IteratorEngine::new();
+        let data1 = vec\!["a", "b", "c"];
+        let data2 = vec\!["x", "y", "z"];
+
+        let zipped: Vec<Vec<&str>> = engine
+            .from_vec(data1)
+            .lockstep_zip(vec\![data2.into_iter()])
+            .collect();
+
+        assert_eq\!(
+            zipped,
+            vec\![vec\!["a", "x"], vec\!["b", "y"], vec\!["c", "z"]]
+        );
+    }
+
+    #[test]
+    fn test_lockstep_zip_preserves_operation_tracking() {
+        let engine = IteratorEngine::new();
+        let data1 = vec\![1, 2];
+        let data2 = vec\![3, 4];
+
+        let chain = engine
+            .from_vec(data1)
+            .lockstep_zip(vec\![data2.into_iter()]);
+
+        assert\!(chain.operations.contains(&"lockstep_zip".to_string()));
+    }
+
+    #[test]
+    fn test_lockstep_zip_with_no_additional_iterators() {
+        let engine = IteratorEngine::new();
+        let data1 = vec\![1, 2, 3];
+
+        let zipped: Vec<Vec<i32>> = engine
+            .from_vec(data1)
+            .lockstep_zip(vec\![])
+            .collect();
+
+        // With no additional iterators, each element becomes a single-item vec
+        assert_eq\!(zipped, vec\![vec\![1], vec\![2], vec\![3]]);
+    }
+
+    #[test]
+    fn test_lockstep_zip_clones_values() {
+        #[derive(Clone, Debug, PartialEq)]
+        struct Value(i32);
+
+        let engine = IteratorEngine::new();
+        let data1 = vec\![Value(1), Value(2)];
+        let data2 = vec\![Value(10), Value(20)];
+
+        let zipped: Vec<Vec<Value>> = engine
+            .from_vec(data1)
+            .lockstep_zip(vec\![data2.into_iter()])
+            .collect();
+
+        assert_eq\!(
+            zipped,
+            vec\![vec\![Value(1), Value(10)], vec\![Value(2), Value(20)]]
+        );
+    }
+
+    // Combined tests for join with edge cases
+    #[test]
+    fn test_join_with_empty_left() {
+        let engine = IteratorEngine::new();
+        let left: Vec<i32> = vec\![];
+        let right = vec\![(1, 10), (2, 20)];
+
+        let joined: Vec<(i32, (i32, i32))> = engine
+            .from_vec(left)
+            .join(right, |&l| l, |&(r, _)| r)
+            .collect();
+
+        assert_eq\!(joined, vec\![]);
+    }
+
+    #[test]
+    fn test_join_with_empty_right() {
+        let engine = IteratorEngine::new();
+        let left = vec\![1, 2, 3];
+        let right: Vec<(i32, i32)> = vec\![];
+
+        let joined: Vec<(i32, (i32, i32))> = engine
+            .from_vec(left)
+            .join(right, |&l| l, |&(r, _)| r)
+            .collect();
+
+        assert_eq\!(joined, vec\![]);
+    }
+
+    #[test]
+    fn test_join_with_no_matches() {
+        let engine = IteratorEngine::new();
+        let left = vec\![1, 2, 3];
+        let right = vec\![(4, 40), (5, 50)];
+
+        let joined: Vec<(i32, (i32, i32))> = engine
+            .from_vec(left)
+            .join(right, |&l| l, |&(r, _)| r)
+            .collect();
+
+        assert_eq\!(joined, vec\![]);
+    }
+
+    #[test]
+    fn test_join_one_to_many() {
+        let engine = IteratorEngine::new();
+        let left = vec\![1];
+        let right = vec\![(1, 10), (1, 11), (1, 12)];
+
+        let joined: Vec<(i32, (i32, i32))> = engine
+            .from_vec(left)
+            .join(right, |&l| l, |&(r, _)| r)
+            .collect();
+
+        assert_eq\!(joined.len(), 3);
+        assert\!(joined.contains(&(1, (1, 10))));
+        assert\!(joined.contains(&(1, (1, 11))));
+        assert\!(joined.contains(&(1, (1, 12))));
+    }
+
+    #[test]
+    fn test_join_with_strings() {
+        let engine = IteratorEngine::new();
+        let left = vec\!["a", "b"];
+        let right = vec\![("a", 1), ("b", 2), ("a", 3)];
+
+        let joined: Vec<(&str, (&str, i32))> = engine
+            .from_vec(left)
+            .join(right, |&l| l, |&(r, _)| r)
+            .collect();
+
+        assert_eq\!(joined.len(), 3);
+        assert\!(joined.contains(&("a", ("a", 1))));
+        assert\!(joined.contains(&("a", ("a", 3))));
+        assert\!(joined.contains(&("b", ("b", 2))));
+    }
+
+    // Tests for chunk_by with edge cases
+    #[test]
+    fn test_chunk_by_with_empty_iterator() {
+        let engine = IteratorEngine::new();
+        let data: Vec<i32> = vec\![];
+
+        let chunks: Vec<(i32, Vec<i32>)> = engine
+            .from_vec(data)
+            .chunk_by(|&x| x)
+            .collect();
+
+        assert_eq\!(chunks, vec\![]);
+    }
+
+    #[test]
+    fn test_chunk_by_single_element() {
+        let engine = IteratorEngine::new();
+        let data = vec\![5];
+
+        let chunks: Vec<(i32, Vec<i32>)> = engine
+            .from_vec(data)
+            .chunk_by(|&x| x)
+            .collect();
+
+        assert_eq\!(chunks, vec\![(5, vec\![5])]);
+    }
+
+    #[test]
+    fn test_chunk_by_all_same() {
+        let engine = IteratorEngine::new();
+        let data = vec\![1, 1, 1, 1];
+
+        let chunks: Vec<(i32, Vec<i32>)> = engine
+            .from_vec(data)
+            .chunk_by(|&x| x)
+            .collect();
+
+        assert_eq\!(chunks, vec\![(1, vec\![1, 1, 1, 1])]);
+    }
+
+    #[test]
+    fn test_chunk_by_all_different() {
+        let engine = IteratorEngine::new();
+        let data = vec\![1, 2, 3, 4];
+
+        let chunks: Vec<(i32, Vec<i32>)> = engine
+            .from_vec(data)
+            .chunk_by(|&x| x)
+            .collect();
+
+        assert_eq\!(
+            chunks,
+            vec\![(1, vec\![1]), (2, vec\![2]), (3, vec\![3]), (4, vec\![4])]
+        );
+    }
+
+    #[test]
+    fn test_chunk_by_non_consecutive_groups() {
+        let engine = IteratorEngine::new();
+        let data = vec\![1, 1, 2, 2, 1, 1, 3];
+
+        let chunks: Vec<(i32, Vec<i32>)> = engine
+            .from_vec(data)
+            .chunk_by(|&x| x)
+            .collect();
+
+        // chunk_by only groups consecutive elements
+        assert_eq\!(
+            chunks,
+            vec\![(1, vec\![1, 1]), (2, vec\![2, 2]), (1, vec\![1, 1]), (3, vec\![3])]
+        );
+    }
+
+    #[test]
+    fn test_chunk_by_with_derived_key() {
+        let engine = IteratorEngine::new();
+        let data = vec\![1, 3, 5, 2, 4, 6];
+
+        let chunks: Vec<(bool, Vec<i32>)> = engine
+            .from_vec(data)
+            .chunk_by(|&x| x % 2 == 0)
+            .collect();
+
+        // Groups by odd/even consecutively
+        assert_eq\!(chunks, vec\![(false, vec\![1, 3, 5]), (true, vec\![2, 4, 6])]);
+    }
+
+    // Integration tests combining multiple operations
+    #[test]
+    fn test_kmerge_then_filter() {
+        let engine = IteratorEngine::new();
+        let data1 = vec\![1, 2, 3, 4, 5];
+        let data2 = vec\![6, 7, 8, 9, 10];
+
+        let result: Vec<i32> = engine
+            .from_vec(data1)
+            .kmerge(data2)
+            .filter(|&x| x % 2 == 0)
+            .collect();
+
+        assert_eq\!(result, vec\![2, 4, 6, 8, 10]);
+    }
+
+    #[test]
+    fn test_lockstep_zip_then_map() {
+        let engine = IteratorEngine::new();
+        let data1 = vec\![1, 2, 3];
+        let data2 = vec\![10, 20, 30];
+
+        let result: Vec<i32> = engine
+            .from_vec(data1)
+            .lockstep_zip(vec\![data2.into_iter()])
+            .map(|vec| vec.iter().sum())
+            .collect();
+
+        assert_eq\!(result, vec\![11, 22, 33]);
+    }
+
+    #[test]
+    fn test_chain_kmerge_lockstep() {
+        let engine = IteratorEngine::new();
+        let data1 = vec\![1, 3];
+        let data2 = vec\![2, 4];
+        let data3 = vec\![10, 20, 30, 40];
+
+        let merged = engine.from_vec(data1).kmerge(data2);
+        let result: Vec<Vec<i32>> = merged
+            .lockstep_zip(vec\![data3.into_iter()])
+            .collect();
+
+        assert_eq\!(
+            result,
+            vec\![vec\![1, 10], vec\![2, 20], vec\![3, 30], vec\![4, 40]]
+        );
     }
 }
