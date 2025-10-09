@@ -28,13 +28,14 @@ tokio = { version = "1.35.0", features = ["rt", "rt-multi-thread", "fs", "io-uti
 notify = "6.1"
 tokio-stream = "0.1"
 url = "2.4"
-itertools = { version = "0.14", optional = true }
+itertools = "0.14"
 rayon = { version = "1.11", optional = true }
 im = "15.1"
 thiserror = "2.0.17"
 regex = "1.10"
 once_cell = "1.18"
 num_cpus = "1.17"
+rand = "0.8"
 
 [dependencies.diesel]
 version = "2.1.0"
@@ -49,12 +50,18 @@ version = "1.3.3"
 features = ["v4"]
 
 [features]
-default = []  # Disable functional features by default for faster builds
-functional = ["dep:itertools", "dep:rayon"]
+default = ["functional", "performance_monitoring"]  # Enable functional features by default to support refactoring
+functional = ["dep:rayon"]
+performance_monitoring = []
 
 [dev-dependencies]
 testcontainers = "0.14.0"
 tempfile = "3.8"
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "functional_benchmarks"
+harness = false
 
 [profile.dev]
 opt-level = 1           # Basic optimizations for faster builds

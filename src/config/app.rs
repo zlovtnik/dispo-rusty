@@ -33,6 +33,8 @@ pub fn config_services(cfg: &mut web::ServiceConfig) {
         info!("  - GET /api/ping -> ping_controller::ping");
         info!("  - GET /api/health -> health_controller::health");
         info!("  - GET /api/health/detailed -> health_controller::health_detailed");
+        info!("  - GET /api/health/performance -> health_controller::performance_metrics");
+        info!("  - GET /api/health/compatibility -> health_controller::backward_compatibility_validation");
         info!("  - GET /api/logs -> health_controller::logs");
         info!("  - POST /api/auth/signup -> account_controller::signup");
         info!("  - POST /api/auth/login -> account_controller::login");
@@ -67,7 +69,7 @@ pub fn config_services(cfg: &mut web::ServiceConfig) {
 
 /// Register API endpoints and nested scopes under `/api`.
 ///
-/// Adds standalone routes for `ping`, `health`, `health_detailed`, and `logs`, and mounts
+/// Adds standalone routes for `ping`, `health`, `health_detailed`, `performance`, and `logs`, and mounts
 /// the `/auth`, `/address-book`, `/admin`, and `/tenants` sub-scopes.
 ///
 /// # Examples
@@ -82,6 +84,8 @@ fn configure_api_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(ping_controller::ping);
     cfg.service(health_controller::health);
     cfg.service(health_controller::health_detailed);
+    cfg.service(health_controller::performance_metrics);
+    cfg.service(health_controller::backward_compatibility_validation);
     cfg.service(health_controller::logs);
 
     // Auth scope routes

@@ -11,6 +11,9 @@ use std::hash::Hash;
 #[cfg(feature = "functional")]
 use itertools::Itertools;
 
+#[cfg(feature = "performance_monitoring")]
+use crate::functional::performance_monitoring::{get_performance_monitor, OperationType, Measurable};
+
 /// Extension trait to re-wrap any iterator back into an IteratorChain
 ///
 /// This trait provides a convenient way to recover IteratorChain functionality
@@ -280,22 +283,17 @@ where
         }
     }
 
-    /// K-way merge sorted iterators
+    /// K-way merge sorted iterators using itertools two-way merge
     #[cfg(feature = "functional")]
     pub fn kmerge<J>(self, other: J) -> IteratorChain<T, impl Iterator<Item = T>>
     where
         T: Ord,
         J: IntoIterator<Item = T>,
-        J::IntoIter: 'static,
-        I: 'static,
     {
         let mut operations = self.operations;
         operations.push("kmerge".to_string());
 
-        let merged = itertools::kmerge(vec![
-            Box::new(self.iterator) as Box<dyn Iterator<Item = T>>,
-            Box::new(other.into_iter()) as Box<dyn Iterator<Item = T>>
-        ]);
+        let merged = self.iterator.merge(other.into_iter());
 
         IteratorChain {
             iterator: merged,
@@ -308,7 +306,7 @@ where
     #[cfg(feature = "functional")]
     pub fn lockstep_zip<J>(
         self,
-        others: Vec<J>,
+        others: impl IntoIterator<Item = J>,
     ) -> IteratorChain<Vec<T>, impl Iterator<Item = Vec<T>>>
     where
         J: Iterator<Item = T>,
@@ -318,7 +316,7 @@ where
         operations.push("lockstep_zip".to_string());
 
         let mut all_vecs: Vec<Vec<T>> = vec![self.iterator.collect()];
-        for iter in others {
+        for iter in others.into_iter() {
             all_vecs.push(iter.collect());
         }
 
@@ -435,7 +433,28 @@ where
     /// assert_eq!(v, vec![1, 2, 3]);
     /// ```
     pub fn collect(self) -> Vec<T> {
-        self.iterator.collect()
+        #[cfg(feature = "performance_monitoring")]
+        {
+            let start = std::time::Instant::now();
+            
+            let result: Vec<T> = self.iterator.collect();
+            
+            let duration = start.elapsed();
+            let memory_usage = (result.len() * std::mem::size_of::<T>()) as u64;
+            
+            get_performance_monitor().record_operation(
+                OperationType::IteratorChain,
+                duration,
+                memory_usage,
+                false,
+            );
+            
+            result
+        }
+        #[cfg(not(feature = "performance_monitoring"))]
+        {
+            self.iterator.collect()
+        }
     }
 
     /// Counts the remaining elements in the chain.
@@ -507,6 +526,17 @@ where
             .field("config", &self.config)
             .field("operations", &self.operations)
             .finish()
+    }
+}
+
+#[cfg(feature = "performance_monitoring")]
+impl<T, I> Measurable for IteratorChain<T, I>
+where
+    I: Iterator<Item = T>,
+{
+    /// Gets the operation type for monitoring
+    fn operation_type(&self) -> OperationType {
+        OperationType::IteratorChain
     }
 }
 
@@ -1101,7 +1131,7 @@ mod tests {
             let engine = IteratorEngine::new();
             let data1 = vec![1, 2, 3];
 
-            let zipped: Vec<Vec<i32>> = engine.from_vec(data1).lockstep_zip(vec![] as Vec<std::vec::IntoIter<i32>>).collect();
+            let zipped: Vec<Vec<i32>> = engine.from_vec(data1).lockstep_zip(Vec::<std::vec::IntoIter<i32>>::new()).collect();
 
             // With no additional iterators, each element becomes a single-item vec
             assert_eq!(zipped, vec![vec![1], vec![2], vec![3]]);

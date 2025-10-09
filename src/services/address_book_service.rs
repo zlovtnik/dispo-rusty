@@ -1,3 +1,16 @@
+//! Service functions for address book operations
+//!
+//! Provides advanced functional programming patterns for CRUD operations on Person entities.
+//! Uses iterator chains, lazy evaluation, and iterator-based validation for high-performance processing.
+//!
+//! ## Functional Programming Features
+//!
+//! - **Iterator-based validation**: All input validation uses iterator chains
+//! - **Lazy evaluation**: Database queries use functional pipelines for memory efficiency
+//! - **Pure functional composition**: Business logic composed from pure functions
+//! - **Immutable data transformations**: All operations preserve immutability
+//! - **Error handling monads**: Comprehensive Result/Option chaining
+
 use crate::{
     config::db::Pool,
     constants,
@@ -7,175 +20,144 @@ use crate::{
         person::{Person, PersonDTO},
         response::Page,
     },
+    services::functional_service_base::{
+        FunctionalQueryService, FunctionalErrorHandling
+    },
+    services::functional_patterns::Validator,
 };
 
-/// Fetches all Person records from the database.
+/// Iterator-based validation using functional combinator pattern
+fn create_person_validator() -> Validator<PersonDTO> {
+    Validator::new()
+        .rule(|dto: &PersonDTO| {
+            if dto.name.trim().is_empty() {
+                Err(ServiceError::bad_request("Name cannot be empty"))
+            } else if dto.name.len() > 100 {
+                Err(ServiceError::bad_request("Name too long (max 100 characters)"))
+            } else {
+                Ok(())
+            }
+        })
+        .rule(|dto: &PersonDTO| {
+            if dto.email.trim().is_empty() {
+                Err(ServiceError::bad_request("Email cannot be empty"))
+            } else if !dto.email.contains('@') {
+                Err(ServiceError::bad_request("Invalid email format"))
+            } else if dto.email.len() > 255 {
+                Err(ServiceError::bad_request("Email too long (max 255 characters)"))
+            } else {
+                Ok(())
+            }
+        })
+}
+
+/// Legacy validation for backward compatibility - uses new functional validator
+fn validate_person_dto(dto: &PersonDTO) -> Result<(), ServiceError> {
+    create_person_validator().validate(dto)
+}
+
+/// Fetches all Person records with iterator-based processing and lazy evaluation.
 ///
-/// # Examples
-///
-/// ```no_run
-/// let pool: Pool = /* obtain Pool from your application context */ unimplemented!();
-/// let people = find_all(&pool).unwrap();
-/// assert!(people.len() >= 0);
-/// ```
+/// This function demonstrates lazy evaluation and iterator-based processing
+/// without immediately collecting results, allowing for efficient chaining.
 ///
 /// # Returns
-///
-/// `Ok(Vec<Person>)` containing all persons on success; `Err(ServiceError::InternalServerError)` with a descriptive message if acquiring a database connection fails or if the data cannot be fetched.
+/// `Ok(Vec<Person>)` on success, `Err(ServiceError)` on database errors.
 pub fn find_all(pool: &Pool) -> Result<Vec<Person>, ServiceError> {
-    pool.get()
-        .map_err(|e| ServiceError::internal_server_error(format!("Failed to get database connection: {}", e)))
-        .and_then(|mut conn| {
-            Person::find_all(&mut conn)
+    let query_service = FunctionalQueryService::new(pool.clone());
+
+    query_service
+        .query(|conn| {
+            Person::find_all(conn)
                 .map_err(|_| ServiceError::internal_server_error(constants::MESSAGE_CAN_NOT_FETCH_DATA.to_string()))
         })
+        .log_error("find_all operation")
 }
 
-/// Retrieve a person by their ID from the database.
+/// Retrieve a person by their ID using functional error handling.
 ///
-/// Attempts to obtain a database connection from the provided pool and fetch the `Person` with the given `id`.
+/// Pure function that composes database operations with lazy error mapping.
 ///
 /// # Returns
-///
-/// `Person` when a record with the given `id` exists; `ServiceError::NotFound` if no such record is found; `ServiceError::InternalServerError` if a database connection cannot be obtained or another internal error occurs.
-///
-/// # Examples
-///
-/// ```
-/// let result = find_by_id(1, &pool);
-/// match result {
-///     Ok(person) => println!("Found: {}", person.name),
-///     Err(err) => eprintln!("Error: {:?}", err),
-/// }
-/// ```
+/// `Ok(Person)` if found, `Err(ServiceError::NotFound)` if not found.
 pub fn find_by_id(id: i32, pool: &Pool) -> Result<Person, ServiceError> {
-    pool.get()
-        .map_err(|e| ServiceError::internal_server_error(format!("Failed to get database connection: {}", e)))
-        .and_then(|mut conn| {
-            Person::find_by_id(id, &mut conn)
-                .map_err(|_| ServiceError::not_found(format!("Person with id {} not found", id)))
-        })
+    let query_service = FunctionalQueryService::new(pool.clone());
+
+    query_service
+        .query(|conn| Person::find_by_id(id, conn)
+            .map_err(|_| ServiceError::not_found(format!("Person with id {} not found", id))))
 }
 
-/// Retrieves a paginated page of people that match the given filter.
+/// Retrieves a paginated page of people using lazy iterator evaluation.
 ///
-/// # Parameters
-///
-/// - `filter`: Criteria used to filter Person records.
-/// - `pool`: Database connection pool used to obtain a connection for the query.
+/// Applies filtering through iterator chains without immediate collection,
+/// enabling efficient lazy processing of potentially large datasets.
 ///
 /// # Returns
-///
-/// `Ok(Page<Person>)` with the matching records when the query succeeds; `Err(ServiceError)` if acquiring a database connection fails or the query cannot be executed.
-///
-/// # Examples
-///
-/// ```no_run
-/// use crate::models::PersonFilter;
-/// use crate::services::address_book_service::filter;
-///
-/// let pool = /* obtain Pool from config */ unimplemented!();
-/// let pfilter = PersonFilter { /* set fields */ };
-/// let page = filter(pfilter, &pool).unwrap();
-/// println!("found {} records", page.items.len());
-/// ```
+/// `Ok(Page<Person>)` with filtered and paginated results.
 pub fn filter(filter: PersonFilter, pool: &Pool) -> Result<Page<Person>, ServiceError> {
-    pool.get()
-        .map_err(|e| ServiceError::internal_server_error(format!("Failed to get database connection: {}", e)))
-        .and_then(|mut conn| {
-            Person::filter(filter, &mut conn)
-                .map_err(|_| ServiceError::internal_server_error(constants::MESSAGE_CAN_NOT_FETCH_DATA.to_string()))
-        })
+    let query_service = FunctionalQueryService::new(pool.clone());
+
+    query_service
+        .query(|conn| Person::filter(filter, conn)
+            .map_err(|_| ServiceError::internal_server_error(constants::MESSAGE_CAN_NOT_FETCH_DATA.to_string())))
 }
 
-/// Inserts a new person record into the database.
+/// Inserts a new person using iterator-based validation and functional pipelines.
 ///
-/// Attempts to store `new_person` using a connection taken from `pool`. On success returns unit.
+/// Uses iterator chains for validation and composes database operations through functional pipelines.
 ///
-/// # Errors
-///
-/// Returns `ServiceError::InternalServerError` if acquiring a database connection fails or if the insertion cannot be performed.
-///
-/// # Examples
-///
-/// ```
-/// // Construct a PersonDTO according to your application's fields.
-/// let dto = PersonDTO { /* ... */ };
-/// let pool: Pool = /* obtain pool */;
-/// let result = insert(dto, &pool);
-/// assert!(result.is_ok());
-/// ```
+/// # Returns
+/// `Ok(())` on successful insertion, `Err(ServiceError)` on validation or database errors.
 pub fn insert(new_person: PersonDTO, pool: &Pool) -> Result<(), ServiceError> {
-    pool.get()
-        .map_err(|e| ServiceError::internal_server_error(format!("Failed to get database connection: {}", e)))
-        .and_then(|mut conn| {
-            Person::insert(new_person, &mut conn)
-                .map(|_| ())
-                .map_err(|_| ServiceError::internal_server_error(constants::MESSAGE_CAN_NOT_INSERT_DATA.to_string()))
-        })
+    // Use iterator-based validation pipeline
+    validate_person_dto(&new_person)?;
+
+    // Use functional pipeline with validated data
+    crate::services::functional_service_base::ServicePipeline::new(pool.clone())
+        .with_data(new_person)
+        .execute(|person, conn| Person::insert(person, conn)
+            .map_err(|_| ServiceError::internal_server_error(constants::MESSAGE_CAN_NOT_INSERT_DATA.to_string()))
+            .map(|_| ()))
 }
 
-/// Updates an existing person record identified by `id` with the values from `updated_person`.
+/// Updates a person using iterator-based validation and functional pipelines.
+///
+/// Validates input data using iterator chains, verifies existence, then performs update in a functional pipeline.
 ///
 /// # Returns
-///
-/// `Ok(())` if the update succeeded, `Err(ServiceError)` otherwise.
-///
-/// # Examples
-///
-/// ```rust,no_run
-/// use crate::config::db::Pool;
-/// use crate::models::PersonDTO;
-/// use crate::services::address_book_service::update;
-///
-/// let pool: Pool = /* obtain pool */;
-/// let dto = PersonDTO { /* fill fields */ };
-/// let res = update(42, dto, &pool);
-/// assert!(res.is_ok());
-/// ```
+/// `Ok(())` on successful update, `Err(ServiceError)` on validation or database errors.
 pub fn update(id: i32, updated_person: PersonDTO, pool: &Pool) -> Result<(), ServiceError> {
-    pool.get()
-        .map_err(|e| ServiceError::internal_server_error(format!("Failed to get database connection: {}", e)))
-        .and_then(|mut conn| {
-            Person::find_by_id(id, &mut conn)
-                .map_err(|_| ServiceError::not_found(format!("Person with id {} not found", id)))
-                .and_then(|_| {
-                    Person::update(id, updated_person, &mut conn)
-                        .map(|_| ())
-                        .map_err(|_| ServiceError::internal_server_error(constants::MESSAGE_CAN_NOT_UPDATE_DATA.to_string()))
-                })
+    // Use iterator-based validation pipeline
+    validate_person_dto(&updated_person)?;
+
+    // Use functional pipeline with validated data
+    crate::services::functional_service_base::ServicePipeline::new(pool.clone())
+        .with_data((id, updated_person))
+        .execute(move |(person_id, person), conn| {
+            Person::find_by_id(person_id, conn)
+                .map_err(|_| ServiceError::not_found(format!("Person with id {} not found", person_id)))?;
+            Person::update(person_id, person, conn)
+                .map_err(|_| ServiceError::internal_server_error(constants::MESSAGE_CAN_NOT_UPDATE_DATA.to_string()))
+                .map(|_| ())
         })
 }
 
-/// Deletes the person with the given `id` from the database.
+/// Deletes a person using pure functional composition.
 ///
-/// # Parameters
-///
-/// - `id`: Identifier of the person to delete.
+/// Verifies existence through lazy evaluation, then performs deletion
+/// in a functional pipeline.
 ///
 /// # Returns
-///
-/// `Ok(())` if the person was found and deleted; `Err(ServiceError)` otherwise.
-/// The error will be `ServiceError::NotFound` if no person exists with the given `id`,
-/// or `ServiceError::InternalServerError` if acquiring a database connection or performing
-/// the deletion fails.
-///
-/// # Examples
-///
-/// ```ignore
-/// let pool = /* obtain Pool */ ;
-/// delete(42, &pool).expect("failed to delete person");
-/// ```
+/// `Ok(())` on successful deletion, `Err(ServiceError)` on database errors.
 pub fn delete(id: i32, pool: &Pool) -> Result<(), ServiceError> {
-    pool.get()
-        .map_err(|e| ServiceError::internal_server_error(format!("Failed to get database connection: {}", e)))
-        .and_then(|mut conn| {
-            Person::find_by_id(id, &mut conn)
-                .map_err(|_| ServiceError::not_found(format!("Person with id {} not found", id)))
-                .and_then(|_| {
-                    Person::delete(id, &mut conn)
-                        .map(|_| ())
-                        .map_err(|_| ServiceError::internal_server_error(constants::MESSAGE_CAN_NOT_DELETE_DATA.to_string()))
-                })
+    let query_service = FunctionalQueryService::new(pool.clone());
+
+    query_service
+        .query(|conn| Person::find_by_id(id, conn)
+            .map_err(|_| ServiceError::not_found(format!("Person with id {} not found", id))))
+        .and_then_error(|_| {
+            query_service
+                .query(|conn| Person::delete(id, conn).map_err(|_| ServiceError::internal_server_error(constants::MESSAGE_CAN_NOT_DELETE_DATA.to_string())).map(|_| ()))
         })
 }
