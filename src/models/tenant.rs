@@ -120,6 +120,20 @@ impl Tenant {
         tenants.filter(id.eq(t_id)).get_result::<Tenant>(conn)
     }
 
+    /// Returns the total count of all tenants in the database.
+    ///
+    /// This method efficiently counts tenants without loading the actual records into memory.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let total = Tenant::count_all(&mut conn).unwrap();
+    /// assert!(total >= 0);
+    /// ```
+    pub fn count_all(conn: &mut crate::config::db::Connection) -> QueryResult<i64> {
+        tenants.count().get_result::<i64>(conn)
+    }
+
     /// Loads tenants up to an enforced maximum; errors if the total tenant count exceeds MAX_PAGE_SIZE.
     ///
     /// This function first counts tenants and returns an error if the total exceeds the hard limit

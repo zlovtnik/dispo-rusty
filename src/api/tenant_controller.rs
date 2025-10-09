@@ -77,9 +77,9 @@ pub async fn get_system_stats(
                 .with_metadata("operation", "get_system_stats")
         })?;
 
-    // Get all tenants
-    let tenants = Tenant::list_all(&mut conn).map_err(|e| {
-        ServiceError::internal_server_error(format!("Failed to fetch tenants: {}", e))
+    // Get total tenant count first without loading all tenants
+    let total_tenants = Tenant::count_all(&mut conn).map_err(|e| {
+        ServiceError::internal_server_error(format!("Failed to count tenants: {}", e))
             .with_tag("tenant")
             .with_metadata("operation", "get_system_stats")
     })?;
@@ -98,34 +98,56 @@ pub async fn get_system_stats(
 
     let mut tenant_stats = Vec::new();
     let mut active_count = 0;
+    let page_size = 1000i64; // Process tenants in chunks of 1000
+    let mut offset = 0i64;
 
-    for tenant in &tenants {
-        // Check tenant health (database connection)
-        let status = match manager.get_tenant_pool(&tenant.id) {
-            Some(pool) => match pool.get() {
-                Ok(_) => {
-                    active_count += 1;
-                    true
-                }
-                Err(_) => false,
-            },
-            None => false,
-        };
+    // Process tenants in paginated chunks to avoid memory issues
+    loop {
+        let (tenants, _) = Tenant::list_paginated(offset, page_size, &mut conn).map_err(|e| {
+            ServiceError::internal_server_error(format!("Failed to fetch tenant page: {}", e))
+                .with_tag("tenant")
+                .with_metadata("operation", "get_system_stats")
+        })?;
 
-        // For per-tenant, since users don't have tenant_id, using global for simplicity
-        tenant_stats.push(TenantStats {
-            tenant_id: tenant.id.clone(),
-            name: tenant.name.clone(),
-            status: if status {
-                "active".to_string()
-            } else {
-                "inactive".to_string()
-            },
-        });
+        if tenants.is_empty() {
+            break; // No more tenants to process
+        }
+
+        for tenant in &tenants {
+            // Check tenant health (database connection)
+            let status = match manager.get_tenant_pool(&tenant.id) {
+                Some(pool) => match pool.get() {
+                    Ok(_) => {
+                        active_count += 1;
+                        true
+                    }
+                    Err(_) => false,
+                },
+                None => false,
+            };
+
+            // For per-tenant, since users don't have tenant_id, using global for simplicity
+            tenant_stats.push(TenantStats {
+                tenant_id: tenant.id.clone(),
+                name: tenant.name.clone(),
+                status: if status {
+                    "active".to_string()
+                } else {
+                    "inactive".to_string()
+                },
+            });
+        }
+
+        offset += page_size;
+        
+        // Safety check to prevent infinite loops
+        if offset >= total_tenants {
+            break;
+        }
     }
 
     let stats = SystemStats {
-        total_tenants: tenants.len() as i64,
+        total_tenants,
         active_tenants: active_count,
         total_users,
         logged_in_users,
@@ -150,36 +172,48 @@ pub async fn get_tenant_health(
                 .with_metadata("operation", "get_tenant_health")
         })?;
 
-    let tenants = Tenant::list_all(&mut conn).map_err(|e| {
-        ServiceError::internal_server_error(format!("Failed to fetch tenants: {}", e))
-            .with_tag("tenant")
-            .with_metadata("operation", "get_tenant_health")
-    })?;
     let mut tenant_health_status = Vec::new();
+    let page_size = 1000i64; // Process tenants in chunks
+    let mut offset = 0i64;
 
-    for tenant in tenants {
-        let (status, error_msg) = match manager.get_tenant_pool(&tenant.id) {
-            Some(pool) => {
-                match pool.get() {
-                    Ok(mut conn) => {
-                        // Simple health check: SELECT 1
-                        match diesel::sql_query("SELECT 1").execute(&mut conn) {
-                            Ok(_) => (true, None),
-                            Err(e) => (false, Some(format!("DB query failed: {}", e))),
+    // Process tenants in paginated chunks to avoid memory issues
+    loop {
+        let (tenants, _) = Tenant::list_paginated(offset, page_size, &mut conn).map_err(|e| {
+            ServiceError::internal_server_error(format!("Failed to fetch tenant page: {}", e))
+                .with_tag("tenant")
+                .with_metadata("operation", "get_tenant_health")
+        })?;
+
+        if tenants.is_empty() {
+            break; // No more tenants to process
+        }
+
+        for tenant in tenants {
+            let (status, error_msg) = match manager.get_tenant_pool(&tenant.id) {
+                Some(pool) => {
+                    match pool.get() {
+                        Ok(mut conn) => {
+                            // Simple health check: SELECT 1
+                            match diesel::sql_query("SELECT 1").execute(&mut conn) {
+                                Ok(_) => (true, None),
+                                Err(e) => (false, Some(format!("DB query failed: {}", e))),
+                            }
                         }
+                        Err(e) => (false, Some(format!("Pool connection failed: {}", e))),
                     }
-                    Err(e) => (false, Some(format!("Pool connection failed: {}", e))),
                 }
-            }
-            None => (false, Some("No connection pool configured".to_string())),
-        };
+                None => (false, Some("No connection pool configured".to_string())),
+            };
 
-        tenant_health_status.push(TenantHealth {
-            tenant_id: tenant.id,
-            name: tenant.name,
-            status,
-            error_message: error_msg,
-        });
+            tenant_health_status.push(TenantHealth {
+                tenant_id: tenant.id,
+                name: tenant.name,
+                status,
+                error_message: error_msg,
+            });
+        }
+
+        offset += page_size;
     }
 
     Ok(HttpResponse::Ok().json(tenant_health_status))
@@ -216,19 +250,31 @@ pub async fn get_tenant_status(
                 .with_metadata("operation", "get_tenant_status")
         })?;
 
-    let tenants = Tenant::list_all(&mut conn).map_err(|e| {
-        ServiceError::internal_server_error(format!("Failed to fetch tenants: {}", e))
-            .with_tag("tenant")
-            .with_metadata("operation", "get_tenant_status")
-    })?;
     let mut status_map = HashMap::new();
+    let page_size = 1000i64; // Process tenants in chunks
+    let mut offset = 0i64;
 
-    for tenant in tenants {
-        let connected = match manager.get_tenant_pool(&tenant.id) {
-            Some(pool) => pool.get().is_ok(),
-            None => false,
-        };
-        status_map.insert(tenant.id.clone(), connected);
+    // Process tenants in paginated chunks to avoid memory issues
+    loop {
+        let (tenants, _) = Tenant::list_paginated(offset, page_size, &mut conn).map_err(|e| {
+            ServiceError::internal_server_error(format!("Failed to fetch tenant page: {}", e))
+                .with_tag("tenant")
+                .with_metadata("operation", "get_tenant_status")
+        })?;
+
+        if tenants.is_empty() {
+            break; // No more tenants to process
+        }
+
+        for tenant in tenants {
+            let connected = match manager.get_tenant_pool(&tenant.id) {
+                Some(pool) => pool.get().is_ok(),
+                None => false,
+            };
+            status_map.insert(tenant.id.clone(), connected);
+        }
+
+        offset += page_size;
     }
 
     Ok(HttpResponse::Ok().json(status_map))
