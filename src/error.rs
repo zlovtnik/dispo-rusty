@@ -6,7 +6,7 @@ use actix_web::{
 };
 use derive_more::{Display, Error};
 
-#[derive(Debug, Display, Error)]
+#[derive(Debug, Display, Error, Clone)]
 pub enum ServiceError {
     #[display(fmt = "{error_message}")]
     Unauthorized { error_message: String },

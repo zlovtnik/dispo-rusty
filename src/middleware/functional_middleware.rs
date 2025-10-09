@@ -5,8 +5,8 @@
 //! performance-critical paths. The system enables reusable middleware components through
 //! functional composition and immutable request/response transformations.
 
-#[cfg(feature = "functional")]
-mod functional_middleware_impl {
+    #[cfg(feature = "functional")]
+pub mod functional_middleware_impl {
     use actix_service::{forward_ready, Service, Transform};
     use actix_web::body::{BoxBody, EitherBody, MessageBody};
     use actix_web::dev::{ServiceRequest, ServiceResponse};
@@ -1045,4 +1045,3 @@ mod functional_middleware_impl {
             assert!(!checker.signature().is_empty());
         }
     }
-

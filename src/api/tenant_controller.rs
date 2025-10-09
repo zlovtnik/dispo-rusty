@@ -382,7 +382,7 @@ pub async fn filter(
             error_message: format!("Failed to filter tenants: {}", e),
         })?;
 
-    Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, tenants)))
+    Ok(HttpResponse::Ok().json(tenants))
 }
 
 /// Fetches a tenant by ID and returns it wrapped in the standard `ResponseBody`.

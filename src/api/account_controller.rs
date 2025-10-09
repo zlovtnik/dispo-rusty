@@ -1,4 +1,5 @@
-use actix_web::{web, HttpMessage, HttpRequest, HttpResponse};
+use actix_web::{web, HttpRequest, HttpResponse, HttpMessage};
+use log::info;
 
 use crate::{
     config::db::{Pool, TenantPoolManager},
@@ -20,7 +21,7 @@ fn extract_tenant_pool(req: &HttpRequest) -> Result<Pool, ServiceError> {
         }),
     }
 }
-// POST api/auth/signup
+
 /// Processes a tenant-scoped user signup and returns an HTTP response.
 ///
 /// On success returns an `HttpResponse::Ok` with a JSON `ResponseBody` containing the signup message and an empty payload.
@@ -38,23 +39,23 @@ pub async fn signup(
     user_dto: web::Json<SignupDTO>,
     manager: web::Data<TenantPoolManager>,
 ) -> Result<HttpResponse, ServiceError> {
+    info!("Processing signup request for user: {}", user_dto.username);
+
     let user_db = UserDTO {
         username: user_dto.username.clone(),
         email: user_dto.email.clone(),
         password: user_dto.password.clone(),
     };
-    if let Some(pool) = manager.get_tenant_pool(&user_dto.tenant_id) {
-        match account_service::signup(user_db, &pool) {
-            Ok(message) => {
-                Ok(HttpResponse::Ok().json(ResponseBody::new(&message, constants::EMPTY)))
-            }
-            Err(err) => Err(err),
-        }
-    } else {
-        Err(ServiceError::BadRequest {
+
+    // Use functional composition for tenant pool lookup and signup
+    manager.get_tenant_pool(&user_dto.tenant_id)
+        .ok_or_else(|| ServiceError::BadRequest {
             error_message: "Tenant not found".to_string(),
         })
-    }
+        .and_then(|pool| account_service::signup(user_db, &pool))
+        .and_then(|message| {
+            Ok(HttpResponse::Ok().json(ResponseBody::new(&message, constants::EMPTY)))
+        })
 }
 
 // POST api/auth/login

@@ -4,7 +4,12 @@ use serde::{Deserialize, Serialize};
 use url::Url;
 
 use crate::{
-    models::filters::TenantFilter,
+    constants::{self, MESSAGE_OK},
+    functional::pagination::{PaginatedPage, Pagination as IteratorPagination},
+    models::{
+        filters::TenantFilter,
+        response::Page,
+    },
     schema::tenants::{self, dsl::*},
 };
 
@@ -302,7 +307,7 @@ impl Tenant {
         })
     }
 
-    /// Filter tenants by field-based conditions with optional database-level pagination.
+    /// Filter tenants by field-based conditions with iterator-backed pagination.
     ///
     /// Supported fields and operators:
     /// - `id`, `name`, `db_url`: `contains`, `equals`.
@@ -310,9 +315,13 @@ impl Tenant {
     ///
     /// - `created_at`, `updated_at`: `gt`, `gte`, `lt`, `lte`, `equals`. Date/time values must use ISO-like format `YYYY-MM-DDTHH:MM:SS.sssZ` (for example `2023-12-25T10:00:00.000Z`).
     ///
-    /// Unknown fields or unsupported operators are ignored. When `filter.page_size` is provided, the function applies `LIMIT`/`OFFSET` using `cursor` and enforces constraints: maximum page size 10,000, non-negative cursor, safe offset calculation to avoid overflow, and page size cannot be zero.
+    /// Unknown fields or unsupported operators are ignored. Pagination parameters are normalised
+    /// through [`crate::functional::pagination::Pagination`], enabling consistent behaviour across
+    /// endpoints. An extra record is fetched per page to determine whether more data exists without
+    /// materialising the full dataset.
     ///
-    /// Returns a `DatabaseError` if a date value cannot be parsed or if pagination parameters violate constraints (e.g., negative cursor, cursor too large, page size zero, or offset overflow).
+    /// Returns a `DatabaseError` if a date value cannot be parsed or if pagination parameters
+    /// overflow the supported bounds.
     ///
     /// # Examples
     ///
@@ -325,12 +334,13 @@ impl Tenant {
     /// //     page_size: Some(100),
     /// //     cursor: Some(0),
     /// // };
-    /// // let tenants = Tenant::filter(filter, &mut conn).expect("query failed");
+    /// // let tenant_page = Tenant::filter(filter, &mut conn).expect("query failed");
+    /// // assert!(tenant_page.data.len() <= 100);
     /// ```
     pub fn filter(
         filter: TenantFilter,
         conn: &mut crate::config::db::Connection,
-    ) -> QueryResult<Vec<Tenant>> {
+    ) -> QueryResult<Page<Tenant>> {
         let mut query = tenants::table.into_boxed();
 
         for field_filter in &filter.filters {
@@ -424,50 +434,85 @@ impl Tenant {
             }
         }
 
-        // Apply pagination at DB level if specified
-        if let Some(page_size) = &filter.page_size {
-            const MAX_PAGE_SIZE: i64 = 10000;
-            const MAX_CURSOR: i64 = i64::MAX / MAX_PAGE_SIZE;
+        // Normalize pagination using iterator-based helper (defaulting to constants::DEFAULT_PER_PAGE)
+        let default_page_size = constants::DEFAULT_PER_PAGE as usize;
+        let mut pagination = IteratorPagination::from_optional(
+            filter.cursor.map(|value| value as i64),
+            filter.page_size,
+            default_page_size,
+        );
 
-            let cursor = filter.cursor.unwrap_or(0) as i64;
-            let page_size = (*page_size as i64).min(MAX_PAGE_SIZE);
+        const MAX_PAGE_SIZE: i64 = 10_000;
 
-            if cursor < 0 {
-                return Err(result::Error::DatabaseError(
+        let mut page_size_i64 = i64::try_from(pagination.page_size())
+            .map_err(|_| {
+                result::Error::DatabaseError(
                     result::DatabaseErrorKind::Unknown,
-                    Box::new("Cursor cannot be negative".to_string()),
-                ));
-            }
+                    Box::new("Page size is too large".to_string()),
+                )
+            })?;
 
-            if cursor > MAX_CURSOR {
-                return Err(result::Error::DatabaseError(
-                    result::DatabaseErrorKind::Unknown,
-                    Box::new(format!("Cursor too large, maximum allowed: {}", MAX_CURSOR)),
-                ));
-            }
-
-            let offset = cursor
-                .checked_mul(page_size)
-                .ok_or_else(|| {
-                    result::Error::DatabaseError(
-                        result::DatabaseErrorKind::Unknown,
-                        Box::new("Offset calculation would overflow".to_string()),
-                    )
-                })?
-                .min(i64::MAX - page_size); // Ensure offset doesn't cause issues with limit
-
-            if page_size == 0 {
-                return Err(result::Error::DatabaseError(
-                    result::DatabaseErrorKind::Unknown,
-                    Box::new("Page size cannot be zero".to_string()),
-                ));
-            }
-
-            query = query.limit(page_size as i64).offset(offset);
+        if page_size_i64 > MAX_PAGE_SIZE {
+            page_size_i64 = MAX_PAGE_SIZE;
+            pagination = IteratorPagination::new(pagination.cursor(), MAX_PAGE_SIZE as usize);
         }
 
-        let results = query.load::<Tenant>(conn)?;
+        let cursor_i64 = i64::try_from(pagination.cursor()).map_err(|_| {
+            result::Error::DatabaseError(
+                result::DatabaseErrorKind::Unknown,
+                Box::new("Cursor is too large".to_string()),
+            )
+        })?;
 
-        Ok(results)
+        let limit = page_size_i64
+            .checked_add(1)
+            .ok_or_else(|| {
+                result::Error::DatabaseError(
+                    result::DatabaseErrorKind::Unknown,
+                    Box::new("Limit calculation would overflow".to_string()),
+                )
+            })?;
+
+        let offset = cursor_i64
+            .checked_mul(page_size_i64)
+            .ok_or_else(|| {
+                result::Error::DatabaseError(
+                    result::DatabaseErrorKind::Unknown,
+                    Box::new("Offset calculation would overflow".to_string()),
+                )
+            })?;
+
+        query = query.limit(limit).offset(offset);
+
+        let mut results = query.load::<Tenant>(conn)?;
+
+        let mut has_more = false;
+        if results.len() as i64 > page_size_i64 {
+            has_more = true;
+            results.truncate(page_size_i64 as usize);
+        }
+
+        let paginated = PaginatedPage::from_items(results, pagination, has_more, None);
+
+        let to_i32 = |value: usize| -> i32 {
+            i32::try_from(value).unwrap_or(i32::MAX)
+        };
+
+        let page = Page::new(
+            MESSAGE_OK,
+            paginated.items,
+            to_i32(paginated.summary.current_cursor),
+            paginated.summary.page_size as i64,
+            paginated
+                .summary
+                .total_elements
+                .map(|total| total.min(i64::MAX as usize) as i64),
+            paginated
+                .summary
+                .next_cursor
+                .map(|cursor| to_i32(cursor)),
+        );
+
+        Ok(page)
     }
 }

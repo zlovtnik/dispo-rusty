@@ -186,47 +186,53 @@ where
         }
     }
 
-    // FIXME: KMerge type alias signature issue
     // /// K-way merge sorted iterators
-    // pub fn kmerge<J>(self, other: J) -> IteratorChain<T, KMerge<I, J::IntoIter>>
+    #[cfg(feature = "functional")]
+    pub fn kmerge<J>(self, other: J) -> IteratorChain<T, impl Iterator<Item = T>>
+    where
+        T: Ord,
+        J: IntoIterator<Item = T>,
+        I::Item: Ord,
+    {
+        let mut operations = self.operations;
+        operations.push("kmerge".to_string());
 
-    // FIXME: ChunkBy doesn't implement Iterator properly
-    // /// Group consecutive elements by key
-    // pub fn chunk_by<K, F>(
-    //     self,
-    //     f: F,
-    // ) -> IteratorChain<<ChunkBy<K, I, F> as Iterator>::Item, ChunkBy<K, I, F>>
-    // where
-    //     F: FnMut(&T) -> K,
-    //     K: PartialEq,
-    // {
-    //     let mut operations = self.operations;
-    //     operations.push("chunk_by".to_string());
-    //
-    //     let chunked = self.iterator.chunk_by(f);
-    //     IteratorChain {
-    //         iterator: chunked,
-    //         config: self.config,
-    //         operations,
-    //     }
-    // }
+        let mut values: Vec<T> = self.iterator.collect();
+        values.extend(other);
+        values.sort();
 
-    // /// Merge multiple sorted iterators
-    // pub fn kmerge<J>(self, other: J) -> IteratorChain<T, KMerge<I, J::IntoIter>>
-    // where
-    //     T: Ord,
-    //     J: IntoIterator<Item = T>,
-    // {
-    //     let mut operations = self.operations;
-    //     operations.push("kmerge".to_string());
-    //
-    //     let merged = self.iterator.kmerge(other);
-    //     IteratorChain {
-    //         iterator: merged,
-    //         config: self.config,
-    //         operations,
-    //     }
-    // }
+        IteratorChain {
+            iterator: values.into_iter(),
+            config: self.config,
+            operations,
+        }
+    }
+
+    /// Lockstep iteration over multiple iterators (zip all with equal lengths)
+    #[cfg(feature = "functional")]
+    pub fn lockstep_zip<Iterators>(self, others: Iterators) -> IteratorChain<Vec<T>, impl Iterator<Item = Vec<T>>>
+    where
+        Iterators: IntoIterator<Item = I>,
+        T: Clone,
+    {
+        let mut operations = self.operations;
+        operations.push("lockstep_zip".to_string());
+
+        let mut all_vecs: Vec<Vec<T>> = vec![self.iterator.collect()];
+        for iter in others {
+            all_vecs.push(iter.collect());
+        }
+
+        // Assume all vectors have the same length, take the minimum
+        let min_len = all_vecs.iter().map(|v| v.len()).min().unwrap_or(0);
+        let zipped = (0..min_len).map(move |i| all_vecs.iter().map(|v| v[i].clone()).collect::<Vec<T>>());
+
+        IteratorChain {
+            iterator: zipped,
+            config: self.config,
+            operations,
+        }
+    }
 
     /// Join two sequences by key, emitting every matching pair of left and right items.
     ///
@@ -632,5 +638,69 @@ mod tests {
         let result = engine.process_zero_copy(&data, |&x| x * 2);
 
         assert_eq!(result, vec![2, 4, 6, 8, 10]);
+    }
+
+    #[test]
+    fn test_kmerge() {
+        let engine = IteratorEngine::new();
+        let data1 = vec![1, 3, 5];
+        let data2 = vec![2, 4, 6];
+
+        let merged: Vec<i32> = engine.from_vec(data1).kmerge(data2).collect();
+
+        assert_eq!(merged, vec![1, 2, 3, 4, 5, 6]);
+    }
+
+    #[test]
+    fn test_lockstep_zip() {
+        let engine = IteratorEngine::new();
+        let data1 = vec![1, 2, 3];
+        let data2 = vec![4, 5, 6];
+
+        let zipped: Vec<Vec<i32>> = engine.from_vec(data1).lockstep_zip(vec![data2.into_iter()]).collect();
+
+        assert_eq!(zipped, vec![vec![1, 4], vec![2, 5], vec![3, 6]]);
+    }
+
+    #[test]
+    fn test_join() {
+        let engine = IteratorEngine::new();
+        let left = vec![1, 2, 3];
+        let right = vec![(1, 10), (2, 20), (1, 11)];
+
+        let joined: Vec<(i32, (i32, i32))> = engine
+            .from_vec(left)
+            .join(right, |&l| l, |&(r, _)| r)
+            .collect();
+
+        // Order may vary, but should contain all matches
+        assert!(joined.contains(&(1, (1, 10))));
+        assert!(joined.contains(&(1, (1, 11))));
+        assert!(joined.contains(&(2, (2, 20))));
+        assert_eq!(joined.len(), 3);
+    }
+
+    #[test]
+    fn test_custom_struct_support() {
+        #[derive(Clone, Debug, PartialEq)]
+        struct Person {
+            id: i32,
+            name: String,
+        }
+
+        let engine = IteratorEngine::new();
+        let people = vec![
+            Person { id: 1, name: "Alice".to_string() },
+            Person { id: 2, name: "Bob".to_string() },
+            Person { id: 3, name: "Charlie".to_string() },
+        ];
+
+        let result: Vec<String> = engine
+            .from_vec(people)
+            .filter(|p| p.id % 2 == 1)
+            .map(|p| p.name)
+            .collect();
+
+        assert_eq!(result, vec!["Alice", "Charlie"]);
     }
 }
