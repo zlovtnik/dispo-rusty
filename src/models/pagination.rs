@@ -5,7 +5,6 @@ use diesel::prelude::*;
 use diesel::query_builder::*;
 use diesel::query_dsl::methods::LoadQuery;
 use diesel::sql_types::BigInt;
-use diesel::QueryId;
 
 use crate::constants::MESSAGE_OK;
 

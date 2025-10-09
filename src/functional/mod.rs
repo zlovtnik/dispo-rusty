@@ -50,8 +50,6 @@ pub mod validation_integration;
 #[cfg(feature = "functional")]
 pub mod validation_rules;
 
-pub mod pagination;
-
 // Re-export commonly used types for convenience
 // Commented out to avoid unused import warnings
 // pub use chain_builder::ChainBuilder;

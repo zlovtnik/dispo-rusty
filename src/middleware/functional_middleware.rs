@@ -5,7 +5,7 @@
 //! performance-critical paths. The system enables reusable middleware components through
 //! functional composition and immutable request/response transformations.
 
-    #[cfg(feature = "functional")]
+#[cfg(feature = "functional")]
 pub mod functional_middleware_impl {
     use actix_service::{forward_ready, Service, Transform};
     use actix_web::body::{BoxBody, EitherBody, MessageBody};
@@ -455,9 +455,7 @@ pub mod functional_middleware_impl {
                 let fut = self.service.call(req);
                 return Box::pin(async move {
                     let res = fut.await?;
-                    Ok(res
-                        .map_into_boxed_body()
-                        .map_into_left_body())
+                    Ok(res.map_into_boxed_body().map_into_left_body())
                 });
             }
 
@@ -466,10 +464,7 @@ pub mod functional_middleware_impl {
                 None => {
                     error!("TenantPoolManager not found in app data");
                     return Box::pin(async move {
-                        Self::create_error_response(
-                            req,
-                            constants::MESSAGE_INTERNAL_SERVER_ERROR,
-                        )
+                        Self::create_error_response(req, constants::MESSAGE_INTERNAL_SERVER_ERROR)
                     });
                 }
             };
@@ -727,321 +722,320 @@ pub mod functional_middleware_impl {
     }
 }
 
-    #[cfg(test)]
-    mod tests {
-        use super::*;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::functional::function_traits::FunctionCategory;
+    use crate::functional::pure_function_registry::PureFunctionRegistry;
+    use std::sync::Arc;
 
-        #[test]
-        fn middleware_context_default() {
-            let context = MiddlewareContext::default();
-            
-            assert!(context.tenant_id.is_none());
-            assert!(context.user_id.is_none());
-            assert!(!context.is_authenticated);
-            assert!(!context.skip_auth);
+    #[test]
+    fn middleware_context_default() {
+        let context = MiddlewareContext::default();
+
+        assert!(context.tenant_id.is_none());
+        assert!(context.user_id.is_none());
+        assert!(!context.is_authenticated);
+        assert!(!context.skip_auth);
+    }
+
+    #[test]
+    fn middleware_context_with_tenant() {
+        let context = MiddlewareContext {
+            tenant_id: Some("tenant123".to_string()),
+            user_id: Some("user456".to_string()),
+            is_authenticated: true,
+            skip_auth: false,
+        };
+
+        assert_eq!(context.tenant_id.unwrap(), "tenant123");
+        assert_eq!(context.user_id.unwrap(), "user456");
+        assert!(context.is_authenticated);
+        assert!(!context.skip_auth);
+    }
+
+    #[test]
+    fn middleware_error_variants() {
+        let auth_err = MiddlewareError::AuthenticationFailed("test".to_string());
+        let tenant_err = MiddlewareError::TenantNotFound("tenant1".to_string());
+        let token_err = MiddlewareError::TokenInvalid("invalid".to_string());
+        let internal_err = MiddlewareError::InternalError("error".to_string());
+
+        match auth_err {
+            MiddlewareError::AuthenticationFailed(msg) => assert_eq!(msg, "test"),
+            _ => panic!("Wrong variant"),
         }
 
-        #[test]
-        fn middleware_context_with_tenant() {
-            let context = MiddlewareContext {
-                tenant_id: Some("tenant123".to_string()),
-                user_id: Some("user456".to_string()),
-                is_authenticated: true,
-                skip_auth: false,
-            };
-            
-            assert_eq!(context.tenant_id.unwrap(), "tenant123");
-            assert_eq!(context.user_id.unwrap(), "user456");
-            assert!(context.is_authenticated);
-            assert!(!context.skip_auth);
+        match tenant_err {
+            MiddlewareError::TenantNotFound(msg) => assert_eq!(msg, "tenant1"),
+            _ => panic!("Wrong variant"),
         }
 
-        #[test]
-        fn middleware_error_variants() {
-            let auth_err = MiddlewareError::AuthenticationFailed("test".to_string());
-            let tenant_err = MiddlewareError::TenantNotFound("tenant1".to_string());
-            let token_err = MiddlewareError::TokenInvalid("invalid".to_string());
-            let internal_err = MiddlewareError::InternalError("error".to_string());
-            
-            match auth_err {
-                MiddlewareError::AuthenticationFailed(msg) => assert_eq!(msg, "test"),
-                _ => panic!("Wrong variant"),
-            }
-            
-            match tenant_err {
-                MiddlewareError::TenantNotFound(msg) => assert_eq!(msg, "tenant1"),
-                _ => panic!("Wrong variant"),
-            }
-            
-            match token_err {
-                MiddlewareError::TokenInvalid(msg) => assert_eq!(msg, "invalid"),
-                _ => panic!("Wrong variant"),
-            }
-            
-            match internal_err {
-                MiddlewareError::InternalError(msg) => assert_eq!(msg, "error"),
-                _ => panic!("Wrong variant"),
-            }
+        match token_err {
+            MiddlewareError::TokenInvalid(msg) => assert_eq!(msg, "invalid"),
+            _ => panic!("Wrong variant"),
         }
 
-        #[test]
-        fn middleware_error_clone() {
-            let error = MiddlewareError::AuthenticationFailed("test".to_string());
-            let cloned = error.clone();
-            
-            match cloned {
-                MiddlewareError::AuthenticationFailed(msg) => assert_eq!(msg, "test"),
-                _ => panic!("Clone failed"),
-            }
-        }
-
-        #[test]
-        fn token_extractor_signature() {
-            let extractor = TokenExtractor;
-            assert_eq!(extractor.signature(), "fn(&ServiceRequest) -> MiddlewareResult<String>");
-        }
-
-        #[test]
-        fn token_extractor_category() {
-            let extractor = TokenExtractor;
-            assert_eq!(extractor.category(), FunctionCategory::Middleware);
-        }
-
-        #[test]
-        fn token_validator_signature() {
-            let validator = TokenValidator;
-            assert_eq!(
-                validator.signature(),
-                "fn((String, &TenantPoolManager)) -> MiddlewareResult<(String, String)>"
-            );
-        }
-
-        #[test]
-        fn token_validator_category() {
-            let validator = TokenValidator;
-            assert_eq!(validator.category(), FunctionCategory::Middleware);
-        }
-
-        #[test]
-        fn auth_skip_checker_signature() {
-            let checker = AuthSkipChecker;
-            assert_eq!(checker.signature(), "fn(&ServiceRequest) -> bool");
-        }
-
-        #[test]
-        fn auth_skip_checker_category() {
-            let checker = AuthSkipChecker;
-            assert_eq!(checker.category(), FunctionCategory::Middleware);
-        }
-
-        #[test]
-        fn auth_skip_checker_skips_options() {
-            use actix_web::test::TestRequest;
-            use actix_web::http::Method;
-            
-            let checker = AuthSkipChecker;
-            let req = TestRequest::default()
-                .method(Method::OPTIONS)
-                .uri("/test")
-                .to_srv_request();
-            
-            assert!(checker.call(&req));
-        }
-
-        #[test]
-        fn auth_skip_checker_skips_health() {
-            use actix_web::test::TestRequest;
-            
-            let checker = AuthSkipChecker;
-            let req = TestRequest::get()
-                .uri("/health")
-                .to_srv_request();
-            
-            assert!(checker.call(&req));
-        }
-
-        #[test]
-        fn auth_skip_checker_does_not_skip_api() {
-            use actix_web::test::TestRequest;
-            
-            let checker = AuthSkipChecker;
-            let req = TestRequest::get()
-                .uri("/api/users")
-                .to_srv_request();
-            
-            assert!(!checker.call(&req));
-        }
-
-        #[test]
-        fn token_extractor_missing_header() {
-            use actix_web::test::TestRequest;
-            
-            let extractor = TokenExtractor;
-            let req = TestRequest::get()
-                .uri("/test")
-                .to_srv_request();
-            
-            let result = extractor.call(&req);
-            assert!(result.is_err());
-            
-            match result {
-                Err(MiddlewareError::AuthenticationFailed(msg)) => {
-                    assert!(msg.contains("Missing or invalid authorization header"));
-                }
-                _ => panic!("Expected AuthenticationFailed error"),
-            }
-        }
-
-        #[test]
-        fn token_extractor_invalid_scheme() {
-            use actix_web::test::TestRequest;
-            
-            let extractor = TokenExtractor;
-            let req = TestRequest::get()
-                .uri("/test")
-                .insert_header((constants::AUTHORIZATION, "Basic token123"))
-                .to_srv_request();
-            
-            let result = extractor.call(&req);
-            assert!(result.is_err());
-        }
-
-        #[test]
-        fn token_extractor_empty_token() {
-            use actix_web::test::TestRequest;
-            
-            let extractor = TokenExtractor;
-            let req = TestRequest::get()
-                .uri("/test")
-                .insert_header((constants::AUTHORIZATION, "Bearer "))
-                .to_srv_request();
-            
-            let result = extractor.call(&req);
-            assert!(result.is_err());
-        }
-
-        #[test]
-        fn token_extractor_valid_token() {
-            use actix_web::test::TestRequest;
-            
-            let extractor = TokenExtractor;
-            let req = TestRequest::get()
-                .uri("/test")
-                .insert_header((constants::AUTHORIZATION, "Bearer valid_token"))
-                .to_srv_request();
-            
-            let result = extractor.call(&req);
-            assert!(result.is_ok());
-            assert_eq!(result.unwrap(), "valid_token");
-        }
-
-        #[test]
-        fn token_extractor_case_insensitive() {
-            use actix_web::test::TestRequest;
-            
-            let extractor = TokenExtractor;
-            let req = TestRequest::get()
-                .uri("/test")
-                .insert_header((constants::AUTHORIZATION, "BEARER token123"))
-                .to_srv_request();
-            
-            let result = extractor.call(&req);
-            assert!(result.is_ok());
-            assert_eq!(result.unwrap(), "token123");
-        }
-
-        #[actix_rt::test]
-        async fn functional_auth_creates_with_registry() {
-            let registry = Arc::new(PureFunctionRegistry::new());
-            let auth = FunctionalAuthentication::new(registry.clone());
-            
-            // Should create successfully - registry should be stored
-            assert!(Arc::ptr_eq(&auth.registry, &registry));
-        }
-
-        #[actix_rt::test]
-        async fn middleware_pipeline_builder_creates() {
-            let registry = Arc::new(PureFunctionRegistry::new());
-            let builder = MiddlewarePipelineBuilder::new(registry);
-            
-            // Should create with empty stack
-            assert_eq!(builder.middleware_stack.len(), 0);
-        }
-
-        #[actix_rt::test]
-        async fn middleware_pipeline_builder_with_auth() {
-            let registry = Arc::new(PureFunctionRegistry::new());
-            let builder = MiddlewarePipelineBuilder::new(registry)
-                .with_auth();
-            
-            // Should add auth middleware
-            assert_eq!(builder.middleware_stack.len(), 1);
-        }
-
-        #[test]
-        fn middleware_result_ok() {
-            let result: MiddlewareResult<i32> = Ok(42);
-            assert!(result.is_ok());
-            assert_eq!(result.unwrap(), 42);
-        }
-
-        #[test]
-        fn middleware_result_err() {
-            let result: MiddlewareResult<i32> = Err(MiddlewareError::InternalError("test".to_string()));
-            assert!(result.is_err());
-        }
-
-        #[test]
-        fn middleware_context_skip_auth() {
-            let context = MiddlewareContext {
-                tenant_id: None,
-                user_id: None,
-                is_authenticated: false,
-                skip_auth: true,
-            };
-            
-            assert!(context.skip_auth);
-            assert!(!context.is_authenticated);
-        }
-
-        #[test]
-        fn middleware_context_authenticated() {
-            let context = MiddlewareContext {
-                tenant_id: Some("t1".to_string()),
-                user_id: Some("u1".to_string()),
-                is_authenticated: true,
-                skip_auth: false,
-            };
-            
-            assert!(context.is_authenticated);
-            assert!(!context.skip_auth);
-            assert!(context.tenant_id.is_some());
-            assert!(context.user_id.is_some());
-        }
-
-        #[test]
-        fn middleware_error_debug_format() {
-            let error = MiddlewareError::TokenInvalid("test token".to_string());
-            let debug_str = format!("{:?}", error);
-
-            assert!(debug_str.contains("TokenInvalid"));
-            assert!(debug_str.contains("test token"));
-        }
-
-        #[test]
-        fn pure_function_implementations_are_consistent() {
-            let extractor = TokenExtractor;
-            let validator = TokenValidator;
-            let checker = AuthSkipChecker;
-            
-            // All should be categorized as business logic functions
-            assert_eq!(extractor.category(), FunctionCategory::BusinessLogic);
-            assert_eq!(validator.category(), FunctionCategory::BusinessLogic);
-            assert_eq!(checker.category(), FunctionCategory::BusinessLogic);
-
-            // All should have non-empty signatures
-            assert!(!extractor.signature().is_empty());
-            assert!(!validator.signature().is_empty());
-            assert!(!checker.signature().is_empty());
+        match internal_err {
+            MiddlewareError::InternalError(msg) => assert_eq!(msg, "error"),
+            _ => panic!("Wrong variant"),
         }
     }
+
+    #[test]
+    fn middleware_error_clone() {
+        let error = MiddlewareError::AuthenticationFailed("test".to_string());
+        let cloned = error.clone();
+
+        match cloned {
+            MiddlewareError::AuthenticationFailed(msg) => assert_eq!(msg, "test"),
+            _ => panic!("Clone failed"),
+        }
+    }
+
+    #[test]
+    fn token_extractor_signature() {
+        let extractor = TokenExtractor;
+        assert_eq!(
+            extractor.signature(),
+            "fn(&ServiceRequest) -> MiddlewareResult<String>"
+        );
+    }
+
+    #[test]
+    fn token_extractor_category() {
+        let extractor = TokenExtractor;
+        assert_eq!(extractor.category(), FunctionCategory::BusinessLogic);
+    }
+
+    #[test]
+    fn token_validator_signature() {
+        let validator = TokenValidator;
+        assert_eq!(
+            validator.signature(),
+            "fn((String, &TenantPoolManager)) -> MiddlewareResult<(String, String)>"
+        );
+    }
+
+    #[test]
+    fn token_validator_category() {
+        let validator = TokenValidator;
+        assert_eq!(validator.category(), FunctionCategory::BusinessLogic);
+    }
+
+    #[test]
+    fn auth_skip_checker_signature() {
+        let checker = AuthSkipChecker;
+        assert_eq!(checker.signature(), "fn(&ServiceRequest) -> bool");
+    }
+
+    #[test]
+    fn auth_skip_checker_category() {
+        let checker = AuthSkipChecker;
+        assert_eq!(checker.category(), FunctionCategory::BusinessLogic);
+    }
+
+    #[test]
+    fn auth_skip_checker_skips_options() {
+        use actix_web::http::Method;
+        use actix_web::test::TestRequest;
+
+        let checker = AuthSkipChecker;
+        let req = TestRequest::default()
+            .method(Method::OPTIONS)
+            .uri("/test")
+            .to_srv_request();
+
+        assert!(checker.call(&req));
+    }
+
+    #[test]
+    fn auth_skip_checker_skips_health() {
+        use actix_web::test::TestRequest;
+
+        let checker = AuthSkipChecker;
+        let req = TestRequest::get().uri("/health").to_srv_request();
+
+        assert!(checker.call(&req));
+    }
+
+    #[test]
+    fn auth_skip_checker_does_not_skip_api() {
+        use actix_web::test::TestRequest;
+
+        let checker = AuthSkipChecker;
+        let req = TestRequest::get().uri("/api/users").to_srv_request();
+
+        assert!(!checker.call(&req));
+    }
+
+    #[test]
+    fn token_extractor_missing_header() {
+        use actix_web::test::TestRequest;
+
+        let extractor = TokenExtractor;
+        let req = TestRequest::get().uri("/test").to_srv_request();
+
+        let result = extractor.call(&req);
+        assert!(result.is_err());
+
+        match result {
+            Err(MiddlewareError::AuthenticationFailed(msg)) => {
+                assert!(msg.contains("Missing or invalid authorization header"));
+            }
+            _ => panic!("Expected AuthenticationFailed error"),
+        }
+    }
+
+    #[test]
+    fn token_extractor_invalid_scheme() {
+        use actix_web::test::TestRequest;
+
+        let extractor = TokenExtractor;
+        let req = TestRequest::get()
+            .uri("/test")
+            .insert_header((constants::AUTHORIZATION, "Basic token123"))
+            .to_srv_request();
+
+        let result = extractor.call(&req);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn token_extractor_empty_token() {
+        use actix_web::test::TestRequest;
+
+        let extractor = TokenExtractor;
+        let req = TestRequest::get()
+            .uri("/test")
+            .insert_header((constants::AUTHORIZATION, "Bearer "))
+            .to_srv_request();
+
+        let result = extractor.call(&req);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn token_extractor_valid_token() {
+        use actix_web::test::TestRequest;
+
+        let extractor = TokenExtractor;
+        let req = TestRequest::get()
+            .uri("/test")
+            .insert_header((constants::AUTHORIZATION, "Bearer valid_token"))
+            .to_srv_request();
+
+        let result = extractor.call(&req);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "valid_token");
+    }
+
+    #[test]
+    fn token_extractor_case_insensitive() {
+        use actix_web::test::TestRequest;
+
+        let extractor = TokenExtractor;
+        let req = TestRequest::get()
+            .uri("/test")
+            .insert_header((constants::AUTHORIZATION, "BEARER token123"))
+            .to_srv_request();
+
+        let result = extractor.call(&req);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "token123");
+    }
+
+    #[actix_rt::test]
+    async fn functional_auth_creates_with_registry() {
+        let registry = Arc::new(PureFunctionRegistry::new());
+        let auth = FunctionalAuthentication::new(registry.clone());
+
+        // Should create successfully - registry should be stored
+        assert!(Arc::ptr_eq(&auth.registry, &registry));
+    }
+
+    #[actix_rt::test]
+    async fn middleware_pipeline_builder_creates() {
+        let registry = Arc::new(PureFunctionRegistry::new());
+        let builder = MiddlewarePipelineBuilder::new(registry);
+
+        // Should create with empty stack
+        assert_eq!(builder.middleware_stack.len(), 0);
+    }
+
+    #[actix_rt::test]
+    async fn middleware_pipeline_builder_with_auth() {
+        let registry = Arc::new(PureFunctionRegistry::new());
+        let builder = MiddlewarePipelineBuilder::new(registry).with_auth();
+
+        // Should add auth middleware
+        assert_eq!(builder.middleware_stack.len(), 1);
+    }
+
+    #[test]
+    fn middleware_result_ok() {
+        let result: MiddlewareResult<i32> = Ok(42);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 42);
+    }
+
+    #[test]
+    fn middleware_result_err() {
+        let result: MiddlewareResult<i32> = Err(MiddlewareError::InternalError("test".to_string()));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn middleware_context_skip_auth() {
+        let context = MiddlewareContext {
+            tenant_id: None,
+            user_id: None,
+            is_authenticated: false,
+            skip_auth: true,
+        };
+
+        assert!(context.skip_auth);
+        assert!(!context.is_authenticated);
+    }
+
+    #[test]
+    fn middleware_context_authenticated() {
+        let context = MiddlewareContext {
+            tenant_id: Some("t1".to_string()),
+            user_id: Some("u1".to_string()),
+            is_authenticated: true,
+            skip_auth: false,
+        };
+
+        assert!(context.is_authenticated);
+        assert!(!context.skip_auth);
+        assert!(context.tenant_id.is_some());
+        assert!(context.user_id.is_some());
+    }
+
+    #[test]
+    fn middleware_error_debug_format() {
+        let error = MiddlewareError::TokenInvalid("test token".to_string());
+        let debug_str = format!("{:?}", error);
+
+        assert!(debug_str.contains("TokenInvalid"));
+        assert!(debug_str.contains("test token"));
+    }
+
+    #[test]
+    fn pure_function_implementations_are_consistent() {
+        let extractor = TokenExtractor;
+        let validator = TokenValidator;
+        let checker = AuthSkipChecker;
+
+        // All should be categorized as business logic functions
+        assert_eq!(extractor.category(), FunctionCategory::BusinessLogic);
+        assert_eq!(validator.category(), FunctionCategory::BusinessLogic);
+        assert_eq!(checker.category(), FunctionCategory::BusinessLogic);
+
+        // All should have non-empty signatures
+        assert!(!extractor.signature().is_empty());
+        assert!(!validator.signature().is_empty());
+        assert!(!checker.signature().is_empty());
+    }
+}

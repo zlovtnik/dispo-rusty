@@ -136,7 +136,6 @@ impl<T> ResponseTransformer<T> {
     pub fn with_message(mut self, message: impl Into<Cow<'static, str>>) -> Self {
         self.message = message.into();
         self
-
     }
 
     /// Produce a new transformer with the message transformed by the given closure.
@@ -509,8 +508,7 @@ impl<T> ResponseTransformer<T> {
             }
         }
     }
-
-    }
+}
 
 impl<T> Responder for ResponseTransformer<T>
 where
@@ -537,7 +535,6 @@ where
             Err(err) => serialization_error(err),
         }
     }
-
 }
 
 fn render_response<T>(
@@ -715,7 +712,6 @@ mod tests {
         let request = TestRequest::default();
         let response = ResponseTransformer::new(vec![1, 2, 3])
             .map_data(|data| data.into_iter().map(|item| item * 10).collect::<Vec<_>>())
-
             .respond_to(&request.to_http_request());
 
         let body = body::to_bytes(response.into_body()).await.unwrap();
@@ -761,7 +757,7 @@ mod tests {
             .with_status(StatusCode::CREATED)
             .respond_to(&request.to_http_request());
 
-    assert_eq!(response.status(), StatusCode::CREATED);
+        assert_eq!(response.status(), StatusCode::CREATED);
     }
 
     #[actix_rt::test]
@@ -775,14 +771,14 @@ mod tests {
         let body = body::to_bytes(response.into_body()).await.unwrap();
         let payload: JsonValue = serde_json::from_slice(&body).unwrap();
 
-    assert!(payload["metadata"].is_object());
-    assert_eq!(payload["metadata"]["count"], 3);
+        assert!(payload["metadata"].is_object());
+        assert_eq!(payload["metadata"]["count"], 3);
     }
 
     #[actix_rt::test]
     async fn response_with_metadata_value() {
         let request = TestRequest::default();
-    let metadata = json!({"version": "1.0", "source": "test"});
+        let metadata = json!({"version": "1.0", "source": "test"});
         let response = ResponseTransformer::new("ok")
             .with_metadata_value(metadata)
             .respond_to(&request.to_http_request());
@@ -790,8 +786,8 @@ mod tests {
         let body = body::to_bytes(response.into_body()).await.unwrap();
         let payload: JsonValue = serde_json::from_slice(&body).unwrap();
 
-    assert_eq!(payload["metadata"]["version"], "1.0");
-    assert_eq!(payload["metadata"]["source"], "test");
+        assert_eq!(payload["metadata"]["version"], "1.0");
+        assert_eq!(payload["metadata"]["source"], "test");
     }
 
     #[actix_rt::test]
@@ -805,7 +801,7 @@ mod tests {
         let body = body::to_bytes(response.into_body()).await.unwrap();
         let payload: JsonValue = serde_json::from_slice(&body).unwrap();
 
-    assert_eq!(payload["message"], "original!");
+        assert_eq!(payload["message"], "original!");
     }
 
     #[actix_rt::test]
@@ -825,8 +821,8 @@ mod tests {
         let body = body::to_bytes(response.into_body()).await.unwrap();
         let payload: JsonValue = serde_json::from_slice(&body).unwrap();
 
-    assert_eq!(payload["metadata"]["count"], 5);
-    assert_eq!(payload["metadata"]["doubled"], 10);
+        assert_eq!(payload["metadata"]["count"], 5);
+        assert_eq!(payload["metadata"]["doubled"], 10);
     }
 
     #[actix_rt::test]
@@ -834,14 +830,19 @@ mod tests {
         let request = TestRequest::default();
         let header_name = HeaderName::from_static("x-custom");
         let header_value = HeaderValue::from_static("test-value");
-        
+
         let response = ResponseTransformer::new("data")
             .insert_header((header_name.clone(), header_value))
             .respond_to(&request.to_http_request());
 
         assert!(response.headers().contains_key(&header_name));
         assert_eq!(
-            response.headers().get(&header_name).unwrap().to_str().unwrap(),
+            response
+                .headers()
+                .get(&header_name)
+                .unwrap()
+                .to_str()
+                .unwrap(),
             "test-value"
         );
     }
@@ -855,40 +856,37 @@ mod tests {
             .respond_to(&request.to_http_request());
 
         let header = response.headers().get("x-request-id");
-    assert!(header.is_some());
-    assert_eq!(header.unwrap().to_str().unwrap(), "12345");
+        assert!(header.is_some());
+        assert_eq!(header.unwrap().to_str().unwrap(), "12345");
     }
 
     #[test]
     fn response_try_insert_header_invalid_name() {
-        let result = ResponseTransformer::new("data")
-            .try_insert_header("invalid header!", "value");
+        let result = ResponseTransformer::new("data").try_insert_header("invalid header!", "value");
 
         assert!(result.is_err());
     }
 
     #[actix_rt::test]
     async fn response_force_format_json_pretty() {
-        let request = TestRequest::default()
-            .insert_header((ACCEPT, "text/plain"));
-        
-    let response = ResponseTransformer::new(vec![1, 2, 3])
+        let request = TestRequest::default().insert_header((ACCEPT, "text/plain"));
+
+        let response = ResponseTransformer::new(vec![1, 2, 3])
             .force_format(ResponseFormat::JsonPretty)
             .respond_to(&request.to_http_request());
 
         let body = body::to_bytes(response.into_body()).await.unwrap();
         let body_str = String::from_utf8(body.to_vec()).unwrap();
-        
+
         // Pretty JSON should contain newlines
-    assert!(body_str.contains('\n'));
+        assert!(body_str.contains('\n'));
     }
 
     #[actix_rt::test]
     async fn response_force_format_text() {
-        let request = TestRequest::default()
-            .insert_header((ACCEPT, "application/json"));
-        
-    let response = ResponseTransformer::new(json!({"key": "value"}))
+        let request = TestRequest::default().insert_header((ACCEPT, "application/json"));
+
+        let response = ResponseTransformer::new(json!({"key": "value"}))
             .force_format(ResponseFormat::Text)
             .respond_to(&request.to_http_request());
 
@@ -902,20 +900,20 @@ mod tests {
     #[actix_rt::test]
     async fn response_prefer_pretty_json() {
         let request = TestRequest::default();
-    let response = ResponseTransformer::new(vec![1, 2])
+        let response = ResponseTransformer::new(vec![1, 2])
             .prefer_pretty_json()
             .respond_to(&request.to_http_request());
 
         let body = body::to_bytes(response.into_body()).await.unwrap();
         let body_str = String::from_utf8(body.to_vec()).unwrap();
-        
-    assert!(body_str.contains('\n'));
+
+        assert!(body_str.contains('\n'));
     }
 
     #[actix_rt::test]
     async fn response_compose_transformation() {
         let request = TestRequest::default();
-    let response = ResponseTransformer::new(vec![1, 2, 3])
+        let response = ResponseTransformer::new(vec![1, 2, 3])
             .with_message("numbers")
             .compose(|envelope| {
                 let sum: i32 = envelope.data.iter().sum();
@@ -930,8 +928,8 @@ mod tests {
         let body = body::to_bytes(response.into_body()).await.unwrap();
         let payload: JsonValue = serde_json::from_slice(&body).unwrap();
 
-    assert_eq!(payload["message"], "numbers (sum=6)");
-    assert_eq!(payload["data"], 6);
+        assert_eq!(payload["message"], "numbers (sum=6)");
+        assert_eq!(payload["data"], 6);
     }
 
     #[actix_rt::test]
@@ -947,55 +945,50 @@ mod tests {
         let body = body::to_bytes(response.into_body()).await.unwrap();
         let payload: JsonValue = serde_json::from_slice(&body).unwrap();
 
-    assert_eq!(payload["data"], 25); // (10 * 2) + 5
-    assert_eq!(payload["message"], "start!");
+        assert_eq!(payload["data"], 25); // (10 * 2) + 5
+        assert_eq!(payload["message"], "start!");
     }
 
     #[actix_rt::test]
     async fn negotiate_format_with_wildcard() {
-        let request = TestRequest::default()
-            .insert_header((ACCEPT, "*/*"));
-        
-        let response = ResponseTransformer::new("data")
-            .respond_to(&request.to_http_request());
+        let request = TestRequest::default().insert_header((ACCEPT, "*/*"));
 
-    assert_eq!(response.status(), StatusCode::OK);
+        let response = ResponseTransformer::new("data").respond_to(&request.to_http_request());
+
+        assert_eq!(response.status(), StatusCode::OK);
     }
 
     #[actix_rt::test]
     async fn negotiate_format_with_application_wildcard() {
-        let request = TestRequest::default()
-            .insert_header((ACCEPT, "application/*"));
-        
-        let response = ResponseTransformer::new("data")
-            .respond_to(&request.to_http_request());
+        let request = TestRequest::default().insert_header((ACCEPT, "application/*"));
+
+        let response = ResponseTransformer::new("data").respond_to(&request.to_http_request());
 
         let content_type = response.headers().get(CONTENT_TYPE).unwrap();
-    assert!(content_type.to_str().unwrap().contains("json"));
+        assert!(content_type.to_str().unwrap().contains("json"));
     }
 
     #[actix_rt::test]
     async fn negotiate_format_multiple_accepts() {
-        let request = TestRequest::default()
-            .insert_header((ACCEPT, "text/html, application/json, */*"));
-        
-        let response = ResponseTransformer::new("data")
-            .respond_to(&request.to_http_request());
+        let request =
+            TestRequest::default().insert_header((ACCEPT, "text/html, application/json, */*"));
+
+        let response = ResponseTransformer::new("data").respond_to(&request.to_http_request());
 
         let content_type = response.headers().get(CONTENT_TYPE).unwrap();
-    assert!(content_type.to_str().unwrap().contains("json"));
+        assert!(content_type.to_str().unwrap().contains("json"));
     }
 
     #[actix_rt::test]
     async fn query_string_format_parameter() {
         let request = TestRequest::with_uri("/api/data?format=pretty");
-    let response = ResponseTransformer::new(json!({"test": "value"}))
+        let response = ResponseTransformer::new(json!({"test": "value"}))
             .respond_to(&request.to_http_request());
 
         let body = body::to_bytes(response.into_body()).await.unwrap();
         let body_str = String::from_utf8(body.to_vec()).unwrap();
-        
-    assert!(body_str.contains('\n'));
+
+        assert!(body_str.contains('\n'));
     }
 
     #[actix_rt::test]
@@ -1006,12 +999,12 @@ mod tests {
             .with_message("Validation failed")
             .respond_to(&request.to_http_request());
 
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 
         let body = body::to_bytes(response.into_body()).await.unwrap();
         let payload: JsonValue = serde_json::from_slice(&body).unwrap();
 
-    assert_eq!(payload["message"], "Validation failed");
+        assert_eq!(payload["message"], "Validation failed");
     }
 
     #[actix_rt::test]
@@ -1024,22 +1017,21 @@ mod tests {
         let body = body::to_bytes(response.into_body()).await.unwrap();
         let payload: JsonValue = serde_json::from_slice(&body).unwrap();
 
-    assert_eq!(payload["message"], "empty response");
-    assert_eq!(payload["data"], json!(null));
+        assert_eq!(payload["message"], "empty response");
+        assert_eq!(payload["data"], json!(null));
     }
 
     #[test]
     fn response_format_enum_equality() {
-    assert_eq!(ResponseFormat::Json, ResponseFormat::Json);
-    assert_ne!(ResponseFormat::Json, ResponseFormat::JsonPretty);
-    assert_ne!(ResponseFormat::Json, ResponseFormat::Text);
+        assert_eq!(ResponseFormat::Json, ResponseFormat::Json);
+        assert_ne!(ResponseFormat::Json, ResponseFormat::JsonPretty);
+        assert_ne!(ResponseFormat::Json, ResponseFormat::Text);
     }
 
     #[actix_rt::test]
     async fn allow_format_adds_capability() {
-        let request = TestRequest::default()
-            .insert_header((ACCEPT, "text/plain"));
-        
+        let request = TestRequest::default().insert_header((ACCEPT, "text/plain"));
+
         let response = ResponseTransformer::new("test")
             .allow_format(ResponseFormat::Text)
             .respond_to(&request.to_http_request());
@@ -1056,19 +1048,15 @@ mod tests {
         let request = TestRequest::default();
         let response = ResponseTransformer::new(1)
             .with_metadata_value(json!({"value": 10}))
-            .try_map_metadata(|meta| {
-                Ok(meta.map(|m| {
-                    json!({"transformed": true, "original": m})
-                }))
-            })
+            .try_map_metadata(|meta| Ok(meta.map(|m| json!({"transformed": true, "original": m}))))
             .unwrap()
             .respond_to(&request.to_http_request());
 
         let body = body::to_bytes(response.into_body()).await.unwrap();
         let payload: JsonValue = serde_json::from_slice(&body).unwrap();
 
-    assert_eq!(payload["metadata"]["transformed"], true);
-    assert!(payload["metadata"]["original"].is_object());
+        assert_eq!(payload["metadata"]["transformed"], true);
+        assert!(payload["metadata"]["original"].is_object());
     }
 
     #[test]
@@ -1076,16 +1064,16 @@ mod tests {
         let result = ResponseTransformer::new(1)
             .with_metadata_value(json!({"value": 10}))
             .try_map_metadata(|_| {
-                Err(serde_json::Error::custom("transformation failed"))
+                Err(serde_json::from_str::<serde_json::Value>("invalid json").unwrap_err())
             });
 
-    assert!(result.is_err());
+        assert!(result.is_err());
     }
 
     #[actix_rt::test]
     async fn complex_transformation_pipeline() {
         let request = TestRequest::default();
-    let response = ResponseTransformer::new(vec![1, 2, 3, 4, 5])
+        let response = ResponseTransformer::new(vec![1, 2, 3, 4, 5])
             .with_message("numbers")
             .with_status(StatusCode::OK)
             .map_data(|nums| nums.into_iter().filter(|&x| x % 2 == 0).collect::<Vec<_>>())
@@ -1098,8 +1086,8 @@ mod tests {
         let body = body::to_bytes(response.into_body()).await.unwrap();
         let payload: JsonValue = serde_json::from_slice(&body).unwrap();
 
-    assert_eq!(payload["data"], json!([20, 40]));
-    assert_eq!(payload["message"], "numbers - processed");
-    assert_eq!(payload["metadata"]["filtered"], true);
+        assert_eq!(payload["data"], json!([20, 40]));
+        assert_eq!(payload["message"], "numbers - processed");
+        assert_eq!(payload["metadata"]["filtered"], true);
     }
 }

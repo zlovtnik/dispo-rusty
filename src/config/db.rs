@@ -92,9 +92,7 @@ pub fn try_init_db_pool(url: &str) -> Result<Pool, ServiceError> {
     let manager = ConnectionManager::<Connection>::new(url);
     r2d2::Pool::builder()
         .build(manager)
-        .map_err(|e| ServiceError::InternalServerError {
-            error_message: format!("Failed to create pool: {e}"),
-        })
+        .map_err(|e| ServiceError::internal_server_error(format!("Failed to create pool: {e}")))
 }
 
 /// Applies all embedded, pending database migrations to the provided PostgreSQL connection.
@@ -116,9 +114,7 @@ pub fn try_init_db_pool(url: &str) -> Result<Pool, ServiceError> {
 /// ```
 pub fn run_migration(conn: &mut PgConnection) -> Result<(), ServiceError> {
     conn.run_pending_migrations(MIGRATIONS)
-        .map_err(|e| ServiceError::InternalServerError {
-            error_message: format!("Migration failed: {e}"),
-        })?;
+        .map_err(|e| ServiceError::internal_server_error(format!("Migration failed: {e}")))?;
     Ok(())
 }
 
@@ -138,9 +134,7 @@ const LOCK_POISONED_ERROR: &str = "Tenant pools lock was poisoned";
 impl TenantPoolManager {
     /// Helper method to handle lock poisoning errors consistently
     fn handle_lock_poisoned_error<T>() -> Result<T, ServiceError> {
-        Err(ServiceError::InternalServerError {
-            error_message: LOCK_POISONED_ERROR.to_string(),
-        })
+        Err(ServiceError::internal_server_error(LOCK_POISONED_ERROR.to_string()))
     }
     /// Creates a TenantPoolManager that uses `main_pool` as the primary connection pool and
     /// initializes an empty, thread-safe map for tenant-specific pools.

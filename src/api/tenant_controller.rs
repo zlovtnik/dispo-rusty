@@ -69,55 +69,85 @@ pub async fn get_system_stats(
 ) -> Result<HttpResponse, ServiceError> {
     info!("Fetching tenant statistics");
 
-    let mut conn = pool.get().map_err(|e| ServiceError::InternalServerError {
-        error_message: format!("Failed to get db connection: {}", e),
-    })?;
+    let mut conn = pool
+        .get()
+        .map_err(|e| {
+            ServiceError::internal_server_error(format!("Failed to get db connection: {}", e))
+                .with_tag("tenant")
+                .with_metadata("operation", "get_system_stats")
+        })?;
 
-    // Get all tenants
-    let tenants = Tenant::list_all(&mut conn).map_err(|e| ServiceError::InternalServerError {
-        error_message: format!("Failed to fetch tenants: {}", e),
+    // Get total tenant count first without loading all tenants
+    let total_tenants = Tenant::count_all(&mut conn).map_err(|e| {
+        ServiceError::internal_server_error(format!("Failed to count tenants: {}", e))
+            .with_tag("tenant")
+            .with_metadata("operation", "get_system_stats")
     })?;
 
     // Get total users and logged in count (global, since no tenant_id in users)
-    let total_users =
-        User::count_all(&mut conn).map_err(|e| ServiceError::InternalServerError {
-            error_message: format!("Failed to count users: {}", e),
-        })?;
-    let logged_in_users =
-        User::count_logged_in(&mut conn).map_err(|e| ServiceError::InternalServerError {
-            error_message: format!("Failed to count logged in users: {}", e),
-        })?;
+    let total_users = User::count_all(&mut conn).map_err(|e| {
+        ServiceError::internal_server_error(format!("Failed to count users: {}", e))
+            .with_tag("tenant")
+            .with_metadata("operation", "get_system_stats")
+    })?;
+    let logged_in_users = User::count_logged_in(&mut conn).map_err(|e| {
+        ServiceError::internal_server_error(format!("Failed to count logged in users: {}", e))
+            .with_tag("tenant")
+            .with_metadata("operation", "get_system_stats")
+    })?;
 
     let mut tenant_stats = Vec::new();
     let mut active_count = 0;
+    let page_size = 1000i64; // Process tenants in chunks of 1000
+    let mut offset = 0i64;
 
-    for tenant in &tenants {
-        // Check tenant health (database connection)
-        let status = match manager.get_tenant_pool(&tenant.id) {
-            Some(pool) => match pool.get() {
-                Ok(_) => {
-                    active_count += 1;
-                    true
-                }
-                Err(_) => false,
-            },
-            None => false,
-        };
+    // Process tenants in paginated chunks to avoid memory issues
+    loop {
+        let (tenants, _) = Tenant::list_paginated(offset, page_size, &mut conn).map_err(|e| {
+            ServiceError::internal_server_error(format!("Failed to fetch tenant page: {}", e))
+                .with_tag("tenant")
+                .with_metadata("operation", "get_system_stats")
+        })?;
 
-        // For per-tenant, since users don't have tenant_id, using global for simplicity
-        tenant_stats.push(TenantStats {
-            tenant_id: tenant.id.clone(),
-            name: tenant.name.clone(),
-            status: if status {
-                "active".to_string()
-            } else {
-                "inactive".to_string()
-            },
-        });
+        if tenants.is_empty() {
+            break; // No more tenants to process
+        }
+
+        for tenant in &tenants {
+            // Check tenant health (database connection)
+            let status = match manager.get_tenant_pool(&tenant.id) {
+                Some(pool) => match pool.get() {
+                    Ok(_) => {
+                        active_count += 1;
+                        true
+                    }
+                    Err(_) => false,
+                },
+                None => false,
+            };
+
+            // For per-tenant, since users don't have tenant_id, using global for simplicity
+            tenant_stats.push(TenantStats {
+                tenant_id: tenant.id.clone(),
+                name: tenant.name.clone(),
+                status: if status {
+                    "active".to_string()
+                } else {
+                    "inactive".to_string()
+                },
+            });
+        }
+
+        offset += page_size;
+        
+        // Safety check to prevent infinite loops
+        if offset >= total_tenants {
+            break;
+        }
     }
 
     let stats = SystemStats {
-        total_tenants: tenants.len() as i64,
+        total_tenants,
         active_tenants: active_count,
         total_users,
         logged_in_users,
@@ -134,38 +164,56 @@ pub async fn get_tenant_health(
 ) -> Result<HttpResponse, ServiceError> {
     info!("Fetching tenant health status");
 
-    let mut conn = pool.get().map_err(|e| ServiceError::InternalServerError {
-        error_message: format!("Failed to get db connection: {}", e),
-    })?;
+    let mut conn = pool
+        .get()
+        .map_err(|e| {
+            ServiceError::internal_server_error(format!("Failed to get db connection: {}", e))
+                .with_tag("tenant")
+                .with_metadata("operation", "get_tenant_health")
+        })?;
 
-    let tenants = Tenant::list_all(&mut conn).map_err(|e| ServiceError::InternalServerError {
-        error_message: format!("Failed to fetch tenants: {}", e),
-    })?;
     let mut tenant_health_status = Vec::new();
+    let page_size = 1000i64; // Process tenants in chunks
+    let mut offset = 0i64;
 
-    for tenant in tenants {
-        let (status, error_msg) = match manager.get_tenant_pool(&tenant.id) {
-            Some(pool) => {
-                match pool.get() {
-                    Ok(mut conn) => {
-                        // Simple health check: SELECT 1
-                        match diesel::sql_query("SELECT 1").execute(&mut conn) {
-                            Ok(_) => (true, None),
-                            Err(e) => (false, Some(format!("DB query failed: {}", e))),
+    // Process tenants in paginated chunks to avoid memory issues
+    loop {
+        let (tenants, _) = Tenant::list_paginated(offset, page_size, &mut conn).map_err(|e| {
+            ServiceError::internal_server_error(format!("Failed to fetch tenant page: {}", e))
+                .with_tag("tenant")
+                .with_metadata("operation", "get_tenant_health")
+        })?;
+
+        if tenants.is_empty() {
+            break; // No more tenants to process
+        }
+
+        for tenant in tenants {
+            let (status, error_msg) = match manager.get_tenant_pool(&tenant.id) {
+                Some(pool) => {
+                    match pool.get() {
+                        Ok(mut conn) => {
+                            // Simple health check: SELECT 1
+                            match diesel::sql_query("SELECT 1").execute(&mut conn) {
+                                Ok(_) => (true, None),
+                                Err(e) => (false, Some(format!("DB query failed: {}", e))),
+                            }
                         }
+                        Err(e) => (false, Some(format!("Pool connection failed: {}", e))),
                     }
-                    Err(e) => (false, Some(format!("Pool connection failed: {}", e))),
                 }
-            }
-            None => (false, Some("No connection pool configured".to_string())),
-        };
+                None => (false, Some("No connection pool configured".to_string())),
+            };
 
-        tenant_health_status.push(TenantHealth {
-            tenant_id: tenant.id,
-            name: tenant.name,
-            status,
-            error_message: error_msg,
-        });
+            tenant_health_status.push(TenantHealth {
+                tenant_id: tenant.id,
+                name: tenant.name,
+                status,
+                error_message: error_msg,
+            });
+        }
+
+        offset += page_size;
     }
 
     Ok(HttpResponse::Ok().json(tenant_health_status))
@@ -194,21 +242,39 @@ pub async fn get_tenant_status(
 ) -> Result<HttpResponse, ServiceError> {
     info!("Fetching tenant connection status");
 
-    let mut conn = pool.get().map_err(|e| ServiceError::InternalServerError {
-        error_message: format!("Failed to get db connection: {}", e),
-    })?;
+    let mut conn = pool
+        .get()
+        .map_err(|e| {
+            ServiceError::internal_server_error(format!("Failed to get db connection: {}", e))
+                .with_tag("tenant")
+                .with_metadata("operation", "get_tenant_status")
+        })?;
 
-    let tenants = Tenant::list_all(&mut conn).map_err(|e| ServiceError::InternalServerError {
-        error_message: format!("Failed to fetch tenants: {}", e),
-    })?;
     let mut status_map = HashMap::new();
+    let page_size = 1000i64; // Process tenants in chunks
+    let mut offset = 0i64;
 
-    for tenant in tenants {
-        let connected = match manager.get_tenant_pool(&tenant.id) {
-            Some(pool) => pool.get().is_ok(),
-            None => false,
-        };
-        status_map.insert(tenant.id.clone(), connected);
+    // Process tenants in paginated chunks to avoid memory issues
+    loop {
+        let (tenants, _) = Tenant::list_paginated(offset, page_size, &mut conn).map_err(|e| {
+            ServiceError::internal_server_error(format!("Failed to fetch tenant page: {}", e))
+                .with_tag("tenant")
+                .with_metadata("operation", "get_tenant_status")
+        })?;
+
+        if tenants.is_empty() {
+            break; // No more tenants to process
+        }
+
+        for tenant in tenants {
+            let connected = match manager.get_tenant_pool(&tenant.id) {
+                Some(pool) => pool.get().is_ok(),
+                None => false,
+            };
+            status_map.insert(tenant.id.clone(), connected);
+        }
+
+        offset += page_size;
     }
 
     Ok(HttpResponse::Ok().json(status_map))
@@ -267,14 +333,18 @@ pub async fn find_all(
         offset, limit
     );
 
-    let mut conn = pool.get().map_err(|e| ServiceError::InternalServerError {
-        error_message: format!("Failed to get db connection: {}", e),
+    let mut conn = pool.get().map_err(|e| {
+        ServiceError::internal_server_error(format!("Failed to get db connection: {}", e))
+            .with_tag("tenant")
+            .with_metadata("operation", "find_all")
     })?;
 
     let (tenants, total) = Tenant::list_paginated(offset, limit, &mut conn).map_err(|e| {
-        ServiceError::InternalServerError {
-            error_message: format!("Failed to fetch tenants: {}", e),
-        }
+        ServiceError::internal_server_error(format!("Failed to fetch tenants: {}", e))
+            .with_tag("tenant")
+            .with_metadata("operation", "find_all")
+            .with_metadata("offset", offset.to_string())
+            .with_metadata("limit", limit.to_string())
     })?;
 
     let count = tenants.len();
@@ -322,8 +392,10 @@ pub async fn filter(
     query: web::Query<std::collections::HashMap<String, String>>,
     pool: web::Data<DatabasePool>,
 ) -> Result<HttpResponse, ServiceError> {
-    let mut conn = pool.get().map_err(|e| ServiceError::InternalServerError {
-        error_message: format!("Failed to get db connection: {}", e),
+    let mut conn = pool.get().map_err(|e| {
+        ServiceError::internal_server_error(format!("Failed to get db connection: {}", e))
+            .with_tag("tenant")
+            .with_metadata("operation", "filter")
     })?;
 
     // Parse filters from query parameters
@@ -366,10 +438,11 @@ pub async fn filter(
         page_size,
     };
 
-    let tenants =
-        Tenant::filter(filter, &mut conn).map_err(|e| ServiceError::InternalServerError {
-            error_message: format!("Failed to filter tenants: {}", e),
-        })?;
+    let tenants = Tenant::filter(filter, &mut conn).map_err(|e| {
+        ServiceError::internal_server_error(format!("Failed to filter tenants: {}", e))
+            .with_tag("tenant")
+            .with_metadata("operation", "filter")
+    })?;
 
     Ok(HttpResponse::Ok().json(tenants))
 }
@@ -391,21 +464,30 @@ pub async fn find_by_id(
     id: web::Path<String>,
     pool: web::Data<DatabasePool>,
 ) -> Result<HttpResponse, ServiceError> {
-    let mut conn = pool.get().map_err(|e| ServiceError::InternalServerError {
-        error_message: format!("Failed to get db connection: {}", e),
+    let mut conn = pool.get().map_err(|e| {
+        ServiceError::internal_server_error(format!("Failed to get db connection: {}", e))
+            .with_tag("tenant")
+            .with_metadata("operation", "find_by_id")
+            .with_metadata("tenant_id", id.to_string())
     })?;
 
     let tenant = match Tenant::find_by_id(&id, &mut conn) {
         Ok(t) => t,
         Err(diesel::result::Error::NotFound) => {
-            return Err(ServiceError::NotFound {
-                error_message: format!("Tenant not found: {}", id),
-            })
+            return Err(
+                ServiceError::not_found(format!("Tenant not found: {}", id))
+                    .with_tag("tenant")
+                    .with_metadata("operation", "find_by_id")
+                    .with_metadata("tenant_id", id.to_string()),
+            )
         }
         Err(e) => {
-            return Err(ServiceError::InternalServerError {
-                error_message: format!("Failed to find tenant: {}", e),
-            })
+            return Err(
+                ServiceError::internal_server_error(format!("Failed to find tenant: {}", e))
+                    .with_tag("tenant")
+                    .with_metadata("operation", "find_by_id")
+                    .with_metadata("tenant_id", id.to_string()),
+            )
         }
     };
 
@@ -434,33 +516,50 @@ pub async fn create(
     tenant_dto: web::Json<TenantDTO>,
     pool: web::Data<DatabasePool>,
 ) -> Result<HttpResponse, ServiceError> {
+    let dto = tenant_dto.into_inner();
+
     // Validate input data format and required fields
-    if let Err(validation_error) = Tenant::validate_tenant_dto(&tenant_dto.0) {
-        return Err(ServiceError::BadRequest {
-            error_message: validation_error.to_string(),
-        });
+    if let Err(validation_error) = Tenant::validate_tenant_dto(&dto) {
+        return Err(
+            ServiceError::bad_request(validation_error.to_string())
+                .with_tag("tenant")
+                .with_metadata("operation", "create"),
+        );
     }
 
-    let mut conn = pool.get().map_err(|e| ServiceError::InternalServerError {
-        error_message: format!("Failed to get db connection: {}", e),
+    let tenant_id = dto.id.clone();
+
+    let mut conn = pool.get().map_err(|e| {
+        ServiceError::internal_server_error(format!("Failed to get db connection: {}", e))
+            .with_tag("tenant")
+            .with_metadata("operation", "create")
+            .with_metadata("tenant_id", tenant_id.clone())
     })?;
 
-    // Check for duplicate ID
     // Create the tenant, relying on DB unique constraints to prevent duplicates
-    let tenant = match Tenant::create(tenant_dto.0, &mut conn) {
+    let tenant = match Tenant::create(dto, &mut conn) {
         Ok(t) => t,
         Err(diesel::result::Error::DatabaseError(
             diesel::result::DatabaseErrorKind::UniqueViolation,
             info,
         )) => {
-            return Err(ServiceError::Conflict {
-                error_message: format!("Tenant unique constraint violated: {}", info.message()),
-            })
+            return Err(
+                ServiceError::conflict(format!(
+                    "Tenant unique constraint violated: {}",
+                    info.message()
+                ))
+                .with_tag("tenant")
+                .with_metadata("operation", "create")
+                .with_metadata("tenant_id", tenant_id.clone()),
+            )
         }
         Err(e) => {
-            return Err(ServiceError::InternalServerError {
-                error_message: format!("Failed to create tenant: {}", e),
-            })
+            return Err(
+                ServiceError::internal_server_error(format!("Failed to create tenant: {}", e))
+                    .with_tag("tenant")
+                    .with_metadata("operation", "create")
+                    .with_metadata("tenant_id", tenant_id.clone()),
+            )
         }
     };
 
@@ -489,21 +588,32 @@ pub async fn update(
     update_dto: web::Json<UpdateTenant>,
     pool: web::Data<DatabasePool>,
 ) -> Result<HttpResponse, ServiceError> {
-    let mut conn = pool.get().map_err(|e| ServiceError::InternalServerError {
-        error_message: format!("Failed to get db connection: {}", e),
+    let dto = update_dto.into_inner();
+
+    let mut conn = pool.get().map_err(|e| {
+        ServiceError::internal_server_error(format!("Failed to get db connection: {}", e))
+            .with_tag("tenant")
+            .with_metadata("operation", "update")
+            .with_metadata("tenant_id", id.to_string())
     })?;
 
-    let tenant = match Tenant::update(&id, update_dto.0, &mut conn) {
+    let tenant = match Tenant::update(&id, dto, &mut conn) {
         Ok(t) => t,
         Err(diesel::result::Error::NotFound) => {
-            return Err(ServiceError::NotFound {
-                error_message: format!("Tenant not found: {}", id),
-            })
+            return Err(
+                ServiceError::not_found(format!("Tenant not found: {}", id))
+                    .with_tag("tenant")
+                    .with_metadata("operation", "update")
+                    .with_metadata("tenant_id", id.to_string()),
+            )
         }
         Err(e) => {
-            return Err(ServiceError::InternalServerError {
-                error_message: format!("Failed to update tenant: {}", e),
-            })
+            return Err(
+                ServiceError::internal_server_error(format!("Failed to update tenant: {}", e))
+                    .with_tag("tenant")
+                    .with_metadata("operation", "update")
+                    .with_metadata("tenant_id", id.to_string()),
+            )
         }
     };
 
@@ -527,21 +637,30 @@ pub async fn delete(
     id: web::Path<String>,
     pool: web::Data<DatabasePool>,
 ) -> Result<HttpResponse, ServiceError> {
-    let mut conn = pool.get().map_err(|e| ServiceError::InternalServerError {
-        error_message: format!("Failed to get db connection: {}", e),
+    let mut conn = pool.get().map_err(|e| {
+        ServiceError::internal_server_error(format!("Failed to get db connection: {}", e))
+            .with_tag("tenant")
+            .with_metadata("operation", "delete")
+            .with_metadata("tenant_id", id.to_string())
     })?;
 
     match Tenant::delete(&id, &mut conn) {
         Ok(_) => (),
         Err(diesel::result::Error::NotFound) => {
-            return Err(ServiceError::NotFound {
-                error_message: format!("Tenant not found: {}", id),
-            })
+            return Err(
+                ServiceError::not_found(format!("Tenant not found: {}", id))
+                    .with_tag("tenant")
+                    .with_metadata("operation", "delete")
+                    .with_metadata("tenant_id", id.to_string()),
+            )
         }
         Err(e) => {
-            return Err(ServiceError::InternalServerError {
-                error_message: format!("Failed to delete tenant: {}", e),
-            })
+            return Err(
+                ServiceError::internal_server_error(format!("Failed to delete tenant: {}", e))
+                    .with_tag("tenant")
+                    .with_metadata("operation", "delete")
+                    .with_metadata("tenant_id", id.to_string()),
+            )
         }
     };
 
