@@ -740,13 +740,16 @@ pub mod functional_middleware_impl {
     }
 }
 
+#[cfg(test)]
 mod tests {
-    
-    
-    
-    
-    
-    
+    use super::functional_middleware_impl::{
+        AuthSkipChecker, FunctionalAuthentication, MiddlewareContext, MiddlewareError,
+        MiddlewarePipelineBuilder, MiddlewareResult, TokenExtractor, TokenValidator,
+    };
+    use crate::constants;
+    use crate::functional::function_traits::{FunctionCategory, PureFunction};
+    use crate::functional::pure_function_registry::PureFunctionRegistry;
+    use std::sync::Arc;
 
     #[test]
     fn middleware_context_default() {

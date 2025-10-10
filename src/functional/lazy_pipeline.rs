@@ -235,7 +235,10 @@ impl PipelineMetrics {
     /// Records timing for a specific operation
     pub fn record_operation(&mut self, operation: &str, duration: Duration) {
         self.operations_count += 1;
-        *self.operation_times.entry(operation.to_string()).or_insert(Duration::default()) += duration;
+        *self
+            .operation_times
+            .entry(operation.to_string())
+            .or_insert(Duration::default()) += duration;
     }
 
     /// Updates memory usage estimate
@@ -287,6 +290,16 @@ pub enum LazyOp<I> {
     Skip(usize),
 }
 
+impl<I> LazyOp<I> {
+    #[inline(never)]
+    fn panic_on_closure_clone(variant: &'static str) -> ! {
+        panic!(
+            "LazyOp::{} cannot be cloned because it captures a closure",
+            variant
+        );
+    }
+}
+
 impl<I> fmt::Debug for LazyOp<I> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -295,6 +308,18 @@ impl<I> fmt::Debug for LazyOp<I> {
             LazyOp::ChunkBy(_) => write!(f, "ChunkBy(_)"),
             LazyOp::Take(n) => write!(f, "Take({})", n),
             LazyOp::Skip(n) => write!(f, "Skip({})", n),
+        }
+    }
+}
+
+impl<I> Clone for LazyOp<I> {
+    fn clone(&self) -> Self {
+        match self {
+            LazyOp::Map(_) => Self::panic_on_closure_clone("Map"),
+            LazyOp::Filter(_) => Self::panic_on_closure_clone("Filter"),
+            LazyOp::ChunkBy(_) => Self::panic_on_closure_clone("ChunkBy"),
+            LazyOp::Take(n) => LazyOp::Take(*n),
+            LazyOp::Skip(n) => LazyOp::Skip(*n),
         }
     }
 }
@@ -319,7 +344,7 @@ where
 impl<T, I> LazyPipeline<T, I>
 where
     I: Iterator<Item = T>,
-    T: Clone + Send + Sync,
+    T: Send + Sync,
 {
     /// Returns a reference to performance metrics
     pub fn metrics_ref(&self) -> &PipelineMetrics {
@@ -378,18 +403,6 @@ where
             key.into()
         };
         self.operations.push(LazyOp::ChunkBy(Box::new(key_mapper)));
-// Manual Clone implementation for LazyOp
-impl<I> Clone for LazyOp<I> {
-    fn clone(&self) -> Self {
-        match self {
-            LazyOp::Map(_) => panic!("Cannot clone Map closure"),
-            LazyOp::Filter(_) => panic!("Cannot clone Filter closure"),
-            LazyOp::ChunkBy(_) => panic!("Cannot clone ChunkBy closure"),
-            LazyOp::Take(n) => LazyOp::Take(*n),
-            LazyOp::Skip(n) => LazyOp::Skip(*n),
-        }
-    }
-}
         self
     }
 
@@ -449,12 +462,14 @@ impl<I> Clone for LazyOp<I> {
             for operation in &self.operations {
                 match operation {
                     LazyOp::Map(ref f) => {
-                        if let Some(ref mut item) = current {
-                            let start = Instant::now();
-                            *item = f(item.clone());
+                        if let Some(item) = current.take() {
                             if enable_metrics {
-                                let duration = start.elapsed();
-                                self.metrics.record_operation("map", duration);
+                                let start = Instant::now();
+                                let mapped = f(item);
+                                self.metrics.record_operation("map", start.elapsed());
+                                current = Some(mapped);
+                            } else {
+                                current = Some(f(item));
                             }
                         }
                     }
@@ -482,11 +497,11 @@ impl<I> Clone for LazyOp<I> {
                     skip_remaining -= 1;
                     continue;
                 }
-                
+
                 if take_remaining == 0 {
                     break;
                 }
-                
+
                 result.push(processed_item);
                 take_remaining -= 1;
                 self.metrics.items_processed += 1;
@@ -549,7 +564,7 @@ where
 impl<T, I> StreamingIterator<T, I>
 where
     I: Iterator<Item = T>,
-    T: Clone + Send + Sync,
+    T: Send + Sync,
 {
     /// Gets the next chunk of data
     pub fn next_chunk(&mut self, chunk_size: usize) -> Result<Option<&[T]>, LazyPipelineError> {
@@ -583,8 +598,8 @@ where
                     for operation in &self.pipeline.operations {
                         match operation {
                             LazyOp::Map(ref f) => {
-                                if let Some(ref mut item) = current_item {
-                                    *item = f(item.clone());
+                                if let Some(item) = current_item.take() {
+                                    current_item = Some(f(item));
                                 }
                             }
                             LazyOp::Filter(ref f) => {
@@ -674,7 +689,7 @@ pub mod patterns {
         map_fn: impl Fn(T) -> T + Send + Sync + 'static,
     ) -> LazyPipeline<T, impl Iterator<Item = T>>
     where
-        T: Clone + Send + Sync + 'static,
+        T: Send + Sync + 'static,
     {
         LazyPipeline::new(data.into_iter())
             .filter(filter_fn)
@@ -688,10 +703,9 @@ pub mod patterns {
         per_page: usize,
     ) -> LazyPipeline<T, impl Iterator<Item = T>>
     where
-        T: Clone + Send + Sync + 'static,
+        T: Send + Sync + 'static,
     {
-        LazyPipeline::new(data.into_iter())
-            .paginate(page, per_page)
+        LazyPipeline::new(data.into_iter()).paginate(page, per_page)
     }
 
     /// Creates a streaming pipeline for memory-constrained environments
@@ -700,7 +714,7 @@ pub mod patterns {
         max_memory_mb: usize,
     ) -> Result<StreamingIterator<T, impl Iterator<Item = T>>, LazyPipelineError>
     where
-        T: Clone + Send + Sync + 'static,
+        T: Send + Sync + 'static,
     {
         let config = LazyConfig {
             max_memory_mb,
@@ -714,6 +728,7 @@ pub mod patterns {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::panic::{catch_unwind, AssertUnwindSafe};
 
     #[test]
     fn test_basic_lazy_pipeline() {
@@ -727,10 +742,45 @@ mod tests {
     }
 
     #[test]
+    fn test_lazy_op_clone_data_variants() {
+        let take = LazyOp::Take(5);
+        match take.clone() {
+            LazyOp::Take(value) => assert_eq!(value, 5),
+            _ => panic!("expected Take variant"),
+        }
+
+        let skip = LazyOp::Skip(3);
+        match skip.clone() {
+            LazyOp::Skip(value) => assert_eq!(value, 3),
+            _ => panic!("expected Skip variant"),
+        }
+    }
+
+    #[test]
+    fn test_lazy_op_clone_panics_on_closures() {
+        let map_clone_attempt = catch_unwind(AssertUnwindSafe(|| {
+            let op: LazyOp<i32> = LazyOp::Map(Box::new(|value| value + 1));
+            let _ = op.clone();
+        }));
+        assert!(map_clone_attempt.is_err());
+
+        let filter_clone_attempt = catch_unwind(AssertUnwindSafe(|| {
+            let op: LazyOp<i32> = LazyOp::Filter(Box::new(|value| *value > 0));
+            let _ = op.clone();
+        }));
+        assert!(filter_clone_attempt.is_err());
+
+        let chunk_by_clone_attempt = catch_unwind(AssertUnwindSafe(|| {
+            let op: LazyOp<i32> = LazyOp::ChunkBy(Box::new(|value: &i32| *value));
+            let _ = op.clone();
+        }));
+        assert!(chunk_by_clone_attempt.is_err());
+    }
+
+    #[test]
     fn test_pagination_pipeline() {
         let data = (1..=100).collect::<Vec<_>>();
-        let pipeline = LazyPipeline::new(data.into_iter())
-            .paginate(1, 10); // Page 2, 10 items per page
+        let pipeline = LazyPipeline::new(data.into_iter()).paginate(1, 10); // Page 2, 10 items per page
 
         let result = pipeline.collect().unwrap();
         assert_eq!(result.len(), 10);
@@ -748,26 +798,27 @@ mod tests {
         let pipeline = LazyPipeline::with_config(data.into_iter(), config);
 
         let result = pipeline.collect();
-        assert!(matches!(result, Err(LazyPipelineError::MemoryLimitExceeded(_))));
+        assert!(matches!(
+            result,
+            Err(LazyPipelineError::MemoryLimitExceeded(_))
+        ));
     }
 
     #[test]
     fn test_streaming_iterator() {
         let data = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-        let mut stream = LazyPipeline::new(data.into_iter())
-            .stream()
-            .unwrap();
+        let mut stream = LazyPipeline::new(data.into_iter()).stream().unwrap();
 
-        let chunk1 = stream.next_chunk(3).unwrap().unwrap();
+        let chunk1 = stream.next_chunk(3).unwrap().expect("chunk 1");
         assert_eq!(chunk1, &[1, 2, 3]);
 
-        let chunk2 = stream.next_chunk(3).unwrap().unwrap();
+        let chunk2 = stream.next_chunk(3).unwrap().expect("chunk 2");
         assert_eq!(chunk2, &[4, 5, 6]);
 
-        let chunk3 = stream.next_chunk(3).unwrap().unwrap();
+        let chunk3 = stream.next_chunk(3).unwrap().expect("chunk 3");
         assert_eq!(chunk3, &[7, 8, 9]);
 
-        let chunk4 = stream.next_chunk(3).unwrap().unwrap();
+        let chunk4 = stream.next_chunk(3).unwrap().expect("chunk 4");
         assert_eq!(chunk4, &[10]);
 
         assert!(stream.next_chunk(1).unwrap().is_none());
@@ -781,24 +832,20 @@ mod tests {
             .filter(|&x| x % 2 == 0)
             .map(|x| x * 2);
 
-    let _result = pipeline.collect().unwrap();
-    let metrics_ref = pipeline.metrics_ref();
-    assert_eq!(metrics_ref.items_processed, 2); // Only even numbers processed
-    assert!(metrics_ref.total_time > Duration::default());
-    assert!(metrics_ref.operations_count > 0);
+        let _result = pipeline.collect().unwrap();
+        let metrics_ref = pipeline.metrics_ref();
+        assert_eq!(metrics_ref.items_processed, 2); // Only even numbers processed
+        assert!(metrics_ref.total_time > Duration::default());
+        assert!(metrics_ref.operations_count > 0);
     }
 
     #[test]
     fn test_patterns_filter_map() {
         let data = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-        let pipeline = patterns::filter_map_pipeline(
-            data,
-            |&x| x > 5,
-            |x| x * 2,
-        );
+        let pipeline = patterns::filter_map_pipeline(data, |&x| x > 5, |x| x * 2);
 
         let result = pipeline.collect().unwrap();
-        assert_eq!(result, vec![12, 16, 18, 20]); // 6*2, 7*2, 8*2, 9*2, 10*2 but filtered
+        assert_eq!(result, vec![12, 14, 16, 18, 20]);
     }
 
     #[test]
@@ -808,5 +855,23 @@ mod tests {
 
         let result = pipeline.collect().unwrap();
         assert_eq!(result, vec![11, 12, 13, 14, 15]);
+    }
+
+    #[test]
+    fn test_pipeline_handles_non_clone_items() {
+        #[derive(Debug, PartialEq)]
+        struct NonClone(i32);
+
+        let data = vec![NonClone(1), NonClone(2), NonClone(3), NonClone(4)];
+        let result = LazyPipeline::new(data.into_iter())
+            .map(|mut item| {
+                item.0 *= 2;
+                item
+            })
+            .filter(|item| item.0 > 4)
+            .collect()
+            .unwrap();
+
+        assert_eq!(result, vec![NonClone(6), NonClone(8)]);
     }
 }

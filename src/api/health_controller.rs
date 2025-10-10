@@ -21,7 +21,9 @@ use tokio::io::{AsyncReadExt, AsyncSeekExt, SeekFrom};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
-use crate::functional::performance_monitoring::{get_performance_monitor, OperationType, HealthSummary as PerformanceHealthSummary};
+use crate::functional::performance_monitoring::{
+    get_performance_monitor, HealthSummary as PerformanceHealthSummary, OperationType,
+};
 
 #[derive(Serialize, Clone)]
 enum Status {
@@ -598,30 +600,31 @@ async fn logs() -> Result<HttpResponse, ServiceError> {
 /// ```
 #[cfg(feature = "performance_monitoring")]
 #[get("/health/performance")]
-async fn performance_metrics(
-    req: HttpRequest,
-) -> Result<HttpResponse, ServiceError> {
+async fn performance_metrics(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
     info!("Performance metrics requested");
-    
+
     // Parse query parameters
-    let query = web::Query::<std::collections::HashMap<String, String>>::from_query(req.query_string())
-        .unwrap_or_else(|_| web::Query(std::collections::HashMap::new()));
-    
+    let query =
+        web::Query::<std::collections::HashMap<String, String>>::from_query(req.query_string())
+            .unwrap_or_else(|_| web::Query(std::collections::HashMap::new()));
+
     let operation_type_filter = query.get("operation_type").cloned();
-    let include_history = query.get("include_history")
+    let include_history = query
+        .get("include_history")
         .and_then(|v| v.parse::<bool>().ok())
         .unwrap_or(false);
-    let reset_counters = query.get("reset_counters")
+    let reset_counters = query
+        .get("reset_counters")
         .and_then(|v| v.parse::<bool>().ok())
         .unwrap_or(false);
-    
+
     // Get performance monitor instance
     let monitor = get_performance_monitor();
-    
+
     // Generate comprehensive performance report
     let performance_summary = monitor.get_health_summary();
     let all_metrics = monitor.get_all_metrics();
-    
+
     // Filter metrics by operation type if specified
     let filtered_metrics = if let Some(op_type_str) = operation_type_filter {
         let operation_type = match op_type_str.as_str() {
@@ -635,9 +638,10 @@ async fn performance_metrics(
             "pure_function_call" => Some(OperationType::PureFunctionCall),
             _ => None,
         };
-        
+
         if let Some(op_type) = operation_type {
-            all_metrics.into_iter()
+            all_metrics
+                .into_iter()
                 .filter(|(key, _)| *key == op_type)
                 .collect()
         } else {
@@ -646,14 +650,25 @@ async fn performance_metrics(
     } else {
         all_metrics
     };
-    
+
     // Build response data
     let total_operations: u64 = filtered_metrics.values().map(|m| m.operation_count).sum();
-    let total_duration: f64 = filtered_metrics.values().map(|m| m.avg_execution_time.as_secs_f64() * 1000.0).sum();
+    let total_duration: f64 = filtered_metrics
+        .values()
+        .map(|m| m.avg_execution_time.as_secs_f64() * 1000.0)
+        .sum();
     let count = filtered_metrics.len();
-    let average_duration_ms = if count > 0 { total_duration / count as f64 } else { 0.0 };
-    let total_memory_allocated_mb = filtered_metrics.values().map(|m| m.memory_stats.total_allocated).sum::<u64>() / (1024 * 1024);
-    
+    let average_duration_ms = if count > 0 {
+        total_duration / count as f64
+    } else {
+        0.0
+    };
+    let total_memory_allocated_mb = filtered_metrics
+        .values()
+        .map(|m| m.memory_stats.total_allocated)
+        .sum::<u64>()
+        / (1024 * 1024);
+
     let operations_by_type: Vec<serde_json::Value> = filtered_metrics.iter().map(|(op_type, metrics)| {
         serde_json::json!({
             "operation": format!("{:?}", op_type),
@@ -683,7 +698,7 @@ async fn performance_metrics(
         },
         "timestamp": chrono::Utc::now().to_rfc3339(),
     });
-    
+
     // Add historical data if requested
     if include_history {
         response_data["historical_data"] = serde_json::json!({
@@ -696,88 +711,224 @@ async fn performance_metrics(
             ]
         });
     }
-    
+
     // Reset counters if requested
     if reset_counters {
         monitor.reset_metrics();
         response_data["counters_reset"] = serde_json::Value::Bool(true);
     }
-    
+
     Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, response_data)))
 }
 
 #[cfg(not(feature = "performance_monitoring"))]
 #[get("/health/performance")]
-async fn performance_metrics(
-    _req: HttpRequest,
-) -> Result<HttpResponse, ServiceError> {
+async fn performance_metrics(_req: HttpRequest) -> Result<HttpResponse, ServiceError> {
     Ok(HttpResponse::ServiceUnavailable().json(ResponseBody::new(
         "Performance monitoring feature not enabled",
         serde_json::json!({
             "error": "Performance monitoring is not compiled into this build",
             "suggestion": "Rebuild with --features performance_monitoring",
             "timestamp": chrono::Utc::now().to_rfc3339(),
-        })
+        }),
     )))
 }
 
 /// # Backward Compatibility Validation Endpoint
-/// 
+///
 /// Runs a comprehensive backward compatibility test suite to ensure that functional programming
 /// enhancements do not break existing API functionality, JWT authentication, multi-tenant
 /// isolation, or frontend integration.
-/// 
+///
 /// ## Query Parameters
-/// 
+///
 /// - `run_tests`: Execute the full test suite (default: false for safety)
 /// - `test_category`: Run specific test category (api, auth, tenant, database, frontend)
 /// - `include_performance`: Include performance regression tests
-/// 
+///
 /// ## Example Usage
-/// 
+///
 /// ```bash
 /// # Get test configuration (safe, read-only)
 /// GET /api/health/compatibility
-/// 
+///
 /// # Run specific test category
 /// GET /api/health/compatibility?run_tests=true&test_category=api
-/// 
+///
 /// # Run full test suite including performance tests
 /// GET /api/health/compatibility?run_tests=true&include_performance=true
 /// ```
-/// 
+///
 /// ## Response Format
-/// 
+///
 /// Returns test results with pass/fail status, detailed breakdown by category,
 /// and recommendations for any issues found.
 #[get("/health/compatibility")]
 pub async fn backward_compatibility_validation(
     _req: HttpRequest,
-    _query: web::Query<std::collections::HashMap<String, String>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
 ) -> Result<HttpResponse, ServiceError> {
     info!("Backward compatibility validation endpoint called");
 
     #[cfg(feature = "functional")]
     {
-        // Note: Backward compatibility module is in development
-        // Temporarily return a placeholder response
-        let compatibility_data = serde_json::json!({
-            "compatibility_status": {
-                "overall_status": "FullyCompatible",
-                "note": "Backward compatibility validation is being implemented",
-                "functional_features_status": "Active"
+        use crate::functional::backward_compatibility::{
+            BackwardCompatibilityValidator, CompatibilityTestConfig,
+        };
+
+        // Parse query parameters
+        let run_tests = query.get("run_tests").map(|s| s == "true").unwrap_or(false);
+        let test_category = query.get("test_category").cloned();
+        let include_performance = query
+            .get("include_performance")
+            .map(|s| s == "true")
+            .unwrap_or(true);
+
+        if !run_tests {
+            // Return configuration info without running tests
+            let config_info = serde_json::json!({
+                "status": "Ready to run tests",
+                "available_tests": ["api_endpoints", "jwt_authentication", "multi_tenant_isolation", "database_operations", "frontend_integration", "performance_regression"],
+                "usage": {
+                    "run_tests": "Set to 'true' to execute all tests",
+                    "test_category": "Specify category to run only that test (optional)",
+                    "include_performance": "Set to 'false' to skip performance tests (default: true)"
+                },
+                "note": "Running tests may create test data and affect performance metrics"
+            });
+
+            return Ok(
+                HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, config_info))
+            );
+        }
+
+        // Create validator with default config
+        let config = CompatibilityTestConfig::default();
+        let validator = BackwardCompatibilityValidator::new(config);
+
+        // Run appropriate tests based on parameters
+        let results = if let Some(category) = test_category {
+            match category.as_str() {
+                "api_endpoints" => {
+                    let mut results = crate::functional::backward_compatibility::CompatibilityTestResults::default();
+                    match validator.test_api_endpoints().await {
+                        Ok(_) => results.api_endpoints_passed = 5,
+                        Err(e) => {
+                            results.api_endpoints_failed = 5;
+                            results.failed_tests.push(format!("API endpoints: {}", e));
+                        }
+                    }
+                    results.overall_compatibility = validator.calculate_overall_status(&results);
+                    results
+                }
+                "jwt_authentication" => {
+                    let mut results = crate::functional::backward_compatibility::CompatibilityTestResults::default();
+                    match validator.test_jwt_authentication().await {
+                        Ok(_) => results.auth_tests_passed = 3,
+                        Err(e) => {
+                            results.auth_tests_failed = 3;
+                            results
+                                .failed_tests
+                                .push(format!("JWT authentication: {}", e));
+                        }
+                    }
+                    results.overall_compatibility = validator.calculate_overall_status(&results);
+                    results
+                }
+                "multi_tenant_isolation" => {
+                    let mut results = crate::functional::backward_compatibility::CompatibilityTestResults::default();
+                    match validator.test_multi_tenant_isolation().await {
+                        Ok(_) => results.tenant_isolation_passed = 2,
+                        Err(e) => {
+                            results.tenant_isolation_failed = 2;
+                            results
+                                .failed_tests
+                                .push(format!("Multi-tenant isolation: {}", e));
+                        }
+                    }
+                    results.overall_compatibility = validator.calculate_overall_status(&results);
+                    results
+                }
+                "database_operations" => {
+                    let mut results = crate::functional::backward_compatibility::CompatibilityTestResults::default();
+                    match validator.test_database_operations().await {
+                        Ok(_) => results.database_tests_passed = 3,
+                        Err(e) => {
+                            results.database_tests_failed = 3;
+                            results
+                                .failed_tests
+                                .push(format!("Database operations: {}", e));
+                        }
+                    }
+                    results.overall_compatibility = validator.calculate_overall_status(&results);
+                    results
+                }
+                "frontend_integration" => {
+                    let mut results = crate::functional::backward_compatibility::CompatibilityTestResults::default();
+                    match validator.test_frontend_integration().await {
+                        Ok(_) => results.frontend_compatibility_passed = 3,
+                        Err(e) => {
+                            results.frontend_compatibility_failed = 3;
+                            results
+                                .failed_tests
+                                .push(format!("Frontend integration: {}", e));
+                        }
+                    }
+                    results.overall_compatibility = validator.calculate_overall_status(&results);
+                    results
+                }
+                "performance_regression" if include_performance => {
+                    let mut results = crate::functional::backward_compatibility::CompatibilityTestResults::default();
+                    match validator.test_performance_regression().await {
+                        Ok(regressions) => results.performance_regressions = regressions,
+                        Err(e) => {
+                            results
+                                .failed_tests
+                                .push(format!("Performance regression: {}", e));
+                        }
+                    }
+                    results.overall_compatibility = validator.calculate_overall_status(&results);
+                    results
+                }
+                _ => {
+                    return Err(ServiceError::bad_request(format!(
+                        "Unknown test category: {}",
+                        category
+                    ))
+                    .with_tag("validation"));
+                }
+            }
+        } else {
+            // Run full test suite
+            let mut results = validator.run_full_compatibility_suite().await;
+            if !include_performance {
+                results.performance_regressions.clear();
+                results.overall_compatibility = validator.calculate_overall_status(&results);
+            }
+            results
+        };
+
+        // Generate report
+        let report =
+            crate::functional::backward_compatibility::generate_compatibility_report(&results);
+
+        let response_data = serde_json::json!({
+            "compatibility_status": results.overall_compatibility,
+            "test_summary": {
+                "api_endpoints": format!("{} passed, {} failed", results.api_endpoints_passed, results.api_endpoints_failed),
+                "authentication": format!("{} passed, {} failed", results.auth_tests_passed, results.auth_tests_failed),
+                "tenant_isolation": format!("{} passed, {} failed", results.tenant_isolation_passed, results.tenant_isolation_failed),
+                "database_operations": format!("{} passed, {} failed", results.database_tests_passed, results.database_tests_failed),
+                "frontend_compatibility": format!("{} passed, {} failed", results.frontend_compatibility_passed, results.frontend_compatibility_failed),
+                "performance_regressions": results.performance_regressions.len()
             },
-            "test_results": {
-                "functional_patterns": "Integrated successfully",
-                "performance_monitoring": "Active and tracking metrics"
-            },
+            "failed_tests": results.failed_tests,
+            "performance_regressions": results.performance_regressions,
+            "full_report": report,
             "timestamp": chrono::Utc::now().to_rfc3339()
         });
 
-        return Ok(HttpResponse::Ok().json(ResponseBody::new(
-            constants::MESSAGE_OK,
-            compatibility_data,
-        )));
+        Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, response_data)))
     }
 
     #[cfg(not(feature = "functional"))]
@@ -806,24 +957,22 @@ mod tests {
     //! Consider using the `serial_test` crate in the future for better test isolation.
 
     use super::*;
-use std::panic::{catch_unwind, AssertUnwindSafe};
+    use std::panic::{catch_unwind, AssertUnwindSafe};
 
     use actix_cors::Cors;
     use actix_web::web::Data;
     use actix_web::{http::StatusCode, test};
     use testcontainers::clients;
-    use testcontainers::Container;
     use testcontainers::images::postgres::Postgres;
     use testcontainers::images::redis::Redis;
+    use testcontainers::Container;
 
     use crate::config;
     use std::env;
     use tempfile::NamedTempFile;
     use tokio::time::{timeout, Duration};
 
-    fn try_run_postgres<'a>(
-        docker: &'a clients::Cli,
-    ) -> Option<Container<'a, Postgres>> {
+    fn try_run_postgres<'a>(docker: &'a clients::Cli) -> Option<Container<'a, Postgres>> {
         catch_unwind(AssertUnwindSafe(|| docker.run(Postgres::default()))).ok()
     }
 
@@ -1040,9 +1189,9 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
     #[actix_web::test]
     async fn test_performance_metrics_ok() {
         use crate::functional::performance_monitoring::{get_performance_monitor, OperationType};
+        use actix_web::{http::StatusCode, test};
         use std::time::Duration as StdDuration;
-        use actix_web::{test, http::StatusCode};
-        
+
         // Generate some test metrics data
         let monitor = get_performance_monitor();
         monitor.record_operation(
@@ -1059,15 +1208,13 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
         );
 
         let app = test::init_service(
-            actix_web::App::new()
-                .service(performance_metrics)
-                .wrap(
-                    Cors::default()
-                        .send_wildcard()
-                        .allowed_methods(vec!["GET"])
-                        .allowed_header(actix_web::http::header::CONTENT_TYPE)
-                        .max_age(3600),
-                ),
+            actix_web::App::new().service(performance_metrics).wrap(
+                Cors::default()
+                    .send_wildcard()
+                    .allowed_methods(vec!["GET"])
+                    .allowed_header(actix_web::http::header::CONTENT_TYPE)
+                    .max_age(3600),
+            ),
         )
         .await;
 
@@ -1080,7 +1227,7 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 
         let body_bytes = test::read_body(resp).await;
         let json: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
-        
+
         // Verify response structure
         assert!(json["data"]["performance_health"].is_object());
         assert!(json["data"]["metrics_summary"].is_object());
@@ -1120,11 +1267,9 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
     #[cfg(not(feature = "performance_monitoring"))]
     #[actix_web::test]
     async fn test_performance_metrics_disabled() {
-        use actix_web::{test, http::StatusCode};
-        
-        let app = test::init_service(
-            actix_web::App::new().service(performance_metrics)
-        ).await;
+        use actix_web::{http::StatusCode, test};
+
+        let app = test::init_service(actix_web::App::new().service(performance_metrics)).await;
 
         let req = test::TestRequest::get()
             .uri("/health/performance")

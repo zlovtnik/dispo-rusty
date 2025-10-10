@@ -1,12 +1,23 @@
 use actix_web::{web, HttpMessage, HttpRequest, HttpResponse, Result};
+use serde::Serialize;
 
 use crate::{
     config::db::Pool,
     constants,
     error::ServiceError,
-    models::{filters::PersonFilter, person::PersonDTO, response::ResponseBody},
+    models::{filters::PersonFilter, person::{PersonDTO, Person}, response::ResponseBody},
     services::address_book_service,
 };
+
+#[derive(Serialize)]
+struct PaginatedAddressBookResponse {
+    data: Vec<Person>,
+    total: i64,
+    offset: i64,
+    limit: i64,
+    count: i64,
+    next_cursor: Option<i64>,
+}
 
 /// Extract the database pool from the request extensions.
 ///
@@ -37,10 +48,53 @@ fn extract_pool(req: &HttpRequest) -> Result<Pool, ServiceError> {
 /// let result = actix_rt::System::new().block_on(crate::api::address_book_controller::find_all(req));
 /// // `result` will be `Ok(HttpResponse)` on success or `Err(ServiceError)` on failure.
 /// ```
-pub async fn find_all(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
+pub async fn find_all(
+    query: web::Query<std::collections::HashMap<String, String>>,
+    req: HttpRequest,
+) -> Result<HttpResponse, ServiceError> {
+    // Parse pagination parameters consistent with tenant pattern
+    let offset = query
+        .get("offset")
+        .and_then(|s| s.parse::<i64>().ok())
+        .or_else(|| query.get("cursor").and_then(|s| s.parse::<i64>().ok()))
+        .unwrap_or(0);
+
+    let limit = query
+        .get("limit")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(50);
+    let limit = limit.min(500); // Max limit
+
     let pool = extract_pool(&req)?;
-    match address_book_service::find_all(&pool) {
-        Ok(people) => Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, people))),
+
+    // Use database-level pagination with Person::filter instead of loading all records
+    let filter = PersonFilter {
+        name: None,
+        gender: None,
+        age: None,
+        phone: None,
+        email: None,
+        cursor: Some(offset as i32),
+        page_size: Some(limit),
+        page_num: None,
+        sort_by: None,
+        sort_order: None,
+    };
+
+    match address_book_service::filter(filter, &pool) {
+        Ok(page) => {
+            let count = page.data.len() as i64;
+            let response = PaginatedAddressBookResponse {
+                data: page.data,
+                total: page.total_elements.unwrap_or(0),
+                offset,
+                limit,
+                count,
+                next_cursor: page.next_cursor.map(|c| c as i64),
+            };
+
+            Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, response)))
+        }
         Err(err) => Err(err),
     }
 }
@@ -77,10 +131,52 @@ pub async fn filter(
     web::Query(filter): web::Query<PersonFilter>,
     req: HttpRequest,
 ) -> Result<HttpResponse, ServiceError> {
-    let pool = extract_pool(&req)?;
+    use log::{debug, error};
+
+    debug!("Filter endpoint called with filter: {:?}", filter);
+
+    let pool = match extract_pool(&req) {
+        Ok(pool) => {
+            debug!("Successfully extracted pool from request");
+            pool
+        }
+        Err(e) => {
+            error!("Failed to extract pool from request: {}", e);
+            return Err(e);
+        }
+    };
+
+    // Parse pagination parameters consistent with tenant pattern
+    let offset = filter.cursor.unwrap_or(0) as i64;
+    let limit = filter.page_size.unwrap_or(50);
+
+    debug!("Calling address_book_service::filter");
     match address_book_service::filter(filter, &pool) {
-        Ok(page) => Ok(HttpResponse::Ok().json(page)),
-        Err(err) => Err(err),
+        Ok(page) => {
+            debug!("Filter operation successful, returning {} results", page.data.len());
+
+            let count = page.data.len() as i64;
+            let total = page.total_elements.unwrap_or(0);
+
+            let response = PaginatedAddressBookResponse {
+                data: page.data,
+                total,
+                offset,
+                limit,
+                count,
+                next_cursor: if offset + limit < total {
+                    Some(offset + limit)
+                } else {
+                    None
+                },
+            };
+
+            Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, response)))
+        }
+        Err(err) => {
+            error!("Filter operation failed: {}", err);
+            Err(err)
+        }
     }
 }
 

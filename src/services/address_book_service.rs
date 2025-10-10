@@ -20,10 +20,8 @@ use crate::{
         person::{Person, PersonDTO},
         response::Page,
     },
-    services::functional_service_base::{
-        FunctionalQueryService, FunctionalErrorHandling
-    },
     services::functional_patterns::Validator,
+    services::functional_service_base::{FunctionalErrorHandling, FunctionalQueryService},
 };
 
 /// Iterator-based validation using functional combinator pattern
@@ -33,7 +31,9 @@ fn create_person_validator() -> Validator<PersonDTO> {
             if dto.name.trim().is_empty() {
                 Err(ServiceError::bad_request("Name cannot be empty"))
             } else if dto.name.len() > 100 {
-                Err(ServiceError::bad_request("Name too long (max 100 characters)"))
+                Err(ServiceError::bad_request(
+                    "Name too long (max 100 characters)",
+                ))
             } else {
                 Ok(())
             }
@@ -44,7 +44,9 @@ fn create_person_validator() -> Validator<PersonDTO> {
             } else if !dto.email.contains('@') {
                 Err(ServiceError::bad_request("Invalid email format"))
             } else if dto.email.len() > 255 {
-                Err(ServiceError::bad_request("Email too long (max 255 characters)"))
+                Err(ServiceError::bad_request(
+                    "Email too long (max 255 characters)",
+                ))
             } else {
                 Ok(())
             }
@@ -68,8 +70,11 @@ pub fn find_all(pool: &Pool) -> Result<Vec<Person>, ServiceError> {
 
     query_service
         .query(|conn| {
-            Person::find_all(conn)
-                .map_err(|_| ServiceError::internal_server_error(constants::MESSAGE_CAN_NOT_FETCH_DATA.to_string()))
+            Person::find_all(conn).map_err(|_| {
+                ServiceError::internal_server_error(
+                    constants::MESSAGE_CAN_NOT_FETCH_DATA.to_string(),
+                )
+            })
         })
         .log_error("find_all operation")
 }
@@ -83,9 +88,10 @@ pub fn find_all(pool: &Pool) -> Result<Vec<Person>, ServiceError> {
 pub fn find_by_id(id: i32, pool: &Pool) -> Result<Person, ServiceError> {
     let query_service = FunctionalQueryService::new(pool.clone());
 
-    query_service
-        .query(|conn| Person::find_by_id(id, conn)
-            .map_err(|_| ServiceError::not_found(format!("Person with id {} not found", id))))
+    query_service.query(|conn| {
+        Person::find_by_id(id, conn)
+            .map_err(|_| ServiceError::not_found(format!("Person with id {} not found", id)))
+    })
 }
 
 /// Retrieves a paginated page of people using lazy iterator evaluation.
@@ -96,11 +102,18 @@ pub fn find_by_id(id: i32, pool: &Pool) -> Result<Person, ServiceError> {
 /// # Returns
 /// `Ok(Page<Person>)` with filtered and paginated results.
 pub fn filter(filter: PersonFilter, pool: &Pool) -> Result<Page<Person>, ServiceError> {
+    use log::{debug, error};
+    
+    debug!("Starting filter operation with filter: {:?}", filter);
     let query_service = FunctionalQueryService::new(pool.clone());
 
-    query_service
-        .query(|conn| Person::filter(filter, conn)
-            .map_err(|_| ServiceError::internal_server_error(constants::MESSAGE_CAN_NOT_FETCH_DATA.to_string())))
+    query_service.query(|conn| {
+        debug!("Executing Person::filter with database connection");
+        Person::filter(filter, conn).map_err(|e| {
+            error!("Database error in Person::filter: {}", e);
+            ServiceError::internal_server_error(format!("Database error: {}", e))
+        })
+    })
 }
 
 /// Inserts a new person using iterator-based validation and functional pipelines.
@@ -116,9 +129,15 @@ pub fn insert(new_person: PersonDTO, pool: &Pool) -> Result<(), ServiceError> {
     // Use functional pipeline with validated data
     crate::services::functional_service_base::ServicePipeline::new(pool.clone())
         .with_data(new_person)
-        .execute(|person, conn| Person::insert(person, conn)
-            .map_err(|_| ServiceError::internal_server_error(constants::MESSAGE_CAN_NOT_INSERT_DATA.to_string()))
-            .map(|_| ()))
+        .execute(|person, conn| {
+            Person::insert(person, conn)
+                .map_err(|_| {
+                    ServiceError::internal_server_error(
+                        constants::MESSAGE_CAN_NOT_INSERT_DATA.to_string(),
+                    )
+                })
+                .map(|_| ())
+        })
 }
 
 /// Updates a person using iterator-based validation and functional pipelines.
@@ -135,10 +154,15 @@ pub fn update(id: i32, updated_person: PersonDTO, pool: &Pool) -> Result<(), Ser
     crate::services::functional_service_base::ServicePipeline::new(pool.clone())
         .with_data((id, updated_person))
         .execute(move |(person_id, person), conn| {
-            Person::find_by_id(person_id, conn)
-                .map_err(|_| ServiceError::not_found(format!("Person with id {} not found", person_id)))?;
+            Person::find_by_id(person_id, conn).map_err(|_| {
+                ServiceError::not_found(format!("Person with id {} not found", person_id))
+            })?;
             Person::update(person_id, person, conn)
-                .map_err(|_| ServiceError::internal_server_error(constants::MESSAGE_CAN_NOT_UPDATE_DATA.to_string()))
+                .map_err(|_| {
+                    ServiceError::internal_server_error(
+                        constants::MESSAGE_CAN_NOT_UPDATE_DATA.to_string(),
+                    )
+                })
                 .map(|_| ())
         })
 }
@@ -154,10 +178,19 @@ pub fn delete(id: i32, pool: &Pool) -> Result<(), ServiceError> {
     let query_service = FunctionalQueryService::new(pool.clone());
 
     query_service
-        .query(|conn| Person::find_by_id(id, conn)
-            .map_err(|_| ServiceError::not_found(format!("Person with id {} not found", id))))
+        .query(|conn| {
+            Person::find_by_id(id, conn)
+                .map_err(|_| ServiceError::not_found(format!("Person with id {} not found", id)))
+        })
         .and_then_error(|_| {
-            query_service
-                .query(|conn| Person::delete(id, conn).map_err(|_| ServiceError::internal_server_error(constants::MESSAGE_CAN_NOT_DELETE_DATA.to_string())).map(|_| ()))
+            query_service.query(|conn| {
+                Person::delete(id, conn)
+                    .map_err(|_| {
+                        ServiceError::internal_server_error(
+                            constants::MESSAGE_CAN_NOT_DELETE_DATA.to_string(),
+                        )
+                    })
+                    .map(|_| ())
+            })
         })
 }

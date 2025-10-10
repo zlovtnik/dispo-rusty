@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct PersonFilter {
     pub name: Option<String>,
     pub gender: Option<String>,
@@ -9,6 +9,12 @@ pub struct PersonFilter {
     pub email: Option<String>,
     pub cursor: Option<i32>,
     pub page_size: Option<i64>,
+    #[serde(default)]
+    pub page_num: Option<i32>,
+    #[serde(default)]
+    pub sort_by: Option<String>,
+    #[serde(default)]
+    pub sort_order: Option<String>,
 }
 
 #[derive(Deserialize)]

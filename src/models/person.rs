@@ -5,12 +5,12 @@ use crate::{
     config::db::Connection,
     constants::MESSAGE_OK,
     models::pagination::SortingAndPaging,
-    schema::people::{self, dsl::*},
+    schema::people,
 };
 
 use super::{filters::PersonFilter, pagination::HasId, response::Page};
 
-#[derive(Queryable, Serialize, Deserialize)]
+#[derive(Clone, Queryable, Serialize, Deserialize)]
 pub struct Person {
     pub id: i32,
     pub name: String,
@@ -40,11 +40,11 @@ impl HasId for Person {
 
 impl Person {
     pub fn find_all(conn: &mut Connection) -> QueryResult<Vec<Person>> {
-        people.order(id.asc()).load::<Person>(conn)
+        people::table.order(people::id.asc()).load::<Person>(conn)
     }
 
     pub fn find_by_id(i: i32, conn: &mut Connection) -> QueryResult<Person> {
-        people.find(i).get_result::<Person>(conn)
+        people::table.find(i).get_result::<Person>(conn)
     }
 
     /// Get a paginated Page of people matching the provided filter criteria.
@@ -79,34 +79,38 @@ impl Person {
         let mut query = people::table.into_boxed();
 
         if let Some(i) = filter.age {
-            query = query.filter(age.eq(i));
+            query = query.filter(people::age.eq(i));
         }
         if let Some(i) = filter.email {
-            query = query.filter(email.like(format!("%{}%", i)));
+            query = query.filter(people::email.like(format!("%{}%", i)));
         }
         if let Some(i) = filter.gender {
             match i.to_lowercase().as_str() {
                 "male" => {
-                    query = query.filter(gender.eq(true));
+                    query = query.filter(people::gender.eq(true));
                 }
                 "female" => {
-                    query = query.filter(gender.eq(false));
+                    query = query.filter(people::gender.eq(false));
                 }
                 _ => {}
             }
         }
         if let Some(i) = filter.name {
-            query = query.filter(name.like(format!("%{}%", i)));
+            query = query.filter(people::name.like(format!("%{}%", i)));
         }
         if let Some(i) = filter.phone {
-            query = query.filter(phone.like(format!("%{}%", i)));
+            query = query.filter(people::phone.like(format!("%{}%", i)));
         }
+        
         let cursor = filter.cursor.unwrap_or(0);
         let page_size = filter
             .page_size
             .unwrap_or(crate::constants::DEFAULT_PER_PAGE);
+            
+        // Handle sorting through pagination - don't add ORDER BY to the base query
+        // The pagination system will handle ordering by the cursor column
         let records = query
-            .paginate(people::id, cursor)
+            .paginate(cursor)
             .per_page(page_size)
             .load_items::<Person>(conn)?;
         Ok(Page::new(
@@ -140,7 +144,7 @@ impl Person {
     /// assert_eq!(rows_inserted, 1);
     /// ```
     pub fn insert(new_person: PersonDTO, conn: &mut Connection) -> QueryResult<usize> {
-        diesel::insert_into(people)
+        diesel::insert_into(people::table)
             .values(&new_person)
             .execute(conn)
     }
@@ -168,7 +172,7 @@ impl Person {
     ///
     /// Number of rows updated on success.
     pub fn update(i: i32, updated_person: PersonDTO, conn: &mut Connection) -> QueryResult<usize> {
-        diesel::update(people.find(i))
+        diesel::update(people::table.find(i))
             .set(&updated_person)
             .execute(conn)
     }
@@ -191,6 +195,6 @@ impl Person {
     /// assert_eq!(deleted, 1);
     /// ```
     pub fn delete(i: i32, conn: &mut Connection) -> QueryResult<usize> {
-        diesel::delete(people.find(i)).execute(conn)
+        diesel::delete(people::table.find(i)).execute(conn)
     }
 }

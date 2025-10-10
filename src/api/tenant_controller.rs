@@ -69,13 +69,11 @@ pub async fn get_system_stats(
 ) -> Result<HttpResponse, ServiceError> {
     info!("Fetching tenant statistics");
 
-    let mut conn = pool
-        .get()
-        .map_err(|e| {
-            ServiceError::internal_server_error(format!("Failed to get db connection: {}", e))
-                .with_tag("tenant")
-                .with_metadata("operation", "get_system_stats")
-        })?;
+    let mut conn = pool.get().map_err(|e| {
+        ServiceError::internal_server_error(format!("Failed to get db connection: {}", e))
+            .with_tag("tenant")
+            .with_metadata("operation", "get_system_stats")
+    })?;
 
     // Get total tenant count first without loading all tenants
     let total_tenants = Tenant::count_all(&mut conn).map_err(|e| {
@@ -139,7 +137,7 @@ pub async fn get_system_stats(
         }
 
         offset += page_size;
-        
+
         // Safety check to prevent infinite loops
         if offset >= total_tenants {
             break;
@@ -164,13 +162,11 @@ pub async fn get_tenant_health(
 ) -> Result<HttpResponse, ServiceError> {
     info!("Fetching tenant health status");
 
-    let mut conn = pool
-        .get()
-        .map_err(|e| {
-            ServiceError::internal_server_error(format!("Failed to get db connection: {}", e))
-                .with_tag("tenant")
-                .with_metadata("operation", "get_tenant_health")
-        })?;
+    let mut conn = pool.get().map_err(|e| {
+        ServiceError::internal_server_error(format!("Failed to get db connection: {}", e))
+            .with_tag("tenant")
+            .with_metadata("operation", "get_tenant_health")
+    })?;
 
     let mut tenant_health_status = Vec::new();
     let page_size = 1000i64; // Process tenants in chunks
@@ -242,13 +238,11 @@ pub async fn get_tenant_status(
 ) -> Result<HttpResponse, ServiceError> {
     info!("Fetching tenant connection status");
 
-    let mut conn = pool
-        .get()
-        .map_err(|e| {
-            ServiceError::internal_server_error(format!("Failed to get db connection: {}", e))
-                .with_tag("tenant")
-                .with_metadata("operation", "get_tenant_status")
-        })?;
+    let mut conn = pool.get().map_err(|e| {
+        ServiceError::internal_server_error(format!("Failed to get db connection: {}", e))
+            .with_tag("tenant")
+            .with_metadata("operation", "get_tenant_status")
+    })?;
 
     let mut status_map = HashMap::new();
     let page_size = 1000i64; // Process tenants in chunks
@@ -369,24 +363,37 @@ pub async fn find_all(
 
 /// Parse query-encoded field filters and optional pagination and return matching tenants.
 ///
-/// This handler accepts query parameters of the form `filters[N][field]`, `filters[N][operator]`,
-/// and `filters[N][value]` which are parsed into a `TenantFilter`. It also accepts `cursor` and
-/// `page_size` for pagination; values that fail numeric parsing are ignored (treated as absent).
+/// This handler accepts query parameters in two formats:
+///
+/// 1. Complex format for multiple/advanced filters:
+///    - `filters[N][field]`, `filters[N][operator]`, `filters[N][value]` which are parsed into a `TenantFilter`
+///    - `cursor` and `page_size` for pagination
+///
+/// 2. Simple format for basic filtering:
+///    - Direct field parameters: `name`, `id`, `db_url` (uses "contains" for name/db_url, "equals" for id)
+///    - `page_num` (treated as cursor, 0-based) and `page_size` for pagination
+///
+/// Values that fail numeric parsing are ignored (treated as absent).
 ///
 /// # Examples
 ///
 /// ```
 /// use std::collections::HashMap;
 ///
-/// // Construct query parameters that the handler expects:
+/// // Complex format:
 /// let mut q = HashMap::new();
 /// q.insert("filters[0][field]".to_string(), "name".to_string());
 /// q.insert("filters[0][operator]".to_string(), "eq".to_string());
 /// q.insert("filters[0][value]".to_string(), "acme".to_string());
 /// q.insert("page_size".to_string(), "25".to_string());
 ///
-/// // When parsed by the handler, these entries produce a TenantFilter
-/// // with one FieldFilter: field = "name", operator = "eq", value = "acme", and page_size = Some(25).
+/// // Simple format:
+/// let mut q2 = HashMap::new();
+/// q2.insert("name".to_string(), "acme".to_string());
+/// q2.insert("page_num".to_string(), "0".to_string());
+/// q2.insert("page_size".to_string(), "10".to_string());
+///
+/// // Both produce a TenantFilter with appropriate filters and pagination.
 /// ```
 pub async fn filter(
     query: web::Query<std::collections::HashMap<String, String>>,
@@ -427,8 +434,32 @@ pub async fn filter(
             }
         } else if key == "cursor" {
             cursor = value.parse().ok();
+        } else if key == "page_num" {
+            // Treat page_num as cursor (0-based)
+            cursor = value.parse().ok();
         } else if key == "page_size" {
             page_size = value.parse().ok();
+        } else if key == "name" {
+            // Direct field parameter: name with contains operator
+            filters.push(crate::models::filters::FieldFilter {
+                field: "name".to_string(),
+                operator: "contains".to_string(),
+                value: value.clone(),
+            });
+        } else if key == "id" {
+            // Direct field parameter: id with equals operator
+            filters.push(crate::models::filters::FieldFilter {
+                field: "id".to_string(),
+                operator: "equals".to_string(),
+                value: value.clone(),
+            });
+        } else if key == "db_url" {
+            // Direct field parameter: db_url with contains operator
+            filters.push(crate::models::filters::FieldFilter {
+                field: "db_url".to_string(),
+                operator: "contains".to_string(),
+                value: value.clone(),
+            });
         }
     }
 
@@ -474,20 +505,19 @@ pub async fn find_by_id(
     let tenant = match Tenant::find_by_id(&id, &mut conn) {
         Ok(t) => t,
         Err(diesel::result::Error::NotFound) => {
-            return Err(
-                ServiceError::not_found(format!("Tenant not found: {}", id))
-                    .with_tag("tenant")
-                    .with_metadata("operation", "find_by_id")
-                    .with_metadata("tenant_id", id.to_string()),
-            )
+            return Err(ServiceError::not_found(format!("Tenant not found: {}", id))
+                .with_tag("tenant")
+                .with_metadata("operation", "find_by_id")
+                .with_metadata("tenant_id", id.to_string()))
         }
         Err(e) => {
-            return Err(
-                ServiceError::internal_server_error(format!("Failed to find tenant: {}", e))
-                    .with_tag("tenant")
-                    .with_metadata("operation", "find_by_id")
-                    .with_metadata("tenant_id", id.to_string()),
-            )
+            return Err(ServiceError::internal_server_error(format!(
+                "Failed to find tenant: {}",
+                e
+            ))
+            .with_tag("tenant")
+            .with_metadata("operation", "find_by_id")
+            .with_metadata("tenant_id", id.to_string()))
         }
     };
 
@@ -520,11 +550,9 @@ pub async fn create(
 
     // Validate input data format and required fields
     if let Err(validation_error) = Tenant::validate_tenant_dto(&dto) {
-        return Err(
-            ServiceError::bad_request(validation_error.to_string())
-                .with_tag("tenant")
-                .with_metadata("operation", "create"),
-        );
+        return Err(ServiceError::bad_request(validation_error.to_string())
+            .with_tag("tenant")
+            .with_metadata("operation", "create"));
     }
 
     let tenant_id = dto.id.clone();
@@ -543,23 +571,22 @@ pub async fn create(
             diesel::result::DatabaseErrorKind::UniqueViolation,
             info,
         )) => {
-            return Err(
-                ServiceError::conflict(format!(
-                    "Tenant unique constraint violated: {}",
-                    info.message()
-                ))
-                .with_tag("tenant")
-                .with_metadata("operation", "create")
-                .with_metadata("tenant_id", tenant_id.clone()),
-            )
+            return Err(ServiceError::conflict(format!(
+                "Tenant unique constraint violated: {}",
+                info.message()
+            ))
+            .with_tag("tenant")
+            .with_metadata("operation", "create")
+            .with_metadata("tenant_id", tenant_id.clone()))
         }
         Err(e) => {
-            return Err(
-                ServiceError::internal_server_error(format!("Failed to create tenant: {}", e))
-                    .with_tag("tenant")
-                    .with_metadata("operation", "create")
-                    .with_metadata("tenant_id", tenant_id.clone()),
-            )
+            return Err(ServiceError::internal_server_error(format!(
+                "Failed to create tenant: {}",
+                e
+            ))
+            .with_tag("tenant")
+            .with_metadata("operation", "create")
+            .with_metadata("tenant_id", tenant_id.clone()))
         }
     };
 
@@ -600,20 +627,19 @@ pub async fn update(
     let tenant = match Tenant::update(&id, dto, &mut conn) {
         Ok(t) => t,
         Err(diesel::result::Error::NotFound) => {
-            return Err(
-                ServiceError::not_found(format!("Tenant not found: {}", id))
-                    .with_tag("tenant")
-                    .with_metadata("operation", "update")
-                    .with_metadata("tenant_id", id.to_string()),
-            )
+            return Err(ServiceError::not_found(format!("Tenant not found: {}", id))
+                .with_tag("tenant")
+                .with_metadata("operation", "update")
+                .with_metadata("tenant_id", id.to_string()))
         }
         Err(e) => {
-            return Err(
-                ServiceError::internal_server_error(format!("Failed to update tenant: {}", e))
-                    .with_tag("tenant")
-                    .with_metadata("operation", "update")
-                    .with_metadata("tenant_id", id.to_string()),
-            )
+            return Err(ServiceError::internal_server_error(format!(
+                "Failed to update tenant: {}",
+                e
+            ))
+            .with_tag("tenant")
+            .with_metadata("operation", "update")
+            .with_metadata("tenant_id", id.to_string()))
         }
     };
 
@@ -647,20 +673,19 @@ pub async fn delete(
     match Tenant::delete(&id, &mut conn) {
         Ok(_) => (),
         Err(diesel::result::Error::NotFound) => {
-            return Err(
-                ServiceError::not_found(format!("Tenant not found: {}", id))
-                    .with_tag("tenant")
-                    .with_metadata("operation", "delete")
-                    .with_metadata("tenant_id", id.to_string()),
-            )
+            return Err(ServiceError::not_found(format!("Tenant not found: {}", id))
+                .with_tag("tenant")
+                .with_metadata("operation", "delete")
+                .with_metadata("tenant_id", id.to_string()))
         }
         Err(e) => {
-            return Err(
-                ServiceError::internal_server_error(format!("Failed to delete tenant: {}", e))
-                    .with_tag("tenant")
-                    .with_metadata("operation", "delete")
-                    .with_metadata("tenant_id", id.to_string()),
-            )
+            return Err(ServiceError::internal_server_error(format!(
+                "Failed to delete tenant: {}",
+                e
+            ))
+            .with_tag("tenant")
+            .with_metadata("operation", "delete")
+            .with_metadata("tenant_id", id.to_string()))
         }
     };
 

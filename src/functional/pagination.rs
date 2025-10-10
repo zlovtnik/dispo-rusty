@@ -174,11 +174,7 @@ where
     }
 }
 
-impl<I> FusedIterator for PagedIterator<I>
-where
-    I: FusedIterator,
-{
-}
+impl<I> FusedIterator for PagedIterator<I> where I: FusedIterator {}
 
 /// Iterator extension helpers enabling chunked and cursor-based pagination.
 pub trait PaginateExt: Iterator + Sized {
@@ -285,7 +281,7 @@ mod tests {
     fn helper_functions_cover_total_pages_and_map_items() {
         let pagination = Pagination::new(0, 5);
         assert_eq!(pagination.total_pages(23), 5);
-    assert_eq!(super::total_pages(23, 5), 5);
+        assert_eq!(super::total_pages(23, 5), 5);
 
         let page = paginate_into_iter(0..5, pagination);
         let mapped = page.map_items(|value| value * 2);
@@ -293,5 +289,4 @@ mod tests {
         assert_eq!(mapped.items, vec![0, 2, 4, 6, 8]);
         assert_eq!(mapped.summary.has_more, false);
     }
-
 }

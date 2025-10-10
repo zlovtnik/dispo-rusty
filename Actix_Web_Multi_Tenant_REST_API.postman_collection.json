@@ -49,6 +49,32 @@
           }
         },
         {
+          "name": "Performance Metrics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/health/performance",
+              "host": ["{{base_url}}"],
+              "path": ["api", "health", "performance"]
+            },
+            "description": "Performance metrics and monitoring data. Requires ENABLE_PERFORMANCE_MONITORING=true in environment."
+          }
+        },
+        {
+          "name": "Backward Compatibility Validation",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/health/compatibility",
+              "host": ["{{base_url}}"],
+              "path": ["api", "health", "compatibility"]
+            },
+            "description": "Validate backward compatibility of API endpoints and functionality. Requires ENABLE_COMPATIBILITY_CHECKS=true in environment."
+          }
+        },
+        {
           "name": "Ping",
           "request": {
             "method": "GET",

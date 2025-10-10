@@ -860,11 +860,11 @@ mod tests {
 
     #[test]
     fn service_error_clone_independence() {
-        let mut error = ServiceError::bad_request("original");
+        let error = ServiceError::bad_request("original");
         let cloned = error.clone();
 
         // Modify original (by reassigning, since fields are private)
-        error = ServiceError::bad_request("modified");
+        let error = ServiceError::bad_request("modified");
 
         // Cloned should still have original value
         match cloned {

@@ -2,8 +2,6 @@
 //!
 //! Provides high-level abstractions for executing functional data
 //! transformations concurrently across multiple threads while
-//! preserving immutability guarantees. This module builds on the
-//! parallel iterator primitives to deliver safe, high-throughput
 //! processing pipelines that integrate seamlessly with the Actix Web
 //! async runtime.
 //!
@@ -25,6 +23,8 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+#[cfg(test)]
+use std::time::Duration;
 
 use actix_web::error::BlockingError;
 use actix_web::web;

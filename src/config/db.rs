@@ -134,7 +134,9 @@ const LOCK_POISONED_ERROR: &str = "Tenant pools lock was poisoned";
 impl TenantPoolManager {
     /// Helper method to handle lock poisoning errors consistently
     fn handle_lock_poisoned_error<T>() -> Result<T, ServiceError> {
-        Err(ServiceError::internal_server_error(LOCK_POISONED_ERROR.to_string()))
+        Err(ServiceError::internal_server_error(
+            LOCK_POISONED_ERROR.to_string(),
+        ))
     }
     /// Creates a TenantPoolManager that uses `main_pool` as the primary connection pool and
     /// initializes an empty, thread-safe map for tenant-specific pools.

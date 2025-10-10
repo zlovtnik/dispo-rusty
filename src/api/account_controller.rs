@@ -1,4 +1,4 @@
-use actix_web::{web, HttpRequest, HttpResponse, HttpMessage};
+use actix_web::{web, HttpMessage, HttpRequest, HttpResponse};
 use log::info;
 
 use crate::{
@@ -62,17 +62,15 @@ pub async fn signup(
 
     // Use functional composition for tenant pool lookup and signup
     match manager.get_tenant_pool(&user_dto.tenant_id) {
-        Some(pool) => {
-            match account_service::signup(user_db, &pool) {
-                Ok(message) => Ok(HttpResponse::Ok().json(ResponseBody::new(&message, constants::EMPTY))),
-                Err(err) => Err(err),
+        Some(pool) => match account_service::signup(user_db, &pool) {
+            Ok(message) => {
+                Ok(HttpResponse::Ok().json(ResponseBody::new(&message, constants::EMPTY)))
             }
-        }
-        None => Err(
-            ServiceError::bad_request("Tenant not found")
-                .with_metadata("tenant_id", user_dto.tenant_id.clone())
-                .with_tag("tenant")
-        )
+            Err(err) => Err(err),
+        },
+        None => Err(ServiceError::bad_request("Tenant not found")
+            .with_metadata("tenant_id", user_dto.tenant_id.clone())
+            .with_tag("tenant")),
     }
 }
 
@@ -90,11 +88,9 @@ pub async fn login(
             Err(err) => Err(err),
         }
     } else {
-        Err(
-            ServiceError::bad_request("Tenant not found")
-                .with_tag("tenant")
-                .with_detail("Tenant pool missing for login request"),
-        )
+        Err(ServiceError::bad_request("Tenant not found")
+            .with_tag("tenant")
+            .with_detail("Tenant pool missing for login request"))
     }
 }
 
@@ -195,16 +191,14 @@ mod tests {
     use futures::FutureExt;
     use http::header;
     use testcontainers::clients;
-    use testcontainers::Container;
     use testcontainers::images::postgres::Postgres;
+    use testcontainers::Container;
 
-    use actix_web::App;
-    use crate::config::db::TenantPoolManager;
     use crate::config;
+    use crate::config::db::TenantPoolManager;
+    use actix_web::App;
 
-    fn try_run_postgres<'a>(
-        docker: &'a clients::Cli,
-    ) -> Option<Container<'a, Postgres>> {
+    fn try_run_postgres<'a>(docker: &'a clients::Cli) -> Option<Container<'a, Postgres>> {
         catch_unwind(AssertUnwindSafe(|| docker.run(Postgres::default()))).ok()
     }
 
@@ -281,9 +275,7 @@ mod tests {
         let postgres = match try_run_postgres(&docker) {
             Some(container) => container,
             None => {
-                eprintln!(
-                    "Skipping test_signup_duplicate_user because Docker is unavailable"
-                );
+                eprintln!("Skipping test_signup_duplicate_user because Docker is unavailable");
                 return;
             }
         };
@@ -359,9 +351,7 @@ mod tests {
         let postgres = match try_run_postgres(&docker) {
             Some(container) => container,
             None => {
-                eprintln!(
-                    "Skipping test_login_ok_with_username because Docker is unavailable"
-                );
+                eprintln!("Skipping test_login_ok_with_username because Docker is unavailable");
                 return;
             }
         };
@@ -435,9 +425,7 @@ mod tests {
         let postgres = match try_run_postgres(&docker) {
             Some(container) => container,
             None => {
-                eprintln!(
-                    "Skipping test_login_ok_with_email because Docker is unavailable"
-                );
+                eprintln!("Skipping test_login_ok_with_email because Docker is unavailable");
                 return;
             }
         };

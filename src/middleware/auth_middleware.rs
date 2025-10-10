@@ -150,7 +150,7 @@ where
 #[cfg(feature = "functional")]
 mod functional_auth {
     use super::*;
-    
+
     use crate::functional::pure_function_registry::PureFunctionRegistry;
     use actix_web::body::BoxBody;
     use std::sync::Arc;
@@ -287,6 +287,12 @@ mod functional_auth {
             let registry = self.registry.clone();
 
             if Self::should_skip_authentication(&req) {
+                if Method::OPTIONS == *req.method() {
+                    let (request, _pl) = req.into_parts();
+                    let response = HttpResponse::Ok().finish().map_into_right_body();
+                    return Box::pin(async { Ok(ServiceResponse::new(request, response)) });
+                }
+
                 info!("Skipping authentication for route: {}", req.path());
                 let fut = self.service.call(req);
                 return Box::pin(async move { fut.await.map(ServiceResponse::map_into_left_body) });
@@ -472,8 +478,8 @@ pub use functional_auth::*;
 mod tests {
     use super::*;
     use crate::functional::pure_function_registry::PureFunctionRegistry;
-    use actix_web::{test, web, App, HttpResponse};
     use actix_web::http::StatusCode;
+    use actix_web::{test, web, App, HttpResponse};
     use std::sync::Arc;
 
     async fn test_handler() -> HttpResponse {
