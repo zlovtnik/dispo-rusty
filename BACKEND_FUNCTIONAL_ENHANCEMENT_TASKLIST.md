@@ -541,12 +541,13 @@ This document tracks the comprehensive functional programming enhancement implem
 
 #### FP-020: Auth Middleware OPTIONS Handling
 **Priority:** P2 - Medium
-**Status:** Pending Implementation
+**Status:** ✅ Completed
 
 **Tasks:**
-- [ ] Special-case HTTP OPTIONS requests to immediately return 200 OK with empty body
-- [ ] Bypass inner service for OPTIONS requests
-- [ ] Ensure CORS preflight requests are handled efficiently
+- [x] Special-case HTTP OPTIONS requests to immediately return 200 OK with empty body
+- [x] Bypass inner service for OPTIONS requests
+- [x] Ensure CORS preflight requests are handled efficiently
+- [x] **BONUS:** Added authentication bypass for login/signup routes using IGNORE_ROUTES
 
 **Files to Modify:**
 - `src/middleware/auth_middleware.rs`
@@ -555,6 +556,7 @@ This document tracks the comprehensive functional programming enhancement implem
 - OPTIONS requests handled without authentication overhead
 - Proper 200 OK responses for preflight requests
 - No impact on authenticated request processing
+- **BONUS:** Login and signup routes properly bypassed for authentication
 
 #### FP-021: Functional Middleware Testing
 **Priority:** P2 - Medium
