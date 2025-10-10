@@ -144,13 +144,14 @@ fn configure_address_book_routes(cfg: &mut web::ServiceConfig) {
             .route(web::get().to(address_book_controller::find_all))
             .route(web::post().to(address_book_controller::insert)),
     );
+    // Define more specific routes before generic ones to avoid path parameter conflicts
+    cfg.service(web::resource("/filter").route(web::get().to(address_book_controller::filter)));
     cfg.service(
         web::resource("/{id}")
             .route(web::get().to(address_book_controller::find_by_id))
             .route(web::put().to(address_book_controller::update))
             .route(web::delete().to(address_book_controller::delete)),
     );
-    cfg.service(web::resource("/filter").route(web::get().to(address_book_controller::filter)));
 }
 
 /// Registers the admin sub-scope at `/tenant` which exposes tenant administration endpoints.

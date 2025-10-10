@@ -1,5 +1,5 @@
 //! # Functional Programming Tests Module
-//! 
+//!
 //! This module provides test utilities and integration points for the comprehensive
 //! functional programming test suite. It serves as a bridge between the test
 //! infrastructure and the actual functional programming components.
@@ -10,11 +10,7 @@
 // pub use crate::tests::functional_tests::*;
 
 // Re-export test utilities for external use
-pub use crate::functional::{
-    iterator_engine::*,
-    pure_function_registry::*,
-    validation_engine::*,
-};
+pub use crate::functional::{iterator_engine::*, pure_function_registry::*, validation_engine::*};
 
 /// Test configuration constants
 pub const DEFAULT_TEST_TENANT: &str = "test_tenant";
@@ -73,7 +69,7 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(10));
             42
         });
-        
+
         assert_eq!(result, 42);
         assert!(duration >= std::time::Duration::from_millis(10));
     }

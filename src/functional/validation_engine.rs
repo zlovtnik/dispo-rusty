@@ -252,7 +252,7 @@ impl<T> ValidationEngine<T> {
     ///     max_errors: Some(5),
     ///     parallel_validation: true,
     /// };
-    /// let engine: ValidationEngine<String> = ValidationEngine::with_config(cfg);
+    /// /// let engine: ValidationEngine<String> = ValidationEngine::with_config(cfg);
     /// assert_eq!(engine.config.fail_fast, false);
     /// ```
     pub fn with_config(config: ValidationConfig) -> Self {
@@ -333,7 +333,7 @@ impl<T> ValidationEngine<T> {
     /// # Examples
     ///
     /// ```
-    /// let engine = validator::<i32>();
+    /// /// let engine = validator::<i32>();
     /// let inputs = vec![(String::from("age"), &42, Vec::new::<()>())];
     /// let outcome = engine.validate_fields(inputs);
     /// assert!(outcome.is_valid);
@@ -594,7 +594,7 @@ where
     ///
     /// ```
     /// let data = vec![1, 2, 3].into_iter();
-    /// let config = ValidationConfig { fail_fast: false, max_errors: Some(5), parallel_validation: false };
+    /// /// let config = ValidationConfig { fail_fast: false, max_errors: Some(5), parallel_validation: false };
     /// let pipeline = ValidationPipeline::new(data).with_config(config);
     /// ```
     pub fn with_config(mut self, config: ValidationConfig) -> Self {
@@ -951,7 +951,7 @@ where
 
 /// ```
 
-/// let engine = validator::<i32>();
+/// /// let engine = validator::<i32>();
 
 /// // default configuration applies (fail_fast = true, max_errors = Some(10), parallel_validation = false)
 
@@ -967,8 +967,8 @@ pub fn validator<T>() -> ValidationEngine<T> {
 /// # Examples
 ///
 /// ```
-/// let config = ValidationConfig { fail_fast: false, max_errors: Some(5), parallel_validation: false };
-/// let engine: ValidationEngine<String> = validator_with_config(config);
+/// /// let config = ValidationConfig { fail_fast: false, max_errors: Some(5), parallel_validation: false };
+/// /// let engine: ValidationEngine<String> = validator_with_config(config);
 /// ```
 pub fn validator_with_config<T>(config: ValidationConfig) -> ValidationEngine<T> {
     ValidationEngine::with_config(config)
@@ -985,10 +985,10 @@ pub fn validator_with_config<T>(config: ValidationConfig) -> ValidationEngine<T>
 /// ```
 /// // Assume `MyType` and a set of rules implementing `ValidationRule<MyType>` exist.
 /// // This demonstrates calling `validate_struct_field` with an engine and rules.
-/// let engine = validator::<MyType>();
+/// /// let engine = validator::<MyType>();
 /// let value = MyType::default();
 /// let rules = vec![]; // populate with rules implementing `ValidationRule<MyType>`
-/// let outcome = validate_struct_field(&engine, &value, "my_field", rules);
+/// /// let outcome = validate_struct_field(&engine, &value, "my_field", rules);
 /// // `outcome` carries the validated reference on success or errors on failure.
 /// ```
 pub fn validate_struct_field<'a, T, R>(

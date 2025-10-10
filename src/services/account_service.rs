@@ -25,17 +25,14 @@ use crate::{
         user::{LoginDTO, LoginInfoDTO, User, UserDTO},
         user_token::UserToken,
     },
-    services::functional_service_base::{
-        FunctionalQueryService, FunctionalErrorHandling
-    },
     services::functional_patterns::Validator,
+    services::functional_service_base::{FunctionalErrorHandling, FunctionalQueryService},
     utils::token_utils,
 };
 
 // Email validation regex - pragmatic pattern for production use
-static EMAIL_REGEX: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"^[^@\s]+@[^@\s]+\.[^@\s]+$").expect("Invalid email regex")
-});
+static EMAIL_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^[^@\s]+@[^@\s]+\.[^@\s]+$").expect("Invalid email regex"));
 
 /// Iterator-based validation using functional combinator pattern for UserDTO
 fn create_user_validator() -> Validator<UserDTO> {
@@ -44,9 +41,13 @@ fn create_user_validator() -> Validator<UserDTO> {
             if dto.username.trim().is_empty() {
                 Err(ServiceError::bad_request("Username cannot be empty"))
             } else if dto.username.len() < 3 {
-                Err(ServiceError::bad_request("Username too short (min 3 characters)"))
+                Err(ServiceError::bad_request(
+                    "Username too short (min 3 characters)",
+                ))
             } else if dto.username.len() > 50 {
-                Err(ServiceError::bad_request("Username too long (max 50 characters)"))
+                Err(ServiceError::bad_request(
+                    "Username too long (max 50 characters)",
+                ))
             } else {
                 Ok(())
             }
@@ -54,9 +55,13 @@ fn create_user_validator() -> Validator<UserDTO> {
         .rule(|dto: &UserDTO| {
             let char_count = dto.password.chars().count();
             if char_count < 8 {
-                Err(ServiceError::bad_request("Password too short (min 8 characters)"))
+                Err(ServiceError::bad_request(
+                    "Password too short (min 8 characters)",
+                ))
             } else if char_count > 64 {
-                Err(ServiceError::bad_request("Password too long (max 64 characters)"))
+                Err(ServiceError::bad_request(
+                    "Password too long (max 64 characters)",
+                ))
             } else {
                 Ok(())
             }
@@ -67,7 +72,9 @@ fn create_user_validator() -> Validator<UserDTO> {
             } else if !EMAIL_REGEX.is_match(&dto.email) {
                 Err(ServiceError::bad_request("Invalid email format"))
             } else if dto.email.len() > 255 {
-                Err(ServiceError::bad_request("Email too long (max 255 characters)"))
+                Err(ServiceError::bad_request(
+                    "Email too long (max 255 characters)",
+                ))
             } else {
                 Ok(())
             }
@@ -79,9 +86,13 @@ fn create_login_validator() -> Validator<LoginDTO> {
     Validator::new()
         .rule(|dto: &LoginDTO| {
             if dto.username_or_email.trim().is_empty() {
-                Err(ServiceError::bad_request("Username or email cannot be empty"))
+                Err(ServiceError::bad_request(
+                    "Username or email cannot be empty",
+                ))
             } else if dto.username_or_email.len() > 255 {
-                Err(ServiceError::bad_request("Username or email too long (max 255 characters)"))
+                Err(ServiceError::bad_request(
+                    "Username or email too long (max 255 characters)",
+                ))
             } else {
                 Ok(())
             }
@@ -90,7 +101,9 @@ fn create_login_validator() -> Validator<LoginDTO> {
             if dto.password.is_empty() {
                 Err(ServiceError::bad_request("Password cannot be empty"))
             } else if dto.password.len() > 128 {
-                Err(ServiceError::bad_request("Password too long (max 128 characters)"))
+                Err(ServiceError::bad_request(
+                    "Password too long (max 128 characters)",
+                ))
             } else {
                 Ok(())
             }
@@ -126,7 +139,9 @@ pub fn signup(user: UserDTO, pool: &Pool) -> Result<String, ServiceError> {
     // Use functional pipeline with validated data
     crate::services::functional_service_base::ServicePipeline::new(pool.clone())
         .with_data(user)
-        .execute(|user, conn| User::signup(user, conn).map_err(|msg| ServiceError::bad_request(msg)))
+        .execute(|user, conn| {
+            User::signup(user, conn).map_err(|msg| ServiceError::bad_request(msg))
+        })
         .log_error("signup operation")
 }
 
@@ -141,10 +156,16 @@ pub fn login(login: LoginDTO, pool: &Pool) -> Result<TokenBodyResponse, ServiceE
     let query_service = FunctionalQueryService::new(pool.clone());
 
     query_service
-        .query(|conn| User::login(login, conn).ok_or_else(|| ServiceError::unauthorized(constants::MESSAGE_USER_NOT_FOUND.to_string())))
+        .query(|conn| {
+            User::login(login, conn).ok_or_else(|| {
+                ServiceError::unauthorized(constants::MESSAGE_USER_NOT_FOUND.to_string())
+            })
+        })
         .and_then(|logged_user| {
             if logged_user.login_session.is_empty() {
-                Err(ServiceError::unauthorized(constants::MESSAGE_LOGIN_FAILED.to_string()))
+                Err(ServiceError::unauthorized(
+                    constants::MESSAGE_LOGIN_FAILED.to_string(),
+                ))
             } else {
                 let token = UserToken::generate_token(&logged_user);
                 Ok(TokenBodyResponse {
@@ -171,32 +192,38 @@ pub fn logout(authen_header: &HeaderValue, pool: &Pool) -> Result<(), ServiceErr
         .map_err(|_| ServiceError::unauthorized(constants::MESSAGE_PROCESS_TOKEN_ERROR.to_string()))
         .and_then(|authen_str| {
             if !token_utils::is_auth_header_valid(authen_header) {
-                Err(ServiceError::unauthorized(constants::MESSAGE_PROCESS_TOKEN_ERROR.to_string()))
+                Err(ServiceError::unauthorized(
+                    constants::MESSAGE_PROCESS_TOKEN_ERROR.to_string(),
+                ))
             } else {
                 let token = authen_str[6..authen_str.len()].trim().to_string();
                 Ok(token)
             }
         })
         .and_then(|token| {
-            token_utils::decode_token(token)
-                .map_err(|_| ServiceError::unauthorized(constants::MESSAGE_PROCESS_TOKEN_ERROR.to_string()))
+            token_utils::decode_token(token).map_err(|_| {
+                ServiceError::unauthorized(constants::MESSAGE_PROCESS_TOKEN_ERROR.to_string())
+            })
         })
         .and_then(|token_data| {
-            token_utils::verify_token(&token_data, pool)
-                .map_err(|_| ServiceError::unauthorized(constants::MESSAGE_PROCESS_TOKEN_ERROR.to_string()))
+            token_utils::verify_token(&token_data, pool).map_err(|_| {
+                ServiceError::unauthorized(constants::MESSAGE_PROCESS_TOKEN_ERROR.to_string())
+            })
         })
         .and_then(|username| {
             query_service
-                .query(|conn| User::find_user_by_username(&username, conn)
-                    .map_err(|_| ServiceError::internal_server_error("Database error".to_string())))
+                .query(|conn| {
+                    User::find_user_by_username(&username, conn).map_err(|_| {
+                        ServiceError::internal_server_error("Database error".to_string())
+                    })
+                })
                 .map(|user| (user, username))
         })
         .and_then(|(user, _)| {
-            query_service
-                .query(|conn| {
-                    User::logout(user.id, conn);
-                    Ok(())
-                })
+            query_service.query(|conn| {
+                User::logout(user.id, conn);
+                Ok(())
+            })
         })
         .log_error("logout operation")
 }
@@ -219,23 +246,31 @@ pub fn refresh(
         .map_err(|_| ServiceError::unauthorized(constants::MESSAGE_TOKEN_MISSING.to_string()))
         .and_then(|authen_str| {
             if !token_utils::is_auth_header_valid(authen_header) {
-                Err(ServiceError::unauthorized(constants::MESSAGE_TOKEN_MISSING.to_string()))
+                Err(ServiceError::unauthorized(
+                    constants::MESSAGE_TOKEN_MISSING.to_string(),
+                ))
             } else {
                 let token = authen_str[6..authen_str.len()].trim().to_string();
                 Ok(token)
             }
         })
-        .and_then(|token| token_utils::decode_token(token).map_err(|_| ServiceError::unauthorized(constants::MESSAGE_TOKEN_MISSING.to_string())))
+        .and_then(|token| {
+            token_utils::decode_token(token).map_err(|_| {
+                ServiceError::unauthorized(constants::MESSAGE_TOKEN_MISSING.to_string())
+            })
+        })
         .and_then(|token_data| {
-            query_service
-                .query(|conn| {
-                    if User::is_valid_login_session(&token_data.claims, conn) {
-                        User::find_login_info_by_token(&token_data.claims, conn)
-                            .map_err(|_| ServiceError::unauthorized(constants::MESSAGE_TOKEN_MISSING.to_string()))
-                    } else {
-                        Err(ServiceError::unauthorized(constants::MESSAGE_TOKEN_MISSING.to_string()))
-                    }
-                })
+            query_service.query(|conn| {
+                if User::is_valid_login_session(&token_data.claims, conn) {
+                    User::find_login_info_by_token(&token_data.claims, conn).map_err(|_| {
+                        ServiceError::unauthorized(constants::MESSAGE_TOKEN_MISSING.to_string())
+                    })
+                } else {
+                    Err(ServiceError::unauthorized(
+                        constants::MESSAGE_TOKEN_MISSING.to_string(),
+                    ))
+                }
+            })
         })
         .and_then(|login_info| {
             let token = UserToken::generate_token(&login_info);
@@ -262,16 +297,24 @@ pub fn me(authen_header: &HeaderValue, pool: &Pool) -> Result<LoginInfoDTO, Serv
         .map_err(|_| ServiceError::unauthorized(constants::MESSAGE_PROCESS_TOKEN_ERROR.to_string()))
         .and_then(|authen_str| {
             if !token_utils::is_auth_header_valid(authen_header) {
-                Err(ServiceError::unauthorized(constants::MESSAGE_PROCESS_TOKEN_ERROR.to_string()))
+                Err(ServiceError::unauthorized(
+                    constants::MESSAGE_PROCESS_TOKEN_ERROR.to_string(),
+                ))
             } else {
                 let token = authen_str[6..authen_str.len()].trim().to_string();
                 Ok(token)
             }
         })
-        .and_then(|token| token_utils::decode_token(token).map_err(|_| ServiceError::unauthorized(constants::MESSAGE_PROCESS_TOKEN_ERROR.to_string())))
+        .and_then(|token| {
+            token_utils::decode_token(token).map_err(|_| {
+                ServiceError::unauthorized(constants::MESSAGE_PROCESS_TOKEN_ERROR.to_string())
+            })
+        })
         .and_then(|token_data| {
-            query_service
-                .query(|conn| User::find_login_info_by_token(&token_data.claims, conn).map_err(|_| ServiceError::internal_server_error("Database error".to_string())))
+            query_service.query(|conn| {
+                User::find_login_info_by_token(&token_data.claims, conn)
+                    .map_err(|_| ServiceError::internal_server_error("Database error".to_string()))
+            })
         })
         .log_error("me operation")
 }

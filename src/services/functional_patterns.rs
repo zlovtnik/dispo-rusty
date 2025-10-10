@@ -72,10 +72,7 @@ impl<T> QueryReader<T> {
 pub fn run_query<T>(reader: QueryReader<T>, pool: &Pool) -> ServiceResult<T> {
     pool.get()
         .map_err(|e| {
-            ServiceError::internal_server_error(format!(
-                "Failed to get database connection: {}",
-                e
-            ))
+            ServiceError::internal_server_error(format!("Failed to get database connection: {}", e))
         })
         .and_then(|mut conn| reader.run(&mut conn))
 }

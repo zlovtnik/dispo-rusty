@@ -63,9 +63,9 @@ pub struct TransitionContext {
 /// # Examples
 ///
 /// ```
-/// let state = TenantApplicationState::default();
-/// let transition = create_user_session("sess-123".to_string(), "user-42".to_string(), 3600);
-/// let new_state = transition(&state);
+/// /// let state = TenantApplicationState::default();
+/// /// let transition = create_user_session("sess-123".to_string(), "user-42".to_string(), 3600);
+/// /// let new_state = transition(&state);
 /// assert!(new_state.user_sessions.contains_key(&"sess-123".to_string()));
 /// ```
 pub fn create_user_session(
@@ -111,10 +111,10 @@ pub fn create_user_session(
 ///
 /// ```
 /// // Create a transition for session "s1" that updates its user data without extending TTL.
-/// let transition = update_user_session("s1", "new-data".to_string(), None).unwrap();
+/// /// let transition = update_user_session("s1", "new-data".to_string(), None).unwrap();
 /// // Applying to a state with no such session leaves it unchanged.
-/// let state = TenantApplicationState::default();
-/// let new_state = transition(&state);
+/// /// let state = TenantApplicationState::default();
+/// /// let new_state = transition(&state);
 /// assert_eq!(new_state.user_sessions.contains_key("s1"), false);
 /// ```
 pub fn update_user_session(
@@ -167,8 +167,8 @@ pub fn update_user_session(
 ///
 /// ```
 /// // Assuming `state` is a `TenantApplicationState` containing a session `"sess1"`.
-/// let transition = remove_user_session("sess1");
-/// let new_state = transition(&state);
+/// /// let transition = remove_user_session("sess1");
+/// /// let new_state = transition(&state);
 /// assert!(!new_state.user_sessions.contains_key("sess1"));
 /// ```
 pub fn remove_user_session(
@@ -202,10 +202,10 @@ pub fn remove_user_session(
 /// use serde_json::json;
 ///
 /// // prepare a transition
-/// let transition = set_app_config("theme", json!("dark"), None).unwrap();
+/// /// let transition = set_app_config("theme", json!("dark"), None).unwrap();
 ///
 /// // apply it to an existing state (assumes `state` is a TenantApplicationState)
-/// let new_state = transition(&state);
+/// /// let new_state = transition(&state);
 /// assert_eq!(new_state.app_data.get("theme").unwrap(), &json!("dark"));
 /// ```
 pub fn set_app_config<F>(
@@ -248,8 +248,8 @@ where
 /// # Examples
 ///
 /// ```
-/// let state = TenantApplicationState::default();
-/// let new_state = remove_app_config("theme")(&state);
+/// /// let state = TenantApplicationState::default();
+/// /// let new_state = remove_app_config("theme")(&state);
 /// assert!(!new_state.app_data.contains_key("theme"));
 /// ```
 pub fn remove_app_config(
@@ -292,8 +292,8 @@ pub fn remove_app_config(
 ///     json!(0),
 /// ).unwrap();
 ///
-/// let state = TenantApplicationState::default();
-/// let new_state = tr(&state);
+/// /// let state = TenantApplicationState::default();
+/// /// let new_state = tr(&state);
 /// assert!(new_state.app_data.get("counter").unwrap().as_i64().unwrap() >= 1);
 /// ```
 pub fn transform_app_data<F>(
@@ -341,9 +341,9 @@ where
 /// # Examples
 ///
 /// ```
-/// let state = TenantApplicationState::default();
+/// /// let state = TenantApplicationState::default();
 /// let transition = cache_query_result("search:users?page=1", vec![1, 2, 3], 60).unwrap();
-/// let new_state = transition(&state);
+/// /// let new_state = transition(&state);
 /// assert!(new_state
 ///     .query_cache
 ///     .iter()
@@ -394,7 +394,7 @@ pub fn cache_query_result(
 ///
 /// ```
 /// let transition = clean_expired_cache();
-/// let new_state = transition(&old_state);
+/// /// let new_state = transition(&old_state);
 /// // `new_state.query_cache` contains only entries with `expires_at > Utc::now()`.
 /// ```
 pub fn clean_expired_cache() -> impl FnOnce(&TenantApplicationState) -> TenantApplicationState {

@@ -150,7 +150,7 @@ where
 #[cfg(feature = "functional")]
 mod functional_auth {
     use super::*;
-    
+
     use crate::functional::pure_function_registry::PureFunctionRegistry;
     use actix_web::body::BoxBody;
     use std::sync::Arc;
@@ -478,8 +478,8 @@ pub use functional_auth::*;
 mod tests {
     use super::*;
     use crate::functional::pure_function_registry::PureFunctionRegistry;
-    use actix_web::{test, web, App, HttpResponse};
     use actix_web::http::StatusCode;
+    use actix_web::{test, web, App, HttpResponse};
     use std::sync::Arc;
 
     async fn test_handler() -> HttpResponse {

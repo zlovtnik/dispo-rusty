@@ -71,9 +71,9 @@ where
     where
         F: FnOnce(T, &mut PgConnection) -> Result<R, ServiceError>,
     {
-        let data = self.data.ok_or_else(|| {
-            ServiceError::bad_request("No data provided to pipeline")
-        })?;
+        let data = self
+            .data
+            .ok_or_else(|| ServiceError::bad_request("No data provided to pipeline"))?;
 
         // Run validations using functional iterator pattern
         for validation in &self.validations {
@@ -202,10 +202,7 @@ impl DataTransformer {
     }
 
     /// Transform collections using iterator chains
-    pub fn transform_collection<T, U, F>(
-        data: Vec<T>,
-        transform: F,
-    ) -> ServiceResult<Vec<U>>
+    pub fn transform_collection<T, U, F>(data: Vec<T>, transform: F) -> ServiceResult<Vec<U>>
     where
         F: Fn(T) -> Result<U, ServiceError>,
     {
@@ -283,9 +280,15 @@ impl SimpleValidation<String> for LengthValidation {
     fn validate(&self, data: &String) -> ServiceResult<()> {
         let len = data.chars().count();
         if len < self.min {
-            Err(ServiceError::bad_request(format!("String too short, minimum length is {}", self.min)))
+            Err(ServiceError::bad_request(format!(
+                "String too short, minimum length is {}",
+                self.min
+            )))
         } else if len > self.max {
-            Err(ServiceError::bad_request(format!("String too long, maximum length is {}", self.max)))
+            Err(ServiceError::bad_request(format!(
+                "String too long, maximum length is {}",
+                self.max
+            )))
         } else {
             Ok(())
         }
@@ -311,12 +314,9 @@ mod tests {
     #[test]
     fn test_data_transformer() {
         let data = vec![1, 2, 3, 4, 5];
-        let result = DataTransformer::filter_transform(
-            data,
-            |&x| x % 2 == 0,
-            |x| Ok(x * 2),
-        ).unwrap();
-        
+        let result =
+            DataTransformer::filter_transform(data, |&x| x % 2 == 0, |x| Ok(x * 2)).unwrap();
+
         assert_eq!(result, vec![4, 8]);
     }
 
@@ -325,7 +325,7 @@ mod tests {
         let result: ServiceResult<i32> = Ok(42);
         let mapped = result.map_error(|_| "custom error");
         assert!(mapped.is_ok());
-        
+
         let error_result: ServiceResult<i32> = Err(ServiceError::internal_server_error("test"));
         let mapped_error = error_result.map_error(|_| "custom error");
         assert!(mapped_error.is_err());
@@ -351,6 +351,8 @@ mod tests {
         let validation = LengthValidation { min: 2, max: 10 };
         assert!(validation.validate(&"hello".to_string()).is_ok());
         assert!(validation.validate(&"a".to_string()).is_err());
-        assert!(validation.validate(&"this is too long".to_string()).is_err());
+        assert!(validation
+            .validate(&"this is too long".to_string())
+            .is_err());
     }
 }

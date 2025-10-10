@@ -1,13 +1,13 @@
 //! # Functional Programming Performance Benchmarks
-//! 
+//!
 //! This module provides comprehensive performance benchmarks for functional programming
 //! operations, comparing functional vs imperative approaches and measuring performance
 //! improvements in data processing speed, memory efficiency, and throughput.
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
-use std::time::Duration;
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use itertools::Itertools;
 use rayon::prelude::*;
+use std::time::Duration;
 
 /// Test data structure for benchmarking
 #[derive(Debug, Clone)]
@@ -41,53 +41,45 @@ pub fn generate_test_data(size: usize) -> Vec<BenchmarkPerson> {
 /// Benchmark: Data filtering performance
 pub fn benchmark_data_filtering(c: &mut Criterion) {
     let mut group = c.benchmark_group("data_filtering");
-    
+
     for size in [100, 1000, 10000].iter() {
         let data = generate_test_data(*size);
-        
+
         // Functional approach
-        group.bench_with_input(
-            BenchmarkId::new("functional", size),
-            &data,
-            |b, data| {
-                b.iter(|| {
-                    let result: Vec<_> = data
-                        .iter()
-                        .filter(|person| person.active && person.age > 25)
-                        .collect();
-                    black_box(result)
-                })
-            },
-        );
-        
+        group.bench_with_input(BenchmarkId::new("functional", size), &data, |b, data| {
+            b.iter(|| {
+                let result: Vec<_> = data
+                    .iter()
+                    .filter(|person| person.active && person.age > 25)
+                    .collect();
+                black_box(result)
+            })
+        });
+
         // Imperative approach
-        group.bench_with_input(
-            BenchmarkId::new("imperative", size),
-            &data,
-            |b, data| {
-                b.iter(|| {
-                    let mut result = Vec::new();
-                    for person in data {
-                        if person.active && person.age > 25 {
-                            result.push(person);
-                        }
+        group.bench_with_input(BenchmarkId::new("imperative", size), &data, |b, data| {
+            b.iter(|| {
+                let mut result = Vec::new();
+                for person in data {
+                    if person.active && person.age > 25 {
+                        result.push(person);
                     }
-                    black_box(result)
-                })
-            },
-        );
+                }
+                black_box(result)
+            })
+        });
     }
-    
+
     group.finish();
 }
 
 /// Benchmark: Data transformation performance
 pub fn benchmark_data_transformation(c: &mut Criterion) {
     let mut group = c.benchmark_group("data_transformation");
-    
+
     for size in [100, 1000, 10000].iter() {
         let data = generate_test_data(*size);
-        
+
         // Functional approach with iterator chains
         group.bench_with_input(
             BenchmarkId::new("functional_chains", size),
@@ -103,35 +95,31 @@ pub fn benchmark_data_transformation(c: &mut Criterion) {
                 })
             },
         );
-        
+
         // Imperative approach
-        group.bench_with_input(
-            BenchmarkId::new("imperative", size),
-            &data,
-            |b, data| {
-                b.iter(|| {
-                    let mut result = Vec::new();
-                    for person in data {
-                        if person.active {
-                            result.push((person.id, person.name.clone(), person.score * 2.0));
-                        }
+        group.bench_with_input(BenchmarkId::new("imperative", size), &data, |b, data| {
+            b.iter(|| {
+                let mut result = Vec::new();
+                for person in data {
+                    if person.active {
+                        result.push((person.id, person.name.clone(), person.score * 2.0));
                     }
-                    black_box(result)
-                })
-            },
-        );
+                }
+                black_box(result)
+            })
+        });
     }
-    
+
     group.finish();
 }
 
 /// Benchmark: Complex data processing pipeline
 pub fn benchmark_complex_pipeline(c: &mut Criterion) {
     let mut group = c.benchmark_group("complex_pipeline");
-    
+
     for size in [1000, 5000, 10000].iter() {
         let data = generate_test_data(*size);
-        
+
         // Functional approach with complex pipeline
         group.bench_with_input(
             BenchmarkId::new("functional_pipeline", size),
@@ -151,76 +139,64 @@ pub fn benchmark_complex_pipeline(c: &mut Criterion) {
                 })
             },
         );
-        
+
         // Imperative approach
-        group.bench_with_input(
-            BenchmarkId::new("imperative", size),
-            &data,
-            |b, data| {
-                b.iter(|| {
-                    let mut intermediate = Vec::new();
-                    
-                    // Filter and transform
-                    for person in data {
-                        if person.active && person.age >= 21 && person.score > 50.0 {
-                            intermediate.push((person.id, person.score * 1.1));
-                        }
+        group.bench_with_input(BenchmarkId::new("imperative", size), &data, |b, data| {
+            b.iter(|| {
+                let mut intermediate = Vec::new();
+
+                // Filter and transform
+                for person in data {
+                    if person.active && person.age >= 21 && person.score > 50.0 {
+                        intermediate.push((person.id, person.score * 1.1));
                     }
-                    
-                    // Sort
-                    intermediate.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
-                    
-                    // Take top 100
-                    let result: Vec<_> = intermediate.into_iter().take(100).collect();
-                    black_box(result)
-                })
-            },
-        );
+                }
+
+                // Sort
+                intermediate.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+
+                // Take top 100
+                let result: Vec<_> = intermediate.into_iter().take(100).collect();
+                black_box(result)
+            })
+        });
     }
-    
+
     group.finish();
 }
 
 /// Benchmark: Parallel processing performance
 pub fn benchmark_parallel_processing(c: &mut Criterion) {
     let mut group = c.benchmark_group("parallel_processing");
-    
+
     for size in [1000, 10000, 100000].iter() {
         let data = generate_test_data(*size);
-        
+
         // Sequential functional approach
-        group.bench_with_input(
-            BenchmarkId::new("sequential", size),
-            &data,
-            |b, data| {
-                b.iter(|| {
-                    let result: Vec<_> = data
-                        .iter()
-                        .filter(|p| p.active)
-                        .map(|p| expensive_computation(p.score))
-                        .collect();
-                    black_box(result)
-                })
-            },
-        );
-        
+        group.bench_with_input(BenchmarkId::new("sequential", size), &data, |b, data| {
+            b.iter(|| {
+                let result: Vec<_> = data
+                    .iter()
+                    .filter(|p| p.active)
+                    .map(|p| expensive_computation(p.score))
+                    .collect();
+                black_box(result)
+            })
+        });
+
         // Parallel functional approach with rayon
-        group.bench_with_input(
-            BenchmarkId::new("parallel", size),
-            &data,
-            |b, data| {
-                b.iter(|| {
-                    let result: Vec<_> = data
-                        .par_iter()
-                        .filter(|p| p.active)
-                        .map(|p| expensive_computation(p.score))
-                        .collect();
-                    black_box(result)
-                })
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("parallel", size), &data, |b, data| {
+            b.iter(|| {
+                let result: Vec<_> = data
+                    .par_iter()
+                    .filter(|p| p.active)
+                    .map(|p| expensive_computation(p.score))
+                    .collect();
+                black_box(result)
+            })
+        });
     }
-    
+
     group.finish();
 }
 
@@ -228,10 +204,10 @@ pub fn benchmark_parallel_processing(c: &mut Criterion) {
 pub fn benchmark_memory_efficiency(c: &mut Criterion) {
     let mut group = c.benchmark_group("memory_efficiency");
     group.measurement_time(Duration::from_secs(10));
-    
+
     for size in [1000, 10000].iter() {
         let data = generate_test_data(*size);
-        
+
         // Functional lazy evaluation
         group.bench_with_input(
             BenchmarkId::new("lazy_functional", size),
@@ -249,7 +225,7 @@ pub fn benchmark_memory_efficiency(c: &mut Criterion) {
                 })
             },
         );
-        
+
         // Imperative eager evaluation
         group.bench_with_input(
             BenchmarkId::new("eager_imperative", size),
@@ -263,29 +239,29 @@ pub fn benchmark_memory_efficiency(c: &mut Criterion) {
                             filtered.push(person);
                         }
                     }
-                    
+
                     let mut transformed = Vec::new();
                     for person in &filtered {
                         transformed.push(person.score * 2.0);
                     }
-                    
+
                     let result: Vec<_> = transformed.into_iter().take(50).collect();
                     black_box(result)
                 })
             },
         );
     }
-    
+
     group.finish();
 }
 
 /// Benchmark: Iterator composition performance
 pub fn benchmark_iterator_composition(c: &mut Criterion) {
     let mut group = c.benchmark_group("iterator_composition");
-    
+
     for size in [1000, 5000, 10000].iter() {
         let data: Vec<i32> = (0..*size).collect();
-        
+
         // Chained iterator operations
         group.bench_with_input(
             BenchmarkId::new("chained_iterators", size),
@@ -304,7 +280,7 @@ pub fn benchmark_iterator_composition(c: &mut Criterion) {
                 })
             },
         );
-        
+
         // Multiple separate loops
         group.bench_with_input(
             BenchmarkId::new("separate_loops", size),
@@ -318,13 +294,13 @@ pub fn benchmark_iterator_composition(c: &mut Criterion) {
                             step1.push(x);
                         }
                     }
-                    
+
                     // Step 2: Transform
                     let mut step2 = Vec::new();
                     for &x in &step1 {
                         step2.push(x * 2);
                     }
-                    
+
                     // Step 3: Filter by value
                     let mut step3 = Vec::new();
                     for &x in &step2 {
@@ -332,7 +308,7 @@ pub fn benchmark_iterator_composition(c: &mut Criterion) {
                             step3.push(x);
                         }
                     }
-                    
+
                     // Step 4: Take first 100
                     let result: Vec<_> = step3.into_iter().take(100).collect();
                     black_box(result)
@@ -340,17 +316,17 @@ pub fn benchmark_iterator_composition(c: &mut Criterion) {
             },
         );
     }
-    
+
     group.finish();
 }
 
 /// Benchmark: Grouping and aggregation operations
 pub fn benchmark_grouping_aggregation(c: &mut Criterion) {
     let mut group = c.benchmark_group("grouping_aggregation");
-    
+
     for size in [1000, 5000, 10000].iter() {
         let data = generate_test_data(*size);
-        
+
         // Functional approach with itertools
         group.bench_with_input(
             BenchmarkId::new("functional_itertools", size),
@@ -363,7 +339,8 @@ pub fn benchmark_grouping_aggregation(c: &mut Criterion) {
                         .into_group_map_by(|p| p.age / 10) // Group by decade
                         .into_iter()
                         .map(|(decade, people)| {
-                            let avg_score = people.iter().map(|p| p.score).sum::<f64>() / people.len() as f64;
+                            let avg_score =
+                                people.iter().map(|p| p.score).sum::<f64>() / people.len() as f64;
                             (decade, people.len(), avg_score)
                         })
                         .collect();
@@ -371,39 +348,35 @@ pub fn benchmark_grouping_aggregation(c: &mut Criterion) {
                 })
             },
         );
-        
+
         // Imperative approach
-        group.bench_with_input(
-            BenchmarkId::new("imperative", size),
-            &data,
-            |b, data| {
-                b.iter(|| {
-                    use std::collections::HashMap;
-                    
-                    let mut groups: HashMap<u32, Vec<&BenchmarkPerson>> = HashMap::new();
-                    
-                    // Group by decade
-                    for person in data {
-                        if person.active {
-                            let decade = person.age / 10;
-                            groups.entry(decade).or_insert_with(Vec::new).push(person);
-                        }
+        group.bench_with_input(BenchmarkId::new("imperative", size), &data, |b, data| {
+            b.iter(|| {
+                use std::collections::HashMap;
+
+                let mut groups: HashMap<u32, Vec<&BenchmarkPerson>> = HashMap::new();
+
+                // Group by decade
+                for person in data {
+                    if person.active {
+                        let decade = person.age / 10;
+                        groups.entry(decade).or_insert_with(Vec::new).push(person);
                     }
-                    
-                    // Calculate aggregations
-                    let mut result = Vec::new();
-                    for (decade, people) in groups {
-                        let count = people.len();
-                        let avg_score = people.iter().map(|p| p.score).sum::<f64>() / count as f64;
-                        result.push((decade, count, avg_score));
-                    }
-                    
-                    black_box(result)
-                })
-            },
-        );
+                }
+
+                // Calculate aggregations
+                let mut result = Vec::new();
+                for (decade, people) in groups {
+                    let count = people.len();
+                    let avg_score = people.iter().map(|p| p.score).sum::<f64>() / count as f64;
+                    result.push((decade, count, avg_score));
+                }
+
+                black_box(result)
+            })
+        });
     }
-    
+
     group.finish();
 }
 
@@ -420,10 +393,10 @@ fn expensive_computation(score: f64) -> f64 {
 /// Benchmark: Error handling in functional pipelines
 pub fn benchmark_error_handling(c: &mut Criterion) {
     let mut group = c.benchmark_group("error_handling");
-    
+
     for size in [1000, 5000].iter() {
         let data: Vec<i32> = (0..*size).collect();
-        
+
         // Functional approach with Result handling
         group.bench_with_input(
             BenchmarkId::new("functional_result", size),
@@ -444,7 +417,7 @@ pub fn benchmark_error_handling(c: &mut Criterion) {
                 })
             },
         );
-        
+
         // Imperative approach with explicit error checking
         group.bench_with_input(
             BenchmarkId::new("imperative_errors", size),
@@ -465,7 +438,7 @@ pub fn benchmark_error_handling(c: &mut Criterion) {
             },
         );
     }
-    
+
     group.finish();
 }
 

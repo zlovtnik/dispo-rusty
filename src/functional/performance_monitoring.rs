@@ -5,11 +5,11 @@
 //! and pipeline operations. It integrates with the existing health check system to provide
 //! real-time insights into functional operation performance.
 
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
-use std::fmt;
-use serde::{Deserialize, Serialize};
 
 /// Performance metrics for functional operations
 #[derive(Debug, Clone)]
@@ -96,7 +96,7 @@ impl PerformanceMeasurement {
     pub fn complete(self) {
         let duration = self.start_time.elapsed();
         let memory_used = self.get_current_memory_usage() - self.initial_memory;
-        
+
         self.monitor.record_operation(
             self.operation_type,
             duration,
@@ -104,12 +104,12 @@ impl PerformanceMeasurement {
             false, // no error
         );
     }
-    
+
     /// Complete the measurement with an error
     pub fn complete_with_error(self) {
         let duration = self.start_time.elapsed();
         let memory_used = self.get_current_memory_usage() - self.initial_memory;
-        
+
         self.monitor.record_operation(
             self.operation_type,
             duration,
@@ -117,7 +117,7 @@ impl PerformanceMeasurement {
             true, // error occurred
         );
     }
-    
+
     /// Get current memory usage (simplified - in production might use jemalloc or similar)
     fn get_current_memory_usage(&self) -> u64 {
         // In a real implementation, this would use a proper memory profiler
@@ -176,8 +176,8 @@ impl Default for PerformanceThreshold {
     fn default() -> Self {
         Self {
             max_execution_time: Duration::from_millis(1000), // 1 second
-            max_memory_per_operation: 1024 * 1024, // 1 MB
-            max_error_rate: 0.05, // 5% error rate
+            max_memory_per_operation: 1024 * 1024,           // 1 MB
+            max_error_rate: 0.05,                            // 5% error rate
         }
     }
 }
@@ -211,7 +211,7 @@ impl PerformanceMonitor {
             thresholds: RwLock::new(HashMap::new()),
         })
     }
-    
+
     /// Create a new performance monitor with custom configuration
     pub fn with_config(config: PerformanceConfig) -> Arc<Self> {
         Arc::new(Self {
@@ -220,7 +220,7 @@ impl PerformanceMonitor {
             thresholds: RwLock::new(HashMap::new()),
         })
     }
-    
+
     /// Start measuring a functional operation
     pub fn start_measurement(
         self: &Arc<Self>,
@@ -229,12 +229,12 @@ impl PerformanceMonitor {
         if !self.config.enabled {
             return None;
         }
-        
+
         // Apply sampling rate
         if rand::random::<f64>() > self.config.sampling_rate {
             return None;
         }
-        
+
         Some(PerformanceMeasurement {
             operation_type,
             start_time: Instant::now(),
@@ -242,7 +242,7 @@ impl PerformanceMonitor {
             monitor: Arc::clone(self),
         })
     }
-    
+
     /// Record a completed operation
     pub fn record_operation(
         &self,
@@ -252,9 +252,10 @@ impl PerformanceMonitor {
         is_error: bool,
     ) {
         let mut metrics = self.metrics.write().unwrap();
-        
-        let metric = metrics.entry(operation_type.clone()).or_insert_with(|| {
-            PerformanceMetrics {
+
+        let metric = metrics
+            .entry(operation_type.clone())
+            .or_insert_with(|| PerformanceMetrics {
                 operation_count: 0,
                 avg_execution_time: Duration::from_nanos(0),
                 min_execution_time: Duration::from_secs(u64::MAX),
@@ -267,15 +268,14 @@ impl PerformanceMonitor {
                 },
                 error_count: 0,
                 last_updated: Instant::now(),
-            }
-        });
-        
+            });
+
         // Get previous count before incrementing
         let prev_count = metric.operation_count;
-        
+
         // Update operation count
         metric.operation_count += 1;
-        
+
         // Update timing statistics
         if prev_count == 0 {
             // First sample - set avg, min, and max to duration
@@ -284,53 +284,57 @@ impl PerformanceMonitor {
             metric.max_execution_time = duration;
         } else {
             // Rolling average: new_avg = (old_avg * prev_count + duration) / new_count
-            metric.avg_execution_time = (metric.avg_execution_time * prev_count as u32 + duration) / metric.operation_count as u32;
-            
+            metric.avg_execution_time = (metric.avg_execution_time * prev_count as u32 + duration)
+                / metric.operation_count as u32;
+
             if duration < metric.min_execution_time {
                 metric.min_execution_time = duration;
             }
-            
+
             if duration > metric.max_execution_time {
                 metric.max_execution_time = duration;
             }
         }
-        
+
         // Update memory statistics
         metric.memory_stats.allocation_count += 1;
         metric.memory_stats.total_allocated += memory_used;
-        metric.memory_stats.avg_memory_per_operation = 
+        metric.memory_stats.avg_memory_per_operation =
             metric.memory_stats.total_allocated / metric.memory_stats.allocation_count;
-        
+
         if memory_used > metric.memory_stats.peak_memory_bytes {
             metric.memory_stats.peak_memory_bytes = memory_used;
         }
-        
+
         // Update error count
         if is_error {
             metric.error_count += 1;
         }
-        
+
         metric.last_updated = Instant::now();
-        
+
         // Check thresholds and generate alerts if necessary
         self.check_thresholds(&operation_type, metric);
     }
-    
+
     /// Get performance metrics for a specific operation type
     pub fn get_metrics(&self, operation_type: &OperationType) -> Option<PerformanceMetrics> {
         self.metrics.read().unwrap().get(operation_type).cloned()
     }
-    
+
     /// Get all performance metrics
     pub fn get_all_metrics(&self) -> HashMap<OperationType, PerformanceMetrics> {
         self.metrics.read().unwrap().clone()
     }
-    
+
     /// Set performance threshold for an operation type
     pub fn set_threshold(&self, operation_type: OperationType, threshold: PerformanceThreshold) {
-        self.thresholds.write().unwrap().insert(operation_type, threshold);
+        self.thresholds
+            .write()
+            .unwrap()
+            .insert(operation_type, threshold);
     }
-    
+
     /// Get performance summary for health checks
     pub fn get_health_summary(&self) -> HealthSummary {
         let metrics = self.metrics.read().unwrap();
@@ -338,26 +342,26 @@ impl PerformanceMonitor {
         let mut total_errors = 0u64;
         let mut slowest_operation = Duration::from_nanos(0);
         let mut highest_memory_usage = 0u64;
-        
+
         for metric in metrics.values() {
             total_operations += metric.operation_count;
             total_errors += metric.error_count;
-            
+
             if metric.max_execution_time > slowest_operation {
                 slowest_operation = metric.max_execution_time;
             }
-            
+
             if metric.memory_stats.peak_memory_bytes > highest_memory_usage {
                 highest_memory_usage = metric.memory_stats.peak_memory_bytes;
             }
         }
-        
+
         let error_rate = if total_operations > 0 {
             total_errors as f64 / total_operations as f64
         } else {
             0.0
         };
-        
+
         HealthSummary {
             total_operations,
             error_rate,
@@ -367,14 +371,14 @@ impl PerformanceMonitor {
             monitoring_enabled: self.config.enabled,
         }
     }
-    
+
     /// Check performance thresholds and generate alerts
     fn check_thresholds(&self, operation_type: &OperationType, metric: &PerformanceMetrics) {
         let thresholds = self.thresholds.read().unwrap();
-        
+
         if let Some(threshold) = thresholds.get(operation_type) {
             let error_rate = metric.error_count as f64 / metric.operation_count as f64;
-            
+
             // Check execution time threshold
             if metric.avg_execution_time > threshold.max_execution_time {
                 log::warn!(
@@ -384,7 +388,7 @@ impl PerformanceMonitor {
                     threshold.max_execution_time
                 );
             }
-            
+
             // Check memory usage threshold
             if metric.memory_stats.avg_memory_per_operation > threshold.max_memory_per_operation {
                 log::warn!(
@@ -394,7 +398,7 @@ impl PerformanceMonitor {
                     threshold.max_memory_per_operation
                 );
             }
-            
+
             // Check error rate threshold
             if error_rate > threshold.max_error_rate {
                 log::warn!(
@@ -406,14 +410,14 @@ impl PerformanceMonitor {
             }
         }
     }
-    
+
     /// Get current memory usage (simplified implementation)
     fn get_current_memory_usage(&self) -> u64 {
         // In a real implementation, this would use a proper memory profiler
         // For now, we'll return a placeholder value
         0
     }
-    
+
     /// Reset all metrics (useful for testing)
     pub fn reset_metrics(&self) {
         self.metrics.write().unwrap().clear();
@@ -442,7 +446,8 @@ static GLOBAL_MONITOR: std::sync::OnceLock<Arc<PerformanceMonitor>> = std::sync:
 
 /// Initialize the global performance monitor
 pub fn init_performance_monitor(config: PerformanceConfig) {
-    GLOBAL_MONITOR.set(PerformanceMonitor::with_config(config))
+    GLOBAL_MONITOR
+        .set(PerformanceMonitor::with_config(config))
         .unwrap_or_else(|_| panic!("Performance monitor already initialized"));
 }
 
@@ -457,9 +462,9 @@ macro_rules! measure_operation {
     ($operation_type:expr, $block:block) => {{
         let monitor = $crate::functional::performance_monitoring::get_performance_monitor();
         let measurement = monitor.start_measurement($operation_type);
-        
+
         let result = $block;
-        
+
         if let Some(m) = measurement {
             match result {
                 Ok(v) => {
@@ -481,7 +486,7 @@ macro_rules! measure_operation {
 pub trait Measurable {
     /// Get the operation type for performance monitoring
     fn operation_type(&self) -> OperationType;
-    
+
     /// Execute with performance monitoring
     fn execute_with_monitoring<T, F>(&self, f: F) -> T
     where
@@ -489,13 +494,13 @@ pub trait Measurable {
     {
         let monitor = get_performance_monitor();
         let measurement = monitor.start_measurement(self.operation_type());
-        
+
         let result = f();
-        
+
         if let Some(m) = measurement {
             m.complete();
         }
-        
+
         result
     }
 }
@@ -537,16 +542,18 @@ mod tests {
     #[test]
     fn test_operation_measurement() {
         let monitor = PerformanceMonitor::new();
-        
+
         // Start measurement
-        let measurement = monitor.start_measurement(OperationType::IteratorChain).unwrap();
-        
+        let measurement = monitor
+            .start_measurement(OperationType::IteratorChain)
+            .unwrap();
+
         // Simulate some work
         thread::sleep(Duration::from_millis(10));
-        
+
         // Complete measurement
         measurement.complete();
-        
+
         // Check metrics
         let metrics = monitor.get_metrics(&OperationType::IteratorChain).unwrap();
         assert_eq!(metrics.operation_count, 1);
@@ -556,18 +563,22 @@ mod tests {
     #[test]
     fn test_operation_with_error() {
         let monitor = PerformanceMonitor::new();
-        
-        let measurement = monitor.start_measurement(OperationType::PureFunctionCall).unwrap();
+
+        let measurement = monitor
+            .start_measurement(OperationType::PureFunctionCall)
+            .unwrap();
         measurement.complete_with_error();
-        
-        let metrics = monitor.get_metrics(&OperationType::PureFunctionCall).unwrap();
+
+        let metrics = monitor
+            .get_metrics(&OperationType::PureFunctionCall)
+            .unwrap();
         assert_eq!(metrics.error_count, 1);
     }
 
     #[test]
     fn test_health_summary() {
         let monitor = PerformanceMonitor::new();
-        
+
         // Record some operations
         monitor.record_operation(
             OperationType::IteratorChain,
@@ -575,14 +586,14 @@ mod tests {
             1024,
             false,
         );
-        
+
         monitor.record_operation(
             OperationType::ValidationPipeline,
             Duration::from_millis(50),
             512,
             true,
         );
-        
+
         let summary = monitor.get_health_summary();
         assert_eq!(summary.total_operations, 2);
         assert_eq!(summary.error_rate, 0.5);
@@ -593,24 +604,24 @@ mod tests {
     #[test]
     fn test_performance_thresholds() {
         let monitor = PerformanceMonitor::new();
-        
+
         // Set a threshold
         let threshold = PerformanceThreshold {
             max_execution_time: Duration::from_millis(50),
             max_memory_per_operation: 500,
             max_error_rate: 0.1,
         };
-        
+
         monitor.set_threshold(OperationType::IteratorChain, threshold);
-        
+
         // Record an operation that exceeds thresholds
         monitor.record_operation(
             OperationType::IteratorChain,
             Duration::from_millis(100), // Exceeds time threshold
-            1000, // Exceeds memory threshold
+            1000,                       // Exceeds memory threshold
             false,
         );
-        
+
         // Threshold violations would be logged (we can't easily test log output)
         let metrics = monitor.get_metrics(&OperationType::IteratorChain).unwrap();
         assert!(metrics.avg_execution_time > Duration::from_millis(50));
@@ -620,7 +631,7 @@ mod tests {
     #[test]
     fn test_multiple_operations() {
         let monitor = PerformanceMonitor::new();
-        
+
         // Record multiple operations of the same type
         for i in 1..=5 {
             monitor.record_operation(
@@ -630,12 +641,14 @@ mod tests {
                 false,
             );
         }
-        
-        let metrics = monitor.get_metrics(&OperationType::QueryComposition).unwrap();
+
+        let metrics = monitor
+            .get_metrics(&OperationType::QueryComposition)
+            .unwrap();
         assert_eq!(metrics.operation_count, 5);
         assert_eq!(metrics.min_execution_time, Duration::from_millis(10));
         assert_eq!(metrics.max_execution_time, Duration::from_millis(50));
-        
+
         // Check average calculation
         let expected_avg = Duration::from_millis((10 + 20 + 30 + 40 + 50) / 5);
         assert_eq!(metrics.avg_execution_time, expected_avg);
@@ -648,9 +661,9 @@ mod tests {
             sampling_rate: 0.0, // No sampling
             ..Default::default()
         };
-        
+
         let monitor = PerformanceMonitor::with_config(config);
-        
+
         // Should return None due to sampling rate
         let measurement = monitor.start_measurement(OperationType::IteratorChain);
         assert!(measurement.is_none());
@@ -662,9 +675,9 @@ mod tests {
             enabled: false,
             ..Default::default()
         };
-        
+
         let monitor = PerformanceMonitor::with_config(config);
-        
+
         // Should return None when disabled
         let measurement = monitor.start_measurement(OperationType::IteratorChain);
         assert!(measurement.is_none());
@@ -673,7 +686,7 @@ mod tests {
     #[test]
     fn test_reset_metrics() {
         let monitor = PerformanceMonitor::new();
-        
+
         // Add some metrics
         monitor.record_operation(
             OperationType::IteratorChain,
@@ -681,9 +694,9 @@ mod tests {
             1024,
             false,
         );
-        
+
         assert_eq!(monitor.get_all_metrics().len(), 1);
-        
+
         // Reset and verify
         monitor.reset_metrics();
         assert_eq!(monitor.get_all_metrics().len(), 0);
@@ -692,6 +705,9 @@ mod tests {
     #[test]
     fn test_operation_type_display() {
         assert_eq!(OperationType::IteratorChain.to_string(), "iterator_chain");
-        assert_eq!(OperationType::Custom("test".to_string()).to_string(), "custom_test");
+        assert_eq!(
+            OperationType::Custom("test".to_string()).to_string(),
+            "custom_test"
+        );
     }
 }
