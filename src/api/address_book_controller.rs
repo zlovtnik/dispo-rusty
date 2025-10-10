@@ -5,7 +5,11 @@ use crate::{
     config::db::Pool,
     constants,
     error::ServiceError,
-    models::{filters::PersonFilter, person::{PersonDTO, Person}, response::ResponseBody},
+    models::{
+        filters::PersonFilter,
+        person::{Person, PersonDTO},
+        response::ResponseBody,
+    },
     services::address_book_service,
 };
 
@@ -153,7 +157,10 @@ pub async fn filter(
     debug!("Calling address_book_service::filter");
     match address_book_service::filter(filter, &pool) {
         Ok(page) => {
-            debug!("Filter operation successful, returning {} results", page.data.len());
+            debug!(
+                "Filter operation successful, returning {} results",
+                page.data.len()
+            );
 
             let count = page.data.len() as i64;
             let total = page.total_elements.unwrap_or(0);

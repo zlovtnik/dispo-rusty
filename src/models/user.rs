@@ -57,7 +57,10 @@ impl User {
                 password: hash(&new_user.password, DEFAULT_COST).unwrap(),
                 ..new_user
             };
-            let _ = diesel::insert_into(users).values(new_user).execute(conn);
+            diesel::insert_into(users)
+                .values(new_user)
+                .execute(conn)
+                .map_err(|err| err.to_string())?;
             Ok(constants::MESSAGE_SIGNUP_SUCCESS.to_string())
         } else {
             Err(format!(
@@ -175,8 +178,13 @@ impl User {
                 login_session: user.login_session,
                 tenant_id: user_token.tenant_id.clone(),
             }),
-            Err(diesel::result::Error::NotFound) => Err(ServiceError::not_found("User not found".to_string())),
-            Err(e) => Err(ServiceError::internal_server_error(format!("Database error: {}", e))),
+            Err(diesel::result::Error::NotFound) => {
+                Err(ServiceError::not_found("User not found".to_string()))
+            }
+            Err(e) => Err(ServiceError::internal_server_error(format!(
+                "Database error: {}",
+                e
+            ))),
         }
     }
 

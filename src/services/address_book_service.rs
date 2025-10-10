@@ -103,7 +103,7 @@ pub fn find_by_id(id: i32, pool: &Pool) -> Result<Person, ServiceError> {
 /// `Ok(Page<Person>)` with filtered and paginated results.
 pub fn filter(filter: PersonFilter, pool: &Pool) -> Result<Page<Person>, ServiceError> {
     use log::{debug, error};
-    
+
     debug!("Starting filter operation with filter: {:?}", filter);
     let query_service = FunctionalQueryService::new(pool.clone());
 

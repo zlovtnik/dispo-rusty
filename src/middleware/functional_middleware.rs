@@ -757,15 +757,15 @@ mod tests {
         MiddlewareError, MiddlewarePipelineBuilder, MiddlewareResult, TokenExtractor,
         TokenValidator,
     };
+    use crate::constants;
+    use crate::functional::function_traits::{FunctionCategory, PureFunction};
+    use crate::functional::pure_function_registry::PureFunctionRegistry;
     use actix_service::{fn_service, Service, Transform};
     use actix_web::body::to_bytes;
     use actix_web::dev::ServiceRequest;
     use actix_web::http::{Method, StatusCode};
     use actix_web::test::TestRequest;
     use actix_web::HttpResponse;
-    use crate::constants;
-    use crate::functional::function_traits::{FunctionCategory, PureFunction};
-    use crate::functional::pure_function_registry::PureFunctionRegistry;
     use serde_json::Value;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
@@ -1064,7 +1064,10 @@ mod tests {
 
         let body = to_bytes(res.into_body()).await.expect("body to bytes");
         let json: Value = serde_json::from_slice(&body).expect("valid json");
-        assert_eq!(json.get("message").unwrap(), constants::MESSAGE_INTERNAL_SERVER_ERROR);
+        assert_eq!(
+            json.get("message").unwrap(),
+            constants::MESSAGE_INTERNAL_SERVER_ERROR
+        );
     }
 
     #[actix_rt::test]
@@ -1082,8 +1085,8 @@ mod tests {
 
         let hits = Arc::new(AtomicUsize::new(0));
         let registry = Arc::new(PureFunctionRegistry::new());
-        let builder = MiddlewarePipelineBuilder::new(registry)
-            .with_component(RecordingMiddleware {
+        let builder =
+            MiddlewarePipelineBuilder::new(registry).with_component(RecordingMiddleware {
                 hits: Arc::clone(&hits),
             });
 
@@ -1143,7 +1146,10 @@ mod tests {
 
         let body = to_bytes(res.into_body()).await.expect("body to bytes");
         let json: Value = serde_json::from_slice(&body).expect("valid json");
-        assert_eq!(json.get("message").unwrap(), constants::MESSAGE_INTERNAL_SERVER_ERROR);
+        assert_eq!(
+            json.get("message").unwrap(),
+            constants::MESSAGE_INTERNAL_SERVER_ERROR
+        );
     }
 
     #[test]

@@ -5,11 +5,8 @@ use url::Url;
 
 use crate::{
     constants::{self, MESSAGE_OK},
+    models::{filters::TenantFilter, response::Page},
     pagination::{PaginatedPage, Pagination as IteratorPagination},
-    models::{
-        filters::TenantFilter,
-        response::Page,
-    },
     schema::tenants::{self, dsl::*},
 };
 
@@ -454,13 +451,12 @@ impl Tenant {
             default_page_size,
         );
 
-        let mut page_size_i64 = i64::try_from(pagination.page_size())
-            .map_err(|_| {
-                result::Error::DatabaseError(
-                    result::DatabaseErrorKind::Unknown,
-                    Box::new("Page size is too large".to_string()),
-                )
-            })?;
+        let mut page_size_i64 = i64::try_from(pagination.page_size()).map_err(|_| {
+            result::Error::DatabaseError(
+                result::DatabaseErrorKind::Unknown,
+                Box::new("Page size is too large".to_string()),
+            )
+        })?;
 
         if page_size_i64 > MAX_PAGE_SIZE {
             page_size_i64 = MAX_PAGE_SIZE;
@@ -474,23 +470,19 @@ impl Tenant {
             )
         })?;
 
-        let limit = page_size_i64
-            .checked_add(1)
-            .ok_or_else(|| {
-                result::Error::DatabaseError(
-                    result::DatabaseErrorKind::Unknown,
-                    Box::new("Limit calculation would overflow".to_string()),
-                )
-            })?;
+        let limit = page_size_i64.checked_add(1).ok_or_else(|| {
+            result::Error::DatabaseError(
+                result::DatabaseErrorKind::Unknown,
+                Box::new("Limit calculation would overflow".to_string()),
+            )
+        })?;
 
-        let offset = cursor_i64
-            .checked_mul(page_size_i64)
-            .ok_or_else(|| {
-                result::Error::DatabaseError(
-                    result::DatabaseErrorKind::Unknown,
-                    Box::new("Offset calculation would overflow".to_string()),
-                )
-            })?;
+        let offset = cursor_i64.checked_mul(page_size_i64).ok_or_else(|| {
+            result::Error::DatabaseError(
+                result::DatabaseErrorKind::Unknown,
+                Box::new("Offset calculation would overflow".to_string()),
+            )
+        })?;
 
         query = query.limit(limit).offset(offset);
 
@@ -504,9 +496,7 @@ impl Tenant {
 
         let paginated = PaginatedPage::from_items(results, pagination, has_more, None);
 
-        let to_i32 = |value: usize| -> i32 {
-            i32::try_from(value).unwrap_or(i32::MAX)
-        };
+        let to_i32 = |value: usize| -> i32 { i32::try_from(value).unwrap_or(i32::MAX) };
 
         let page = Page::new(
             MESSAGE_OK,
@@ -517,10 +507,7 @@ impl Tenant {
                 .summary
                 .total_elements
                 .map(|total| total.min(i64::MAX as usize) as i64),
-            paginated
-                .summary
-                .next_cursor
-                .map(|cursor| to_i32(cursor)),
+            paginated.summary.next_cursor.map(|cursor| to_i32(cursor)),
         );
 
         Ok(page)
