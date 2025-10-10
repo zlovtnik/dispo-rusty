@@ -64,7 +64,7 @@ performance_monitoring = []
 testcontainers = "0.14.0"
 tempfile = "3.8"
 criterion = { version = "0.5", features = ["html_reports"] }
-reqwest = { version = "0.11", features = ["json"] }
+reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"] }
 
 [[bench]]
 name = "functional_benchmarks"
