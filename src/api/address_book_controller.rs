@@ -398,7 +398,7 @@ mod tests {
         )
         .await;
 
-        assert!(insert_mock_data(1, &pool).await.is_ok());
+        insert_mock_data(1, &pool).await.unwrap();
         assert_eq!(get_people_in_db(&pool).await.unwrap().len(), 1);
     }
 
@@ -624,7 +624,7 @@ mod tests {
         )
         .await;
 
-        let _ = insert_mock_data(1, &pool).await;
+        insert_mock_data(1, &pool).await.unwrap();
 
         let update_request = json!({
             "email": "email1@example.com",
