@@ -11,15 +11,17 @@
 //!   with functional-friendly configuration knobs
 //! - Parallel map, filter, fold, and group-by helpers that capture rich
 //!   performance metrics via `ParallelResult`
-//! - Immutable dataset wrappers (`ImmutableDataset`) that make sharing
-//!   read-only data across threads trivial
-//! - Asynchronous helpers that bridge Rayon with Actix/Tokio using
-//!   `tokio::task::spawn_blocking` or `actix_web::web::block`
-//! - Metrics aggregation utilities to summarise concurrent workloads
+//! - Async bridging helpers that connect Rayon workloads to Actix/Tokio
+//!   runtimes (`map_async`, `fold_async`, `map_actix_blocking`)
+//! - Batch orchestration utilities such as `process_batch` for service
+//!   pipelines that need convenient parallelisation
+//! - Metrics aggregation helpers (`aggregate_metrics`) to summarise
+//!   concurrent workloads at runtime
 //!
-//! The design emphasises **immutable data**, **pure functions**, and
-//! **composable building blocks** so callers can compose functional
-//! pipelines without worrying about data races or thread management.
+//! This module focuses on thread-safe parallel composition and seamless
+//! integration with the surrounding async ecosystem. Use `ImmutableDataset`
+//! when you need a cheap, read-only view over shared collections; owned
+//! iterators work out of the box for everything else.
 
 use std::collections::HashMap;
 use std::sync::Arc;

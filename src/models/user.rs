@@ -178,9 +178,7 @@ impl User {
                 login_session: user.login_session,
                 tenant_id: user_token.tenant_id.clone(),
             }),
-            Err(diesel::result::Error::NotFound) => {
-                Err(ServiceError::not_found("User not found"))
-            }
+            Err(diesel::result::Error::NotFound) => Err(ServiceError::not_found("User not found")),
             Err(e) => Err(ServiceError::internal_server_error(format!(
                 "Database error: {}",
                 e

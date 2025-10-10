@@ -13,13 +13,13 @@
 //! - All user-provided values are bound as parameters, never concatenated into SQL strings
 //!
 //! Key Features:
-
-#![allow(dead_code)]
 //! - Lazy evaluation for large datasets with automatic chunking
 //! - Parameterized queries with automatic sanitization
 //! - Functional predicate composition with monadic operations
 //! - Query performance monitoring and optimization
 //! - Asynchronous query execution patterns
+
+#![allow(dead_code)]
 
 use crate::functional::query_builder::{
     Column, Operator, Predicate, QueryFilter, TypeSafeQueryBuilder,

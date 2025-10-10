@@ -599,7 +599,8 @@ mod tests {
             )
             .as_str(),
         );
-        let _ = config::db::run_migration(&mut pool.get().unwrap());
+        config::db::run_migration(&mut pool.get().unwrap())
+            .expect("DB migration failed in test setup");
 
         let manager = TenantPoolManager::new(pool.clone());
         manager
@@ -624,7 +625,9 @@ mod tests {
         )
         .await;
 
-        insert_mock_data(1, &pool).await.unwrap();
+        insert_mock_data(1, &pool)
+            .await
+            .expect("Failed to insert mock data in test setup");
 
         let update_request = json!({
             "email": "email1@example.com",
