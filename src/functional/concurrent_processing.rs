@@ -2,8 +2,7 @@
 //!
 //! Provides high-level abstractions for executing functional data
 //! transformations concurrently across multiple threads while
-//! processing pipelines that integrate seamlessly with the Actix Web
-//! async runtime.
+//! integrating cleanly with the Actix Web async runtime.
 //!
 //! # Key Capabilities
 //!
@@ -18,10 +17,9 @@
 //! - Metrics aggregation helpers (`aggregate_metrics`) to summarise
 //!   concurrent workloads at runtime
 //!
-//! This module focuses on thread-safe parallel composition and seamless
-//! integration with the surrounding async ecosystem. Use `ImmutableDataset`
-//! when you need a cheap, read-only view over shared collections; owned
-//! iterators work out of the box for everything else.
+//! The module emphasises thread-safe parallel composition, runtime
+//! observability, and ergonomic async bridging so functional pipelines
+//! can scale without manual thread management.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -514,26 +512,26 @@ impl ConcurrentProcessor {
 /// # Examples
 ///
 /// ```
-/// use crate::functional::concurrent_processing::ParallelMetrics;
+/// # use std::time::Duration;
+/// use crate::functional::parallel_iterators::ParallelMetrics;
 /// use crate::functional::concurrent_processing::aggregate_metrics;
 ///
-/// let a = ParallelMetrics {
-///     total_time: 10,
-///     thread_count: 4,
-///     throughput: 100,
-///     memory_usage: 256,
-///     efficiency: 0.8,
-/// };
-/// let b = ParallelMetrics {
-///     total_time: 5,
-///     thread_count: 8,
-///     throughput: 50,
-///     memory_usage: 128,
-///     efficiency: 0.6,
-/// };
+/// let mut a = ParallelMetrics::default();
+/// a.total_time = Duration::from_millis(10);
+/// a.thread_count = 4;
+/// a.throughput = 100;
+/// a.memory_usage = 256;
+/// a.efficiency = 0.8;
+///
+/// let mut b = ParallelMetrics::default();
+/// b.total_time = Duration::from_millis(5);
+/// b.thread_count = 8;
+/// b.throughput = 50;
+/// b.memory_usage = 128;
+/// b.efficiency = 0.6;
 ///
 /// let combined = aggregate_metrics([&a, &b].into_iter());
-/// assert_eq!(combined.total_time, 15);
+/// assert_eq!(combined.total_time, Duration::from_millis(15));
 /// assert_eq!(combined.thread_count, 8);
 /// assert_eq!(combined.throughput, 150);
 /// assert_eq!(combined.memory_usage, 384);

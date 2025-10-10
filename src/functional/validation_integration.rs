@@ -155,10 +155,11 @@ pub fn validate_person_with_complex_rules(person: &PersonDTO) -> ValidationOutco
     ValidationOutcome::success(())
 }
 
-/// Validates a collection of PersonDTO values lazily and produces a per-item ValidationOutcome.
+/// Validates a collection of PersonDTO values eagerly and produces a per-item `ValidationOutcome`.
 ///
-/// Each input element is validated when iterated; valid items are represented as `ValidationOutcome::success(())`
-/// and invalid items carry their collected validation errors in `ValidationOutcome::failure`.
+/// All validations are executed immediately when this function is called. Each returned entry corresponds to
+/// the matching input person, yielding `ValidationOutcome::success(())` for valid inputs or
+/// `ValidationOutcome::failure(errors)` with the collected validation errors otherwise.
 ///
 /// # Returns
 ///

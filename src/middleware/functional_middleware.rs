@@ -529,13 +529,14 @@ pub mod functional_middleware_impl {
     }
 
     impl<S> FunctionalAuthenticationMiddleware<S> {
-        /// Create a 500 Internal Server Error `ServiceResponse` whose JSON body is a `ResponseBody` containing the given `message` and an empty data payload.
-        ///
-        /// The `req` is converted into the response's request parts; the function constructs an `HttpResponse::InternalServerError` with `ResponseBody::new(message, constants::EMPTY)` and wraps it as a `ServiceResponse`.
-        ///
-        /// # Returns
-        ///
-        /// `Ok(ServiceResponse)` containing a 500 Internal Server Error response with the JSON error body, or `Err(Error)` if constructing the response fails.
+    /// Create a 401 Unauthorized `ServiceResponse` whose JSON body is a `ResponseBody` containing the given `message` and an empty data payload.
+    ///
+    /// The `req` is converted into the response's request parts; the function constructs an `HttpResponse::Unauthorized`
+    /// with `ResponseBody::new(message, constants::EMPTY)` and wraps it as a `ServiceResponse`.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(ServiceResponse)` containing a 401 Unauthorized response with the JSON error body, or `Err(Error)` if constructing the response fails.
         ///
         /// # Examples
         ///
@@ -549,7 +550,7 @@ pub mod functional_middleware_impl {
             message: &str,
         ) -> Result<ServiceResponse<EitherBody<BoxBody>>, Error> {
             let (request, _pl) = req.into_parts();
-            let response = HttpResponse::InternalServerError()
+            let response = HttpResponse::Unauthorized()
                 .json(ResponseBody::new(message, constants::EMPTY))
                 .map_into_right_body();
             Ok(ServiceResponse::new(request, response))
