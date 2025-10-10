@@ -592,7 +592,7 @@ mod tests {
             )
             .as_str(),
         );
-        config::db::run_migration(&mut pool.get().unwrap());
+        let _ = config::db::run_migration(&mut pool.get().unwrap());
 
         let manager = TenantPoolManager::new(pool.clone());
         manager
@@ -617,7 +617,7 @@ mod tests {
         )
         .await;
 
-        insert_mock_data(1, &pool).await;
+        let _ = insert_mock_data(1, &pool).await;
 
         let update_request = json!({
             "email": "email1@example.com",

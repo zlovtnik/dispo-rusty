@@ -127,7 +127,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     
     let results = futures::future::join_all(handles).await;
-    let successful = results.iter().filter(|r| r.as_ref().unwrap_or(&false)).count();
+    let successful = results
+        .iter()
+        .filter(|r| *r.as_ref().unwrap_or(&false))
+        .count();
     let duration = start.elapsed();
     
     println!("✅ Stress test completed: {:?}", duration);

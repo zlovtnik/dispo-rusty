@@ -181,26 +181,9 @@ pub fn validate_person_with_complex_rules(person: &PersonDTO) -> ValidationOutco
 /// assert_eq!(results.len(), 1);
 /// ```
 pub fn validate_person_batch(people: Vec<PersonDTO>) -> Vec<ValidationOutcome<()>> {
-    use crate::functional::validation_engine::LazyValidationIterator;
-
-    let validator = |_person: &PersonDTO| {
-        // Validate the person and return appropriate result
-        // This is a placeholder - in a real implementation, you would
-        // call the actual validation logic here
-        Ok(())
-    };
-
-    let lazy_iter = LazyValidationIterator::new(people.into_iter()).add_validator(validator);
-
-    lazy_iter
-        .map(|outcome| match outcome {
-            ValidationOutcome {
-                value: Some(_),
-                is_valid: true,
-                ..
-            } => ValidationOutcome::success(()),
-            ValidationOutcome { errors, .. } => ValidationOutcome::failure(errors),
-        })
+    people
+        .into_iter()
+        .map(|person| validate_person_dto(&person))
         .collect()
 }
 

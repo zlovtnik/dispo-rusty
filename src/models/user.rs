@@ -57,7 +57,7 @@ impl User {
                 password: hash(&new_user.password, DEFAULT_COST).unwrap(),
                 ..new_user
             };
-            diesel::insert_into(users).values(new_user).execute(conn);
+            let _ = diesel::insert_into(users).values(new_user).execute(conn);
             Ok(constants::MESSAGE_SIGNUP_SUCCESS.to_string())
         } else {
             Err(format!(
