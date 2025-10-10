@@ -5,6 +5,11 @@ authors = ["Hai Phan <bahaimt@gmail.com>"]
 edition = "2021"
 rust-version = "1.80"
 
+[lib]
+name = "rcs"
+path = "src/lib.rs"
+doctest = false
+
 [dependencies]
 actix-web = "4.3.1"
 actix-rt = "2.8.0"
@@ -59,6 +64,7 @@ performance_monitoring = []
 testcontainers = "0.14.0"
 tempfile = "3.8"
 criterion = { version = "0.5", features = ["html_reports"] }
+reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"] }
 
 [[bench]]
 name = "functional_benchmarks"

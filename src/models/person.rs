@@ -2,9 +2,7 @@ use diesel::{prelude::*, AsChangeset, Insertable, Queryable};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    config::db::Connection,
-    constants::MESSAGE_OK,
-    models::pagination::SortingAndPaging,
+    config::db::Connection, constants::MESSAGE_OK, models::pagination::SortingAndPaging,
     schema::people,
 };
 
@@ -101,12 +99,12 @@ impl Person {
         if let Some(i) = filter.phone {
             query = query.filter(people::phone.like(format!("%{}%", i)));
         }
-        
+
         let cursor = filter.cursor.unwrap_or(0);
         let page_size = filter
             .page_size
             .unwrap_or(crate::constants::DEFAULT_PER_PAGE);
-            
+
         // Handle sorting through pagination - don't add ORDER BY to the base query
         // The pagination system will handle ordering by the cursor column
         let records = query

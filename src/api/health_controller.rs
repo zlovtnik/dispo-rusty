@@ -1016,7 +1016,8 @@ mod tests {
             )
             .as_str(),
         );
-        config::db::run_migration(&mut pool.get().unwrap());
+        config::db::run_migration(&mut pool.get().unwrap())
+            .expect("DB migration failed in test setup");
 
         let redis_client = config::cache::init_redis_client(
             format!("redis://127.0.0.1:{}", redis.get_host_port_ipv4(6379)).as_str(),
@@ -1119,7 +1120,8 @@ mod tests {
             )
             .as_str(),
         );
-        config::db::run_migration(&mut pool.get().unwrap());
+        config::db::run_migration(&mut pool.get().unwrap())
+            .expect("DB migration failed in test setup");
 
         // set up the Redis client
         let redis_client = config::cache::init_redis_client(

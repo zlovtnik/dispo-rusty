@@ -8,11 +8,11 @@
 //! - Parallel map operations on large datasets
 //! - Concurrent folding and reduction operations
 //! - Work-stealing thread pool integration
+//! - Thread-safe immutable data handling
+//! - Iterator-based parallel processing with itertools compatibility
 
 #![allow(dead_code)]
 #![allow(unused_variables)]
-//! - Thread-safe immutable data handling
-//! - Iterator-based parallel processing with itertools compatibility
 
 use rayon::prelude::*;
 use std::collections::HashMap;

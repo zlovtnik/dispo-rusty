@@ -2,8 +2,7 @@
 //!
 //! Provides high-level abstractions for executing functional data
 //! transformations concurrently across multiple threads while
-//! processing pipelines that integrate seamlessly with the Actix Web
-//! async runtime.
+//! integrating cleanly with the Actix Web async runtime.
 //!
 //! # Key Capabilities
 //!
@@ -11,15 +10,16 @@
 //!   with functional-friendly configuration knobs
 //! - Parallel map, filter, fold, and group-by helpers that capture rich
 //!   performance metrics via `ParallelResult`
-//! - Immutable dataset wrappers (`ImmutableDataset`) that make sharing
-//!   read-only data across threads trivial
-//! - Asynchronous helpers that bridge Rayon with Actix/Tokio using
-//!   `tokio::task::spawn_blocking` or `actix_web::web::block`
-//! - Metrics aggregation utilities to summarise concurrent workloads
+//! - Async bridging helpers that connect Rayon workloads to Actix/Tokio
+//!   runtimes (`map_async`, `fold_async`, `map_actix_blocking`)
+//! - Batch orchestration utilities such as `process_batch` for service
+//!   pipelines that need convenient parallelisation
+//! - Metrics aggregation helpers (`aggregate_metrics`) to summarise
+//!   concurrent workloads at runtime
 //!
-//! The design emphasises **immutable data**, **pure functions**, and
-//! **composable building blocks** so callers can compose functional
-//! pipelines without worrying about data races or thread management.
+//! The module emphasises thread-safe parallel composition, runtime
+//! observability, and ergonomic async bridging so functional pipelines
+//! can scale without manual thread management.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -512,26 +512,26 @@ impl ConcurrentProcessor {
 /// # Examples
 ///
 /// ```
-/// use crate::functional::concurrent_processing::ParallelMetrics;
+/// # use std::time::Duration;
+/// use crate::functional::parallel_iterators::ParallelMetrics;
 /// use crate::functional::concurrent_processing::aggregate_metrics;
 ///
-/// let a = ParallelMetrics {
-///     total_time: 10,
-///     thread_count: 4,
-///     throughput: 100,
-///     memory_usage: 256,
-///     efficiency: 0.8,
-/// };
-/// let b = ParallelMetrics {
-///     total_time: 5,
-///     thread_count: 8,
-///     throughput: 50,
-///     memory_usage: 128,
-///     efficiency: 0.6,
-/// };
+/// let mut a = ParallelMetrics::default();
+/// a.total_time = Duration::from_millis(10);
+/// a.thread_count = 4;
+/// a.throughput = 100;
+/// a.memory_usage = 256;
+/// a.efficiency = 0.8;
+///
+/// let mut b = ParallelMetrics::default();
+/// b.total_time = Duration::from_millis(5);
+/// b.thread_count = 8;
+/// b.throughput = 50;
+/// b.memory_usage = 128;
+/// b.efficiency = 0.6;
 ///
 /// let combined = aggregate_metrics([&a, &b].into_iter());
-/// assert_eq!(combined.total_time, 15);
+/// assert_eq!(combined.total_time, Duration::from_millis(15));
 /// assert_eq!(combined.thread_count, 8);
 /// assert_eq!(combined.throughput, 150);
 /// assert_eq!(combined.memory_usage, 384);

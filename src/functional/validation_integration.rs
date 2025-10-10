@@ -155,10 +155,11 @@ pub fn validate_person_with_complex_rules(person: &PersonDTO) -> ValidationOutco
     ValidationOutcome::success(())
 }
 
-/// Validates a collection of PersonDTO values lazily and produces a per-item ValidationOutcome.
+/// Validates a collection of PersonDTO values eagerly and produces a per-item `ValidationOutcome`.
 ///
-/// Each input element is validated when iterated; valid items are represented as `ValidationOutcome::success(())`
-/// and invalid items carry their collected validation errors in `ValidationOutcome::failure`.
+/// All validations are executed immediately when this function is called. Each returned entry corresponds to
+/// the matching input person, yielding `ValidationOutcome::success(())` for valid inputs or
+/// `ValidationOutcome::failure(errors)` with the collected validation errors otherwise.
 ///
 /// # Returns
 ///
@@ -181,26 +182,9 @@ pub fn validate_person_with_complex_rules(person: &PersonDTO) -> ValidationOutco
 /// assert_eq!(results.len(), 1);
 /// ```
 pub fn validate_person_batch(people: Vec<PersonDTO>) -> Vec<ValidationOutcome<()>> {
-    use crate::functional::validation_engine::LazyValidationIterator;
-
-    let validator = |_person: &PersonDTO| {
-        // Validate the person and return appropriate result
-        // This is a placeholder - in a real implementation, you would
-        // call the actual validation logic here
-        Ok(())
-    };
-
-    let lazy_iter = LazyValidationIterator::new(people.into_iter()).add_validator(validator);
-
-    lazy_iter
-        .map(|outcome| match outcome {
-            ValidationOutcome {
-                value: Some(_),
-                is_valid: true,
-                ..
-            } => ValidationOutcome::success(()),
-            ValidationOutcome { errors, .. } => ValidationOutcome::failure(errors),
-        })
+    people
+        .into_iter()
+        .map(|person| validate_person_dto(&person))
         .collect()
 }
 

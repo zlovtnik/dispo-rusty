@@ -83,7 +83,10 @@ where
 
         // Check if route should be bypassed (no authentication required)
         let path = req.path();
-        if constants::IGNORE_ROUTES.iter().any(|route| path.starts_with(route)) {
+        if constants::IGNORE_ROUTES
+            .iter()
+            .any(|route| path.starts_with(route))
+        {
             authenticate_pass = true;
         }
 

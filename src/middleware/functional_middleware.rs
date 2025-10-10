@@ -5,6 +5,7 @@
 //! performance-critical paths. The system enables reusable middleware components through
 //! functional composition and immutable request/response transformations.
 
+#[cfg(feature = "functional")]
 pub mod functional_middleware_impl {
     use actix_service::{forward_ready, Service, Transform};
     use actix_web::body::{BoxBody, EitherBody, MessageBody};
@@ -528,20 +529,21 @@ pub mod functional_middleware_impl {
     }
 
     impl<S> FunctionalAuthenticationMiddleware<S> {
-        /// Create a 401 Unauthorized `ServiceResponse` whose JSON body is a `ResponseBody` containing the given `message` and an empty data payload.
-        ///
-        /// The `req` is converted into the response's request parts; the function constructs an `HttpResponse::Unauthorized` with `ResponseBody::new(message, constants::EMPTY)` and wraps it as a `ServiceResponse`.
-        ///
-        /// # Returns
-        ///
-        /// `Ok(ServiceResponse)` containing a 401 Unauthorized response with the JSON error body, or `Err(Error)` if constructing the response fails.
+    /// Create a 401 Unauthorized `ServiceResponse` whose JSON body is a `ResponseBody` containing the given `message` and an empty data payload.
+    ///
+    /// The `req` is converted into the response's request parts; the function constructs an `HttpResponse::Unauthorized`
+    /// with `ResponseBody::new(message, constants::EMPTY)` and wraps it as a `ServiceResponse`.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(ServiceResponse)` containing a 401 Unauthorized response with the JSON error body, or `Err(Error)` if constructing the response fails.
         ///
         /// # Examples
         ///
         /// ```
         /// // Given a `ServiceRequest` named `req`:
-        /// let resp = create_error_response(req, "Authentication required").unwrap();
-        /// assert_eq!(resp.status(), actix_web::http::StatusCode::UNAUTHORIZED);
+        /// let resp = create_error_response(req, "Internal server error").unwrap();
+        /// assert_eq!(resp.status(), actix_web::http::StatusCode::INTERNAL_SERVER_ERROR);
         /// ```
         fn create_error_response(
             req: ServiceRequest,
@@ -606,6 +608,16 @@ pub mod functional_middleware_impl {
         #[cfg(test)]
         pub fn stack_len(&self) -> usize {
             self.middleware_stack.len()
+        }
+
+        /// Adds a custom middleware component to the pipeline builder (test-only helper).
+        #[cfg(test)]
+        pub fn with_component<T>(mut self, component: T) -> Self
+        where
+            T: MiddlewareComponent + 'static,
+        {
+            self.middleware_stack.push(Box::new(component));
+            self
         }
 
         pub fn build<S, B>(self, service: S) -> ComposedMiddleware<S>
@@ -740,15 +752,24 @@ pub mod functional_middleware_impl {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "functional"))]
 mod tests {
     use super::functional_middleware_impl::{
-        AuthSkipChecker, FunctionalAuthentication, MiddlewareContext, MiddlewareError,
-        MiddlewarePipelineBuilder, MiddlewareResult, TokenExtractor, TokenValidator,
+        AuthSkipChecker, FunctionalAuthentication, MiddlewareComponent, MiddlewareContext,
+        MiddlewareError, MiddlewarePipelineBuilder, MiddlewareResult, TokenExtractor,
+        TokenValidator,
     };
     use crate::constants;
     use crate::functional::function_traits::{FunctionCategory, PureFunction};
     use crate::functional::pure_function_registry::PureFunctionRegistry;
+    use actix_service::{fn_service, Service, Transform};
+    use actix_web::body::to_bytes;
+    use actix_web::dev::ServiceRequest;
+    use actix_web::http::{Method, StatusCode};
+    use actix_web::test::TestRequest;
+    use actix_web::HttpResponse;
+    use serde_json::Value;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
 
     #[test]
@@ -859,9 +880,6 @@ mod tests {
 
     #[test]
     fn auth_skip_checker_skips_options() {
-        use actix_web::http::Method;
-        use actix_web::test::TestRequest;
-
         let checker = AuthSkipChecker;
         let req = TestRequest::default()
             .method(Method::OPTIONS)
@@ -873,8 +891,6 @@ mod tests {
 
     #[test]
     fn auth_skip_checker_skips_health() {
-        use actix_web::test::TestRequest;
-
         let checker = AuthSkipChecker;
         let req = TestRequest::get().uri("/health").to_srv_request();
 
@@ -883,8 +899,6 @@ mod tests {
 
     #[test]
     fn auth_skip_checker_does_not_skip_api() {
-        use actix_web::test::TestRequest;
-
         let checker = AuthSkipChecker;
         let req = TestRequest::get().uri("/api/users").to_srv_request();
 
@@ -893,8 +907,6 @@ mod tests {
 
     #[test]
     fn token_extractor_missing_header() {
-        use actix_web::test::TestRequest;
-
         let extractor = TokenExtractor;
         let req = TestRequest::get().uri("/test").to_srv_request();
 
@@ -911,8 +923,6 @@ mod tests {
 
     #[test]
     fn token_extractor_invalid_scheme() {
-        use actix_web::test::TestRequest;
-
         let extractor = TokenExtractor;
         let req = TestRequest::get()
             .uri("/test")
@@ -925,8 +935,6 @@ mod tests {
 
     #[test]
     fn token_extractor_empty_token() {
-        use actix_web::test::TestRequest;
-
         let extractor = TokenExtractor;
         let req = TestRequest::get()
             .uri("/test")
@@ -939,8 +947,6 @@ mod tests {
 
     #[test]
     fn token_extractor_valid_token() {
-        use actix_web::test::TestRequest;
-
         let extractor = TokenExtractor;
         let req = TestRequest::get()
             .uri("/test")
@@ -954,8 +960,6 @@ mod tests {
 
     #[test]
     fn token_extractor_case_insensitive() {
-        use actix_web::test::TestRequest;
-
         let extractor = TokenExtractor;
         let req = TestRequest::get()
             .uri("/test")
@@ -992,6 +996,162 @@ mod tests {
 
         // Should add auth middleware
         assert_eq!(builder.stack_len(), 1);
+    }
+
+    #[test]
+    fn token_extractor_trims_surrounding_whitespace() {
+        let extractor = TokenExtractor;
+        let req = TestRequest::get()
+            .uri("/test")
+            .insert_header((constants::AUTHORIZATION, "Bearer    spaced-token  "))
+            .to_srv_request();
+
+        let result = extractor.call(&req).expect("token should be extracted");
+        assert_eq!(result, "spaced-token");
+    }
+
+    #[actix_rt::test]
+    async fn functional_auth_middleware_skips_auth_for_options_requests() {
+        let registry = Arc::new(PureFunctionRegistry::new());
+        let auth = FunctionalAuthentication::new(registry);
+        let inner = fn_service(|req: ServiceRequest| async move {
+            Ok(req.into_response(HttpResponse::Ok().finish()))
+        });
+
+        let middleware = auth
+            .new_transform(inner)
+            .await
+            .expect("transform construction must succeed");
+
+        let req = TestRequest::default()
+            .method(Method::OPTIONS)
+            .uri("/any-route")
+            .to_srv_request();
+
+        let res = middleware
+            .call(req)
+            .await
+            .expect("middleware call should succeed");
+
+        assert_eq!(res.status(), StatusCode::OK);
+
+        let body = to_bytes(res.into_body()).await.expect("body to bytes");
+        assert!(body.is_empty());
+    }
+
+    #[actix_rt::test]
+    async fn functional_auth_middleware_returns_error_without_pool_manager() {
+        let registry = Arc::new(PureFunctionRegistry::new());
+        let auth = FunctionalAuthentication::new(registry);
+        let inner = fn_service(|req: ServiceRequest| async move {
+            Ok(req.into_response(HttpResponse::Ok().finish()))
+        });
+
+        let middleware = auth
+            .new_transform(inner)
+            .await
+            .expect("transform construction must succeed");
+
+        let req = TestRequest::default()
+            .method(Method::GET)
+            .uri("/api/secure")
+            .to_srv_request();
+
+        let res = middleware
+            .call(req)
+            .await
+            .expect("middleware call should succeed");
+
+        assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
+
+        let body = to_bytes(res.into_body()).await.expect("body to bytes");
+        let json: Value = serde_json::from_slice(&body).expect("valid json");
+        assert_eq!(
+            json.get("message").unwrap(),
+            constants::MESSAGE_INTERNAL_SERVER_ERROR
+        );
+    }
+
+    #[actix_rt::test]
+    async fn composed_middleware_successfully_invokes_inner_service() {
+        struct RecordingMiddleware {
+            hits: Arc<AtomicUsize>,
+        }
+
+        impl MiddlewareComponent for RecordingMiddleware {
+            fn process(&self, _req: &mut ServiceRequest) -> Result<(), MiddlewareError> {
+                self.hits.fetch_add(1, Ordering::SeqCst);
+                Ok(())
+            }
+        }
+
+        let hits = Arc::new(AtomicUsize::new(0));
+        let registry = Arc::new(PureFunctionRegistry::new());
+        let builder =
+            MiddlewarePipelineBuilder::new(registry).with_component(RecordingMiddleware {
+                hits: Arc::clone(&hits),
+            });
+
+        let inner = fn_service(|req: ServiceRequest| async move {
+            Ok(req.into_response(HttpResponse::Ok().finish()))
+        });
+
+        let middleware = builder.build(inner);
+
+        let req = TestRequest::default()
+            .method(Method::GET)
+            .uri("/api/data")
+            .to_srv_request();
+
+        let res = middleware
+            .call(req)
+            .await
+            .expect("middleware call should succeed");
+
+        assert_eq!(hits.load(Ordering::SeqCst), 1);
+        assert_eq!(res.status(), StatusCode::OK);
+
+        let body = to_bytes(res.into_body()).await.expect("body to bytes");
+        assert!(body.is_empty());
+    }
+
+    #[actix_rt::test]
+    async fn composed_middleware_returns_internal_error_on_failure() {
+        struct FailingMiddleware;
+
+        impl MiddlewareComponent for FailingMiddleware {
+            fn process(&self, _req: &mut ServiceRequest) -> Result<(), MiddlewareError> {
+                Err(MiddlewareError::InternalError("boom".to_string()))
+            }
+        }
+
+        let registry = Arc::new(PureFunctionRegistry::new());
+        let builder = MiddlewarePipelineBuilder::new(registry).with_component(FailingMiddleware);
+
+        let inner = fn_service(|req: ServiceRequest| async move {
+            Ok(req.into_response(HttpResponse::Ok().finish()))
+        });
+
+        let middleware = builder.build(inner);
+
+        let req = TestRequest::default()
+            .method(Method::GET)
+            .uri("/api/data")
+            .to_srv_request();
+
+        let res = middleware
+            .call(req)
+            .await
+            .expect("middleware call should succeed");
+
+        assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
+
+        let body = to_bytes(res.into_body()).await.expect("body to bytes");
+        let json: Value = serde_json::from_slice(&body).expect("valid json");
+        assert_eq!(
+            json.get("message").unwrap(),
+            constants::MESSAGE_INTERNAL_SERVER_ERROR
+        );
     }
 
     #[test]

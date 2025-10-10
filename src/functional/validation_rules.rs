@@ -845,16 +845,25 @@ mod tests {
         let inner = Custom::new(|value: &i32| *value == 5, "MATCH", "{} must equal five");
         let negated = not(inner);
 
-        let error = negated.validate(&5, "number").expect_err("negated rule should fail");
+        let error = negated
+            .validate(&5, "number")
+            .expect_err("negated rule should fail");
 
         assert_eq!(error.field, "number");
         assert_eq!(error.code, "VALIDATION_FAILED");
-        assert_eq!(error.message, "Validation rule should have failed but passed");
+        assert_eq!(
+            error.message,
+            "Validation rule should have failed but passed"
+        );
     }
 
     #[test]
     fn not_validator_succeeds_when_inner_rule_fails() {
-        let inner = Custom::new(|value: &i32| *value > 10, "TOO_SMALL", "{} must be greater than 10");
+        let inner = Custom::new(
+            |value: &i32| *value > 10,
+            "TOO_SMALL",
+            "{} must be greater than 10",
+        );
         let negated = not(inner);
 
         assert!(negated.validate(&5, "threshold").is_ok());
