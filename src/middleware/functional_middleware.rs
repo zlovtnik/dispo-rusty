@@ -5,6 +5,7 @@
 //! performance-critical paths. The system enables reusable middleware components through
 //! functional composition and immutable request/response transformations.
 
+#[cfg(feature = "functional")]
 pub mod functional_middleware_impl {
     use actix_service::{forward_ready, Service, Transform};
     use actix_web::body::{BoxBody, EitherBody, MessageBody};
@@ -528,27 +529,27 @@ pub mod functional_middleware_impl {
     }
 
     impl<S> FunctionalAuthenticationMiddleware<S> {
-        /// Create a 401 Unauthorized `ServiceResponse` whose JSON body is a `ResponseBody` containing the given `message` and an empty data payload.
+        /// Create a 500 Internal Server Error `ServiceResponse` whose JSON body is a `ResponseBody` containing the given `message` and an empty data payload.
         ///
-        /// The `req` is converted into the response's request parts; the function constructs an `HttpResponse::Unauthorized` with `ResponseBody::new(message, constants::EMPTY)` and wraps it as a `ServiceResponse`.
+        /// The `req` is converted into the response's request parts; the function constructs an `HttpResponse::InternalServerError` with `ResponseBody::new(message, constants::EMPTY)` and wraps it as a `ServiceResponse`.
         ///
         /// # Returns
         ///
-        /// `Ok(ServiceResponse)` containing a 401 Unauthorized response with the JSON error body, or `Err(Error)` if constructing the response fails.
+        /// `Ok(ServiceResponse)` containing a 500 Internal Server Error response with the JSON error body, or `Err(Error)` if constructing the response fails.
         ///
         /// # Examples
         ///
         /// ```
         /// // Given a `ServiceRequest` named `req`:
-        /// let resp = create_error_response(req, "Authentication required").unwrap();
-        /// assert_eq!(resp.status(), actix_web::http::StatusCode::UNAUTHORIZED);
+        /// let resp = create_error_response(req, "Internal server error").unwrap();
+        /// assert_eq!(resp.status(), actix_web::http::StatusCode::INTERNAL_SERVER_ERROR);
         /// ```
         fn create_error_response(
             req: ServiceRequest,
             message: &str,
         ) -> Result<ServiceResponse<EitherBody<BoxBody>>, Error> {
             let (request, _pl) = req.into_parts();
-            let response = HttpResponse::Unauthorized()
+            let response = HttpResponse::InternalServerError()
                 .json(ResponseBody::new(message, constants::EMPTY))
                 .map_into_right_body();
             Ok(ServiceResponse::new(request, response))
@@ -750,7 +751,7 @@ pub mod functional_middleware_impl {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "functional"))]
 mod tests {
     use super::functional_middleware_impl::{
         AuthSkipChecker, FunctionalAuthentication, MiddlewareComponent, MiddlewareContext,
@@ -1060,7 +1061,7 @@ mod tests {
             .await
             .expect("middleware call should succeed");
 
-        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
 
         let body = to_bytes(res.into_body()).await.expect("body to bytes");
         let json: Value = serde_json::from_slice(&body).expect("valid json");
