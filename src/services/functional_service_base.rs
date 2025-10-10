@@ -6,11 +6,18 @@
 
 use crate::{
     config::db::Pool,
-    error::{ServiceError, ServiceResult},
+    error::{
+        error_logging, error_pipeline, monadic, ErrorTransformer, ServiceError, ServiceResult,
+        ServiceResultExt,
+    },
 };
 use diesel::PgConnection;
-use std::future::Future;
-use std::pin::Pin;
+use log::Level;
+use std::{
+    future::Future,
+    pin::Pin,
+    sync::{Arc, Mutex},
+};
 
 /// Simple validation trait for basic validation patterns
 pub trait SimpleValidation<T> {
@@ -26,6 +33,26 @@ pub struct ServicePipeline<T> {
     data: Option<T>,
     validations: Vec<Box<dyn SimpleValidation<T> + Send + Sync>>,
     transformations: Vec<Box<dyn Fn(T) -> Result<T, ServiceError> + Send + Sync>>,
+}
+
+struct PipelineErrorAdapter {
+    context: &'static str,
+    level: Level,
+}
+
+impl PipelineErrorAdapter {
+    fn new(context: &'static str, level: Level) -> Self {
+        Self { context, level }
+    }
+}
+
+impl<T> ErrorTransformer<T, ServiceError> for PipelineErrorAdapter {
+    fn transform(&self, result: ServiceResult<T>) -> ServiceResult<T> {
+        result
+            .tap_error(|err| log::debug!("{} error: {}", self.context, err))
+            .map_service_error(|err| err.with_tag(self.context))
+            .log_on_error(self.level)
+    }
 }
 
 impl<T> ServicePipeline<T>
@@ -70,31 +97,78 @@ where
     pub fn execute<F, R>(self, operation: F) -> ServiceResult<R>
     where
         F: FnOnce(T, &mut PgConnection) -> Result<R, ServiceError>,
+        R: Send + 'static,
     {
-        let data = self
-            .data
-            .ok_or_else(|| ServiceError::bad_request("No data provided to pipeline"))?;
+        let ServicePipeline {
+            pool,
+            data,
+            validations,
+            transformations,
+        } = self;
 
-        // Run validations using functional iterator pattern
-        for validation in &self.validations {
-            validation.validate(&data)?;
+        let mut pipeline_data = monadic::option_to_result(
+            data,
+            |value| value,
+            || ServiceError::bad_request("No data provided to pipeline"),
+        )?;
+
+        let collected_errors = Arc::new(Mutex::new(Vec::new()));
+        let mut reporter = error_pipeline::build_error_reporter(
+            collected_errors.clone(),
+            |err: &ServiceError| {
+                log::warn!("Validation failed in pipeline: {}", err);
+            },
+        );
+
+        let validation_results: Vec<ServiceResult<()>> = validations
+            .iter()
+            .map(|validation| validation.validate(&pipeline_data))
+            .collect();
+
+        for result in validation_results.iter().cloned() {
+            reporter(result.map(|_| ()));
         }
 
-        // Apply transformations using functional pipeline
-        let mut transformed_data = data;
-        for transform in &self.transformations {
-            transformed_data = transform(transformed_data)?;
+        let _validation_successes =
+            error_pipeline::collect_successes(validation_results.clone(), |_| ());
+
+        if let Some(err) = validation_results.into_iter().find_map(|res| res.err()) {
+            if let Ok(mut collected) = collected_errors.lock() {
+                collected.clear();
+            }
+            return Err(err);
         }
 
-        // Execute database operation
-        self.pool
-            .get()
-            .map_err(|e| {
-                ServiceError::internal_server_error("Failed to get database connection")
-                    .with_tag("db")
-                    .with_detail(e.to_string())
-            })
-            .and_then(|mut conn| operation(transformed_data, &mut conn))
+        let transformed_data = error_pipeline::process_sequence(
+            pipeline_data,
+            transformations
+                .into_iter()
+                .map(|transform| move |value: T| transform(value)),
+        )?;
+
+        let mut connection_logger = error_logging::chain_log_and_transform(
+            error_logging::log_errors::<_, ServiceError>(Level::Error),
+            |result: ServiceResult<_>| result.map_service_error(|err| err.with_tag("pool")),
+        );
+
+        let mut conn = connection_logger(pool.get().map_err(|e| {
+            ServiceError::internal_server_error("Failed to get database connection")
+                .with_tag("db")
+                .with_detail(e.to_string())
+        }))?;
+
+        let mut result_logger = error_logging::compose_transformers(
+            error_logging::log_errors::<R, ServiceError>(Level::Error),
+            error_logging::log_errors_if(
+                |err: &ServiceError| matches!(err, ServiceError::BadRequest { .. }),
+                Level::Warn,
+            ),
+        );
+
+        let operation_result = result_logger(operation(transformed_data, &mut conn));
+
+        let error_adapter = PipelineErrorAdapter::new("service_pipeline", Level::Error);
+        error_adapter.transform(operation_result)
     }
 }
 
@@ -112,15 +186,31 @@ impl FunctionalQueryService {
     pub fn query<F, R>(&self, query_builder: F) -> ServiceResult<R>
     where
         F: FnOnce(&mut PgConnection) -> Result<R, ServiceError>,
+        R: Send + 'static,
     {
-        self.pool
-            .get()
-            .map_err(|e| {
-                ServiceError::internal_server_error("Failed to get database connection")
-                    .with_tag("db")
-                    .with_detail(e.to_string())
-            })
-            .and_then(|mut conn| query_builder(&mut conn))
+        let mut connection_logger = error_logging::chain_log_and_transform(
+            error_logging::log_errors::<_, ServiceError>(Level::Error),
+            |result: ServiceResult<_>| result.map_service_error(|err| err.with_tag("db")),
+        );
+
+        let mut conn = connection_logger(self.pool.get().map_err(|e| {
+            ServiceError::internal_server_error("Failed to get database connection")
+                .with_tag("db")
+                .with_detail(e.to_string())
+        }))?;
+
+        let mut result_logger = error_logging::compose_transformers(
+            error_logging::log_errors::<R, ServiceError>(Level::Info),
+            error_logging::log_errors_if(
+                |err: &ServiceError| matches!(err, ServiceError::Conflict { .. }),
+                Level::Warn,
+            ),
+        );
+
+        let result = result_logger(query_builder(&mut conn));
+
+        let error_adapter = PipelineErrorAdapter::new("functional_query", Level::Warn);
+        error_adapter.transform(result)
     }
 
     /// Execute a query with validation and transformation pipeline
@@ -136,12 +226,41 @@ impl FunctionalQueryService {
         Q: FnOnce(T, &mut PgConnection) -> Result<R, ServiceError>,
         V: SimpleValidation<T> + Send + Sync + 'static,
         Tr: Fn(T) -> Result<T, ServiceError> + Send + Sync + 'static,
+        R: Send + 'static,
     {
-        ServicePipeline::new(self.pool.clone())
+        let base_result = ServicePipeline::new(self.pool.clone())
             .with_data(input)
             .with_validation(validator)
             .with_transformation(transformer)
-            .execute(query_fn)
+            .execute(query_fn);
+
+        error_pipeline::Pipeline::new()
+            .step(|result: ServiceResult<R>| result.map_service_error(|err| err.with_tag("query")))
+            .step(|result| result.log_on_error(Level::Warn))
+            .execute(base_result)
+    }
+
+    /// Execute a query that may return an optional result, mapping absence to a not found error
+    pub fn query_optional<F, R>(&self, query_builder: F) -> ServiceResult<R>
+    where
+        F: FnOnce(&mut PgConnection) -> Result<Option<R>, ServiceError>,
+    {
+        let mut connection_logger = error_logging::chain_log_and_transform(
+            error_logging::log_errors::<_, ServiceError>(Level::Error),
+            |result: ServiceResult<_>| result,
+        );
+
+        let mut conn = connection_logger(self.pool.get().map_err(|e| {
+            ServiceError::internal_server_error("Failed to get database connection")
+                .with_tag("db")
+                .with_detail(e.to_string())
+        }))?;
+
+        monadic::flatten_option(
+            query_builder(&mut conn),
+            |err| err,
+            || ServiceError::not_found("Record not found"),
+        )
     }
 }
 

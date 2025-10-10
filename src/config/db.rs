@@ -40,49 +40,27 @@ pub fn init_db_pool(url: &str) -> Pool {
 }
 
 /// Creates a database connection pool for the given database URL without panicking on failure.
-
 ///
-
 /// The function attempts to build an r2d2 connection pool for the provided PostgreSQL URL. On
-
 /// success it returns the configured pool; on failure it returns `ServiceError::InternalServerError`
-
-/// with a descriptive message.
-
+/// with a descriptie message.
 ///
-
 /// # Arguments
-
 ///
-
 /// * `url` - The database connection URL (e.g., `postgres://user:pass@host/db`).
-
 ///
-
-/// # Returns
-
-///
-
+/// # Return
+//
 /// The configured `Pool` on success, or `ServiceError::InternalServerError` describing the failure.
-
 ///
-
 /// # Examples
-
 ///
-
 /// ```no_run
-
 /// # use crate::db::try_init_db_pool;
-
 /// let result = try_init_db_pool("postgres://user:pass@localhost/db");
-
 /// match result {
-
 ///     Ok(pool) => println!("Created pool with max size: {}", pool.state().connections()),
-
 ///     Err(err) => eprintln!("Failed to create pool: {:?}", err),
-
 /// }
 
 /// ```
@@ -183,7 +161,7 @@ impl TenantPoolManager {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust,no_run
     /// // assuming `manager` is a TenantPoolManager
     /// let pool = manager.get_main_pool();
     /// // use `pool` to obtain connections...
