@@ -23,7 +23,7 @@ use crate::{
     error::ServiceError,
     models::{
         refresh_token::RefreshToken,
-        user::{LoginDTO, LoginInfoDTO, User, UserDTO},
+        user::{LoginDTO, LoginInfoDTO, User, UserDTO, UserResponseDTO, UserUpdateDTO},
         user_token::UserToken,
     },
     services::functional_patterns::Validator,
@@ -422,4 +422,148 @@ pub fn me(authen_header: &HeaderValue, pool: &Pool) -> Result<LoginInfoDTO, Serv
             })
         })
         .log_error("me operation")
+}
+
+/// Find all users with pagination support.
+///
+/// Returns a vector of user response DTOs with pagination applied.
+/// Uses functional query service for consistent error handling.
+///
+/// # Returns
+/// `Ok(Vec<UserResponseDTO>)` on success, `Err(ServiceError)` on database errors.
+pub fn find_all_users(limit: i64, offset: i64, pool: &Pool) -> Result<Vec<UserResponseDTO>, ServiceError> {
+    let query_service = FunctionalQueryService::new(pool.clone());
+
+    query_service
+        .query(|conn| {
+            User::find_all(limit, offset, conn)
+                .map_err(|e| ServiceError::internal_server_error(format!("Database error: {}", e)))
+        })
+        .map(|users| {
+            users.into_iter()
+                .map(|user| UserResponseDTO {
+                    id: user.id,
+                    username: user.username,
+                    email: user.email,
+                    active: user.active,
+                })
+                .collect()
+        })
+        .log_error("find_all_users operation")
+}
+
+/// Find a user by ID.
+///
+/// Returns user response DTO if found, NotFound error otherwise.
+/// Uses functional query service for consistent error handling.
+///
+/// # Returns
+/// `Ok(UserResponseDTO)` on success, `Err(ServiceError)` on not found or database errors.
+pub fn find_user_by_id(user_id: i32, pool: &Pool) -> Result<UserResponseDTO, ServiceError> {
+    let query_service = FunctionalQueryService::new(pool.clone());
+
+    query_service
+        .query(|conn| {
+            User::find_user_by_id(user_id, conn)
+                .map_err(|e| match e {
+                    diesel::result::Error::NotFound => ServiceError::not_found("User not found"),
+                    _ => ServiceError::internal_server_error(format!("Database error: {}", e)),
+                })
+        })
+        .map(|user| UserResponseDTO {
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            active: user.active,
+        })
+        .log_error("find_user_by_id operation")
+}
+
+/// Update an existing user.
+///
+/// Validates input data and updates the user record.
+/// Uses iterator-based validation and functional composition.
+///
+/// # Returns
+/// `Ok(())` on success, `Err(ServiceError)` on validation or database errors.
+pub fn update_user(user_id: i32, updated_user: UserUpdateDTO, pool: &Pool) -> Result<(), ServiceError> {
+    // Validate update DTO
+    validate_user_update_dto(&updated_user)?;
+
+    let query_service = FunctionalQueryService::new(pool.clone());
+
+    // Check if user exists first
+    query_service
+        .query(|conn| {
+            User::find_user_by_id(user_id, conn)
+                .map_err(|e| match e {
+                    diesel::result::Error::NotFound => ServiceError::not_found("User not found"),
+                    _ => ServiceError::internal_server_error(format!("Database error: {}", e)),
+                })
+        })?;
+
+    // Perform update
+    query_service
+        .query(|conn| {
+            let user_dto = UserDTO {
+                username: updated_user.username,
+                email: updated_user.email,
+                password: String::new(), // Password not updated through this endpoint
+                active: updated_user.active,
+            };
+            User::update(user_id, user_dto, conn)
+                .map_err(|e| ServiceError::internal_server_error(format!("Database error: {}", e)))
+        })
+        .map(|_| ())
+        .log_error("update_user operation")
+}
+
+/// Delete a user by ID.
+///
+/// Removes the user record from the database.
+/// Uses functional query service for consistent error handling.
+///
+/// # Returns
+/// `Ok(())` on success, `Err(ServiceError)` on not found or database errors.
+pub fn delete_user(user_id: i32, pool: &Pool) -> Result<(), ServiceError> {
+    let query_service = FunctionalQueryService::new(pool.clone());
+
+    // Check if user exists first
+    query_service
+        .query(|conn| {
+            User::find_user_by_id(user_id, conn)
+                .map_err(|e| match e {
+                    diesel::result::Error::NotFound => ServiceError::not_found("User not found"),
+                    _ => ServiceError::internal_server_error(format!("Database error: {}", e)),
+                })
+        })?;
+
+    // Perform deletion
+    query_service
+        .query(|conn| {
+            User::delete(user_id, conn)
+                .map_err(|e| ServiceError::internal_server_error(format!("Database error: {}", e)))
+        })
+        .map(|_| ())
+        .log_error("delete_user operation")
+}
+
+/// Iterator-based validation for UserUpdateDTO
+fn validate_user_update_dto(user_update: &UserUpdateDTO) -> Result<(), ServiceError> {
+    if user_update.username.trim().is_empty() {
+        return Err(ServiceError::bad_request("Username cannot be empty"));
+    }
+    if user_update.username.len() < 3 {
+        return Err(ServiceError::bad_request("Username too short (min 3 characters)"));
+    }
+    if user_update.username.len() > 50 {
+        return Err(ServiceError::bad_request("Username too long (max 50 characters)"));
+    }
+    if user_update.email.trim().is_empty() {
+        return Err(ServiceError::bad_request("Email cannot be empty"));
+    }
+    if !EMAIL_REGEX.is_match(&user_update.email) {
+        return Err(ServiceError::bad_request("Invalid email format"));
+    }
+    Ok(())
 }
