@@ -15,7 +15,7 @@ diesel::table! {
 diesel::table! {
     login_history (id) {
         id -> Int4,
-        user_id -> Int8,
+        user_id -> Int4,
         login_timestamp -> Timestamptz,
     }
 }
@@ -514,6 +514,7 @@ diesel::table! {
     }
 }
 
+diesel::joinable!(login_history -> users (user_id));
 diesel::joinable!(nfe_cofins -> nfe_items (nfe_item_id));
 diesel::joinable!(nfe_fiscal_info -> nfe_documents (nfe_document_id));
 diesel::joinable!(nfe_icms -> nfe_items (nfe_item_id));
