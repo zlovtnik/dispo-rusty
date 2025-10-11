@@ -71,7 +71,7 @@ fn configure_api_routes(cfg: &mut web::ServiceConfig) {
             cfg.service(web::scope("/admin").configure(configure_admin_routes));
         })
         .add_route(|cfg| {
-            cfg.service(web::scope("/tenants").configure(configure_tenant_routes));
+            cfg.service(web::scope("/users").configure(configure_user_routes));
         })
         .build(cfg);
 }
@@ -213,37 +213,33 @@ fn configure_tenant_admin_routes(cfg: &mut web::ServiceConfig) {
         .build(cfg);
 }
 
-/// Registers tenant HTTP routes using functional composition patterns.
+/// Registers user management HTTP routes using functional composition patterns.
 ///
 /// Uses RouteBuilder to configure collection routes (GET list, POST create),
-/// a filtered listing at `/filter` (GET), and per-tenant operations by `{id}` (GET, PUT, DELETE).
+/// and per-user operations by `{id}` (GET, PUT, DELETE).
 ///
 /// # Examples
 ///
 /// ```
 /// use actix_web::web;
 ///
-/// // Attach the tenant routes under the `/tenants` scope.
-/// let _scope = web::scope("/tenants").configure(configure_tenant_routes);
+/// // Attach the user routes under the `/users` scope.
+/// let _scope = web::scope("/users").configure(configure_user_routes);
 /// ```
-fn configure_tenant_routes(cfg: &mut web::ServiceConfig) {
+fn configure_user_routes(cfg: &mut web::ServiceConfig) {
     RouteBuilder::new()
         .add_route(|cfg| {
             cfg.service(
                 web::resource("")
-                    .route(web::get().to(tenant_controller::find_all))
-                    .route(web::post().to(tenant_controller::create)),
+                    .route(web::get().to(user_controller::find_all)),
             );
-        })
-        .add_route(|cfg| {
-            cfg.service(web::resource("/filter").route(web::get().to(tenant_controller::filter)));
         })
         .add_route(|cfg| {
             cfg.service(
                 web::resource("/{id}")
-                    .route(web::get().to(tenant_controller::find_by_id))
-                    .route(web::put().to(tenant_controller::update))
-                    .route(web::delete().to(tenant_controller::delete)),
+                    .route(web::get().to(user_controller::find_by_id))
+                    .route(web::put().to(user_controller::update))
+                    .route(web::delete().to(user_controller::delete)),
             );
         })
         .build(cfg);

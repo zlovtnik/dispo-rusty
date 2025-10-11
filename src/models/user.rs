@@ -37,6 +37,21 @@ pub struct UserDTO {
 }
 
 #[derive(Serialize, Deserialize)]
+pub struct UserUpdateDTO {
+    pub username: String,
+    pub email: String,
+    pub active: bool,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct UserResponseDTO {
+    pub id: i32,
+    pub username: String,
+    pub email: String,
+    pub active: bool,
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct SignupDTO {
     pub username: String,
     pub email: String,
@@ -304,6 +319,60 @@ impl User {
     /// ```
     pub fn count_all(conn: &mut Connection) -> QueryResult<i64> {
         users.count().get_result(conn)
+    }
+
+    /// Find all users with pagination support.
+    ///
+    /// # Parameters
+    ///
+    /// - `limit` - Maximum number of users to return
+    /// - `offset` - Number of users to skip
+    /// - `conn` - Database connection
+    ///
+    /// # Returns
+    ///
+    /// A vector of users or a database error.
+    pub fn find_all(limit: i64, offset: i64, conn: &mut Connection) -> QueryResult<Vec<User>> {
+        users
+            .order(id)
+            .limit(limit)
+            .offset(offset)
+            .load::<User>(conn)
+    }
+
+    /// Update an existing user with new data.
+    ///
+    /// # Parameters
+    ///
+    /// - `user_id` - ID of the user to update
+    /// - `updated_user` - UserDTO containing updated data
+    /// - `conn` - Database connection
+    ///
+    /// # Returns
+    ///
+    /// Ok(()) on success, or a database error.
+    pub fn update(user_id: i32, updated_user: UserDTO, conn: &mut Connection) -> QueryResult<usize> {
+        diesel::update(users.filter(id.eq(user_id)))
+            .set((
+                username.eq(updated_user.username),
+                email.eq(updated_user.email),
+                active.eq(updated_user.active),
+            ))
+            .execute(conn)
+    }
+
+    /// Delete a user by ID.
+    ///
+    /// # Parameters
+    ///
+    /// - `user_id` - ID of the user to delete
+    /// - `conn` - Database connection
+    ///
+    /// # Returns
+    ///
+    /// Ok(usize) with number of affected rows, or a database error.
+    pub fn delete(user_id: i32, conn: &mut Connection) -> QueryResult<usize> {
+        diesel::delete(users.filter(id.eq(user_id))).execute(conn)
     }
 
     /// Counts users that currently have a non-empty login session.

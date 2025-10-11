@@ -30,7 +30,6 @@ Thumbs.db
 # Rust
 target/
 **/*.rs.bk
-Cargo.lock
 
 # Frontend node_modules (we copy these separately)
 frontend/node_modules/
