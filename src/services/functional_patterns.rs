@@ -124,6 +124,28 @@ impl<L, R> Either<L, R> {
             Either::Right(r) => Ok(r),
         }
     }
+
+    /// Chain a computation that may fail, useful for monadic composition
+    pub fn and_then<F, T>(self, f: F) -> Either<L, T>
+    where
+        F: FnOnce(R) -> Either<L, T>,
+    {
+        match self {
+            Either::Left(l) => Either::Left(l),
+            Either::Right(r) => f(r),
+        }
+    }
+
+    /// Provide a default value for Left cases
+    pub fn unwrap_or_else<F>(self, f: F) -> Either<L, R>
+    where
+        F: FnOnce(L) -> Either<L, R>,
+    {
+        match self {
+            Either::Left(l) => f(l),
+            Either::Right(r) => Either::Right(r),
+        }
+    }
 }
 
 /// Functional validation combinator

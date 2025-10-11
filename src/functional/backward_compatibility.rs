@@ -407,7 +407,7 @@ impl BackwardCompatibilityValidator {
 
         // Test token refresh
         let refresh_url = format!("{}/api/auth/refresh", self.config.base_url);
-        let mut response = client
+        let response = client
             .post(&refresh_url)
             .insert_header(("Authorization", format!("Bearer {}", token)))
             .insert_header(("x-tenant-id", self.config.test_tenant_id.clone()))
@@ -444,7 +444,7 @@ impl BackwardCompatibilityValidator {
             "tenant_id": tenant1
         });
 
-        let mut response = client
+        let response = client
             .post(&signup_url)
             .insert_header(("Content-Type", "application/json"))
             .send_json(&signup_payload1)

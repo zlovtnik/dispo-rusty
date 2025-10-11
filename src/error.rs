@@ -353,7 +353,7 @@ impl<T> ServiceResultExt<T> for Result<T, ServiceError> {
         })
     }
 
-    fn tap_error(self, tap: impl Fn(&ServiceError)) -> ServiceResult<T> {
+    fn tap_error(self, mut tap: impl FnMut(&ServiceError)) -> ServiceResult<T> {
         if let Err(ref err) = self {
             tap(err);
         }
@@ -864,7 +864,7 @@ mod tests {
         let cloned = error.clone();
 
         // Modify original (by reassigning, since fields are private)
-        let error = ServiceError::bad_request("modified");
+        let _modified = ServiceError::bad_request("modified");
 
         // Cloned should still have original value
         match cloned {

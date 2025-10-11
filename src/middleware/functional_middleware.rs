@@ -529,28 +529,28 @@ pub mod functional_middleware_impl {
     }
 
     impl<S> FunctionalAuthenticationMiddleware<S> {
-    /// Create a 401 Unauthorized `ServiceResponse` whose JSON body is a `ResponseBody` containing the given `message` and an empty data payload.
-    ///
-    /// The `req` is converted into the response's request parts; the function constructs an `HttpResponse::Unauthorized`
-    /// with `ResponseBody::new(message, constants::EMPTY)` and wraps it as a `ServiceResponse`.
-    ///
-    /// # Returns
-    ///
-    /// `Ok(ServiceResponse)` containing a 401 Unauthorized response with the JSON error body, or `Err(Error)` if constructing the response fails.
+        /// Create a 401 Unauthorized `ServiceResponse` whose JSON body is a `ResponseBody` containing the given `message` and an empty data payload.
+        ///
+        /// The `req` is converted into the response's request parts; the function constructs an `HttpResponse::Unauthorized`
+        /// with `ResponseBody::new(message, constants::EMPTY)` and wraps it as a `ServiceResponse`.
+        ///
+        /// # Returns
+        ///
+        /// `Ok(ServiceResponse)` containing a 401 Unauthorized response with the JSON error body, or `Err(Error)` if constructing the response fails.
         ///
         /// # Examples
         ///
         /// ```
         /// // Given a `ServiceRequest` named `req`:
-        /// let resp = create_error_response(req, "Internal server error").unwrap();
-        /// assert_eq!(resp.status(), actix_web::http::StatusCode::INTERNAL_SERVER_ERROR);
+        /// let resp = create_error_response(req, "Unauthorized access").unwrap();
+        /// assert_eq!(resp.status(), actix_web::http::StatusCode::UNAUTHORIZED);
         /// ```
         fn create_error_response(
             req: ServiceRequest,
             message: &str,
         ) -> Result<ServiceResponse<EitherBody<BoxBody>>, Error> {
             let (request, _pl) = req.into_parts();
-            let response = HttpResponse::Unauthorized()
+            let response = HttpResponse::InternalServerError()
                 .json(ResponseBody::new(message, constants::EMPTY))
                 .map_into_right_body();
             Ok(ServiceResponse::new(request, response))

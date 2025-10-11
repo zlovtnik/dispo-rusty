@@ -1,3 +1,5 @@
+use crate::config::functional_config::EitherConvert;
+use crate::services::functional_patterns::Either;
 use r2d2;
 use redis;
 
@@ -11,7 +13,9 @@ impl r2d2::ManageConnection for RedisManager {
     type Connection = redis::Connection;
     type Error = redis::RedisError;
 
-    /// Establishes a new connection to the Redis server using this manager's client.
+    /// Establishes a new connection to the Redis server using functional composition.
+    ///
+    /// Uses Either pattern for better error handling and composition.
     ///
     /// # Examples
     ///
@@ -22,12 +26,22 @@ impl r2d2::ManageConnection for RedisManager {
     /// // `conn` is a `redis::Connection` ready to execute commands
     /// ```
     fn connect(&self) -> Result<Self::Connection, Self::Error> {
-        self.client.get_connection()
+        // Use functional composition for connection establishment
+        let connection_result = Either::from_result(self.client.get_connection());
+
+        match connection_result {
+            Either::Right(conn) => Ok(conn),
+            Either::Left(error) => {
+                // Try once more with functional composition
+                log::warn!("First connection attempt failed, retrying: {}", error);
+                self.client.get_connection()
+            }
+        }
     }
 
-    /// Checks whether a Redis connection is alive by sending a `PING` command.
+    /// Checks whether a Redis connection is alive using functional validation.
     ///
-    /// Returns `Ok(())` if the connection responds to `PING`, `Err(redis::RedisError)` otherwise.
+    /// Uses Either pattern for composable validation logic.
     ///
     /// # Examples
     ///
@@ -40,8 +54,16 @@ impl r2d2::ManageConnection for RedisManager {
     /// manager.is_valid(&mut conn).unwrap();
     /// ```
     fn is_valid(&self, conn: &mut Self::Connection) -> Result<(), Self::Error> {
-        redis::cmd("PING").exec(conn)?;
-        Ok(())
+        // Use functional composition for validation
+        let ping_result = Either::from_result(redis::cmd("PING").exec(conn));
+
+        match ping_result {
+            Either::Right(_) => Ok(()),
+            Either::Left(error) => {
+                log::debug!("Redis PING validation failed: {}", error);
+                Err(error)
+            }
+        }
     }
 
     /// Indicates whether a pooled Redis connection should be treated as broken and removed from the pool.
@@ -61,27 +83,129 @@ impl r2d2::ManageConnection for RedisManager {
     }
 }
 
+/// Initializes a Redis connection pool using functional composition patterns.
+///
+/// Uses Either pattern for error handling and functional URL masking.
+/// Applies functional composition for pool creation with proper error handling.
+///
+/// # Examples
+///
+/// ```no_run
+/// let pool = init_redis_client("redis://localhost:6379");
+/// ```
 pub fn init_redis_client(url: &str) -> Pool {
     use log::info;
-    info!("Initializing Redis client...");
-    let masked_url = mask_redis_url(url);
-    let client = redis::Client::open(url).unwrap_or_else(|e| {
-        panic!("Failed to create Redis client for {}: {}", masked_url, e);
-    });
+    info!("Initializing Redis client with functional patterns...");
+    
+    // Use functional URL masking
+    let masked_url = mask_redis_url_functional(url);
+    
+    // Functional client creation with Either pattern
+    let client_result = Either::from_result(redis::Client::open(url));
+    let client = match client_result {
+        Either::Right(client) => client,
+        Either::Left(e) => {
+            panic!("Failed to create Redis client for {}: {}", masked_url, e);
+        }
+    };
+    
+    // Functional pool creation with composition
     let manager = RedisManager { client };
-    r2d2::Pool::builder().build(manager).unwrap_or_else(|e| {
-        panic!("Failed to create Redis pool for {}: {}", masked_url, e);
-    })
+    let pool_result = Either::from_result(r2d2::Pool::builder().build(manager));
+    
+    match pool_result {
+        Either::Right(pool) => {
+            info!("Redis pool created successfully for {}", masked_url);
+            pool
+        }
+        Either::Left(e) => {
+            panic!("Failed to create Redis pool for {}: {}", masked_url, e);
+        }
+    }
 }
 
-fn mask_redis_url(input: &str) -> String {
-    if let Some(at_pos) = input.find('@') {
-        if let Some(colon_pos) = input[..at_pos].rfind(':') {
-            format!("{}:<redacted>{}", &input[..colon_pos], &input[at_pos..])
-        } else {
-            input.to_string()
+/// Functional URL masking using composition patterns.
+///
+/// Uses functional composition to mask sensitive credentials in URLs.
+fn mask_redis_url_functional(input: &str) -> String {
+    // Functional approach to URL masking
+    let find_credentials = |url: &str| -> Option<(usize, usize)> {
+        let at_pos = url.find('@')?;
+        let colon_pos = url[..at_pos].rfind(':')?;
+        Some((colon_pos, at_pos))
+    };
+    
+    let mask_url = |(colon_pos, at_pos): (usize, usize)| -> String {
+        format!("{}:<redacted>{}", &input[..colon_pos], &input[at_pos..])
+    };
+    
+    // Apply functional composition
+    find_credentials(input)
+        .map(mask_url)
+        .unwrap_or_else(|| input.to_string())
+}
+
+/// Functional Redis pool configuration builder
+pub struct FunctionalRedisConfig {
+    url: String,
+    max_size: Option<u32>,
+    connection_timeout: Option<std::time::Duration>,
+}
+
+impl FunctionalRedisConfig {
+    /// Create a new functional Redis configuration
+    pub fn new(url: &str) -> Self {
+        Self {
+            url: url.to_string(),
+            max_size: None,
+            connection_timeout: None,
         }
-    } else {
-        input.to_string()
     }
+    
+    /// Set maximum pool size using functional chaining
+    pub fn max_size(mut self, size: u32) -> Self {
+        self.max_size = Some(size);
+        self
+    }
+    
+    /// Set connection timeout using functional chaining
+    pub fn connection_timeout(mut self, timeout: std::time::Duration) -> Self {
+        self.connection_timeout = Some(timeout);
+        self
+    }
+    
+    /// Build the Redis pool using functional composition
+    pub fn build(self) -> Either<String, Pool> {
+        let client_result = Either::from_result(
+            redis::Client::open(self.url.as_str())
+                .map_err(|e| format!("Failed to create Redis client: {}", e))
+        );
+        
+        let client = match client_result {
+            Either::Right(client) => client,
+            Either::Left(error) => return Either::Left(error),
+        };
+        
+        let manager = RedisManager { client };
+        let mut builder = r2d2::Pool::builder();
+        
+        // Apply configuration using functional chaining
+        if let Some(max_size) = self.max_size {
+            builder = builder.max_size(max_size);
+        }
+        
+        if let Some(timeout) = self.connection_timeout {
+            builder = builder.connection_timeout(timeout);
+        }
+        
+        Either::from_result(
+            builder.build(manager)
+                .map_err(|e| format!("Failed to build Redis pool: {}", e))
+        )
+    }
+}
+
+// Legacy function for backward compatibility
+fn mask_redis_url(input: &str) -> String {
+    mask_redis_url_functional(input)
 }

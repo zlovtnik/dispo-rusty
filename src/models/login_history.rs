@@ -12,13 +12,13 @@ use crate::{
 #[diesel(table_name = login_history)]
 pub struct LoginHistory {
     pub id: i32,
-    pub user_id: i32,
+    pub user_id: i64,
     pub login_timestamp: NaiveDateTime,
 }
 #[derive(Insertable)]
 #[diesel(table_name = login_history)]
 pub struct LoginHistoryInsertableDTO {
-    pub user_id: i32,
+    pub user_id: i64,
     pub login_timestamp: NaiveDateTime,
 }
 
@@ -27,7 +27,7 @@ impl LoginHistory {
         if let Ok(user) = User::find_user_by_username(un, conn) {
             let now = Utc::now();
             Some(LoginHistoryInsertableDTO {
-                user_id: user.id,
+                user_id: user.id as i64,
                 login_timestamp: now.naive_utc(),
             })
         } else {

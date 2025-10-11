@@ -1,5 +1,10 @@
-use bcrypt::{hash, verify, DEFAULT_COST};
-use diesel::{prelude::*, Identifiable, Insertable, Queryable};
+#![cfg_attr(test, allow(dead_code))]
+
+use argon2::{
+    password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
+    Argon2,
+};
+use diesel::{prelude::*, result::DatabaseErrorKind, Identifiable, Insertable, Queryable};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -13,11 +18,12 @@ use crate::{
 #[derive(Identifiable, Queryable, Serialize, Deserialize)]
 #[diesel(table_name = users)]
 pub struct User {
-    pub id: i32,
+    pub id: i64,
     pub username: String,
     pub email: String,
     pub password: String,
     pub login_session: String,
+    pub active: bool,
 }
 
 #[derive(Insertable, Serialize, Deserialize)]
@@ -26,6 +32,7 @@ pub struct UserDTO {
     pub username: String,
     pub email: String,
     pub password: String,
+    pub active: bool,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -51,64 +58,116 @@ pub struct LoginInfoDTO {
 }
 
 impl User {
-    pub fn signup(new_user: UserDTO, conn: &mut Connection) -> Result<String, String> {
-        if Self::find_user_by_username(&new_user.username, conn).is_err() {
-            let new_user = UserDTO {
-                password: hash(&new_user.password, DEFAULT_COST).unwrap(),
-                ..new_user
-            };
-            diesel::insert_into(users)
-                .values(new_user)
-                .execute(conn)
-                .map_err(|err| err.to_string())?;
-            Ok(constants::MESSAGE_SIGNUP_SUCCESS.to_string())
-        } else {
-            Err(format!(
-                "User '{}' is already registered",
-                &new_user.username
-            ))
-        }
+    pub fn signup(new_user: UserDTO, conn: &mut Connection) -> Result<String, ServiceError> {
+        let password_hash = Self::hash_password_argon2(&new_user.password).map_err(|_| {
+            ServiceError::internal_server_error("Failed to hash password".to_string())
+        })?;
+        let user_name = new_user.username.clone(); // Store username before move
+        let new_user = UserDTO {
+            password: password_hash,
+            ..new_user
+        };
+        diesel::insert_into(users)
+            .values(new_user)
+            .execute(conn)
+            .map_err(|err| match err {
+                diesel::result::Error::DatabaseError(DatabaseErrorKind::UniqueViolation, _) => {
+                    ServiceError::bad_request(format!("User '{}' is already registered", user_name))
+                },
+                _ => {
+                    log::error!("Signup failed: {}", err);
+                    ServiceError::internal_server_error("Internal server error".to_string())
+                }
+            })?;
+        Ok(constants::MESSAGE_SIGNUP_SUCCESS.to_string())
+    }
+
+    /// Hash a password using Argon2 algorithm
+    /// 
+    /// # Arguments
+    /// * `plain_password` - The plain text password to hash
+    /// 
+    /// # Returns
+    /// * `Ok(String)` - The hashed password on success
+    /// * `Err(String)` - A formatted error message on failure
+    fn hash_password_argon2(plain_password: &str) -> Result<String, String> {
+        let salt = SaltString::generate(&mut OsRng);
+        let argon2 = Argon2::default();
+        argon2
+            .hash_password(plain_password.as_bytes(), &salt)
+            .map_err(|e| format!("Password hashing failed: {}", e))
+            .map(|hash| hash.to_string())
     }
 
     pub fn login(login: LoginDTO, conn: &mut Connection) -> Option<LoginInfoDTO> {
-        if let Ok(user_to_verify) = users
+        // 1) Fetch user (early return None if not found)
+        let user_to_verify = users
             .filter(username.eq(&login.username_or_email))
             .or_filter(email.eq(&login.username_or_email))
             .get_result::<User>(conn)
-        {
-            if !user_to_verify.password.is_empty()
-                && verify(&login.password, &user_to_verify.password).unwrap()
-            {
-                if let Some(login_history) = LoginHistory::create(&user_to_verify.username, conn) {
-                    if LoginHistory::save_login_history(login_history, conn).is_err() {
-                        return None;
-                    }
-                    let login_session_str = User::generate_login_session();
-                    if User::update_login_session_to_db(
-                        &user_to_verify.username,
-                        &login_session_str,
-                        conn,
-                    ) {
-                        return Some(LoginInfoDTO {
-                            username: user_to_verify.username,
-                            login_session: login_session_str,
-                            tenant_id: login.tenant_id,
-                        });
-                    }
-                }
-            } else {
-                return Some(LoginInfoDTO {
-                    username: user_to_verify.username,
-                    login_session: String::new(),
-                    tenant_id: login.tenant_id,
-                });
-            }
+            .ok()?;
+
+        // 2) Return None for inactive users (consistent with password mismatch behavior)
+        if !user_to_verify.active {
+            return None;
         }
 
-        None
+        // Skip empty passwords
+        if user_to_verify.password.is_empty() {
+            return None;
+        }
+
+        // 3) Verify password using hybrid approach
+        if Self::verify_password_hybrid(&user_to_verify.password, &login.password) {
+            // On successful verification, create login session
+            Self::create_login_session(&user_to_verify.username, login.tenant_id, conn)
+        } else {
+            // Return None for failed authentication (consistent behavior)
+            None
+        }
     }
 
-    pub fn logout(user_id: i32, conn: &mut Connection) {
+    /// Verify password using hybrid approach: try Argon2 first, fallback to bcrypt if hash format indicates bcrypt
+    fn verify_password_hybrid(stored_hash: &str, provided_password: &str) -> bool {
+        let is_bcrypt = stored_hash.starts_with("$2");
+        
+        if is_bcrypt {
+            // Hash looks like bcrypt, use bcrypt verification
+            bcrypt::verify(provided_password, stored_hash).unwrap_or(false)
+        } else {
+            // Default to Argon2 verification
+            PasswordHash::new(stored_hash)
+                .map(|parsed_hash| {
+                    let argon2 = Argon2::default();
+                    argon2.verify_password(provided_password.as_bytes(), &parsed_hash).is_ok()
+                })
+                .unwrap_or(false)
+        }
+    }
+
+    /// Create login session: save login history, generate session, update DB, return LoginInfoDTO on success
+    fn create_login_session(user_name: &str, tenant_id: String, conn: &mut Connection) -> Option<LoginInfoDTO> {
+        // Create and save login history
+        let login_history = LoginHistory::create(user_name, conn)?;
+        if let Err(e) = LoginHistory::save_login_history(login_history, conn) {
+            log::error!("Failed to save login history for user '{}': {}", user_name, e);
+            return None;
+        }
+
+        // Generate session and update database
+        let login_session_str = User::generate_login_session();
+        if User::update_login_session_to_db(user_name, &login_session_str, conn) {
+            Some(LoginInfoDTO {
+                username: user_name.to_string(),
+                login_session: login_session_str,
+                tenant_id,
+            })
+        } else {
+            None
+        }
+    }
+
+    pub fn logout(user_id: i64, conn: &mut Connection) {
         if let Ok(user) = users.find(user_id).get_result::<User>(conn) {
             Self::update_login_session_to_db(&user.username, "", conn);
         }
@@ -179,15 +238,23 @@ impl User {
                 tenant_id: user_token.tenant_id.clone(),
             }),
             Err(diesel::result::Error::NotFound) => Err(ServiceError::not_found("User not found")),
-            Err(e) => Err(ServiceError::internal_server_error(format!(
-                "Database error: {}",
-                e
-            ))),
+            Err(e) => {
+                log::error!("Failed to query user: {}", e);
+                Err(ServiceError::internal_server_error("Internal server error".to_string()))
+            }
         }
     }
 
     pub fn find_user_by_username(un: &str, conn: &mut Connection) -> QueryResult<User> {
         users.filter(username.eq(un)).get_result::<User>(conn)
+    }
+
+    pub fn find_user_by_email(em: &str, conn: &mut Connection) -> QueryResult<User> {
+        users.filter(email.eq(em)).get_result::<User>(conn)
+    }
+
+    pub fn find_user_by_id(user_id: i64, conn: &mut Connection) -> QueryResult<User> {
+        users.find(user_id).get_result::<User>(conn)
     }
 
     pub fn generate_login_session() -> String {

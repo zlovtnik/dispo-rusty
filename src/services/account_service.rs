@@ -22,6 +22,7 @@ use crate::{
     constants,
     error::ServiceError,
     models::{
+        refresh_token::RefreshToken,
         user::{LoginDTO, LoginInfoDTO, User, UserDTO},
         user_token::UserToken,
     },
@@ -61,6 +62,18 @@ fn create_user_validator() -> Validator<UserDTO> {
             } else if char_count > 64 {
                 Err(ServiceError::bad_request(
                     "Password too long (max 64 characters)",
+                ))
+            } else if !dto.password.chars().any(|c| c.is_uppercase()) {
+                Err(ServiceError::bad_request(
+                    "Password must contain at least one uppercase letter",
+                ))
+            } else if !dto.password.chars().any(|c| c.is_lowercase()) {
+                Err(ServiceError::bad_request(
+                    "Password must contain at least one lowercase letter",
+                ))
+            } else if !dto.password.chars().any(|c| c.is_numeric()) {
+                Err(ServiceError::bad_request(
+                    "Password must contain at least one number",
                 ))
             } else {
                 Ok(())
@@ -122,8 +135,15 @@ fn validate_login_dto(dto: &LoginDTO) -> Result<(), ServiceError> {
 
 #[derive(Serialize, Deserialize)]
 pub struct TokenBodyResponse {
-    pub token: String,
+    pub access_token: String,
+    pub refresh_token: String,
     pub token_type: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct RefreshTokenRequest {
+    pub refresh_token: String,
+    pub tenant_id: String,
 }
 
 /// Creates a new user account using iterator-based validation and functional pipelines.
@@ -139,9 +159,7 @@ pub fn signup(user: UserDTO, pool: &Pool) -> Result<String, ServiceError> {
     // Use functional pipeline with validated data
     crate::services::functional_service_base::ServicePipeline::new(pool.clone())
         .with_data(user)
-        .execute(|user, conn| {
-            User::signup(user, conn).map_err(|msg| ServiceError::bad_request(msg))
-        })
+        .execute(|user, conn| User::signup(user, conn))
         .log_error("signup operation")
 }
 
@@ -158,21 +176,38 @@ pub fn login(login: LoginDTO, pool: &Pool) -> Result<TokenBodyResponse, ServiceE
     query_service
         .query(|conn| {
             User::login(login, conn).ok_or_else(|| {
-                ServiceError::unauthorized(constants::MESSAGE_USER_NOT_FOUND.to_string())
+                ServiceError::unauthorized(constants::MESSAGE_LOGIN_FAILED.to_string())
             })
         })
         .and_then(|logged_user| {
-            if logged_user.login_session.is_empty() {
-                Err(ServiceError::unauthorized(
-                    constants::MESSAGE_LOGIN_FAILED.to_string(),
-                ))
-            } else {
-                let token = UserToken::generate_token(&logged_user);
-                Ok(TokenBodyResponse {
-                    token,
+            // Since User::login now returns None for all authentication failures,
+            // we no longer need to check for empty login_session
+            // Get user by username and create refresh token
+            query_service
+                .query(|conn| {
+                    User::find_user_by_username(&logged_user.username, conn)
+                        .map_err(|_| {
+                            ServiceError::internal_server_error(
+                                "Failed to find user".to_string(),
+                            )
+                        })
+                        .and_then(|user| {
+                            let access_token = UserToken::generate_token(&logged_user);
+                            RefreshToken::create(user.id, conn)
+                                .map_err(|e| {
+                                    ServiceError::internal_server_error(format!(
+                                        "Failed to create refresh token: {}",
+                                        e
+                                    ))
+                                })
+                                .map(|refresh_token| (access_token, refresh_token))
+                        })
+                })
+                .map(|(access_token, refresh_token)| TokenBodyResponse {
+                    access_token,
+                    refresh_token,
                     token_type: "bearer".to_string(),
                 })
-            }
         })
         .log_error("login operation")
 }
@@ -273,13 +308,85 @@ pub fn refresh(
             })
         })
         .and_then(|login_info| {
-            let token = UserToken::generate_token(&login_info);
+            let access_token = UserToken::generate_token(&login_info);
             Ok(TokenBodyResponse {
-                token,
+                access_token,
+                refresh_token: "".to_string(), // Access token refresh doesn't provide new refresh token
                 token_type: "bearer".to_string(),
             })
         })
         .log_error("refresh operation")
+}
+
+/// Refreshes access token using refresh token.
+///
+/// Validates refresh token, checks expiry and revocation, then generates
+/// new access token and refresh token pair through functional composition.
+///
+/// # Returns
+/// `Ok(TokenBodyResponse)` with new token pair, `Err(ServiceError)` on validation errors.
+pub fn refresh_with_token(
+    refresh_token: &str,
+    tenant_id: &str,
+    pool: &Pool,
+) -> Result<TokenBodyResponse, ServiceError> {
+    log::debug!("refresh_with_token called for tenant: {}", tenant_id);
+    let query_service = FunctionalQueryService::new(pool.clone());
+
+    // Find and validate refresh token
+    query_service
+        .query(|conn| {
+            RefreshToken::find_by_token(refresh_token, conn)
+                .map_err(|_| ServiceError::unauthorized("Invalid refresh token".to_string()))
+        })
+        .and_then(|refresh_token_record| {
+            log::debug!(
+                "Found refresh token for user_id: {}, expires_at: {}",
+                refresh_token_record.user_id,
+                refresh_token_record.expires_at
+            );
+            // Get user info for new token generation
+            query_service
+                .query(|conn| {
+                    User::find_user_by_id(refresh_token_record.user_id, conn).map_err(|_| {
+                        ServiceError::internal_server_error("Failed to find user".to_string())
+                    })
+                })
+                .and_then(|user| {
+                    // Generate new tokens
+                    let access_token = UserToken::generate_token(&LoginInfoDTO {
+                        username: user.username.clone(),
+                        login_session: user.login_session.clone(),
+                        tenant_id: tenant_id.to_string(),
+                    });
+
+                    // Revoke old refresh token and create new one
+                    query_service
+                        .query(|conn| {
+                            // Revoke old token
+                            RefreshToken::revoke(refresh_token, conn).map_err(|e| {
+                                ServiceError::internal_server_error(format!(
+                                    "Failed to revoke old token: {}",
+                                    e
+                                ))
+                            })?;
+
+                            // Create new refresh token
+                            RefreshToken::create(user.id, conn).map_err(|e| {
+                                ServiceError::internal_server_error(format!(
+                                    "Failed to create refresh token: {}",
+                                    e
+                                ))
+                            })
+                        })
+                        .map(|new_refresh_token| TokenBodyResponse {
+                            access_token,
+                            refresh_token: new_refresh_token,
+                            token_type: "bearer".to_string(),
+                        })
+                })
+        })
+        .log_error("refresh_with_token operation")
 }
 
 /// Returns user info from token using functional pipeline.

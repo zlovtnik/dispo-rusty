@@ -585,8 +585,8 @@ mod tests {
             id: "test_tenant".to_string(),
             name: "Test Tenant".to_string(),
             db_url: "postgres://test:test@localhost/test".to_string(),
-            created_at: chrono::Utc::now().naive_utc(),
-            updated_at: chrono::Utc::now().naive_utc(),
+            created_at: Some(chrono::Utc::now().naive_utc()),
+            updated_at: Some(chrono::Utc::now().naive_utc()),
         }
     }
 
