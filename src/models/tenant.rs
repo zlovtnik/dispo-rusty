@@ -359,29 +359,31 @@ impl Tenant {
         let mut query = tenants::table.into_boxed();
         for field_filter in &filter.filters {
             match field_filter.field.as_str() {
-                "id" => {
-                    match field_filter.operator.as_str() {
-                        "contains" => query = query.filter(id.like(format!("%{}%", field_filter.value))),
-                        "equals" => query = query.filter(id.eq(&field_filter.value)),
-                        _ => {}
+                "id" => match field_filter.operator.as_str() {
+                    "contains" => {
+                        query = query.filter(id.like(format!("%{}%", field_filter.value)))
                     }
-                }
-                "name" => {
-                    match field_filter.operator.as_str() {
-                        "contains" => query = query.filter(name.like(format!("%{}%", field_filter.value))),
-                        "equals" => query = query.filter(name.eq(&field_filter.value)),
-                        _ => {}
+                    "equals" => query = query.filter(id.eq(&field_filter.value)),
+                    _ => {}
+                },
+                "name" => match field_filter.operator.as_str() {
+                    "contains" => {
+                        query = query.filter(name.like(format!("%{}%", field_filter.value)))
                     }
-                }
-                "db_url" => {
-                    match field_filter.operator.as_str() {
-                        "contains" => query = query.filter(db_url.like(format!("%{}%", field_filter.value))),
-                        "equals" => query = query.filter(db_url.eq(&field_filter.value)),
-                        _ => {}
+                    "equals" => query = query.filter(name.eq(&field_filter.value)),
+                    _ => {}
+                },
+                "db_url" => match field_filter.operator.as_str() {
+                    "contains" => {
+                        query = query.filter(db_url.like(format!("%{}%", field_filter.value)))
                     }
-                }
+                    "equals" => query = query.filter(db_url.eq(&field_filter.value)),
+                    _ => {}
+                },
                 "created_at" => {
-                    if let Ok(dt) = NaiveDateTime::parse_from_str(&field_filter.value, "%Y-%m-%dT%H:%M:%S%.fZ") {
+                    if let Ok(dt) =
+                        NaiveDateTime::parse_from_str(&field_filter.value, "%Y-%m-%dT%H:%M:%S%.fZ")
+                    {
                         match field_filter.operator.as_str() {
                             "gt" => query = query.filter(created_at.gt(dt)),
                             "gte" => query = query.filter(created_at.ge(dt)),
@@ -393,7 +395,9 @@ impl Tenant {
                     }
                 }
                 "updated_at" => {
-                    if let Ok(dt) = NaiveDateTime::parse_from_str(&field_filter.value, "%Y-%m-%dT%H:%M:%S%.fZ") {
+                    if let Ok(dt) =
+                        NaiveDateTime::parse_from_str(&field_filter.value, "%Y-%m-%dT%H:%M:%S%.fZ")
+                    {
                         match field_filter.operator.as_str() {
                             "gt" => query = query.filter(updated_at.gt(dt)),
                             "gte" => query = query.filter(updated_at.ge(dt)),

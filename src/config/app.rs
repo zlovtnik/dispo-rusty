@@ -229,10 +229,7 @@ fn configure_tenant_admin_routes(cfg: &mut web::ServiceConfig) {
 fn configure_user_routes(cfg: &mut web::ServiceConfig) {
     RouteBuilder::new()
         .add_route(|cfg| {
-            cfg.service(
-                web::resource("")
-                    .route(web::get().to(user_controller::find_all)),
-            );
+            cfg.service(web::resource("").route(web::get().to(user_controller::find_all)));
         })
         .add_route(|cfg| {
             cfg.service(
