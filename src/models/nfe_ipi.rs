@@ -42,8 +42,10 @@ pub struct NewNfeIpi {
     pub valor: Option<Decimal>,
 }
 
+#[diesel(treat_none_as_null = false)]
 #[derive(AsChangeset, Serialize, Deserialize, Debug)]
 #[diesel(table_name = nfe_ipi)]
+#[diesel(treat_none_as_null = false)]
 pub struct UpdateNfeIpi {
     pub cst: Option<String>,
     pub classe_enquadramento: Option<String>,

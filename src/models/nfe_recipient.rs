@@ -1,5 +1,5 @@
 use crate::schema::nfe_recipients;
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -29,8 +29,8 @@ pub struct NfeRecipient {
     pub codigo_pais: Option<String>,
     pub pais: Option<String>,
     pub telefone: Option<String>,
-    pub created_at: NaiveDateTime,
-    pub updated_at: NaiveDateTime,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Insertable, Serialize, Deserialize, Debug)]
@@ -79,5 +79,5 @@ pub struct UpdateNfeRecipient {
     pub codigo_pais: Option<String>,
     pub pais: Option<String>,
     pub telefone: Option<String>,
-    pub updated_at: Option<NaiveDateTime>,
+    pub updated_at: Option<DateTime<Utc>>,
 }

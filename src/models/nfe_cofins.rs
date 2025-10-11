@@ -36,6 +36,7 @@ pub struct NewNfeCofins {
 
 #[derive(AsChangeset, Serialize, Deserialize, Debug)]
 #[diesel(table_name = nfe_cofins)]
+#[diesel(treat_none_as_null = false)]
 pub struct UpdateNfeCofins {
     pub cst: Option<String>,
     pub modalidade_bc: Option<String>,

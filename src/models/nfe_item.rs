@@ -1,7 +1,7 @@
 use crate::models::nfe_document::NfeDocument;
 use crate::models::nfe_product::NfeProduct;
 use crate::schema::nfe_items;
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -41,8 +41,8 @@ pub struct NfeItem {
     pub informacoes_adicionais: Option<String>,
     pub numero_pedido_compra: Option<String>,
     pub item_pedido_compra: Option<String>,
-    pub created_at: NaiveDateTime,
-    pub updated_at: NaiveDateTime,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Insertable, Serialize, Deserialize, Debug)]
@@ -102,5 +102,5 @@ pub struct UpdateNfeItem {
     pub informacoes_adicionais: Option<String>,
     pub numero_pedido_compra: Option<String>,
     pub item_pedido_compra: Option<String>,
-    pub updated_at: Option<NaiveDateTime>,
+    pub updated_at: Option<DateTime<Utc>>,
 }

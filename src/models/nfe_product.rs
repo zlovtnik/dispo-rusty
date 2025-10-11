@@ -1,5 +1,5 @@
 use crate::schema::nfe_products;
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -30,8 +30,8 @@ pub struct NfeProduct {
     pub cofins_aliquota: Option<Decimal>,
     pub informacoes_adicionais: Option<String>,
     pub ativo: bool,
-    pub created_at: NaiveDateTime,
-    pub updated_at: NaiveDateTime,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Insertable, Serialize, Deserialize, Debug)]
@@ -61,6 +61,7 @@ pub struct NewNfeProduct {
     pub ativo: Option<bool>,
 }
 
+#[diesel(treat_none_as_null = false)]
 #[derive(AsChangeset, Serialize, Deserialize, Debug)]
 #[diesel(table_name = nfe_products)]
 pub struct UpdateNfeProduct {
@@ -84,5 +85,5 @@ pub struct UpdateNfeProduct {
     pub cofins_aliquota: Option<Decimal>,
     pub informacoes_adicionais: Option<String>,
     pub ativo: Option<bool>,
-    pub updated_at: Option<NaiveDateTime>,
+    pub updated_at: Option<DateTime<Utc>>,
 }

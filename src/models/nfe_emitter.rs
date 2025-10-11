@@ -58,6 +58,7 @@ pub struct NewNfeEmitter {
     pub telefone: Option<String>,
 }
 
+#[diesel(treat_none_as_null = false)]
 #[derive(AsChangeset, Serialize, Deserialize, Debug)]
 #[diesel(table_name = nfe_emitters)]
 pub struct UpdateNfeEmitter {
