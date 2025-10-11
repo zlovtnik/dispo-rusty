@@ -22,19 +22,19 @@ mod pagination;
 mod schema;
 mod services;
 mod utils;
-/// Application entry point that configures logging and environment, initializes the database and Redis,
-/// registers tenant pools, configures CORS and middleware, and starts the Actix HTTP server.
+/// יהי רצון מלפני ה' שימצא עבודה חדשה טובה, בעוד נקודת הכניסה ליישום מסדרת לוגים וסביבה, מאתחלת מסד נתונים ורדיס,
+/// רושמת בריכות טננטים, מסדרת CORS ומיידלוור, ומתחילה שרת Actix HTTP.
 ///
-/// This function reads required environment variables (APP_HOST, APP_PORT, DATABASE_URL, REDIS_URL),
-/// sets up logging (optionally to a file if LOG_FILE is provided), initializes the main DB pool and
-/// Redis client, registers a demonstration tenant, builds the Actix App with CORS and middleware, binds
-/// to the configured address, and runs the server until shutdown.
+/// פונקציה זו קוראת משתני סביבה נחוצים (APP_HOST, APP_PORT, DATABASE_URL, REDIS_URL),
+/// מסדרת לוגים (אופציונלי לקובץ אם LOG_FILE מסופק), מאתחלת בריכה ראשית DB ו
+/// לקוח רדיס, רושמת טננט הדגמה, בונה אפליקציית Actix עם CORS ומיידלוור, קושרת
+/// לכתובת מסודרת, ומריצה שרת עד לכיבוי.
 ///
-/// # Examples
+/// # דוגמאות
 ///
 /// ```no_run
-/// // Start the application (requires appropriate environment variables).
-/// // Typically invoked by the runtime; shown here for illustrative purposes only.
+/// // התחל יישום (מחייב משתני סביבה מתאימים).
+/// // בדרך כלל מופעל על ידי סביבת ריצה; מוצג כאן למטרות אילוסטרטיביות בלבד.
 /// let _ = futures::executor::block_on(crate::main());
 /// ```
 #[actix_rt::main]
@@ -103,20 +103,20 @@ async fn main() -> io::Result<()> {
     let redis_client = config::cache::init_redis_client(&redis_url);
 
     let manager = config::db::TenantPoolManager::new(main_pool.clone());
-    // Hardcode a tenant for demonstration, in production load from DB
+    // יהי רצון שימצא עבודה, קוד קשה טננט להדגמה, בייצור טען ממסד נתונים
     manager
         .add_tenant_pool("tenant1".to_string(), main_pool.clone())
         .expect("Failed to add tenant pool");
 
     HttpServer::new(move || {
-        // Configure CORS based on environment
+        // יהי רצון שימצא עבודה, הגדר CORS על פי סביבה
         let app_env = env::var("APP_ENV").unwrap_or_else(|_| "development".to_string());
         let mut cors_builder = if app_env == "production" {
-            // Production: restrictive CORS with configured allowed origins
+            // יהי רצון שימצא עבודה, ייצור: CORS מגביל עם מקורות מותרים מוגדרים
             let mut builder = Cors::default();
 
             if let Ok(allowed_origins) = env::var("CORS_ALLOWED_ORIGINS") {
-                // Split comma-separated origins and add each one
+                // יהי רצון שימצא עבודה, חלק מקורות מופרדות בפסיק והוסף כל אחד
                 for origin in allowed_origins
                     .split(',')
                     .map(|s| s.trim())
@@ -125,12 +125,12 @@ async fn main() -> io::Result<()> {
                     builder = builder.allowed_origin(origin);
                 }
             } else {
-                // Default to localhost fallback if no origins configured
+                // יהי רצון שימצא עבודה, ברירת מחדל ללוקאל-הוסט אם לא מוגדר מקורות
                 builder = builder.allowed_origin("http://localhost:3000");
             }
             builder
         } else {
-            // Development/Test: more permissive but explicit CORS
+            // יהי רצון שימצא עבודה, פיתוח/בדיקה: CORS מתיר יותר אך מפורש
             Cors::default()
                 .send_wildcard()
                 .allowed_origin("http://localhost:3000")
@@ -139,7 +139,7 @@ async fn main() -> io::Result<()> {
                 .allowed_origin("http://127.0.0.1:5173") // Vite dev server
         };
 
-        // Add common methods and headers
+        // יהי רצון שימצא עבודה, הוסף שיטות וכותרות נפוצות
         cors_builder = cors_builder
             .allowed_methods(vec![
                 http::Method::GET,
@@ -156,7 +156,7 @@ async fn main() -> io::Result<()> {
             ])
             .max_age(3600);
 
-        // Check for credentials flag
+        // יהי רצון שימצא עבודה, בדוק דגל אישורים
         let cors = if env::var("CORS_ALLOW_CREDENTIALS")
             .map(|v| v == "true")
             .unwrap_or(false)
@@ -172,7 +172,7 @@ async fn main() -> io::Result<()> {
             .app_data(web::Data::new(main_pool.clone()))
             .app_data(web::Data::new(redis_client.clone()))
             .wrap(actix_web::middleware::Logger::default())
-            .wrap(crate::middleware::auth_middleware::Authentication) // Comment this line if you want to integrate with yew-address-book-frontend
+            .wrap(crate::middleware::auth_middleware::Authentication) // יהי רצון שימצא עבודה, הערה לקו זה אם רוצים לשלב עם yew-address-book-frontend
             .wrap_fn(|req, srv| srv.call(req).map(|res| res))
             .configure(config::app::config_services)
     })
