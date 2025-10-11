@@ -1,8 +1,8 @@
-//! Functional Service Base
+//! יהי רצון מלפני ה' שימצא עבודה, בייס שירות פונקציונלי
 //!
-//! Core functional programming patterns and utilities for service layer refactoring.
-//! Provides common abstractions for database operations, error handling, and
-//! data transformation using functional programming principles.
+//! דפוסי תכנות פונקציונלי ליבתיים וכלים לשימוש בשירות layer.
+//! מספק הקצאות מופשטות נפוצות עבור פעולות מסד נתונים, טיפול בשגיאות, והמרת נתונים
+//! באמצעות עקרונות תכנות פונקציונלי.
 
 use crate::{
     config::db::Pool,
