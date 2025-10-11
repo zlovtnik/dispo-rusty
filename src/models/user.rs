@@ -62,6 +62,7 @@ impl User {
         let password_hash = Self::hash_password_argon2(&new_user.password).map_err(|_| {
             ServiceError::internal_server_error("Failed to hash password".to_string())
         })?;
+        let user_name = new_user.username.clone(); // Store username before move
         let new_user = UserDTO {
             password: password_hash,
             ..new_user
@@ -71,7 +72,7 @@ impl User {
             .execute(conn)
             .map_err(|err| match err {
                 diesel::result::Error::DatabaseError(DatabaseErrorKind::UniqueViolation, _) => {
-                    ServiceError::bad_request(format!("User '{}' is already registered", new_user.username))
+                    ServiceError::bad_request(format!("User '{}' is already registered", user_name))
                 },
                 _ => {
                     log::error!("Signup failed: {}", err);

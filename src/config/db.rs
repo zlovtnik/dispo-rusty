@@ -1,6 +1,5 @@
 use crate::error::ServiceError;
 use crate::services::functional_patterns::Either;
-use crate::config::functional_config::EitherConvert;
 #[allow(unused_imports)]
 use diesel::{
     pg::PgConnection,

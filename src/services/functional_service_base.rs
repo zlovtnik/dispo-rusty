@@ -106,7 +106,7 @@ where
             transformations,
         } = self;
 
-        let mut pipeline_data = monadic::option_to_result(
+        let pipeline_data = monadic::option_to_result(
             data,
             |value| value,
             || ServiceError::bad_request("No data provided to pipeline"),
