@@ -340,7 +340,11 @@ impl User {
     /// # Returns
     ///
     /// Ok(()) on success, or a database error.
-    pub fn update(user_id: i32, updated_user: UserDTO, conn: &mut Connection) -> QueryResult<usize> {
+    pub fn update(
+        user_id: i32,
+        updated_user: UserDTO,
+        conn: &mut Connection,
+    ) -> QueryResult<usize> {
         diesel::update(users.filter(id.eq(user_id)))
             .set((
                 username.eq(updated_user.username),

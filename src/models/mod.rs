@@ -32,28 +32,27 @@ pub mod user_token;
 
 // Re-export functional programming utilities for model operations
 pub use crate::functional::{
-    query_builder::{
-        Column, Operator, Predicate, QueryFilter, TypeSafeQueryBuilder,
-        equals, contains, compare, null_check
-    },
-    query_composition::{
-        ComposablePredicate, FunctionalQueryComposer, LazyEvaluationConfig,
-        QueryPerformanceMetrics, ParameterSanitizer, QueryOptimizationEngine,
-        composable_predicate, field_filter_to_composable
-    },
-    validation_engine::{
-        ValidationEngine, ValidationConfig, ValidationContext, ValidationOutcome,
-        ValidationPipeline, ValidationPipelineResult, LazyValidationIterator,
-        validator, validator_with_config, validate_struct_field
-    },
-    validation_rules::{
-        ValidationRule, ValidationResult, ValidationError,
-        Required, Length, Email, Range, Phone, Url, Custom, OneOf, Unique, MustBeTrue,
-        all, any, not, when
-    },
     iterator_engine::{IteratorChain, IteratorEngine},
     pure_function_registry::{PureFunctionRegistry, RegistryError, SharedRegistry},
-    response_transformers::{ResponseTransformer},
+    query_builder::{
+        compare, contains, equals, null_check, Column, Operator, Predicate, QueryFilter,
+        TypeSafeQueryBuilder,
+    },
+    query_composition::{
+        composable_predicate, field_filter_to_composable, ComposablePredicate,
+        FunctionalQueryComposer, LazyEvaluationConfig, ParameterSanitizer, QueryOptimizationEngine,
+        QueryPerformanceMetrics,
+    },
+    response_transformers::ResponseTransformer,
+    validation_engine::{
+        validate_struct_field, validator, validator_with_config, LazyValidationIterator,
+        ValidationConfig, ValidationContext, ValidationEngine, ValidationOutcome,
+        ValidationPipeline, ValidationPipelineResult,
+    },
+    validation_rules::{
+        all, any, not, when, Custom, Email, Length, MustBeTrue, OneOf, Phone, Range, Required,
+        Unique, Url, ValidationError, ValidationResult, ValidationRule,
+    },
 };
 
 // Re-export commonly used functional traits

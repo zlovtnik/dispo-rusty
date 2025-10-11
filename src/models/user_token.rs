@@ -1,13 +1,26 @@
-use std::env;
+use std::{env, fs};
 
 use chrono::Utc;
 use jsonwebtoken::{EncodingKey, Header};
 use log::debug;
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 
 use crate::models::user::LoginInfoDTO;
 
-pub static KEY: [u8; 16] = *include_bytes!("../secret.key");
+/// Lazily loads the JWT secret from `JWT_SECRET` env var or `src/secret.key` fallback.
+pub static SECRET_KEY: Lazy<Vec<u8>> = Lazy::new(|| {
+    // dotenv is idempotent; allows local development without explicit env loading elsewhere.
+    let _ = dotenv::dotenv();
+
+    if let Ok(secret) = env::var("JWT_SECRET") {
+        return secret.into_bytes();
+    }
+
+    fs::read("src/secret.key")
+        .or_else(|_| fs::read("secret.key"))
+        .expect("JWT secret not configured. Provide JWT_SECRET or src/secret.key")
+});
 static ONE_WEEK: i64 = 60 * 60 * 24 * 7; // in seconds
 
 #[derive(Serialize, Deserialize)]
@@ -46,7 +59,7 @@ impl UserToken {
     /// assert!(!token.is_empty());
     /// ```
     pub fn generate_token(login: &LoginInfoDTO) -> String {
-        dotenv::dotenv().expect("Failed to read .env file");
+        let _ = dotenv::dotenv();
         let max_age: i64 = match env::var("MAX_AGE") {
             Ok(val) => val.parse::<i64>().unwrap_or(ONE_WEEK),
             Err(_) => ONE_WEEK,
@@ -66,7 +79,7 @@ impl UserToken {
         jsonwebtoken::encode(
             &Header::default(),
             &payload,
-            &EncodingKey::from_secret(&KEY),
+            &EncodingKey::from_secret(SECRET_KEY.as_slice()),
         )
         .unwrap()
     }

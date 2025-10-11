@@ -1,13 +1,13 @@
-use diesel::{prelude::*, AsChangeset, Insertable, Queryable, BoxableExpression};
-use serde::{Deserialize, Serialize};
+use diesel::{prelude::*, AsChangeset, BoxableExpression, Insertable, Queryable};
 use regex::Regex;
+use serde::{Deserialize, Serialize};
 
 use crate::{
-    config::db::Connection, constants::MESSAGE_OK, models::pagination::SortingAndPaging,
-    schema::people, error::ServiceError,
+    config::db::Connection, constants::MESSAGE_OK, error::ServiceError,
+    models::pagination::SortingAndPaging, schema::people,
 };
 
-use super::{filters::PersonFilter, pagination::HasId, response::Page, functional_utils};
+use super::{filters::PersonFilter, functional_utils, pagination::HasId, response::Page};
 
 // Re-export functional utilities for person operations
 pub use functional_utils::*;
@@ -44,9 +44,8 @@ impl PersonDTO {
         let mut errors = Vec::new();
 
         // Get email regex
-        let email_regex = EMAIL_REGEX.get_or_init(|| {
-            Regex::new(r"^[^@\s]+@[^@\s]+\.[^@\s]+$").unwrap()
-        });
+        let email_regex =
+            EMAIL_REGEX.get_or_init(|| Regex::new(r"^[^@\s]+@[^@\s]+\.[^@\s]+$").unwrap());
 
         // Define validation functions with consistent signatures
         let validate_required = |value: &str, field: &str| -> Option<String> {
@@ -57,20 +56,21 @@ impl PersonDTO {
             }
         };
 
-        let validate_length = |value: &str, field: &str, min: Option<usize>, max: Option<usize>| -> Option<String> {
-            let len = value.len();
-            if let Some(min_len) = min {
-                if len < min_len {
-                    return Some(format!("{} must be at least {} characters", field, min_len));
+        let validate_length =
+            |value: &str, field: &str, min: Option<usize>, max: Option<usize>| -> Option<String> {
+                let len = value.len();
+                if let Some(min_len) = min {
+                    if len < min_len {
+                        return Some(format!("{} must be at least {} characters", field, min_len));
+                    }
                 }
-            }
-            if let Some(max_len) = max {
-                if len > max_len {
-                    return Some(format!("{} must be at most {} characters", field, max_len));
+                if let Some(max_len) = max {
+                    if len > max_len {
+                        return Some(format!("{} must be at most {} characters", field, max_len));
+                    }
                 }
-            }
-            None
-        };
+                None
+            };
 
         let validate_email = |value: &str, field: &str| -> Option<String> {
             if !email_regex.is_match(value) {
@@ -178,23 +178,93 @@ impl Person {
         let mut query = people::table.into_boxed();
 
         // Build query using functional composition with fold
-        let predicates: Vec<Box<dyn BoxableExpression<people::table, diesel::pg::Pg, SqlType = diesel::sql_types::Bool>>> = vec![
-            filter.age.map(|age| people::age.eq(age)).map(|expr| Box::new(expr) as Box<dyn BoxableExpression<people::table, diesel::pg::Pg, SqlType = diesel::sql_types::Bool>>),
-            filter.email.as_ref().map(|email| people::email.like(format!("%{}%", email))).map(|expr| Box::new(expr) as Box<dyn BoxableExpression<people::table, diesel::pg::Pg, SqlType = diesel::sql_types::Bool>>),
-            filter.name.as_ref().map(|name| people::name.like(format!("%{}%", name))).map(|expr| Box::new(expr) as Box<dyn BoxableExpression<people::table, diesel::pg::Pg, SqlType = diesel::sql_types::Bool>>),
-            filter.phone.as_ref().map(|phone| people::phone.like(format!("%{}%", phone))).map(|expr| Box::new(expr) as Box<dyn BoxableExpression<people::table, diesel::pg::Pg, SqlType = diesel::sql_types::Bool>>),
-            filter.gender.as_ref().and_then(|gender| {
-                match gender.to_lowercase().as_str() {
+        let predicates: Vec<
+            Box<
+                dyn BoxableExpression<
+                    people::table,
+                    diesel::pg::Pg,
+                    SqlType = diesel::sql_types::Bool,
+                >,
+            >,
+        > = vec![
+            filter.age.map(|age| people::age.eq(age)).map(|expr| {
+                Box::new(expr)
+                    as Box<
+                        dyn BoxableExpression<
+                            people::table,
+                            diesel::pg::Pg,
+                            SqlType = diesel::sql_types::Bool,
+                        >,
+                    >
+            }),
+            filter
+                .email
+                .as_ref()
+                .map(|email| people::email.like(format!("%{}%", email)))
+                .map(|expr| {
+                    Box::new(expr)
+                        as Box<
+                            dyn BoxableExpression<
+                                people::table,
+                                diesel::pg::Pg,
+                                SqlType = diesel::sql_types::Bool,
+                            >,
+                        >
+                }),
+            filter
+                .name
+                .as_ref()
+                .map(|name| people::name.like(format!("%{}%", name)))
+                .map(|expr| {
+                    Box::new(expr)
+                        as Box<
+                            dyn BoxableExpression<
+                                people::table,
+                                diesel::pg::Pg,
+                                SqlType = diesel::sql_types::Bool,
+                            >,
+                        >
+                }),
+            filter
+                .phone
+                .as_ref()
+                .map(|phone| people::phone.like(format!("%{}%", phone)))
+                .map(|expr| {
+                    Box::new(expr)
+                        as Box<
+                            dyn BoxableExpression<
+                                people::table,
+                                diesel::pg::Pg,
+                                SqlType = diesel::sql_types::Bool,
+                            >,
+                        >
+                }),
+            filter
+                .gender
+                .as_ref()
+                .and_then(|gender| match gender.to_lowercase().as_str() {
                     "male" => Some(people::gender.eq(true)),
                     "female" => Some(people::gender.eq(false)),
                     _ => None,
-                }
-            }).map(|expr| Box::new(expr) as Box<dyn BoxableExpression<people::table, diesel::pg::Pg, SqlType = diesel::sql_types::Bool>>),
-        ].into_iter()
+                })
+                .map(|expr| {
+                    Box::new(expr)
+                        as Box<
+                            dyn BoxableExpression<
+                                people::table,
+                                diesel::pg::Pg,
+                                SqlType = diesel::sql_types::Bool,
+                            >,
+                        >
+                }),
+        ]
+        .into_iter()
         .flatten()
         .collect();
 
-        query = predicates.into_iter().fold(query, |q, predicate| q.filter(predicate));
+        query = predicates
+            .into_iter()
+            .fold(query, |q, predicate| q.filter(predicate));
 
         let cursor = filter.cursor.unwrap_or(0);
         let page_size = filter
@@ -239,15 +309,17 @@ impl Person {
     /// ```
     pub fn insert(new_person: PersonDTO, conn: &mut Connection) -> Result<usize, ServiceError> {
         // Validate using functional validation patterns
-        new_person.validate().map_err(|errors| {
-            ServiceError::bad_request(errors.join("; "))
-        })?;
+        new_person
+            .validate()
+            .map_err(|errors| ServiceError::bad_request(errors.join("; ")))?;
 
         // Insert using functional composition
         diesel::insert_into(people::table)
             .values(&new_person)
             .execute(conn)
-            .map_err(|e| ServiceError::internal_server_error(format!("Failed to insert person: {}", e)))
+            .map_err(|e| {
+                ServiceError::internal_server_error(format!("Failed to insert person: {}", e))
+            })
     }
 
     /// Updates the person record with the specified id using values from `updated_person`.
