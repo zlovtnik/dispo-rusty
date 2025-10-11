@@ -32,6 +32,9 @@ COPY migrations/ ./migrations/
 # Copy source code
 COPY src/ ./src/
 
+# Copy benchmark files
+COPY benches/ ./benches/
+
 # Development fallback: Generate secret.key only if DEV_MODE is true
 # In production, secrets should be injected at runtime via:
 # - Environment variable: JWT_SECRET (base64 encoded 16-byte key)
