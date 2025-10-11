@@ -500,7 +500,10 @@ impl Tenant {
             match i32::try_from(value) {
                 Ok(v) => v,
                 Err(_) => {
-                    log::warn!("Cursor value {} exceeds i32::MAX, truncating to i32::MAX", value);
+                    log::warn!(
+                        "Cursor value {} exceeds i32::MAX, truncating to i32::MAX",
+                        value
+                    );
                     i32::MAX
                 }
             }

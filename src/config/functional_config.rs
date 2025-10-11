@@ -4,10 +4,7 @@
 //! operations. It includes composable builders, functional error handling, and pipeline-based
 //! initialization patterns that align with the project's functional programming principles.
 
-use crate::{
-    error::ServiceError,
-    services::functional_patterns::Either,
-};
+use crate::{error::ServiceError, services::functional_patterns::Either};
 
 use actix_web::web;
 
@@ -24,8 +21,8 @@ impl RouteBuilder {
     }
 
     /// Add a route configuration function
-    pub fn add_route<F>(mut self, route_fn: F) -> Self 
-    where 
+    pub fn add_route<F>(mut self, route_fn: F) -> Self
+    where
         F: Fn(&mut web::ServiceConfig) + Send + Sync + 'static,
     {
         self.routes.push(Box::new(route_fn));
@@ -56,12 +53,12 @@ impl FunctionalLogger {
     {
         move |cfg| {
             log::info!("Starting functional configuration...");
-            
+
             // Wrap f(cfg) call in panic handler
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 f(cfg);
             }));
-            
+
             match result {
                 Ok(_) => {
                     log::info!("Functional configuration completed successfully");
