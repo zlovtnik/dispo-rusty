@@ -346,7 +346,7 @@ mod tests {
             .uri("/api/auth/signup")
             .insert_header(header::ContentType::json())
             .set_payload(
-                r#"{"username":"admin","email":"admin@gmail.com","password":"123456","tenant_id":"test"}"#.as_bytes(),
+                r#"{"username":"admin","email":"admin@gmail.com","password":"TestPass123","tenant_id":"test"}"#.as_bytes(),
             )
             .send_request(&app)
             .await;
@@ -489,7 +489,7 @@ mod tests {
             .uri("/api/auth/signup")
             .insert_header(header::ContentType::json())
             .set_payload(
-                r#"{"username":"admin","email":"admin@gmail.com","password":"123456","tenant_id":"test"}"#.as_bytes(),
+                r#"{"username":"admin","email":"admin@gmail.com","password":"TestPass123","tenant_id":"test"}"#.as_bytes(),
             )
             .send_request(&app)
             .await;
@@ -498,7 +498,7 @@ mod tests {
             .uri("/api/auth/login")
             .insert_header(header::ContentType::json())
             .set_payload(
-                r#"{"username_or_email":"admin","password":"123456","tenant_id":"test"}"#
+                r#"{"username_or_email":"admin","password":"TestPass123","tenant_id":"test"}"#
                     .as_bytes(),
             )
             .send_request(&app)
@@ -554,7 +554,7 @@ mod tests {
             .uri("/api/auth/signup")
             .insert_header(header::ContentType::json())
             .set_payload(
-                r#"{"username":"admin","email":"admin@gmail.com","password":"123456","tenant_id":"test"}"#.as_bytes(),
+                r#"{"username":"admin","email":"admin@gmail.com","password":"TestPass123","tenant_id":"test"}"#.as_bytes(),
             )
             .send_request(&app)
             .await;
@@ -563,7 +563,7 @@ mod tests {
             .uri("/api/auth/login")
             .insert_header(header::ContentType::json())
             .set_payload(
-                r#"{"username_or_email":"admin@gmail.com","password":"123456","tenant_id":"test"}"#
+                r#"{"username_or_email":"admin@gmail.com","password":"TestPass123","tenant_id":"test"}"#
                     .as_bytes(),
             )
             .send_request(&app)

@@ -326,7 +326,7 @@ mod tests {
         let user_dto = UserDTO {
             email: "admin@example.com".to_string(),
             username: "admin".to_string(),
-            password: "123456".to_string(),
+            password: "TestPass123".to_string(),
             active: true,
         };
 
@@ -334,7 +334,7 @@ mod tests {
             Ok(_) => {
                 let login_dto = LoginDTO {
                     username_or_email: "admin".to_string(),
-                    password: "123456".to_string(),
+                    password: "TestPass123".to_string(),
                     tenant_id: "tenant1".to_string(),
                 };
                 match account_service::login(login_dto, pool) {

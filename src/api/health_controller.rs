@@ -1039,7 +1039,7 @@ mod tests {
         )
         .await;
 
-        let req = test::TestRequest::get().uri("/api/health").to_request();
+        let req = test::TestRequest::get().uri("/health").to_request();
         let resp = test::call_service(&app, req).await;
 
         assert_eq!(resp.status(), StatusCode::OK);
