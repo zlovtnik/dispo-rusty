@@ -196,16 +196,15 @@ pub async fn refresh_token(
 ) -> Result<HttpResponse, ServiceError> {
     log::debug!("refresh_token controller called");
     let refresh_payload = refresh_dto.into_inner();
-    let tenant_id = refresh_payload.tenant_id.clone();
+    let tenant_id = refresh_payload.tenant_id;
 
     if let Some(pool) = manager.get_tenant_pool(&tenant_id) {
-        let tenant_metadata = tenant_id.clone();
         account_service::refresh_with_token(&refresh_payload.refresh_token, &tenant_id, &pool)
             .log_error("account_controller::refresh_token")
             .and_then(|token_res| {
                 ResponseTransformer::new(token_res)
                     .with_message(Cow::Borrowed(constants::MESSAGE_OK))
-                    .try_with_metadata(json!({ "tenant_id": tenant_metadata }))
+                    .try_with_metadata(json!({ "tenant_id": tenant_id }))
                     .map(|transformer| transformer.respond_to(&req))
                     .map_err(response_composition_error)
             })

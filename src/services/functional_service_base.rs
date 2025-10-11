@@ -254,11 +254,14 @@ impl FunctionalQueryService {
                 .with_detail(e.to_string())
         }))?;
 
-        monadic::flatten_option(
+        let result = monadic::flatten_option(
             query_builder(&mut conn),
             |err| err,
             || ServiceError::not_found("Record not found"),
-        )
+        );
+
+        let error_adapter = PipelineErrorAdapter::new("functional_query", Level::Warn);
+        error_adapter.transform(result)
     }
 }
 

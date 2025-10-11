@@ -49,9 +49,6 @@ fn configure_api_routes(cfg: &mut web::ServiceConfig) {
             cfg.service(ping_controller::ping);
         })
         .add_route(|cfg| {
-            cfg.service(health_controller::health);
-        })
-        .add_route(|cfg| {
             cfg.service(health_controller::health_detailed);
         })
         .add_route(|cfg| {

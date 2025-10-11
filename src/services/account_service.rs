@@ -178,42 +178,38 @@ pub fn login(login: LoginDTO, pool: &Pool) -> Result<TokenBodyResponse, ServiceE
     query_service
         .query(|conn| {
             User::login(login, conn).ok_or_else(|| {
-                ServiceError::unauthorized(constants::MESSAGE_USER_NOT_FOUND.to_string())
+                ServiceError::unauthorized(constants::MESSAGE_LOGIN_FAILED.to_string())
             })
         })
         .and_then(|logged_user| {
-            if logged_user.login_session.is_empty() {
-                Err(ServiceError::unauthorized(
-                    constants::MESSAGE_LOGIN_FAILED.to_string(),
-                ))
-            } else {
-                // Get user by username and create refresh token
-                query_service
-                    .query(|conn| {
-                        User::find_user_by_username(&logged_user.username, conn)
-                            .map_err(|_| {
-                                ServiceError::internal_server_error(
-                                    "Failed to find user".to_string(),
-                                )
-                            })
-                            .and_then(|user| {
-                                let access_token = UserToken::generate_token(&logged_user);
-                                RefreshToken::create(user.id, conn)
-                                    .map_err(|e| {
-                                        ServiceError::internal_server_error(format!(
-                                            "Failed to create refresh token: {}",
-                                            e
-                                        ))
-                                    })
-                                    .map(|refresh_token| (access_token, refresh_token))
-                            })
-                    })
-                    .map(|(access_token, refresh_token)| TokenBodyResponse {
-                        access_token,
-                        refresh_token,
-                        token_type: "bearer".to_string(),
-                    })
-            }
+            // Since User::login now returns None for all authentication failures,
+            // we no longer need to check for empty login_session
+            // Get user by username and create refresh token
+            query_service
+                .query(|conn| {
+                    User::find_user_by_username(&logged_user.username, conn)
+                        .map_err(|_| {
+                            ServiceError::internal_server_error(
+                                "Failed to find user".to_string(),
+                            )
+                        })
+                        .and_then(|user| {
+                            let access_token = UserToken::generate_token(&logged_user);
+                            RefreshToken::create(user.id, conn)
+                                .map_err(|e| {
+                                    ServiceError::internal_server_error(format!(
+                                        "Failed to create refresh token: {}",
+                                        e
+                                    ))
+                                })
+                                .map(|refresh_token| (access_token, refresh_token))
+                        })
+                })
+                .map(|(access_token, refresh_token)| TokenBodyResponse {
+                    access_token,
+                    refresh_token,
+                    token_type: "bearer".to_string(),
+                })
         })
         .log_error("login operation")
 }

@@ -542,8 +542,8 @@ pub mod functional_middleware_impl {
         ///
         /// ```
         /// // Given a `ServiceRequest` named `req`:
-        /// let resp = create_error_response(req, "Internal server error").unwrap();
-        /// assert_eq!(resp.status(), actix_web::http::StatusCode::INTERNAL_SERVER_ERROR);
+        /// let resp = create_error_response(req, "Unauthorized access").unwrap();
+        /// assert_eq!(resp.status(), actix_web::http::StatusCode::UNAUTHORIZED);
         /// ```
         fn create_error_response(
             req: ServiceRequest,

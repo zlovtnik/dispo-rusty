@@ -69,12 +69,7 @@ impl User {
             return Err(format!("Email '{}' is already registered", &new_user.email));
         }
 
-        let salt = SaltString::generate(&mut OsRng);
-        let argon2 = Argon2::default();
-        let password_hash = argon2
-            .hash_password(new_user.password.as_bytes(), &salt)
-            .map_err(|e| format!("Password hashing failed: {}", e))?
-            .to_string();
+        let password_hash = Self::hash_password_argon2(&new_user.password)?;
         let new_user = UserDTO {
             password: password_hash,
             ..new_user
@@ -86,71 +81,89 @@ impl User {
         Ok(constants::MESSAGE_SIGNUP_SUCCESS.to_string())
     }
 
+    /// Hash a password using Argon2 algorithm
+    /// 
+    /// # Arguments
+    /// * `plain_password` - The plain text password to hash
+    /// 
+    /// # Returns
+    /// * `Ok(String)` - The hashed password on success
+    /// * `Err(String)` - A formatted error message on failure
+    fn hash_password_argon2(plain_password: &str) -> Result<String, String> {
+        let salt = SaltString::generate(&mut OsRng);
+        let argon2 = Argon2::default();
+        argon2
+            .hash_password(plain_password.as_bytes(), &salt)
+            .map_err(|e| format!("Password hashing failed: {}", e))
+            .map(|hash| hash.to_string())
+    }
+
     pub fn login(login: LoginDTO, conn: &mut Connection) -> Option<LoginInfoDTO> {
-        if let Ok(user_to_verify) = users
+        // 1) Fetch user (early return None if not found)
+        let user_to_verify = users
             .filter(username.eq(&login.username_or_email))
             .or_filter(email.eq(&login.username_or_email))
             .get_result::<User>(conn)
-        {
-            if !user_to_verify.active {
-                return Some(LoginInfoDTO {
-                    username: user_to_verify.username,
-                    login_session: String::new(),
-                    tenant_id: login.tenant_id,
-                });
-            }
+            .ok()?;
 
-            if !user_to_verify.password.is_empty() {
-                let parsed_hash = PasswordHash::new(&user_to_verify.password).ok()?;
-                let argon2 = Argon2::default();
-                
-                // Try Argon2 verification first
-                let is_valid = if argon2
-                    .verify_password(login.password.as_bytes(), &parsed_hash)
-                    .is_ok()
-                {
-                    true
-                } else {
-                    // If Argon2 fails, check if this might be a bcrypt hash and try bcrypt verification
-                    // Bcrypt hashes start with $2a$, $2b$, $2x$, or $2y$
-                    if user_to_verify.password.starts_with("$2") {
-                        bcrypt::verify(&login.password, &user_to_verify.password).unwrap_or(false)
-                    } else {
-                        false
-                    }
-                };
-
-                if is_valid {
-                    if let Some(login_history) =
-                        LoginHistory::create(&user_to_verify.username, conn)
-                    {
-                        if LoginHistory::save_login_history(login_history, conn).is_err() {
-                            return None;
-                        }
-                        let login_session_str = User::generate_login_session();
-                        if User::update_login_session_to_db(
-                            &user_to_verify.username,
-                            &login_session_str,
-                            conn,
-                        ) {
-                            return Some(LoginInfoDTO {
-                                username: user_to_verify.username,
-                                login_session: login_session_str,
-                                tenant_id: login.tenant_id,
-                            });
-                        }
-                    }
-                } else {
-                    return Some(LoginInfoDTO {
-                        username: user_to_verify.username,
-                        login_session: String::new(),
-                        tenant_id: login.tenant_id,
-                    });
-                }
-            }
+        // 2) Return None for inactive users (consistent with password mismatch behavior)
+        if !user_to_verify.active {
+            return None;
         }
 
-        None
+        // Skip empty passwords
+        if user_to_verify.password.is_empty() {
+            return None;
+        }
+
+        // 3) Verify password using hybrid approach
+        if Self::verify_password_hybrid(&user_to_verify.password, &login.password) {
+            // On successful verification, create login session
+            Self::create_login_session(&user_to_verify.username, login.tenant_id, conn)
+        } else {
+            // Return None for failed authentication (consistent behavior)
+            None
+        }
+    }
+
+    /// Verify password using hybrid approach: try Argon2 first, fallback to bcrypt if hash format indicates bcrypt
+    fn verify_password_hybrid(stored_hash: &str, provided_password: &str) -> bool {
+        let is_bcrypt = stored_hash.starts_with("$2");
+        
+        if is_bcrypt {
+            // Hash looks like bcrypt, use bcrypt verification
+            bcrypt::verify(provided_password, stored_hash).unwrap_or(false)
+        } else {
+            // Default to Argon2 verification
+            PasswordHash::new(stored_hash)
+                .map(|parsed_hash| {
+                    let argon2 = Argon2::default();
+                    argon2.verify_password(provided_password.as_bytes(), &parsed_hash).is_ok()
+                })
+                .unwrap_or(false)
+        }
+    }
+
+    /// Create login session: save login history, generate session, update DB, return LoginInfoDTO on success
+    fn create_login_session(user_name: &str, tenant_id: String, conn: &mut Connection) -> Option<LoginInfoDTO> {
+        // Create and save login history
+        let login_history = LoginHistory::create(user_name, conn)?;
+        if let Err(e) = LoginHistory::save_login_history(login_history, conn) {
+            log::error!("Failed to save login history for user '{}': {}", user_name, e);
+            return None;
+        }
+
+        // Generate session and update database
+        let login_session_str = User::generate_login_session();
+        if User::update_login_session_to_db(user_name, &login_session_str, conn) {
+            Some(LoginInfoDTO {
+                username: user_name.to_string(),
+                login_session: login_session_str,
+                tenant_id,
+            })
+        } else {
+            None
+        }
     }
 
     pub fn logout(user_id: i64, conn: &mut Connection) {
