@@ -22,7 +22,7 @@ pub fn config_services(cfg: &mut web::ServiceConfig) {
     // Create functional route configuration with error handling
     let route_config = || -> Result<(), &'static str> {
         // Build routes using functional composition
-        let route_builder = RouteBuilder::new()
+        let route_builder: RouteBuilder = RouteBuilder::new()
             .add_route(|cfg| {
                 cfg.service(health_controller::health);
             })
@@ -32,7 +32,7 @@ pub fn config_services(cfg: &mut web::ServiceConfig) {
 
         // Apply logging and build routes - clone the builder for the closure
         let logged_config = logger.with_logging(move |inner_cfg| {
-            route_builder.build(inner_cfg);
+            <RouteBuilder as Clone>::clone(&route_builder).build(inner_cfg);
         });
 
         logged_config(cfg);
@@ -192,7 +192,7 @@ fn configure_address_book_routes(cfg: &mut web::ServiceConfig) {
 /// }));
 /// ```
 fn configure_admin_routes(cfg: &mut web::ServiceConfig) {
-    RouteBuilder::<()>::new()
+    RouteBuilder::new()
         .add_route(|cfg| {
             cfg.service(web::scope("/tenant").configure(configure_tenant_admin_routes));
         })
@@ -214,7 +214,7 @@ fn configure_admin_routes(cfg: &mut web::ServiceConfig) {
 /// let _app = App::new().service(web::scope("/admin/tenant").configure(configure_tenant_admin_routes));
 /// ```
 fn configure_tenant_admin_routes(cfg: &mut web::ServiceConfig) {
-    RouteBuilder::<()>::new()
+    RouteBuilder::new()
         .add_route(|cfg| {
             cfg.service(
                 web::resource("/stats").route(web::get().to(tenant_controller::get_system_stats)),
@@ -247,7 +247,7 @@ fn configure_tenant_admin_routes(cfg: &mut web::ServiceConfig) {
 /// let _scope = web::scope("/tenants").configure(configure_tenant_routes);
 /// ```
 fn configure_tenant_routes(cfg: &mut web::ServiceConfig) {
-    RouteBuilder::<()>::new()
+    RouteBuilder::new()
         .add_route(|cfg| {
             cfg.service(
                 web::resource("")
