@@ -1,8 +1,10 @@
+#![cfg_attr(test, allow(dead_code))]
+
 use argon2::{
     password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2,
 };
-use diesel::{prelude::*, Identifiable, Insertable, Queryable};
+use diesel::{prelude::*, result::DatabaseErrorKind, Identifiable, Insertable, Queryable};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -56,20 +58,10 @@ pub struct LoginInfoDTO {
 }
 
 impl User {
-    pub fn signup(new_user: UserDTO, conn: &mut Connection) -> Result<String, String> {
-        // Check if username already exists
-        if Self::find_user_by_username(&new_user.username, conn).is_ok() {
-            return Err(format!(
-                "User '{}' is already registered",
-                &new_user.username
-            ));
-        }
-        // Check if email already exists
-        if Self::find_user_by_email(&new_user.email, conn).is_ok() {
-            return Err(format!("Email '{}' is already registered", &new_user.email));
-        }
-
-        let password_hash = Self::hash_password_argon2(&new_user.password)?;
+    pub fn signup(new_user: UserDTO, conn: &mut Connection) -> Result<String, ServiceError> {
+        let password_hash = Self::hash_password_argon2(&new_user.password).map_err(|_| {
+            ServiceError::internal_server_error("Failed to hash password".to_string())
+        })?;
         let new_user = UserDTO {
             password: password_hash,
             ..new_user
@@ -77,7 +69,15 @@ impl User {
         diesel::insert_into(users)
             .values(new_user)
             .execute(conn)
-            .map_err(|err| err.to_string())?;
+            .map_err(|err| match err {
+                diesel::result::Error::DatabaseError(DatabaseErrorKind::UniqueViolation, _) => {
+                    ServiceError::bad_request(format!("User '{}' is already registered", new_user.username))
+                },
+                _ => {
+                    log::error!("Signup failed: {}", err);
+                    ServiceError::internal_server_error("Internal server error".to_string())
+                }
+            })?;
         Ok(constants::MESSAGE_SIGNUP_SUCCESS.to_string())
     }
 
@@ -237,10 +237,10 @@ impl User {
                 tenant_id: user_token.tenant_id.clone(),
             }),
             Err(diesel::result::Error::NotFound) => Err(ServiceError::not_found("User not found")),
-            Err(e) => Err(ServiceError::internal_server_error(format!(
-                "Database error: {}",
-                e
-            ))),
+            Err(e) => {
+                log::error!("Failed to query user: {}", e);
+                Err(ServiceError::internal_server_error("Internal server error".to_string()))
+            }
         }
     }
 

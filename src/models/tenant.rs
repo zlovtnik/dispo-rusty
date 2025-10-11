@@ -496,7 +496,15 @@ impl Tenant {
 
         let paginated = PaginatedPage::from_items(results, pagination, has_more, None);
 
-        let to_i32 = |value: usize| -> i32 { i32::try_from(value).unwrap_or(i32::MAX) };
+        let to_i32 = |value: usize| -> i32 {
+            match i32::try_from(value) {
+                Ok(v) => v,
+                Err(_) => {
+                    log::warn!("Cursor value {} exceeds i32::MAX, truncating to i32::MAX", value);
+                    i32::MAX
+                }
+            }
+        };
 
         let page = Page::new(
             MESSAGE_OK,

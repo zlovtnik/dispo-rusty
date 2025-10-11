@@ -550,7 +550,7 @@ pub mod functional_middleware_impl {
             message: &str,
         ) -> Result<ServiceResponse<EitherBody<BoxBody>>, Error> {
             let (request, _pl) = req.into_parts();
-            let response = HttpResponse::Unauthorized()
+            let response = HttpResponse::InternalServerError()
                 .json(ResponseBody::new(message, constants::EMPTY))
                 .map_into_right_body();
             Ok(ServiceResponse::new(request, response))

@@ -159,9 +159,7 @@ pub fn signup(user: UserDTO, pool: &Pool) -> Result<String, ServiceError> {
     // Use functional pipeline with validated data
     crate::services::functional_service_base::ServicePipeline::new(pool.clone())
         .with_data(user)
-        .execute(|user, conn| {
-            User::signup(user, conn).map_err(|msg| ServiceError::bad_request(msg))
-        })
+        .execute(|user, conn| User::signup(user, conn))
         .log_error("signup operation")
 }
 
