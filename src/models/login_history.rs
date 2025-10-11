@@ -23,6 +23,30 @@ pub struct LoginHistoryInsertableDTO {
 }
 
 impl LoginHistory {
+    /// Builds an insertable login-history record for the given username if that user exists.
+    ///
+    /// Looks up the user by username and, on success, returns a `LoginHistoryInsertableDTO` populated
+    /// with the user's `id` and the current UTC timestamp. Returns `None` if no matching user is found.
+    ///
+    /// # Arguments
+    ///
+    /// * `un` - Username to look up.
+    /// * `conn` - Mutable database connection used for the lookup.
+    ///
+    /// # Returns
+    ///
+    /// `Some(LoginHistoryInsertableDTO)` with `user_id` and `login_timestamp` when the user exists, `None` otherwise.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // assume `conn` is a valid &mut Connection and a user "alice" exists
+    /// let dto = create("alice", &mut conn);
+    /// assert!(dto.is_some());
+    /// if let Some(record) = dto {
+    ///     assert_eq!(record.user_id > 0, true);
+    /// }
+    /// ```
     pub fn create(un: &str, conn: &mut Connection) -> Option<LoginHistoryInsertableDTO> {
         if let Ok(user) = User::find_user_by_username(un, conn) {
             let now = Utc::now();
