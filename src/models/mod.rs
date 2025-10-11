@@ -1,5 +1,14 @@
 pub mod filters;
 pub mod login_history;
+pub mod nfe_cofins;
+pub mod nfe_document;
+pub mod nfe_emitter;
+pub mod nfe_icms;
+pub mod nfe_ipi;
+pub mod nfe_item;
+pub mod nfe_pis;
+pub mod nfe_product;
+pub mod nfe_recipient;
 pub mod pagination;
 pub mod person;
 pub mod refresh_token;

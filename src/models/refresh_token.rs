@@ -9,7 +9,7 @@ use crate::{config::db::Connection, models::user::User, schema::refresh_tokens};
 #[diesel(table_name = refresh_tokens)]
 pub struct RefreshToken {
     pub id: i32,
-    pub user_id: i64,
+    pub user_id: i32,
     pub token: String,
     pub expires_at: NaiveDateTime,
     pub created_at: Option<NaiveDateTime>,
@@ -19,14 +19,14 @@ pub struct RefreshToken {
 #[derive(Insertable)]
 #[diesel(table_name = refresh_tokens)]
 pub struct NewRefreshToken {
-    pub user_id: i64,
+    pub user_id: i32,
     pub token: String,
     pub expires_at: NaiveDateTime,
 }
 
 impl RefreshToken {
     pub fn create(
-        user_id_val: i64,
+        user_id_val: i32,
         conn: &mut Connection,
     ) -> Result<String, diesel::result::Error> {
         let token_val = Uuid::new_v4().to_string();
@@ -63,7 +63,7 @@ impl RefreshToken {
             .execute(conn)
     }
 
-    pub fn revoke_all_for_user(user_id_val: i64, conn: &mut Connection) -> QueryResult<usize> {
+    pub fn revoke_all_for_user(user_id_val: i32, conn: &mut Connection) -> QueryResult<usize> {
         diesel::update(refresh_tokens::table.filter(refresh_tokens::user_id.eq(user_id_val)))
             .set(refresh_tokens::revoked.eq(true))
             .execute(conn)

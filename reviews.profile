@@ -4,6 +4,8 @@
 # Set the review style to 'assertive' for more detailed feedback
 reviews:
   profile: assertive
+  instructions: "כתוב עבורי docstrings בעברית לקוד שלי."
+
 
 # Additional settings can be added here to customize the review process
 # For example:

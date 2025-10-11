@@ -15,10 +15,11 @@ use crate::{
     models::{login_history::LoginHistory, user_token::UserToken},
     schema::users::{self, dsl::*},
 };
-#[derive(Identifiable, Queryable, Serialize, Deserialize)]
+#[derive(Identifiable, Queryable, Selectable, Serialize, Deserialize)]
 #[diesel(table_name = users)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct User {
-    pub id: i64,
+    pub id: i32,
     pub username: String,
     pub email: String,
     pub password: String,
@@ -167,8 +168,8 @@ impl User {
         }
     }
 
-    pub fn logout(user_id: i64, conn: &mut Connection) {
-        if let Ok(user) = users.find(user_id).get_result::<User>(conn) {
+    pub fn logout(user_id: i32, conn: &mut Connection) {
+        if let Ok(user) = users.filter(id.eq(user_id)).first::<User>(conn) {
             Self::update_login_session_to_db(&user.username, "", conn);
         }
     }
@@ -253,8 +254,8 @@ impl User {
         users.filter(email.eq(em)).get_result::<User>(conn)
     }
 
-    pub fn find_user_by_id(user_id: i64, conn: &mut Connection) -> QueryResult<User> {
-        users.find(user_id).get_result::<User>(conn)
+    pub fn find_user_by_id(user_id: i32, conn: &mut Connection) -> QueryResult<User> {
+        users.filter(id.eq(user_id)).first::<User>(conn)
     }
 
     pub fn generate_login_session() -> String {
@@ -267,7 +268,7 @@ impl User {
         conn: &mut Connection,
     ) -> bool {
         if let Ok(user) = User::find_user_by_username(un, conn) {
-            diesel::update(users.find(user.id))
+            diesel::update(users.filter(id.eq(user.id)))
                 .set(login_session.eq(login_session_str.to_string()))
                 .execute(conn)
                 .is_ok()
