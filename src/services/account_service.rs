@@ -30,6 +30,7 @@ use crate::{
     services::functional_service_base::{FunctionalErrorHandling, FunctionalQueryService},
     utils::token_utils,
 };
+use diesel::result::{DatabaseErrorKind, Error as DieselError};
 
 // Email validation regex - pragmatic pattern for production use
 static EMAIL_REGEX: Lazy<Regex> =
@@ -512,7 +513,14 @@ pub fn update_user(user_id: i32, updated_user: UserUpdateDTO, pool: &Pool) -> Re
                 active: updated_user.active,
             };
             User::update(user_id, user_dto, conn)
-                .map_err(|e| ServiceError::internal_server_error(format!("Database error: {}", e)))
+                .map_err(|e| match e {
+                    DieselError::DatabaseError(DatabaseErrorKind::UniqueViolation, info) => {
+                        ServiceError::bad_request(
+                            info.message().to_string()
+                        )
+                    }
+                    _ => ServiceError::internal_server_error(format!("Database error: {}", e)),
+                })
         })
         .map(|_| ())
         .log_error("update_user operation")
