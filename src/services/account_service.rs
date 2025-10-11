@@ -187,9 +187,7 @@ pub fn login(login: LoginDTO, pool: &Pool) -> Result<TokenBodyResponse, ServiceE
                 .query(|conn| {
                     User::find_user_by_username(&logged_user.username, conn)
                         .map_err(|_| {
-                            ServiceError::internal_server_error(
-                                "Failed to find user".to_string(),
-                            )
+                            ServiceError::internal_server_error("Failed to find user".to_string())
                         })
                         .and_then(|user| {
                             let access_token = UserToken::generate_token(&logged_user);

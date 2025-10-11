@@ -74,7 +74,7 @@ impl User {
             .map_err(|err| match err {
                 diesel::result::Error::DatabaseError(DatabaseErrorKind::UniqueViolation, _) => {
                     ServiceError::bad_request(format!("User '{}' is already registered", user_name))
-                },
+                }
                 _ => {
                     log::error!("Signup failed: {}", err);
                     ServiceError::internal_server_error("Internal server error".to_string())
@@ -131,7 +131,7 @@ impl User {
     /// Verify password using hybrid approach: try Argon2 first, fallback to bcrypt if hash format indicates bcrypt
     fn verify_password_hybrid(stored_hash: &str, provided_password: &str) -> bool {
         let is_bcrypt = stored_hash.starts_with("$2");
-        
+
         if is_bcrypt {
             // Hash looks like bcrypt, use bcrypt verification
             bcrypt::verify(provided_password, stored_hash).unwrap_or(false)
@@ -140,18 +140,28 @@ impl User {
             PasswordHash::new(stored_hash)
                 .map(|parsed_hash| {
                     let argon2 = Argon2::default();
-                    argon2.verify_password(provided_password.as_bytes(), &parsed_hash).is_ok()
+                    argon2
+                        .verify_password(provided_password.as_bytes(), &parsed_hash)
+                        .is_ok()
                 })
                 .unwrap_or(false)
         }
     }
 
     /// Create login session: save login history, generate session, update DB, return LoginInfoDTO on success
-    fn create_login_session(user_name: &str, tenant_id: String, conn: &mut Connection) -> Option<LoginInfoDTO> {
+    fn create_login_session(
+        user_name: &str,
+        tenant_id: String,
+        conn: &mut Connection,
+    ) -> Option<LoginInfoDTO> {
         // Create and save login history
         let login_history = LoginHistory::create(user_name, conn)?;
         if let Err(e) = LoginHistory::save_login_history(login_history, conn) {
-            log::error!("Failed to save login history for user '{}': {}", user_name, e);
+            log::error!(
+                "Failed to save login history for user '{}': {}",
+                user_name,
+                e
+            );
             return None;
         }
 
@@ -241,7 +251,9 @@ impl User {
             Err(diesel::result::Error::NotFound) => Err(ServiceError::not_found("User not found")),
             Err(e) => {
                 log::error!("Failed to query user: {}", e);
-                Err(ServiceError::internal_server_error("Internal server error".to_string()))
+                Err(ServiceError::internal_server_error(
+                    "Internal server error".to_string(),
+                ))
             }
         }
     }

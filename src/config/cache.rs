@@ -96,10 +96,10 @@ impl r2d2::ManageConnection for RedisManager {
 pub fn init_redis_client(url: &str) -> Pool {
     use log::info;
     info!("Initializing Redis client with functional patterns...");
-    
+
     // Use functional URL masking
     let masked_url = mask_redis_url_functional(url);
-    
+
     // Functional client creation with Either pattern
     let client_result = Either::from_result(redis::Client::open(url));
     let client = match client_result {
@@ -108,11 +108,11 @@ pub fn init_redis_client(url: &str) -> Pool {
             panic!("Failed to create Redis client for {}: {}", masked_url, e);
         }
     };
-    
+
     // Functional pool creation with composition
     let manager = RedisManager { client };
     let pool_result = Either::from_result(r2d2::Pool::builder().build(manager));
-    
+
     match pool_result {
         Either::Right(pool) => {
             info!("Redis pool created successfully for {}", masked_url);
@@ -134,11 +134,11 @@ fn mask_redis_url_functional(input: &str) -> String {
         let colon_pos = url[..at_pos].rfind(':')?;
         Some((colon_pos, at_pos))
     };
-    
+
     let mask_url = |(colon_pos, at_pos): (usize, usize)| -> String {
         format!("{}:<redacted>{}", &input[..colon_pos], &input[at_pos..])
     };
-    
+
     // Apply functional composition
     find_credentials(input)
         .map(mask_url)
@@ -161,46 +161,47 @@ impl FunctionalRedisConfig {
             connection_timeout: None,
         }
     }
-    
+
     /// Set maximum pool size using functional chaining
     pub fn max_size(mut self, size: u32) -> Self {
         self.max_size = Some(size);
         self
     }
-    
+
     /// Set connection timeout using functional chaining
     pub fn connection_timeout(mut self, timeout: std::time::Duration) -> Self {
         self.connection_timeout = Some(timeout);
         self
     }
-    
+
     /// Build the Redis pool using functional composition
     pub fn build(self) -> Either<String, Pool> {
         let client_result = Either::from_result(
             redis::Client::open(self.url.as_str())
-                .map_err(|e| format!("Failed to create Redis client: {}", e))
+                .map_err(|e| format!("Failed to create Redis client: {}", e)),
         );
-        
+
         let client = match client_result {
             Either::Right(client) => client,
             Either::Left(error) => return Either::Left(error),
         };
-        
+
         let manager = RedisManager { client };
         let mut builder = r2d2::Pool::builder();
-        
+
         // Apply configuration using functional chaining
         if let Some(max_size) = self.max_size {
             builder = builder.max_size(max_size);
         }
-        
+
         if let Some(timeout) = self.connection_timeout {
             builder = builder.connection_timeout(timeout);
         }
-        
+
         Either::from_result(
-            builder.build(manager)
-                .map_err(|e| format!("Failed to build Redis pool: {}", e))
+            builder
+                .build(manager)
+                .map_err(|e| format!("Failed to build Redis pool: {}", e)),
         )
     }
 }

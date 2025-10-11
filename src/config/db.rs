@@ -5,9 +5,7 @@ use chrono::NaiveDateTime;
 use diesel::{
     pg::PgConnection,
     r2d2::{self, ConnectionManager},
-    sql_query,
-    QueryableByName,
-    RunQueryDsl,
+    sql_query, QueryableByName, RunQueryDsl,
 };
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use serde::{Deserialize, Serialize};
@@ -51,21 +49,20 @@ pub fn init_db_pool(url: &str) -> Pool {
     use log::info;
 
     info!("Migrating and configuring database with functional patterns...");
-    
+
     // Use functional composition for pool creation
-    create_pool_functional(url)
-        .unwrap_or_else(|error| {
-            panic!("Failed to create database pool: {}", error);
-        })
+    create_pool_functional(url).unwrap_or_else(|error| {
+        panic!("Failed to create database pool: {}", error);
+    })
 }
 
 /// Functional database pool creation with optimized connection settings
 fn create_pool_functional(url: &str) -> Result<Pool, String> {
     let manager = ConnectionManager::<Connection>::new(url);
-    
+
     r2d2::Pool::builder()
-        .max_size(20)  // Maximum 20 connections per tenant pool
-        .min_idle(Some(5))  // Minimum 5 idle connections
+        .max_size(20) // Maximum 20 connections per tenant pool
+        .min_idle(Some(5)) // Minimum 5 idle connections
         .build(manager)
         .map_err(|e| format!("Pool creation failed: {}", e))
 }
@@ -96,7 +93,7 @@ fn create_pool_functional(url: &str) -> Result<Pool, String> {
 pub fn try_init_db_pool_functional(url: &str) -> Either<String, Pool> {
     use log::info;
     info!("Attempting to create database pool with functional patterns...");
-    
+
     match create_pool_functional(url) {
         Ok(pool) => Either::Right(pool),
         Err(err) => Either::Left(err),
@@ -133,8 +130,8 @@ pub fn try_init_db_pool(url: &str) -> Result<Pool, ServiceError> {
     info!("Migrating and configuring database...");
     let manager = ConnectionManager::<Connection>::new(url);
     r2d2::Pool::builder()
-        .max_size(20)  // Maximum 20 connections per pool
-        .min_idle(Some(5))  // Minimum 5 idle connections
+        .max_size(20) // Maximum 20 connections per pool
+        .min_idle(Some(5)) // Minimum 5 idle connections
         .build(manager)
         .map_err(|e| ServiceError::internal_server_error(format!("Failed to create pool: {e}")))
 }
@@ -318,26 +315,25 @@ impl TenantPoolManager {
         self.get_tenant_db_url_functional(tenant_id)
             .and_then(|db_url| {
                 // Create pool using functional patterns
-                try_init_db_pool_functional(&db_url)
-                    .and_then(|pool| {
-                        // Cache the pool and handle cache failures
-                        match self.cache_tenant_pool_functional(tenant_id, pool.clone()) {
-                            Either::Right(_) => {
-                                // Provision NFe schema for the new tenant
-                                match self.provision_tenant_schema(tenant_id) {
-                                    Ok(_) => Either::Right(pool),
-                                    Err(e) => Either::Left(format!(
-                                        "Pool created but schema provisioning failed for tenant {}: {}",
-                                        tenant_id, e
-                                    ))
-                                }
+                try_init_db_pool_functional(&db_url).and_then(|pool| {
+                    // Cache the pool and handle cache failures
+                    match self.cache_tenant_pool_functional(tenant_id, pool.clone()) {
+                        Either::Right(_) => {
+                            // Provision NFe schema for the new tenant
+                            match self.provision_tenant_schema(tenant_id) {
+                                Ok(_) => Either::Right(pool),
+                                Err(e) => Either::Left(format!(
+                                    "Pool created but schema provisioning failed for tenant {}: {}",
+                                    tenant_id, e
+                                )),
                             }
-                            Either::Left(cache_err) => Either::Left(format!(
-                                "Pool created but failed to cache for tenant {}: {}",
-                                tenant_id, cache_err
-                            ))
                         }
-                    })
+                        Either::Left(cache_err) => Either::Left(format!(
+                            "Pool created but failed to cache for tenant {}: {}",
+                            tenant_id, cache_err
+                        )),
+                    }
+                })
             })
     }
 
@@ -356,19 +352,16 @@ impl TenantPoolManager {
         }
 
         // Not in cache, query database
-        use diesel::prelude::*;
         use crate::models::tenant::Tenant;
         use crate::schema::tenants::dsl::*;
+        use diesel::prelude::*;
 
         match self.main_pool.get() {
             Ok(mut conn) => {
-                match tenants
-                    .filter(id.eq(tenant_id))
-                    .first::<Tenant>(&mut conn)
-                {
+                match tenants.filter(id.eq(tenant_id)).first::<Tenant>(&mut conn) {
                     Ok(tenant) => {
                         let tenant_db_url = tenant.db_url;
-                        
+
                         // Cache the URL for future use
                         match self.tenant_urls.write() {
                             Ok(mut urls) => {
@@ -379,7 +372,7 @@ impl TenantPoolManager {
                                 log::warn!("Failed to cache tenant URL for {}", tenant_id);
                             }
                         }
-                        
+
                         Either::Right(tenant_db_url)
                     }
                     Err(e) => Either::Left(format!("Failed to find tenant {}: {}", tenant_id, e)),
@@ -403,16 +396,17 @@ impl TenantPoolManager {
     /// Validate tenant pool health using functional patterns
     pub fn validate_tenant_pool_functional(&self, tenant_id: &str) -> Either<String, bool> {
         self.try_get_existing_pool_functional(tenant_id)
-            .and_then(|pool| {
-                match pool.get() {
-                    Ok(_conn) => Either::Right(true),
-                    Err(e) => Either::Left(format!("Pool unhealthy for tenant {}: {}", tenant_id, e)),
-                }
+            .and_then(|pool| match pool.get() {
+                Ok(_conn) => Either::Right(true),
+                Err(e) => Either::Left(format!("Pool unhealthy for tenant {}: {}", tenant_id, e)),
             })
     }
 
     /// Comprehensive health monitoring for tenant pools with detailed diagnostics
-    pub fn monitor_tenant_pool_health(&self, tenant_id: &str) -> Result<PoolHealthStatus, ServiceError> {
+    pub fn monitor_tenant_pool_health(
+        &self,
+        tenant_id: &str,
+    ) -> Result<PoolHealthStatus, ServiceError> {
         match self.tenant_pools.read() {
             Ok(pools) => {
                 match pools.get(tenant_id) {
@@ -438,17 +432,22 @@ impl TenantPoolManager {
                             }),
                         }
                     }
-                    None => Err(ServiceError::not_found(format!("No pool found for tenant: {}", tenant_id))),
+                    None => Err(ServiceError::not_found(format!(
+                        "No pool found for tenant: {}",
+                        tenant_id
+                    ))),
                 }
             }
-            Err(_) => Err(ServiceError::internal_server_error("Failed to access tenant pools for health monitoring")),
+            Err(_) => Err(ServiceError::internal_server_error(
+                "Failed to access tenant pools for health monitoring",
+            )),
         }
     }
 
     /// Monitor all tenant pools and return health status for each
     pub fn monitor_all_tenant_pools(&self) -> Result<Vec<PoolHealthStatus>, ServiceError> {
         let mut health_statuses = Vec::new();
-        
+
         match self.tenant_pools.read() {
             Ok(pools) => {
                 for tenant_id in pools.keys() {
@@ -471,7 +470,9 @@ impl TenantPoolManager {
                 }
                 Ok(health_statuses)
             }
-            Err(_) => Err(ServiceError::internal_server_error("Failed to access tenant pools for monitoring")),
+            Err(_) => Err(ServiceError::internal_server_error(
+                "Failed to access tenant pools for monitoring",
+            )),
         }
     }
 
@@ -479,16 +480,20 @@ impl TenantPoolManager {
     pub fn auto_heal_tenant_pool(&self, tenant_id: &str) -> Result<bool, ServiceError> {
         // First check health
         let health = self.monitor_tenant_pool_health(tenant_id)?;
-        
+
         if health.is_healthy {
             return Ok(false); // No healing needed
         }
 
-        log::warn!("Pool for tenant {} is unhealthy: {:?}", tenant_id, health.error_message);
-        
+        log::warn!(
+            "Pool for tenant {} is unhealthy: {:?}",
+            tenant_id,
+            health.error_message
+        );
+
         // Remove the unhealthy pool
         let _ = self.remove_tenant_pool(tenant_id);
-        
+
         // Try to recreate the pool
         match self.get_or_create_pool_functional(tenant_id) {
             Either::Right(_) => {
@@ -497,7 +502,10 @@ impl TenantPoolManager {
             }
             Either::Left(err) => {
                 log::error!("Failed to recreate pool for tenant {}: {}", tenant_id, err);
-                Err(ServiceError::internal_server_error(format!("Auto-healing failed for tenant {}: {}", tenant_id, err)))
+                Err(ServiceError::internal_server_error(format!(
+                    "Auto-healing failed for tenant {}: {}",
+                    tenant_id, err
+                )))
             }
         }
     }
@@ -508,22 +516,34 @@ impl TenantPoolManager {
         log::info!("Provisioning NFe schema for tenant: {}", tenant_id);
 
         // Get the tenant pool
-        let pool = self.get_tenant_pool(tenant_id)
-            .ok_or_else(|| ServiceError::not_found(format!("No pool found for tenant: {}", tenant_id)))?;
+        let pool = self.get_tenant_pool(tenant_id).ok_or_else(|| {
+            ServiceError::not_found(format!("No pool found for tenant: {}", tenant_id))
+        })?;
 
         // Get a connection and run the NFe schema provisioning
-        let mut conn = pool.get()
-            .map_err(|e| ServiceError::internal_server_error(format!("Failed to get connection for tenant {}: {}", tenant_id, e)))?;
+        let mut conn = pool.get().map_err(|e| {
+            ServiceError::internal_server_error(format!(
+                "Failed to get connection for tenant {}: {}",
+                tenant_id, e
+            ))
+        })?;
 
         // Run the NFe schema creation SQL
         self.create_nfe_schema(&mut conn, tenant_id)?;
 
-        log::info!("Successfully provisioned NFe schema for tenant: {}", tenant_id);
+        log::info!(
+            "Successfully provisioned NFe schema for tenant: {}",
+            tenant_id
+        );
         Ok(())
     }
 
     /// Execute NFe schema creation SQL
-    fn create_nfe_schema(&self, conn: &mut PgConnection, tenant_id: &str) -> Result<(), ServiceError> {
+    fn create_nfe_schema(
+        &self,
+        conn: &mut PgConnection,
+        tenant_id: &str,
+    ) -> Result<(), ServiceError> {
         // Check if schema is already provisioned
         if self.is_nfe_schema_provisioned(conn)? {
             log::info!("NFe schema already exists for tenant: {}", tenant_id);
@@ -532,15 +552,18 @@ impl TenantPoolManager {
 
         // Execute the complete NFe schema DDL
         let schema_sql = self.get_nfe_schema_sql();
-        
+
         // Split into individual statements and execute
         for statement in schema_sql.split(';').filter(|s| !s.trim().is_empty()) {
             if !statement.trim().is_empty() {
                 diesel::sql_query(statement.trim())
                     .execute(conn)
-                    .map_err(|e| ServiceError::internal_server_error(
-                        format!("Failed to execute NFe schema statement for tenant {}: {}", tenant_id, e)
-                    ))?;
+                    .map_err(|e| {
+                        ServiceError::internal_server_error(format!(
+                            "Failed to execute NFe schema statement for tenant {}: {}",
+                            tenant_id, e
+                        ))
+                    })?;
             }
         }
 
@@ -560,7 +583,7 @@ impl TenantPoolManager {
         let result: ExistsResult = diesel::sql_query("SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'nfe_documents') as exists")
             .get_result(conn)
             .map_err(|e| ServiceError::internal_server_error(format!("Failed to check schema existence: {}", e)))?;
-        
+
         Ok(result.exists)
     }
 
@@ -573,9 +596,15 @@ impl TenantPoolManager {
     /// Provision schema for a tenant when creating their pool (integrated workflow)
     pub fn create_tenant_pool_with_schema(&self, tenant_id: &str) -> Result<Pool, ServiceError> {
         // First create the pool
-        let pool = self.get_or_create_pool_functional(tenant_id)
+        let pool = self
+            .get_or_create_pool_functional(tenant_id)
             .into_result()
-            .map_err(|e| ServiceError::internal_server_error(format!("Failed to create pool for tenant {}: {}", tenant_id, e)))?;
+            .map_err(|e| {
+                ServiceError::internal_server_error(format!(
+                    "Failed to create pool for tenant {}: {}",
+                    tenant_id, e
+                ))
+            })?;
 
         // Then provision the schema
         self.provision_tenant_schema(tenant_id)?;
@@ -614,10 +643,10 @@ impl TenantPoolManager {
     pub fn remove_tenant_completely(&self, tenant_id: &str) -> Result<Option<Pool>, ServiceError> {
         // Remove pool first
         let pool_result = self.remove_tenant_pool(tenant_id)?;
-        
+
         // Remove cached URL (ignore errors since pool removal is more critical)
         let _ = self.clear_tenant_url_cache(tenant_id);
-        
+
         Ok(pool_result)
     }
 }
