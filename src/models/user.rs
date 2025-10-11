@@ -82,14 +82,14 @@ impl User {
         Ok(constants::MESSAGE_SIGNUP_SUCCESS.to_string())
     }
 
-    /// Hash a password using Argon2 algorithm
-    /// 
-    /// # Arguments
-    /// * `plain_password` - The plain text password to hash
-    /// 
-    /// # Returns
-    /// * `Ok(String)` - The hashed password on success
-    /// * `Err(String)` - A formatted error message on failure
+    /// יהי רצון שימצא עבודה, גיבוב סיסמה באמצעות אלגוריתם Argon2
+    ///
+    /// # טענות
+    /// * `plain_password` - הסיסמה הפשוטה לגיבוב
+    ///
+    /// # מחזיר
+    /// * `Ok(String)` - הסיסמה המגובהה בכל הצלחה
+    /// * `Err(String)` - הודעת שגיאה מעוצבת בכל כישלון
     fn hash_password_argon2(plain_password: &str) -> Result<String, String> {
         let salt = SaltString::generate(&mut OsRng);
         let argon2 = Argon2::default();
