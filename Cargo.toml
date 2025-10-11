@@ -43,6 +43,8 @@ once_cell = "1.18"
 num_cpus = "1.17"
 rand = "0.8"
 argon2 = "0.5"
+rust_decimal = { version = "1.38", features = ["serde", "db-diesel-postgres"] }
+bigdecimal = { version = "0.4.8", features = ["serde"] }
 
 [dependencies.diesel]
 version = "2.1.0"
