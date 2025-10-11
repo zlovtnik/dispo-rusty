@@ -103,10 +103,24 @@ impl User {
             if !user_to_verify.password.is_empty() {
                 let parsed_hash = PasswordHash::new(&user_to_verify.password).ok()?;
                 let argon2 = Argon2::default();
-                if argon2
+                
+                // Try Argon2 verification first
+                let is_valid = if argon2
                     .verify_password(login.password.as_bytes(), &parsed_hash)
                     .is_ok()
                 {
+                    true
+                } else {
+                    // If Argon2 fails, check if this might be a bcrypt hash and try bcrypt verification
+                    // Bcrypt hashes start with $2a$, $2b$, $2x$, or $2y$
+                    if user_to_verify.password.starts_with("$2") {
+                        bcrypt::verify(&login.password, &user_to_verify.password).unwrap_or(false)
+                    } else {
+                        false
+                    }
+                };
+
+                if is_valid {
                     if let Some(login_history) =
                         LoginHistory::create(&user_to_verify.username, conn)
                     {

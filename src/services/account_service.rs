@@ -336,7 +336,7 @@ pub fn refresh_with_token(
     tenant_id: &str,
     pool: &Pool,
 ) -> Result<TokenBodyResponse, ServiceError> {
-    println!("DEBUG: refresh_with_token called");
+    log::debug!("refresh_with_token called for tenant: {}", tenant_id);
     let query_service = FunctionalQueryService::new(pool.clone());
 
     // Find and validate refresh token
@@ -346,9 +346,10 @@ pub fn refresh_with_token(
                 .map_err(|_| ServiceError::unauthorized("Invalid refresh token".to_string()))
         })
         .and_then(|refresh_token_record| {
-            println!(
-                "DEBUG: Found refresh token record: {:?}",
-                refresh_token_record
+            log::debug!(
+                "Found refresh token for user_id: {}, expires_at: {}",
+                refresh_token_record.user_id,
+                refresh_token_record.expires_at
             );
             // Get user info for new token generation
             query_service

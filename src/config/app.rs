@@ -1,5 +1,5 @@
 use crate::api::*;
-use crate::config::functional_config::{FunctionalLogger, RouteBuilder};
+use crate::config::functional_config::RouteBuilder;
 use actix_web::web;
 
 /// Configure application HTTP routes using functional composition patterns.
@@ -17,34 +17,17 @@ use actix_web::web;
 /// let app = App::new().configure(config_services);
 /// ```
 pub fn config_services(cfg: &mut web::ServiceConfig) {
-    let logger = FunctionalLogger::new();
-
-    // Create functional route configuration with error handling
-    let route_config = || -> Result<(), &'static str> {
-        // Build routes using functional composition
-        let route_builder: RouteBuilder = RouteBuilder::new()
-            .add_route(|cfg| {
-                cfg.service(health_controller::health);
-            })
-            .add_route(|cfg| {
-                cfg.service(web::scope("/api").configure(configure_api_routes));
-            });
-
-        // Apply logging and build routes - clone the builder for the closure
-        let logged_config = logger.with_logging(move |inner_cfg| {
-            <RouteBuilder as Clone>::clone(&route_builder).build(inner_cfg);
+    // Build routes using functional composition
+    let route_builder: RouteBuilder = RouteBuilder::new()
+        .add_route(|cfg| {
+            cfg.service(health_controller::health);
+        })
+        .add_route(|cfg| {
+            cfg.service(web::scope("/api").configure(configure_api_routes));
         });
 
-        logged_config(cfg);
-        Ok(())
-    };
-
-    // Execute with functional error handling
-    if route_config().is_err() {
-        // Fallback to basic configuration
-        cfg.service(health_controller::health);
-        cfg.service(web::scope("/api").configure(configure_api_routes));
-    }
+    // Build routes directly
+    route_builder.build(cfg);
 }
 
 /// Register API endpoints and nested scopes under `/api` using functional composition.

@@ -79,11 +79,9 @@ pub fn try_init_db_pool_functional(url: &str) -> Either<String, Pool> {
     use log::info;
     info!("Attempting to create database pool with functional patterns...");
     
-    let manager = ConnectionManager::<Connection>::new(url);
-    
-    match r2d2::Pool::builder().build(manager) {
+    match create_pool_functional(url) {
         Ok(pool) => Either::Right(pool),
-        Err(e) => Either::Left(format!("Failed to create pool: {}", e)),
+        Err(err) => Either::Left(err),
     }
 }
 
@@ -152,6 +150,7 @@ pub fn run_migration(conn: &mut PgConnection) -> Result<(), ServiceError> {
 pub struct TenantPoolManager {
     pub main_pool: Pool,
     pub tenant_pools: Arc<RwLock<HashMap<String, Pool>>>,
+    tenant_urls: Arc<RwLock<HashMap<String, String>>>, // Add tenant URL cache
 }
 
 const LOCK_POISONED_ERROR: &str = "Tenant pools lock was poisoned";
@@ -178,6 +177,7 @@ impl TenantPoolManager {
         TenantPoolManager {
             main_pool,
             tenant_pools: Arc::new(RwLock::new(HashMap::new())),
+            tenant_urls: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -266,12 +266,19 @@ impl TenantPoolManager {
     /// ```
     pub fn get_or_create_pool_functional(&self, tenant_id: &str) -> Either<String, Pool> {
         // First try to get existing pool using functional patterns
-        self.try_get_existing_pool_functional(tenant_id)
-            .map_right(|pool| pool)
-            .unwrap_or_else(|_| {
-                // If not found, create new pool using functional patterns
-                self.create_tenant_pool_functional(tenant_id)
-            })
+        match self.try_get_existing_pool_functional(tenant_id) {
+            Either::Right(pool) => Either::Right(pool),
+            Either::Left(err) => {
+                // Check if this is a "not found" error vs a critical error
+                if err.contains("Pool not found") {
+                    // Non-fatal: pool just doesn't exist yet, create it
+                    self.create_tenant_pool_functional(tenant_id)
+                } else {
+                    // Critical error (e.g., lock poisoning): propagate the error
+                    Either::Left(format!("Critical error accessing tenant pools: {}", err))
+                }
+            }
+        }
     }
 
     /// Try to get an existing pool from the cache using functional patterns
@@ -292,16 +299,34 @@ impl TenantPoolManager {
             .and_then(|db_url| {
                 // Create pool using functional patterns
                 try_init_db_pool_functional(&db_url)
-                    .map_right(|pool| {
-                        // Cache the pool
-                        self.cache_tenant_pool_functional(tenant_id, pool.clone());
-                        pool
+                    .and_then(|pool| {
+                        // Cache the pool and handle cache failures
+                        match self.cache_tenant_pool_functional(tenant_id, pool.clone()) {
+                            Either::Right(_) => Either::Right(pool),
+                            Either::Left(cache_err) => Either::Left(format!(
+                                "Pool created but failed to cache for tenant {}: {}", 
+                                tenant_id, cache_err
+                            ))
+                        }
                     })
             })
     }
 
-    /// Get tenant database URL using functional patterns
+    /// Get tenant database URL using functional patterns with caching
     fn get_tenant_db_url_functional(&self, tenant_id: &str) -> Either<String, String> {
+        // First check cache
+        match self.tenant_urls.read() {
+            Ok(urls) => {
+                if let Some(cached_url) = urls.get(tenant_id) {
+                    return Either::Right(cached_url.clone());
+                }
+            }
+            Err(_) => {
+                return Either::Left("Failed to read tenant URL cache".to_string());
+            }
+        }
+
+        // Not in cache, query database
         use diesel::prelude::*;
         use crate::models::tenant::Tenant;
         use crate::schema::tenants::dsl::*;
@@ -312,7 +337,22 @@ impl TenantPoolManager {
                     .filter(id.eq(tenant_id))
                     .first::<Tenant>(&mut conn)
                 {
-                    Ok(tenant) => Either::Right(tenant.db_url),
+                    Ok(tenant) => {
+                        let tenant_db_url = tenant.db_url;
+                        
+                        // Cache the URL for future use
+                        match self.tenant_urls.write() {
+                            Ok(mut urls) => {
+                                urls.insert(tenant_id.to_string(), tenant_db_url.clone());
+                            }
+                            Err(_) => {
+                                // Log warning but continue - we still have the URL
+                                log::warn!("Failed to cache tenant URL for {}", tenant_id);
+                            }
+                        }
+                        
+                        Either::Right(tenant_db_url)
+                    }
                     Err(e) => Either::Left(format!("Failed to find tenant {}: {}", tenant_id, e)),
                 }
             }
@@ -345,5 +385,38 @@ impl TenantPoolManager {
     /// Legacy method for backward compatibility
     pub fn get_or_create_pool(&self, tenant_id: &str) -> Result<Pool, String> {
         self.get_or_create_pool_functional(tenant_id).into_result()
+    }
+
+    /// Clear cached URL for a specific tenant (useful for tenant config updates)
+    pub fn clear_tenant_url_cache(&self, tenant_id: &str) -> Result<(), ServiceError> {
+        match self.tenant_urls.write() {
+            Ok(mut urls) => {
+                urls.remove(tenant_id);
+                Ok(())
+            }
+            Err(_) => Self::handle_lock_poisoned_error(),
+        }
+    }
+
+    /// Clear all cached URLs (useful for bulk config updates)
+    pub fn clear_all_url_caches(&self) -> Result<(), ServiceError> {
+        match self.tenant_urls.write() {
+            Ok(mut urls) => {
+                urls.clear();
+                Ok(())
+            }
+            Err(_) => Self::handle_lock_poisoned_error(),
+        }
+    }
+
+    /// Remove a tenant completely (both pool and URL cache)
+    pub fn remove_tenant_completely(&self, tenant_id: &str) -> Result<Option<Pool>, ServiceError> {
+        // Remove pool first
+        let pool_result = self.remove_tenant_pool(tenant_id)?;
+        
+        // Remove cached URL (ignore errors since pool removal is more critical)
+        let _ = self.clear_tenant_url_cache(tenant_id);
+        
+        Ok(pool_result)
     }
 }

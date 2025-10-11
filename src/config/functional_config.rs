@@ -12,9 +12,9 @@ use crate::{
 use actix_web::web;
 
 /// Functional route builder that composes route configurations
-#[derive(Clone)]
+#[derive(Default)]
 pub struct RouteBuilder {
-    routes: Vec<fn(&mut web::ServiceConfig)>,
+    routes: Vec<Box<dyn Fn(&mut web::ServiceConfig) + Send + Sync + 'static>>,
 }
 
 impl RouteBuilder {
@@ -24,8 +24,11 @@ impl RouteBuilder {
     }
 
     /// Add a route configuration function
-    pub fn add_route(mut self, route_fn: fn(&mut web::ServiceConfig)) -> Self {
-        self.routes.push(route_fn);
+    pub fn add_route<F>(mut self, route_fn: F) -> Self 
+    where 
+        F: Fn(&mut web::ServiceConfig) + Send + Sync + 'static,
+    {
+        self.routes.push(Box::new(route_fn));
         self
     }
 
@@ -34,12 +37,6 @@ impl RouteBuilder {
         for route_fn in self.routes {
             route_fn(cfg);
         }
-    }
-}
-
-impl Default for RouteBuilder {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -59,8 +56,22 @@ impl FunctionalLogger {
     {
         move |cfg| {
             log::info!("Starting functional configuration...");
-            f(cfg);
-            log::info!("Functional configuration completed successfully");
+            
+            // Wrap f(cfg) call in panic handler
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                f(cfg);
+            }));
+            
+            match result {
+                Ok(_) => {
+                    log::info!("Functional configuration completed successfully");
+                }
+                Err(panic_info) => {
+                    log::error!("Functional configuration panicked: {:?}", panic_info);
+                    // Re-raise the panic so callers still observe the unwind
+                    std::panic::resume_unwind(panic_info);
+                }
+            }
         }
     }
 }
@@ -103,43 +114,31 @@ impl<T> PoolConfig<T> {
 pub struct UrlMasker;
 
 impl UrlMasker {
-    /// Mask sensitive parts of URLs for logging
+    /// Mask sensitive parts of URLs for logging using robust URL parsing
     pub fn mask_url(url: &str) -> String {
-        if url.contains("://") && url.contains("@") {
-            // Basic masking for database URLs
-            let parts: Vec<&str> = url.split("@").collect();
-            if parts.len() >= 2 {
-                let scheme_and_masked = parts[0]
-                    .split("://")
-                    .map(|part| {
-                        if part.contains(":") {
-                            // Mask the password part
-                            let auth_parts: Vec<&str> = part.split(":").collect();
-                            if auth_parts.len() >= 2 {
-                                format!("{}:***", auth_parts[0])
-                            } else {
-                                part.to_string()
-                            }
-                        } else {
-                            part.to_string()
-                        }
-                    })
-                    .collect::<Vec<String>>()
-                    .join("://");
-
-                format!("{}@{}", scheme_and_masked, parts[1..].join("@"))
-            } else {
+        match url::Url::parse(url) {
+            Ok(mut parsed_url) => {
+                // If the URL has a password, mask it
+                if parsed_url.password().is_some() {
+                    // Set password to masked value
+                    let _ = parsed_url.set_password(Some("***"));
+                }
+                parsed_url.to_string()
+            }
+            Err(_) => {
+                // If parsing fails, return the original URL unchanged
                 url.to_string()
             }
-        } else {
-            url.to_string()
         }
     }
 }
 
+#[allow(dead_code)]
 /// Configuration error handler using functional patterns
-pub struct ConfigErrorHandler;
+pub struct ConfigErrorHandler(());
 
+// The struct is uninhabitable and used for namespacing static functions
+#[allow(dead_code)]
 impl ConfigErrorHandler {
     /// Handle configuration errors with functional composition
     pub fn handle_error<T, E1, E2>(

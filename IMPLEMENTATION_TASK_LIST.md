@@ -557,7 +557,7 @@
 
 ### 6.2 Integration Testing
 - [ ] **Task 6.2.1:** Set up integration test framework
-  - Add `actix-test` dependency
+  - Use `actix_web::test` module or `actix-http-test` crate
   - Configure test server
   - Set up test fixtures
   - Use testcontainers for PostgreSQL

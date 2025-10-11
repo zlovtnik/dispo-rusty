@@ -194,7 +194,7 @@ pub async fn refresh_token(
     manager: web::Data<TenantPoolManager>,
     req: HttpRequest,
 ) -> Result<HttpResponse, ServiceError> {
-    println!("DEBUG: refresh_token controller called");
+    log::debug!("refresh_token controller called");
     let refresh_payload = refresh_dto.into_inner();
     let tenant_id = refresh_payload.tenant_id.clone();
 

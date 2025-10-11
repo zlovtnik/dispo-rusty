@@ -27,7 +27,7 @@ diesel::table! {
         gender -> Bool,
         age -> Int4,
         address -> Varchar,
-        #[max_length = 11]
+        #[max_length = 20]
         phone -> Varchar,
         email -> Varchar,
     }
@@ -48,8 +48,7 @@ diesel::table! {
     sessions (session_id) {
         #[max_length = 255]
         session_id -> Varchar,
-        #[max_length = 255]
-        user_id -> Varchar,
+        user_id -> Int8,
         created_at -> Nullable<Timestamptz>,
         expires_at -> Timestamptz,
         is_valid -> Nullable<Bool>,
@@ -79,6 +78,7 @@ diesel::table! {
 
 diesel::joinable!(login_history -> users (user_id));
 diesel::joinable!(refresh_tokens -> users (user_id));
+diesel::joinable!(sessions -> users (user_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     configuration,

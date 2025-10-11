@@ -49,7 +49,7 @@ Each item includes specific implementation steps, dependencies, and validation c
 ### 6.6.1.2 Integration Testing
 
 - [ ] **Set up integration testing infrastructure**
-  - Install actix-web::test for HTTP endpoint testing
+  - Install actix_web::test for HTTP endpoint testing
   - Configure PostgreSQL test instances with RLS enabled
   - Set up transaction-based database isolation (never committed)
 - [ ] **Implement API endpoint testing**
