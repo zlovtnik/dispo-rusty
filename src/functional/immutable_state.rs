@@ -958,8 +958,8 @@ mod tests {
             id: id.to_string(),
             name: format!("Test Tenant {}", id),
             db_url: "postgres://test:test@localhost/test".to_string(),
-            created_at: Utc::now().naive_utc(),
-            updated_at: Utc::now().naive_utc(),
+            created_at: Some(Utc::now().naive_utc()),
+            updated_at: Some(Utc::now().naive_utc()),
         }
     }
 

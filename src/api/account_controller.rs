@@ -10,7 +10,10 @@ use crate::{
     error::ServiceError,
     functional::response_transformers::{ResponseTransformError, ResponseTransformer},
     models::user::{LoginDTO, SignupDTO, UserDTO},
-    services::{account_service, functional_service_base::FunctionalErrorHandling},
+    services::{
+        account_service::{self, RefreshTokenRequest},
+        functional_service_base::FunctionalErrorHandling,
+    },
 };
 
 fn response_composition_error(err: ResponseTransformError) -> ServiceError {
@@ -75,6 +78,7 @@ pub async fn signup(
         username: signup_payload.username,
         email: signup_payload.email,
         password: signup_payload.password,
+        active: true, // New users are active by default
     };
 
     match manager.get_tenant_pool(&tenant_id) {
@@ -90,11 +94,9 @@ pub async fn signup(
                         .map_err(response_composition_error)
                 })
         }
-        None => Err(
-            ServiceError::bad_request("Tenant not found")
-                .with_metadata("tenant_id", tenant_id)
-                .with_tag("tenant"),
-        ),
+        None => Err(ServiceError::bad_request("Tenant not found")
+            .with_metadata("tenant_id", tenant_id)
+            .with_tag("tenant")),
     }
 }
 
@@ -169,6 +171,48 @@ pub async fn refresh(req: HttpRequest) -> Result<HttpResponse, ServiceError> {
         Err(ServiceError::bad_request(constants::MESSAGE_TOKEN_MISSING)
             .with_tag("auth")
             .with_detail("Authorization header missing"))
+    }
+}
+
+// POST api/auth/refresh-token
+/// Refreshes access and refresh tokens using a valid refresh token.
+///
+/// Requires a JSON body with `refresh_token` and `tenant_id`. On success returns an HTTP 200 response
+/// with a JSON body containing new access_token and refresh_token.
+/// If the refresh token is invalid or expired, returns an unauthorized error.
+///
+/// # Examples
+///
+/// ```no_run
+/// use actix_web::web;
+/// use serde_json::json;
+///
+/// // POST /api/auth/refresh-token with body: {"refresh_token": "token", "tenant_id": "tenant1"}
+/// ```
+pub async fn refresh_token(
+    refresh_dto: web::Json<RefreshTokenRequest>,
+    manager: web::Data<TenantPoolManager>,
+    req: HttpRequest,
+) -> Result<HttpResponse, ServiceError> {
+    println!("DEBUG: refresh_token controller called");
+    let refresh_payload = refresh_dto.into_inner();
+    let tenant_id = refresh_payload.tenant_id.clone();
+
+    if let Some(pool) = manager.get_tenant_pool(&tenant_id) {
+        let tenant_metadata = tenant_id.clone();
+        account_service::refresh_with_token(&refresh_payload.refresh_token, &tenant_id, &pool)
+            .log_error("account_controller::refresh_token")
+            .and_then(|token_res| {
+                ResponseTransformer::new(token_res)
+                    .with_message(Cow::Borrowed(constants::MESSAGE_OK))
+                    .try_with_metadata(json!({ "tenant_id": tenant_metadata }))
+                    .map(|transformer| transformer.respond_to(&req))
+                    .map_err(response_composition_error)
+            })
+    } else {
+        Err(ServiceError::bad_request("Tenant not found")
+            .with_tag("tenant")
+            .with_detail("Tenant pool missing for refresh token request"))
     }
 }
 

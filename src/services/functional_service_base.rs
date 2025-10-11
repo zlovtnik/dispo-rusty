@@ -113,12 +113,10 @@ where
         )?;
 
         let collected_errors = Arc::new(Mutex::new(Vec::new()));
-        let mut reporter = error_pipeline::build_error_reporter(
-            collected_errors.clone(),
-            |err: &ServiceError| {
+        let mut reporter =
+            error_pipeline::build_error_reporter(collected_errors.clone(), |err: &ServiceError| {
                 log::warn!("Validation failed in pipeline: {}", err);
-            },
-        );
+            });
 
         let validation_results: Vec<ServiceResult<()>> = validations
             .iter()

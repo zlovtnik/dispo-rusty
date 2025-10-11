@@ -1,4 +1,5 @@
 use crate::error::ServiceError;
+use crate::services::functional_patterns::Either;
 #[allow(unused_imports)]
 use diesel::{
     pg::PgConnection,
@@ -15,7 +16,9 @@ pub type Connection = PgConnection;
 
 pub type Pool = r2d2::Pool<ConnectionManager<Connection>>;
 
-/// Create and configure a database connection pool for the given database URL.
+/// Creates a database connection pool using functional composition patterns.
+///
+/// Uses functional error handling and composition to create pools safely.
 ///
 /// # Examples
 ///
@@ -31,12 +34,57 @@ pub type Pool = r2d2::Pool<ConnectionManager<Connection>>;
 pub fn init_db_pool(url: &str) -> Pool {
     use log::info;
 
-    info!("Migrating and configuring database...");
-    let manager = ConnectionManager::<Connection>::new(url);
+    info!("Migrating and configuring database with functional patterns...");
+    
+    // Use functional composition for pool creation
+    create_pool_functional(url)
+        .unwrap_or_else(|error| {
+            panic!("Failed to create database pool: {}", error);
+        })
+}
 
+/// Functional database pool creation
+fn create_pool_functional(url: &str) -> Result<Pool, String> {
+    let manager = ConnectionManager::<Connection>::new(url);
+    
     r2d2::Pool::builder()
         .build(manager)
-        .expect("Failed to create pool.")
+        .map_err(|e| format!("Pool creation failed: {}", e))
+}
+
+/// Creates a database connection pool using functional composition with Either pattern.
+///
+/// This version uses Either for better error composition and handling. Returns an
+/// Either type that can be composed with other functional operations.
+///
+/// # Arguments
+///
+/// * `url` - The database connection URL (e.g., `postgres://user:pass@host/db`).
+///
+/// # Return
+///
+/// Either::Right(Pool) on success, or Either::Left(String) describing the failure.
+///
+/// # Examples
+///
+/// ```no_run
+/// # use crate::db::try_init_db_pool_functional;
+/// let result = try_init_db_pool_functional("postgres://user:pass@localhost/db");
+/// match result {
+///     Either::Right(pool) => println!("Created pool successfully"),
+///     Either::Left(err) => eprintln!("Failed to create pool: {}", err),
+/// }
+/// ```
+pub fn try_init_db_pool_functional(url: &str) -> Either<String, Pool> {
+    use log::info;
+    info!("Attempting to create database pool with functional patterns...");
+    
+    let manager = ConnectionManager::<Connection>::new(url);
+    
+    match r2d2::Pool::builder().build(manager) {
+        Ok(pool) => Either::Right(pool),
+        Err(e) => Either::Left(format!("Failed to create pool: {}", e)),
+    }
 }
 
 /// Creates a database connection pool for the given database URL without panicking on failure.
@@ -198,5 +246,104 @@ impl TenantPoolManager {
             Ok(mut pools) => Ok(pools.remove(tenant_id)),
             Err(_) => Self::handle_lock_poisoned_error(),
         }
+    }
+
+    // Functional programming methods for enhanced composition and error handling
+
+    /// Get or create a tenant pool using functional error handling patterns.
+    ///
+    /// Uses Either for composable error handling and functional composition.
+    /// Returns Either::Right(pool) on success or Either::Left(error_message) on failure.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// let result = manager.get_or_create_pool_functional("tenant_1");
+    /// match result {
+    ///     Either::Right(pool) => println!("Got pool successfully"),
+    ///     Either::Left(err) => eprintln!("Failed to get pool: {}", err),
+    /// }
+    /// ```
+    pub fn get_or_create_pool_functional(&self, tenant_id: &str) -> Either<String, Pool> {
+        // First try to get existing pool using functional patterns
+        self.try_get_existing_pool_functional(tenant_id)
+            .map_right(|pool| pool)
+            .unwrap_or_else(|_| {
+                // If not found, create new pool using functional patterns
+                self.create_tenant_pool_functional(tenant_id)
+            })
+    }
+
+    /// Try to get an existing pool from the cache using functional patterns
+    fn try_get_existing_pool_functional(&self, tenant_id: &str) -> Either<String, Pool> {
+        match self.tenant_pools.read() {
+            Ok(pools) => match pools.get(tenant_id) {
+                Some(pool) => Either::Right(pool.clone()),
+                None => Either::Left(format!("Pool not found for tenant: {}", tenant_id)),
+            },
+            Err(e) => Either::Left(format!("Failed to read tenant pools: {}", e)),
+        }
+    }
+
+    /// Create a new tenant pool using functional composition
+    fn create_tenant_pool_functional(&self, tenant_id: &str) -> Either<String, Pool> {
+        // Get tenant database URL using functional patterns
+        self.get_tenant_db_url_functional(tenant_id)
+            .and_then(|db_url| {
+                // Create pool using functional patterns
+                try_init_db_pool_functional(&db_url)
+                    .map_right(|pool| {
+                        // Cache the pool
+                        self.cache_tenant_pool_functional(tenant_id, pool.clone());
+                        pool
+                    })
+            })
+    }
+
+    /// Get tenant database URL using functional patterns
+    fn get_tenant_db_url_functional(&self, tenant_id: &str) -> Either<String, String> {
+        use diesel::prelude::*;
+        use crate::models::tenant::Tenant;
+        use crate::schema::tenants::dsl::*;
+
+        match self.main_pool.get() {
+            Ok(mut conn) => {
+                match tenants
+                    .filter(id.eq(tenant_id))
+                    .first::<Tenant>(&mut conn)
+                {
+                    Ok(tenant) => Either::Right(tenant.db_url),
+                    Err(e) => Either::Left(format!("Failed to find tenant {}: {}", tenant_id, e)),
+                }
+            }
+            Err(e) => Either::Left(format!("Failed to get main database connection: {}", e)),
+        }
+    }
+
+    /// Cache a tenant pool with functional error handling
+    fn cache_tenant_pool_functional(&self, tenant_id: &str, pool: Pool) -> Either<String, ()> {
+        match self.tenant_pools.write() {
+            Ok(mut pools) => {
+                pools.insert(tenant_id.to_string(), pool);
+                Either::Right(())
+            }
+            Err(e) => Either::Left(format!("Failed to cache tenant pool: {}", e)),
+        }
+    }
+
+    /// Validate tenant pool health using functional patterns
+    pub fn validate_tenant_pool_functional(&self, tenant_id: &str) -> Either<String, bool> {
+        self.try_get_existing_pool_functional(tenant_id)
+            .and_then(|pool| {
+                match pool.get() {
+                    Ok(_conn) => Either::Right(true),
+                    Err(e) => Either::Left(format!("Pool unhealthy for tenant {}: {}", tenant_id, e)),
+                }
+            })
+    }
+
+    /// Legacy method for backward compatibility
+    pub fn get_or_create_pool(&self, tenant_id: &str) -> Result<Pool, String> {
+        self.get_or_create_pool_functional(tenant_id).into_result()
     }
 }

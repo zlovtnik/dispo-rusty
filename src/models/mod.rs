@@ -2,6 +2,7 @@ pub mod filters;
 pub mod login_history;
 pub mod pagination;
 pub mod person;
+pub mod refresh_token;
 pub mod response;
 pub mod tenant;
 pub mod user;

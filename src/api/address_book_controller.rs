@@ -1,7 +1,7 @@
 use actix_web::http::StatusCode;
-use actix_web::{web, HttpMessage, HttpRequest, HttpResponse, Result, Responder};
-use std::borrow::Cow;
+use actix_web::{web, HttpMessage, HttpRequest, HttpResponse, Responder, Result};
 use serde_json::json;
+use std::borrow::Cow;
 
 use crate::{
     config::db::Pool,
@@ -15,10 +15,7 @@ use crate::{
         filters::PersonFilter,
         person::{Person, PersonDTO},
     },
-    services::{
-        address_book_service,
-        functional_service_base::FunctionalErrorHandling,
-    },
+    services::{address_book_service, functional_service_base::FunctionalErrorHandling},
 };
 
 fn response_composition_error(err: ResponseTransformError) -> ServiceError {
@@ -29,7 +26,7 @@ fn response_composition_error(err: ResponseTransformError) -> ServiceError {
 
 fn respond_empty(req: &HttpRequest, status: StatusCode, message: &str) -> HttpResponse {
     ResponseTransformer::new(constants::EMPTY)
-    .with_message(Cow::Owned(message.to_string()))
+        .with_message(Cow::Owned(message.to_string()))
         .with_status(status)
         .respond_to(req)
 }
@@ -177,13 +174,11 @@ pub async fn filter(
         }
     };
 
-    let pagination = Pagination::from_optional(
-        filter.cursor.map(i64::from),
-        filter.page_size,
-        50,
-    );
+    let pagination = Pagination::from_optional(filter.cursor.map(i64::from), filter.page_size, 50);
     filter.cursor.get_or_insert(pagination.cursor() as i32);
-    filter.page_size.get_or_insert(pagination.page_size() as i64);
+    filter
+        .page_size
+        .get_or_insert(pagination.page_size() as i64);
 
     debug!("Calling address_book_service::filter");
     address_book_service::filter(filter, &pool)
@@ -332,6 +327,7 @@ mod tests {
             email: "admin@example.com".to_string(),
             username: "admin".to_string(),
             password: "123456".to_string(),
+            active: true,
         };
 
         match account_service::signup(user_dto, pool) {
@@ -342,7 +338,7 @@ mod tests {
                     tenant_id: "tenant1".to_string(),
                 };
                 match account_service::login(login_dto, pool) {
-                    Ok(token_res) => Ok(token_res.token),
+                    Ok(token_res) => Ok(token_res.access_token),
                     Err(err) => Err(format!("{:?}", err.error_response())),
                 }
             }

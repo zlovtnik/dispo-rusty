@@ -1,4 +1,7 @@
-use bcrypt::{hash, verify, DEFAULT_COST};
+use argon2::{
+    password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
+    Argon2,
+};
 use diesel::{prelude::*, Identifiable, Insertable, Queryable};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -13,11 +16,12 @@ use crate::{
 #[derive(Identifiable, Queryable, Serialize, Deserialize)]
 #[diesel(table_name = users)]
 pub struct User {
-    pub id: i32,
+    pub id: i64,
     pub username: String,
     pub email: String,
     pub password: String,
     pub login_session: String,
+    pub active: bool,
 }
 
 #[derive(Insertable, Serialize, Deserialize)]
@@ -26,6 +30,7 @@ pub struct UserDTO {
     pub username: String,
     pub email: String,
     pub password: String,
+    pub active: bool,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -52,22 +57,33 @@ pub struct LoginInfoDTO {
 
 impl User {
     pub fn signup(new_user: UserDTO, conn: &mut Connection) -> Result<String, String> {
-        if Self::find_user_by_username(&new_user.username, conn).is_err() {
-            let new_user = UserDTO {
-                password: hash(&new_user.password, DEFAULT_COST).unwrap(),
-                ..new_user
-            };
-            diesel::insert_into(users)
-                .values(new_user)
-                .execute(conn)
-                .map_err(|err| err.to_string())?;
-            Ok(constants::MESSAGE_SIGNUP_SUCCESS.to_string())
-        } else {
-            Err(format!(
+        // Check if username already exists
+        if Self::find_user_by_username(&new_user.username, conn).is_ok() {
+            return Err(format!(
                 "User '{}' is already registered",
                 &new_user.username
-            ))
+            ));
         }
+        // Check if email already exists
+        if Self::find_user_by_email(&new_user.email, conn).is_ok() {
+            return Err(format!("Email '{}' is already registered", &new_user.email));
+        }
+
+        let salt = SaltString::generate(&mut OsRng);
+        let argon2 = Argon2::default();
+        let password_hash = argon2
+            .hash_password(new_user.password.as_bytes(), &salt)
+            .map_err(|e| format!("Password hashing failed: {}", e))?
+            .to_string();
+        let new_user = UserDTO {
+            password: password_hash,
+            ..new_user
+        };
+        diesel::insert_into(users)
+            .values(new_user)
+            .execute(conn)
+            .map_err(|err| err.to_string())?;
+        Ok(constants::MESSAGE_SIGNUP_SUCCESS.to_string())
     }
 
     pub fn login(login: LoginDTO, conn: &mut Connection) -> Option<LoginInfoDTO> {
@@ -76,39 +92,54 @@ impl User {
             .or_filter(email.eq(&login.username_or_email))
             .get_result::<User>(conn)
         {
-            if !user_to_verify.password.is_empty()
-                && verify(&login.password, &user_to_verify.password).unwrap()
-            {
-                if let Some(login_history) = LoginHistory::create(&user_to_verify.username, conn) {
-                    if LoginHistory::save_login_history(login_history, conn).is_err() {
-                        return None;
-                    }
-                    let login_session_str = User::generate_login_session();
-                    if User::update_login_session_to_db(
-                        &user_to_verify.username,
-                        &login_session_str,
-                        conn,
-                    ) {
-                        return Some(LoginInfoDTO {
-                            username: user_to_verify.username,
-                            login_session: login_session_str,
-                            tenant_id: login.tenant_id,
-                        });
-                    }
-                }
-            } else {
+            if !user_to_verify.active {
                 return Some(LoginInfoDTO {
                     username: user_to_verify.username,
                     login_session: String::new(),
                     tenant_id: login.tenant_id,
                 });
             }
+
+            if !user_to_verify.password.is_empty() {
+                let parsed_hash = PasswordHash::new(&user_to_verify.password).ok()?;
+                let argon2 = Argon2::default();
+                if argon2
+                    .verify_password(login.password.as_bytes(), &parsed_hash)
+                    .is_ok()
+                {
+                    if let Some(login_history) =
+                        LoginHistory::create(&user_to_verify.username, conn)
+                    {
+                        if LoginHistory::save_login_history(login_history, conn).is_err() {
+                            return None;
+                        }
+                        let login_session_str = User::generate_login_session();
+                        if User::update_login_session_to_db(
+                            &user_to_verify.username,
+                            &login_session_str,
+                            conn,
+                        ) {
+                            return Some(LoginInfoDTO {
+                                username: user_to_verify.username,
+                                login_session: login_session_str,
+                                tenant_id: login.tenant_id,
+                            });
+                        }
+                    }
+                } else {
+                    return Some(LoginInfoDTO {
+                        username: user_to_verify.username,
+                        login_session: String::new(),
+                        tenant_id: login.tenant_id,
+                    });
+                }
+            }
         }
 
         None
     }
 
-    pub fn logout(user_id: i32, conn: &mut Connection) {
+    pub fn logout(user_id: i64, conn: &mut Connection) {
         if let Ok(user) = users.find(user_id).get_result::<User>(conn) {
             Self::update_login_session_to_db(&user.username, "", conn);
         }
@@ -188,6 +219,14 @@ impl User {
 
     pub fn find_user_by_username(un: &str, conn: &mut Connection) -> QueryResult<User> {
         users.filter(username.eq(un)).get_result::<User>(conn)
+    }
+
+    pub fn find_user_by_email(em: &str, conn: &mut Connection) -> QueryResult<User> {
+        users.filter(email.eq(em)).get_result::<User>(conn)
+    }
+
+    pub fn find_user_by_id(user_id: i64, conn: &mut Connection) -> QueryResult<User> {
+        users.find(user_id).get_result::<User>(conn)
     }
 
     pub fn generate_login_session() -> String {

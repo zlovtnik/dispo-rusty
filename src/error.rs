@@ -863,8 +863,8 @@ mod tests {
         let error = ServiceError::bad_request("original");
         let cloned = error.clone();
 
-    // Modify original (by reassigning, since fields are private)
-    let _modified = ServiceError::bad_request("modified");
+        // Modify original (by reassigning, since fields are private)
+        let _modified = ServiceError::bad_request("modified");
 
         // Cloned should still have original value
         match cloned {

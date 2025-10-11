@@ -1,128 +1,143 @@
-use actix_web::web;
-use log::info;
-use std::sync::Once;
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use crate::api::*;
+use crate::config::functional_config::{FunctionalLogger, RouteBuilder};
+use actix_web::web;
 
-static LOG_ONCE: Once = Once::new();
-
-/// Configure application HTTP routes and register the API scope.
+/// Configure application HTTP routes using functional composition patterns.
 ///
-/// This registers the root health endpoint and mounts the `/api` scope with its
-/// nested routes. On the first invocation this function logs a human-readable
-/// summary of all registered routes and timestamps the start and end of the
-/// configuration process.
+/// This function uses the RouteBuilder pattern to compose route configurations
+/// in a functional, composable manner. It uses functional composition for
+/// logging and error handling.
 ///
 /// # Examples
 ///
 /// ```
 /// use actix_web::App;
 ///
-/// // Mounts the routes onto an Actix application builder.
+/// // Mounts the routes onto an Actix application builder using functional composition.
 /// let app = App::new().configure(config_services);
 /// ```
 pub fn config_services(cfg: &mut web::ServiceConfig) {
-    LOG_ONCE.call_once(|| {
-        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
-        info!("Starting route configuration at {}", timestamp);
-        info!("Configuring routes...");
+    let logger = FunctionalLogger::new();
 
-        info!("Route Configuration Summary:");
-        info!("  - GET /health -> health_controller::health");
-        info!("  - GET /api/ping -> ping_controller::ping");
-        info!("  - GET /api/health -> health_controller::health");
-        info!("  - GET /api/health/detailed -> health_controller::health_detailed");
-        info!("  - GET /api/health/performance -> health_controller::performance_metrics");
-        info!("  - GET /api/health/compatibility -> health_controller::backward_compatibility_validation");
-        info!("  - GET /api/logs -> health_controller::logs");
-        info!("  - POST /api/auth/signup -> account_controller::signup");
-        info!("  - POST /api/auth/login -> account_controller::login");
-        info!("  - POST /api/auth/logout -> account_controller::logout");
-        info!("  - POST /api/auth/refresh -> account_controller::refresh");
-        info!("  - GET /api/auth/me -> account_controller::me");
-        info!("  - GET /api/address-book -> address_book_controller::find_all (list all contacts)");
-        info!("  - POST /api/address-book -> address_book_controller::insert (create new contact)");
-        info!("  - GET /api/address-book/{{id}} -> address_book_controller::find_by_id (get specific contact)");
-        info!("  - PUT /api/address-book/{{id}} -> address_book_controller::update (update contact)");
-        info!("  - DELETE /api/address-book/{{id}} -> address_book_controller::delete (delete contact)");
-        info!("  - GET /api/address-book/filter -> address_book_controller::filter (filter contacts)");
-        info!("  - GET /api/admin/tenant/stats -> tenant_controller::get_system_stats (system statistics)");
-        info!("  - GET /api/admin/tenant/health -> tenant_controller::get_tenant_health (tenant health status)");
-        info!("  - GET /api/admin/tenant/status -> tenant_controller::get_tenant_status (tenant connection status)");
-        info!("  - GET /api/tenants -> tenant_controller::find_all (list all tenants)");
-        info!("  - GET /api/tenants/filter -> tenant_controller::filter (filter tenants)");
-        info!("  - POST /api/tenants -> tenant_controller::create (create new tenant)");
-        info!("  - GET /api/tenants/{{id}} -> tenant_controller::find_by_id (get tenant by id)");
-        info!("  - PUT /api/tenants/{{id}} -> tenant_controller::update (update tenant)");
-        info!("  - DELETE /api/tenants/{{id}} -> tenant_controller::delete (delete tenant)");
-        let end_timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
-        info!("Route configuration completed successfully at {}", end_timestamp);
-    });
+    // Create functional route configuration with error handling
+    let route_config = || -> Result<(), &'static str> {
+        // Build routes using functional composition
+        let route_builder = RouteBuilder::new()
+            .add_route(|cfg| {
+                cfg.service(health_controller::health);
+            })
+            .add_route(|cfg| {
+                cfg.service(web::scope("/api").configure(configure_api_routes));
+            });
 
-    // Root level routes
-    cfg.service(health_controller::health);
+        // Apply logging and build routes - clone the builder for the closure
+        let logged_config = logger.with_logging(move |inner_cfg| {
+            route_builder.build(inner_cfg);
+        });
 
-    // API scope routes
-    cfg.service(web::scope("/api").configure(configure_api_routes));
+        logged_config(cfg);
+        Ok(())
+    };
+
+    // Execute with functional error handling
+    if route_config().is_err() {
+        // Fallback to basic configuration
+        cfg.service(health_controller::health);
+        cfg.service(web::scope("/api").configure(configure_api_routes));
+    }
 }
 
-/// Register API endpoints and nested scopes under `/api`.
+/// Register API endpoints and nested scopes under `/api` using functional composition.
 ///
-/// Adds standalone routes for `ping`, `health`, `health_detailed`, `performance`, and `logs`, and mounts
-/// the `/auth`, `/address-book`, `/admin`, and `/tenants` sub-scopes.
+/// Uses the RouteBuilder pattern to compose routes functionally, making the configuration
+/// more composable and testable. Each scope is added as a separate route transformation.
 ///
 /// # Examples
 ///
 /// ```
 /// use actix_web::{App, web};
 ///
-/// let app = App::new().service(web::scope("/api").configure(crate::config::configure_api_routes));
+/// let app = App::new().service(web::scope("/api").configure(configure_api_routes));
 /// ```
 fn configure_api_routes(cfg: &mut web::ServiceConfig) {
-    // Standalone routes in /api
-    cfg.service(ping_controller::ping);
-    cfg.service(health_controller::health);
-    cfg.service(health_controller::health_detailed);
-    cfg.service(health_controller::performance_metrics);
-    cfg.service(health_controller::backward_compatibility_validation);
-    cfg.service(health_controller::logs);
-
-    // Auth scope routes
-    cfg.service(web::scope("/auth").configure(configure_auth_routes));
-
-    // Address book scope routes
-    cfg.service(web::scope("/address-book").configure(configure_address_book_routes));
-
-    // Admin scope routes
-    cfg.service(web::scope("/admin").configure(configure_admin_routes));
-
-    // Tenant scope routes
-    cfg.service(web::scope("/tenants").configure(configure_tenant_routes));
+    RouteBuilder::new()
+        // Standalone routes in /api
+        .add_route(|cfg| {
+            cfg.service(ping_controller::ping);
+        })
+        .add_route(|cfg| {
+            cfg.service(health_controller::health);
+        })
+        .add_route(|cfg| {
+            cfg.service(health_controller::health_detailed);
+        })
+        .add_route(|cfg| {
+            cfg.service(health_controller::performance_metrics);
+        })
+        .add_route(|cfg| {
+            cfg.service(health_controller::backward_compatibility_validation);
+        })
+        .add_route(|cfg| {
+            cfg.service(health_controller::logs);
+        })
+        // Scoped routes
+        .add_route(|cfg| {
+            cfg.service(web::scope("/auth").configure(configure_auth_routes));
+        })
+        .add_route(|cfg| {
+            cfg.service(web::scope("/address-book").configure(configure_address_book_routes));
+        })
+        .add_route(|cfg| {
+            cfg.service(web::scope("/admin").configure(configure_admin_routes));
+        })
+        .add_route(|cfg| {
+            cfg.service(web::scope("/tenants").configure(configure_tenant_routes));
+        })
+        .build(cfg);
 }
 
-/// Register authentication endpoints on the provided ServiceConfig.
+/// Register authentication endpoints using functional composition patterns.
 ///
-/// Adds the routes: POST /signup, POST /login, POST /logout, POST /refresh, and GET /me.
+/// Uses functional composition to build authentication routes in a composable manner.
 ///
 /// # Examples
 ///
 /// ```
 /// use actix_web::{App, web};
 ///
-/// let app = App::new().service(web::scope("/api/auth").configure(crate::routes::configure_auth_routes));
+/// let app = App::new().service(web::scope("/api/auth").configure(configure_auth_routes));
 /// ```
 fn configure_auth_routes(cfg: &mut web::ServiceConfig) {
-    cfg.service(web::resource("/signup").route(web::post().to(account_controller::signup)));
-    cfg.service(web::resource("/login").route(web::post().to(account_controller::login)));
-    cfg.service(web::resource("/logout").route(web::post().to(account_controller::logout)));
-    cfg.service(web::resource("/refresh").route(web::post().to(account_controller::refresh)));
-    cfg.service(web::resource("/me").route(web::get().to(account_controller::me)));
+    RouteBuilder::new()
+        .add_route(|cfg| {
+            cfg.service(web::resource("/signup").route(web::post().to(account_controller::signup)));
+        })
+        .add_route(|cfg| {
+            cfg.service(web::resource("/login").route(web::post().to(account_controller::login)));
+        })
+        .add_route(|cfg| {
+            cfg.service(web::resource("/logout").route(web::post().to(account_controller::logout)));
+        })
+        .add_route(|cfg| {
+            cfg.service(
+                web::resource("/refresh").route(web::post().to(account_controller::refresh)),
+            );
+        })
+        .add_route(|cfg| {
+            cfg.service(
+                web::resource("/refresh-token")
+                    .route(web::post().to(account_controller::refresh_token)),
+            );
+        })
+        .add_route(|cfg| {
+            cfg.service(web::resource("/me").route(web::get().to(account_controller::me)));
+        })
+        .build(cfg);
 }
 
-/// Register address-book HTTP routes on the provided service configuration.
+/// Register address-book HTTP routes using functional composition patterns.
 ///
-/// Configured endpoints (relative to the mounted scope):
+/// Uses RouteBuilder to compose endpoints functionally:
 /// - GET `/` → `address_book_controller::find_all`
 /// - POST `/` → `address_book_controller::insert`
 /// - GET `/{id}` → `address_book_controller::find_by_id`
@@ -136,25 +151,36 @@ fn configure_auth_routes(cfg: &mut web::ServiceConfig) {
 /// use actix_web::web;
 ///
 /// // Mount the address-book routes under `/address-book`
-/// let scope = web::scope("/address-book").configure(crate::routes::configure_address_book_routes);
+/// let scope = web::scope("/address-book").configure(configure_address_book_routes);
 /// ```
 fn configure_address_book_routes(cfg: &mut web::ServiceConfig) {
-    cfg.service(
-        web::resource("")
-            .route(web::get().to(address_book_controller::find_all))
-            .route(web::post().to(address_book_controller::insert)),
-    );
-    // Define more specific routes before generic ones to avoid path parameter conflicts
-    cfg.service(web::resource("/filter").route(web::get().to(address_book_controller::filter)));
-    cfg.service(
-        web::resource("/{id}")
-            .route(web::get().to(address_book_controller::find_by_id))
-            .route(web::put().to(address_book_controller::update))
-            .route(web::delete().to(address_book_controller::delete)),
-    );
+    RouteBuilder::new()
+        .add_route(|cfg| {
+            cfg.service(
+                web::resource("")
+                    .route(web::get().to(address_book_controller::find_all))
+                    .route(web::post().to(address_book_controller::insert)),
+            );
+        })
+        .add_route(|cfg| {
+            cfg.service(
+                web::resource("/filter").route(web::get().to(address_book_controller::filter)),
+            );
+        })
+        .add_route(|cfg| {
+            cfg.service(
+                web::resource("/{id}")
+                    .route(web::get().to(address_book_controller::find_by_id))
+                    .route(web::put().to(address_book_controller::update))
+                    .route(web::delete().to(address_book_controller::delete)),
+            );
+        })
+        .build(cfg);
 }
 
-/// Registers the admin sub-scope at `/tenant` which exposes tenant administration endpoints.
+/// Registers the admin sub-scope using functional composition patterns.
+///
+/// Uses RouteBuilder to functionally mount tenant administration endpoints.
 ///
 /// # Examples
 ///
@@ -162,14 +188,18 @@ fn configure_address_book_routes(cfg: &mut web::ServiceConfig) {
 /// use actix_web::{App, test, web};
 /// // Mount the admin routes onto an Actix-web App
 /// let app = test::init_service(App::new().configure(|cfg: &mut web::ServiceConfig| {
-///     crate::configure_admin_routes(cfg);
+///     configure_admin_routes(cfg);
 /// }));
 /// ```
 fn configure_admin_routes(cfg: &mut web::ServiceConfig) {
-    cfg.service(web::scope("/tenant").configure(configure_tenant_admin_routes));
+    RouteBuilder::<()>::new()
+        .add_route(|cfg| {
+            cfg.service(web::scope("/tenant").configure(configure_tenant_admin_routes));
+        })
+        .build(cfg);
 }
 
-/// Register tenant administration endpoints under the tenant admin scope.
+/// Register tenant administration endpoints using functional composition.
 ///
 /// The configured routes (relative to the scope) are:
 /// - GET `/stats` -> `tenant_controller::get_system_stats`
@@ -184,19 +214,29 @@ fn configure_admin_routes(cfg: &mut web::ServiceConfig) {
 /// let _app = App::new().service(web::scope("/admin/tenant").configure(configure_tenant_admin_routes));
 /// ```
 fn configure_tenant_admin_routes(cfg: &mut web::ServiceConfig) {
-    cfg.service(web::resource("/stats").route(web::get().to(tenant_controller::get_system_stats)));
-    cfg.service(
-        web::resource("/health").route(web::get().to(tenant_controller::get_tenant_health)),
-    );
-    cfg.service(
-        web::resource("/status").route(web::get().to(tenant_controller::get_tenant_status)),
-    );
+    RouteBuilder::<()>::new()
+        .add_route(|cfg| {
+            cfg.service(
+                web::resource("/stats").route(web::get().to(tenant_controller::get_system_stats)),
+            );
+        })
+        .add_route(|cfg| {
+            cfg.service(
+                web::resource("/health").route(web::get().to(tenant_controller::get_tenant_health)),
+            );
+        })
+        .add_route(|cfg| {
+            cfg.service(
+                web::resource("/status").route(web::get().to(tenant_controller::get_tenant_status)),
+            );
+        })
+        .build(cfg);
 }
 
-/// Registers tenant HTTP routes on the provided ServiceConfig.
+/// Registers tenant HTTP routes using functional composition patterns.
 ///
-/// Configures collection routes (GET list, POST create), a filtered listing at `/filter` (GET),
-/// and per-tenant operations by `{id}` (GET, PUT, DELETE).
+/// Uses RouteBuilder to configure collection routes (GET list, POST create),
+/// a filtered listing at `/filter` (GET), and per-tenant operations by `{id}` (GET, PUT, DELETE).
 ///
 /// # Examples
 ///
@@ -207,16 +247,24 @@ fn configure_tenant_admin_routes(cfg: &mut web::ServiceConfig) {
 /// let _scope = web::scope("/tenants").configure(configure_tenant_routes);
 /// ```
 fn configure_tenant_routes(cfg: &mut web::ServiceConfig) {
-    cfg.service(
-        web::resource("")
-            .route(web::get().to(tenant_controller::find_all))
-            .route(web::post().to(tenant_controller::create)),
-    );
-    cfg.service(web::resource("/filter").route(web::get().to(tenant_controller::filter)));
-    cfg.service(
-        web::resource("/{id}")
-            .route(web::get().to(tenant_controller::find_by_id))
-            .route(web::put().to(tenant_controller::update))
-            .route(web::delete().to(tenant_controller::delete)),
-    );
+    RouteBuilder::<()>::new()
+        .add_route(|cfg| {
+            cfg.service(
+                web::resource("")
+                    .route(web::get().to(tenant_controller::find_all))
+                    .route(web::post().to(tenant_controller::create)),
+            );
+        })
+        .add_route(|cfg| {
+            cfg.service(web::resource("/filter").route(web::get().to(tenant_controller::filter)));
+        })
+        .add_route(|cfg| {
+            cfg.service(
+                web::resource("/{id}")
+                    .route(web::get().to(tenant_controller::find_by_id))
+                    .route(web::put().to(tenant_controller::update))
+                    .route(web::delete().to(tenant_controller::delete)),
+            );
+        })
+        .build(cfg);
 }

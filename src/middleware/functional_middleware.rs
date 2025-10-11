@@ -529,14 +529,14 @@ pub mod functional_middleware_impl {
     }
 
     impl<S> FunctionalAuthenticationMiddleware<S> {
-    /// Create a 401 Unauthorized `ServiceResponse` whose JSON body is a `ResponseBody` containing the given `message` and an empty data payload.
-    ///
-    /// The `req` is converted into the response's request parts; the function constructs an `HttpResponse::Unauthorized`
-    /// with `ResponseBody::new(message, constants::EMPTY)` and wraps it as a `ServiceResponse`.
-    ///
-    /// # Returns
-    ///
-    /// `Ok(ServiceResponse)` containing a 401 Unauthorized response with the JSON error body, or `Err(Error)` if constructing the response fails.
+        /// Create a 401 Unauthorized `ServiceResponse` whose JSON body is a `ResponseBody` containing the given `message` and an empty data payload.
+        ///
+        /// The `req` is converted into the response's request parts; the function constructs an `HttpResponse::Unauthorized`
+        /// with `ResponseBody::new(message, constants::EMPTY)` and wraps it as a `ServiceResponse`.
+        ///
+        /// # Returns
+        ///
+        /// `Ok(ServiceResponse)` containing a 401 Unauthorized response with the JSON error body, or `Err(Error)` if constructing the response fails.
         ///
         /// # Examples
         ///

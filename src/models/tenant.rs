@@ -18,8 +18,8 @@ pub struct Tenant {
     pub id: String,
     pub name: String,
     pub db_url: String,
-    pub created_at: NaiveDateTime,
-    pub updated_at: NaiveDateTime,
+    pub created_at: Option<NaiveDateTime>,
+    pub updated_at: Option<NaiveDateTime>,
 }
 
 #[derive(Insertable, Serialize, Deserialize)]
