@@ -10,6 +10,11 @@ use crate::{
     schema::tenants::{self, dsl::*},
 };
 
+use super::functional_utils;
+
+// Re-export functional utilities for tenant operations
+pub use functional_utils::*;
+
 const MAX_PAGE_SIZE: i64 = 10_000;
 
 #[derive(Clone, Identifiable, Queryable, Serialize, Deserialize)]
@@ -350,93 +355,53 @@ impl Tenant {
         filter: TenantFilter,
         conn: &mut crate::config::db::Connection,
     ) -> QueryResult<Page<Tenant>> {
+        // Use functional iterator patterns to build query
         let mut query = tenants::table.into_boxed();
-
         for field_filter in &filter.filters {
             match field_filter.field.as_str() {
                 "id" => {
                     match field_filter.operator.as_str() {
-                        "contains" => {
-                            query = query.filter(id.like(format!("%{}%", field_filter.value)));
-                        }
-                        "equals" => {
-                            query = query.filter(id.eq(&field_filter.value));
-                        }
-                        _ => {} // Ignore unsupported operators for id
+                        "contains" => query = query.filter(id.like(format!("%{}%", field_filter.value))),
+                        "equals" => query = query.filter(id.eq(&field_filter.value)),
+                        _ => {}
                     }
                 }
                 "name" => {
                     match field_filter.operator.as_str() {
-                        "contains" => {
-                            query = query.filter(name.like(format!("%{}%", field_filter.value)));
-                        }
-                        "equals" => {
-                            query = query.filter(name.eq(&field_filter.value));
-                        }
-                        _ => {} // Ignore unsupported operators for name
+                        "contains" => query = query.filter(name.like(format!("%{}%", field_filter.value))),
+                        "equals" => query = query.filter(name.eq(&field_filter.value)),
+                        _ => {}
                     }
                 }
                 "db_url" => {
                     match field_filter.operator.as_str() {
-                        "contains" => {
-                            query = query.filter(db_url.like(format!("%{}%", field_filter.value)));
-                        }
-                        "equals" => {
-                            query = query.filter(db_url.eq(&field_filter.value));
-                        }
-                        _ => {} // Ignore unsupported operators for db_url
+                        "contains" => query = query.filter(db_url.like(format!("%{}%", field_filter.value))),
+                        "equals" => query = query.filter(db_url.eq(&field_filter.value)),
+                        _ => {}
                     }
                 }
                 "created_at" => {
-                    // Parse the value as datetime
-                    let dt = NaiveDateTime::parse_from_str(&field_filter.value, "%Y-%m-%dT%H:%M:%S%.fZ")
-                        .map_err(|_| result::Error::DatabaseError(
-                            result::DatabaseErrorKind::Unknown,
-                            Box::new(format!("Invalid datetime format for field '{}': '{}'. Expected ISO format like '2023-12-25T10:00:00.000Z'", field_filter.field, field_filter.value)),
-                        ))?;
-                    match field_filter.operator.as_str() {
-                        "gt" => {
-                            query = query.filter(created_at.gt(dt));
+                    if let Ok(dt) = NaiveDateTime::parse_from_str(&field_filter.value, "%Y-%m-%dT%H:%M:%S%.fZ") {
+                        match field_filter.operator.as_str() {
+                            "gt" => query = query.filter(created_at.gt(dt)),
+                            "gte" => query = query.filter(created_at.ge(dt)),
+                            "lt" => query = query.filter(created_at.lt(dt)),
+                            "lte" => query = query.filter(created_at.le(dt)),
+                            "equals" => query = query.filter(created_at.eq(dt)),
+                            _ => {}
                         }
-                        "gte" => {
-                            query = query.filter(created_at.ge(dt));
-                        }
-                        "lt" => {
-                            query = query.filter(created_at.lt(dt));
-                        }
-                        "lte" => {
-                            query = query.filter(created_at.le(dt));
-                        }
-                        "equals" => {
-                            query = query.filter(created_at.eq(dt));
-                        }
-                        _ => {} // Ignore unsupported operators for dates
                     }
                 }
                 "updated_at" => {
-                    // Parse the value as datetime
-                    let dt = NaiveDateTime::parse_from_str(&field_filter.value, "%Y-%m-%dT%H:%M:%S%.fZ")
-                        .map_err(|_| result::Error::DatabaseError(
-                            result::DatabaseErrorKind::Unknown,
-                            Box::new(format!("Invalid datetime format for field '{}': '{}'. Expected ISO format like '2023-12-25T10:00:00.000Z'", field_filter.field, field_filter.value)),
-                        ))?;
-                    match field_filter.operator.as_str() {
-                        "gt" => {
-                            query = query.filter(updated_at.gt(dt));
+                    if let Ok(dt) = NaiveDateTime::parse_from_str(&field_filter.value, "%Y-%m-%dT%H:%M:%S%.fZ") {
+                        match field_filter.operator.as_str() {
+                            "gt" => query = query.filter(updated_at.gt(dt)),
+                            "gte" => query = query.filter(updated_at.ge(dt)),
+                            "lt" => query = query.filter(updated_at.lt(dt)),
+                            "lte" => query = query.filter(updated_at.le(dt)),
+                            "equals" => query = query.filter(updated_at.eq(dt)),
+                            _ => {}
                         }
-                        "gte" => {
-                            query = query.filter(updated_at.ge(dt));
-                        }
-                        "lt" => {
-                            query = query.filter(updated_at.lt(dt));
-                        }
-                        "lte" => {
-                            query = query.filter(updated_at.le(dt));
-                        }
-                        "equals" => {
-                            query = query.filter(updated_at.eq(dt));
-                        }
-                        _ => {} // Ignore unsupported operators for dates
                     }
                 }
                 _ => {} // Ignore unknown fields

@@ -43,7 +43,7 @@ fn respond_empty(req: &HttpRequest, status: StatusCode, message: &str) -> HttpRe
 fn extract_tenant_pool(req: &HttpRequest) -> Result<Pool, ServiceError> {
     match req.extensions().get::<Pool>() {
         Some(pool) => Ok(pool.clone()),
-        None => Err(ServiceError::bad_request("Tenant not found")
+        None => Err(ServiceError::unauthorized("Tenant not found")
             .with_tag("tenant")
             .with_detail("Missing tenant pool in request extensions")),
     }
@@ -68,16 +68,25 @@ pub async fn find_all(
 ) -> Result<HttpResponse, ServiceError> {
     info!("Processing find_all users request");
 
-    let limit = query
+    let mut limit = query
         .get("limit")
         .and_then(|v| v.parse::<i64>().ok())
-        .unwrap_or(50)
-        .min(500);
+        .unwrap_or(50);
 
-    let offset = query
+    if limit < 1 {
+        limit = 1;
+    } else if limit > 500 {
+        limit = 500;
+    }
+
+    let mut offset = query
         .get("offset")
         .and_then(|v| v.parse::<i64>().ok())
         .unwrap_or(0);
+
+    if offset < 0 {
+        offset = 0;
+    }
 
     let pool = extract_tenant_pool(&req)?;
 

@@ -15,6 +15,11 @@ use crate::{
     models::{login_history::LoginHistory, user_token::UserToken},
     schema::users::{self, dsl::*},
 };
+
+use super::functional_utils;
+
+// Re-export functional utilities for user operations
+pub use functional_utils::*;
 #[derive(Identifiable, Queryable, Selectable, Serialize, Deserialize)]
 #[diesel(table_name = users)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
@@ -116,31 +121,15 @@ impl User {
     }
 
     pub fn login(login: LoginDTO, conn: &mut Connection) -> Option<LoginInfoDTO> {
-        // 1) Fetch user (early return None if not found)
-        let user_to_verify = users
+        // Functional composition: lookup -> validate -> verify -> create session
+        users
             .filter(username.eq(&login.username_or_email))
             .or_filter(email.eq(&login.username_or_email))
             .get_result::<User>(conn)
-            .ok()?;
-
-        // 2) Return None for inactive users (consistent with password mismatch behavior)
-        if !user_to_verify.active {
-            return None;
-        }
-
-        // Skip empty passwords
-        if user_to_verify.password.is_empty() {
-            return None;
-        }
-
-        // 3) Verify password using hybrid approach
-        if Self::verify_password_hybrid(&user_to_verify.password, &login.password) {
-            // On successful verification, create login session
-            Self::create_login_session(&user_to_verify.username, login.tenant_id, conn)
-        } else {
-            // Return None for failed authentication (consistent behavior)
-            None
-        }
+            .ok()
+            .filter(|user| user.active && !user.password.is_empty())
+            .filter(|user| Self::verify_password_hybrid(&user.password, &login.password))
+            .and_then(|user| Self::create_login_session(&user.username, login.tenant_id, conn))
     }
 
     /// Verify password using hybrid approach: try Argon2 first, fallback to bcrypt if hash format indicates bcrypt
