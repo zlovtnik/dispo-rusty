@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { ConfirmationModal } from '@/components/ConfirmationModal';
-import type { Contact } from '@/types/contact';
+import type { Contact, ContactListResponse } from '@/types/contact';
 import { Gender } from '@/types/contact';
 import { addressBookService, genderConversion } from '@/services/api';
 import {
@@ -25,6 +25,8 @@ import {
   DeleteOutlined,
   SearchOutlined,
 } from '@ant-design/icons';
+import { isApiSuccess } from '@/types/api';
+import { asContactId, asTenantId, asUserId } from '@/types/ids';
 
 interface AddressFormValues {
   firstName: string;
@@ -51,133 +53,238 @@ export const AddressBookPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
-  const [deleteContactId, setDeleteContactId] = useState<string | null>(null);
+  const [deleteContactId, setDeleteContactId] = useState<Contact['id'] | null>(null);
   const [form] = Form.useForm();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Load contacts from API on component mount
-  useEffect(() => {
-    loadContacts();
-  }, []);
-
   // Helper function to transform backend Person to frontend Contact
+  const generateFallbackContactId = () => `contact-${Math.random().toString(36).slice(2, 10)}`;
+
   const personToContact = (person: any): Contact => {
-    const nameParts = person.name ? person.name.trim().split(/\s+/) : [];
-    const firstName = nameParts[0] || '';
-    const lastName = nameParts.slice(1).join(' ') || '';
+    const resolvedId = (() => {
+      if (typeof person?.id === 'string' && person.id.trim()) return asContactId(person.id.trim());
+      if (typeof person?.id === 'number') return asContactId(person.id.toString());
+      return asContactId(generateFallbackContactId());
+    })();
+
+    const resolvedTenantId = (() => {
+      if (typeof person?.tenantId === 'string' && person.tenantId.trim()) return asTenantId(person.tenantId.trim());
+      if (typeof person?.tenant_id === 'string' && person.tenant_id.trim()) return asTenantId(person.tenant_id.trim());
+      if (tenant?.id) return tenant.id;
+      return asTenantId('tenant-fallback');
+    })();
+
+    const rawName = (() => {
+      if (typeof person?.name === 'string' && person.name.trim()) return person.name.trim();
+      if (typeof person?.fullName === 'string' && person.fullName.trim()) return person.fullName.trim();
+      const first = typeof person?.firstName === 'string' ? person.firstName : '';
+      const last = typeof person?.lastName === 'string' ? person.lastName : '';
+      return [first, last].filter(Boolean).join(' ').trim();
+    })();
+
+    const nameParts = rawName ? rawName.split(/\s+/) : [];
+    const firstName = nameParts[0] ?? '';
+    const lastName = nameParts.slice(1).join(' ');
+
+    const resolvedGender = (() => {
+      if (typeof person?.gender === 'string') {
+        return person.gender === Gender.female ? Gender.female : person.gender === Gender.male ? Gender.male : undefined;
+      }
+      if (typeof person?.gender === 'boolean') {
+        return genderConversion.fromBoolean(person.gender);
+      }
+      return undefined;
+    })();
+
+    const resolveDate = (value: unknown): Date => {
+      if (typeof value === 'string' || typeof value === 'number') {
+        const parsed = new Date(value);
+        if (!Number.isNaN(parsed.getTime())) return parsed;
+      }
+      if (value instanceof Date) return value;
+      return new Date();
+    };
+
+    const resolvedAddress = (() => {
+      if (typeof person?.address === 'object' && person.address !== null) {
+        const addressObj = person.address as Record<string, unknown>;
+        const street1 = typeof addressObj.street1 === 'string' && addressObj.street1.trim()
+          ? addressObj.street1.trim()
+          : typeof addressObj.address === 'string'
+            ? addressObj.address.trim()
+            : '';
+
+        return {
+          street1,
+          street2: typeof addressObj.street2 === 'string' ? addressObj.street2 : undefined,
+          city: typeof addressObj.city === 'string' ? addressObj.city : '',
+          state: typeof addressObj.state === 'string' ? addressObj.state : '',
+          zipCode: typeof addressObj.zipCode === 'string' ? addressObj.zipCode : '',
+          country: typeof addressObj.country === 'string' ? addressObj.country : 'USA',
+        };
+      }
+
+      if (typeof person?.address === 'string') {
+        return {
+          street1: person.address,
+          street2: undefined,
+          city: '',
+          state: '',
+          zipCode: '',
+          country: 'USA',
+        };
+      }
+
+      return undefined;
+    })();
+
+    const createdBy = typeof person?.createdBy === 'string' && person.createdBy.trim()
+      ? asUserId(person.createdBy.trim())
+      : typeof person?.created_by === 'string' && person.created_by.trim()
+        ? asUserId(person.created_by.trim())
+        : asUserId('system');
+
+    const updatedBy = typeof person?.updatedBy === 'string' && person.updatedBy.trim()
+      ? asUserId(person.updatedBy.trim())
+      : typeof person?.updated_by === 'string' && person.updated_by.trim()
+        ? asUserId(person.updated_by.trim())
+        : createdBy;
+
     return {
-      id: person.id?.toString() || '',
-      tenantId: tenant?.id || '',
+      id: resolvedId,
+      tenantId: resolvedTenantId,
       firstName,
       lastName,
-      fullName: person.name || '',
-      email: person.email || '',
-      phone: person.phone || '',
-      gender: typeof person.gender === 'boolean' ? genderConversion.fromBoolean(person.gender) : undefined,
-      age: typeof person.age === 'number' ? person.age : undefined,
-      address: {
-        street1: person.address || '',
-        street2: '',
-        city: '',
-        state: '',
-        zipCode: '',
-        country: 'USA',
-      },
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      createdBy: 'system',
-      updatedBy: 'system',
-      isActive: true,
+      fullName: rawName || [firstName, lastName].filter(Boolean).join(' '),
+      email: typeof person?.email === 'string' ? person.email : undefined,
+      phone: typeof person?.phone === 'string' ? person.phone : undefined,
+      gender: resolvedGender,
+      age: typeof person?.age === 'number' ? person.age : undefined,
+      address: resolvedAddress,
+      createdAt: resolveDate(person?.createdAt ?? person?.created_at),
+      updatedAt: resolveDate(person?.updatedAt ?? person?.updated_at ?? person?.createdAt ?? person?.created_at),
+      createdBy,
+      updatedBy,
+      isActive: typeof person?.isActive === 'boolean' ? person.isActive : true,
     };
   };
 
   // Helper function to transform frontend Contact to backend PersonDTO
-  const contactToPersonDTO = (name: string, address: string, phone: string, email: string, gender?: Gender, age?: number) => {
+  const contactToPersonDTO = (formValues: AddressFormValues) => {
+    const name = `${formValues.firstName} ${formValues.lastName}`.trim();
+    const addressSegments = [
+      formValues.street1,
+      formValues.street2,
+      formValues.city,
+      formValues.state,
+      formValues.zipCode,
+      formValues.country,
+    ]
+      .map(segment => (segment ?? '').trim())
+      .filter(segment => segment.length > 0);
+
     return {
-      name,
-      address,
-      phone,
-      email,
-      gender: gender ? genderConversion.toBoolean(gender) : false,
-      age: age || 25,
+      name: name || formValues.street1,
+      address: addressSegments.join(', ') || formValues.street1,
+      phone: formValues.phone ?? '',
+      email: formValues.email ?? '',
+      gender: genderConversion.toBoolean(formValues.gender),
+      age: typeof formValues.age === 'number' ? formValues.age : 25,
     };
   };
 
-  // Load contacts from API
-  const loadContacts = async () => {
+  const loadContacts = useCallback(async () => {
+    if (!tenant) {
+      setContacts([]);
+      setError(null);
+      return;
+    }
+
     setLoading(true);
     setError(null);
-    try {
-      const response = await addressBookService.getAll() as any;
-      // Transform backend data to frontend Contact objects
-      const contactData = Array.isArray(response.data)
-        ? response.data.map(personToContact)
-        : [];
 
-      setContacts(contactData);
-    } catch (err: any) {
-      const errorMessage = err?.message || 'Failed to load contacts';
+    const result = await addressBookService.getAll();
+
+    if (result.isErr()) {
+      const errorMessage = result.error.message || 'Failed to load contacts';
       setError(errorMessage);
       message.error(errorMessage);
-    } finally {
       setLoading(false);
+      return;
     }
-  };
+
+    const apiResponse = result.value;
+
+    if (!isApiSuccess(apiResponse)) {
+      const errorMessage = apiResponse.error.message || 'Failed to load contacts';
+      setError(errorMessage);
+      message.error(errorMessage);
+      setLoading(false);
+      return;
+    }
+
+    const data = apiResponse.data as ContactListResponse;
+    const records = Array.isArray(data?.contacts) ? data.contacts : [];
+    const normalizedContacts = records.map(personToContact);
+    setContacts(normalizedContacts);
+    setLoading(false);
+  }, [message, tenant]);
+
+  useEffect(() => {
+    loadContacts();
+  }, [loadContacts]);
 
   // Filter contacts based on search term
-  const filteredContacts = contacts.filter(contact =>
-    contact.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    contact.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    contact.phone?.includes(searchTerm)
-  );
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+  const filteredContacts = useMemo(() => {
+    if (!normalizedSearch) {
+      return contacts;
+    }
+
+    return contacts.filter(contact => {
+      const matchesName = contact.fullName?.toLowerCase().includes(normalizedSearch);
+      const matchesEmail = contact.email?.toLowerCase().includes(normalizedSearch);
+      const matchesPhone = contact.phone?.includes(normalizedSearch);
+      return Boolean(matchesName || matchesEmail || matchesPhone);
+    });
+  }, [contacts, normalizedSearch]);
 
   // Handle form submission
   const handleSubmit = async (values: AddressFormValues) => {
     setIsSubmitting(true);
+    const dto = contactToPersonDTO(values);
 
-    try {
-      const dto = contactToPersonDTO(
-        `${values.firstName} ${values.lastName}`,
-        values.street1,
-        values.phone || '',
-        values.email || '',
-        values.gender,
-        values.age
-      );
+    const isUpdating = Boolean(editingContact);
+    const result = isUpdating
+      ? await addressBookService.update(editingContact!.id, dto)
+      : await addressBookService.create(dto);
 
-      if (editingContact) {
-        // Update existing contact
-        await addressBookService.update(editingContact.id, {
-          name: `${values.firstName} ${values.lastName}`,
-          gender: genderConversion.toBoolean(values.gender),
-          age: values.age,
-          address: values.street1,
-          phone: values.phone || '',
-          email: values.email || '',
-        });
-      } else {
-        // Create new contact
-        await addressBookService.create(dto);
-      }
-
-      // Reload contacts
-      await loadContacts();
-
-      // Success message
-      const successMsg = editingContact ? 'Contact updated successfully!' : 'Contact created successfully!';
-      message.success(successMsg);
-
-      // Reset form and close modal on success
-      setEditingContact(null);
-      setIsFormOpen(false);
-      form.resetFields();
-
-    } catch (error: any) {
-      const errorMessage = error?.message || 'An error occurred while saving the contact.';
+    if (result.isErr()) {
+      const errorMessage = result.error.message || 'An error occurred while saving the contact.';
       message.error(errorMessage);
-    } finally {
       setIsSubmitting(false);
+      return;
     }
+
+    const apiResponse = result.value;
+
+    if (!isApiSuccess(apiResponse)) {
+      const errorMessage = apiResponse.error.message || 'An error occurred while saving the contact.';
+      message.error(errorMessage);
+      setIsSubmitting(false);
+      return;
+    }
+
+    const successMsg = apiResponse.message ?? (isUpdating ? 'Contact updated successfully!' : 'Contact created successfully!');
+    message.success(successMsg);
+
+    await loadContacts();
+
+    setEditingContact(null);
+    setIsFormOpen(false);
+    form.resetFields();
+    setIsSubmitting(false);
   };
 
   // Handle edit
@@ -188,7 +295,7 @@ export const AddressBookPage: React.FC = () => {
       lastName: contact.lastName,
       email: contact.email,
       phone: contact.phone,
-      gender: contact.gender as Gender || Gender.male, // Default if not available
+      gender: contact.gender ?? Gender.male,
       age: contact.age || 25, // Default if not available
       street1: contact.address?.street1,
       street2: contact.address?.street2,
@@ -201,23 +308,32 @@ export const AddressBookPage: React.FC = () => {
   };
 
   // Handle delete - open confirmation modal
-  const handleDelete = (id: string) => {
+  const handleDelete = (id: Contact['id']) => {
     setDeleteContactId(id);
   };
 
   // Confirm delete
   const confirmDelete = async () => {
     if (deleteContactId) {
-      try {
-        await addressBookService.delete(deleteContactId);
-        // Reload contacts
-        await loadContacts();
-        setDeleteContactId(null);
-        message.success('Contact deleted successfully!');
-      } catch (error: any) {
-        const errorMessage = error?.message || 'Failed to delete contact';
+      const result = await addressBookService.delete(deleteContactId);
+
+      if (result.isErr()) {
+        const errorMessage = result.error.message || 'Failed to delete contact';
         message.error(errorMessage);
+        return;
       }
+
+      const apiResponse = result.value;
+
+      if (!isApiSuccess(apiResponse)) {
+        const errorMessage = apiResponse.error.message || 'Failed to delete contact';
+        message.error(errorMessage);
+        return;
+      }
+
+      setDeleteContactId(null);
+      await loadContacts();
+      message.success(apiResponse.message ?? 'Contact deleted successfully!');
     }
   };
 

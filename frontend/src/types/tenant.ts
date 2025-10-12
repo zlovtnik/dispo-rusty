@@ -1,5 +1,7 @@
+import type { TenantId } from './ids';
+
 export interface Tenant {
-  id: string;
+  id: TenantId;
   name: string;
   db_url: string;
   created_at: string;

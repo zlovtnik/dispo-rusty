@@ -38,6 +38,7 @@
 use std::borrow::Cow;
 use std::str::FromStr;
 
+#[cfg_attr(not(test), allow(unused_imports))]
 use actix_web::body::{self, BoxBody};
 use actix_web::http::header::{
     self, HeaderName, HeaderValue, InvalidHeaderName, InvalidHeaderValue,
@@ -664,6 +665,7 @@ fn prefers_pretty_json(req: &HttpRequest) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use actix_web::body;
     use actix_web::http::header::{ACCEPT, CONTENT_TYPE};
     use actix_web::http::StatusCode;
     use actix_web::test::TestRequest;

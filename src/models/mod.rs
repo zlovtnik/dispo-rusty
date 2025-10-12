@@ -32,31 +32,12 @@ pub mod user_token;
 
 // Re-export functional programming utilities for model operations
 pub use crate::functional::{
-    iterator_engine::{IteratorChain, IteratorEngine},
-    pure_function_registry::{PureFunctionRegistry, RegistryError, SharedRegistry},
-    query_builder::{
-        compare, contains, equals, null_check, Column, Operator, Predicate, QueryFilter,
-        TypeSafeQueryBuilder,
-    },
-    query_composition::{
-        composable_predicate, field_filter_to_composable, ComposablePredicate,
-        FunctionalQueryComposer, LazyEvaluationConfig, ParameterSanitizer, QueryOptimizationEngine,
-        QueryPerformanceMetrics,
-    },
-    response_transformers::ResponseTransformer,
-    validation_engine::{
-        validate_struct_field, validator, validator_with_config, LazyValidationIterator,
-        ValidationConfig, ValidationContext, ValidationEngine, ValidationOutcome,
-        ValidationPipeline, ValidationPipelineResult,
-    },
-    validation_rules::{
-        all, any, not, when, Custom, Email, Length, MustBeTrue, OneOf, Phone, Range, Required,
-        Unique, Url, ValidationError, ValidationResult, ValidationRule,
-    },
+    query_builder::Column,
+    validation_engine::{ValidationConfig, ValidationEngine},
+    validation_rules::{Custom, Email, Length, Phone, Range, ValidationError},
 };
 
 // Re-export commonly used functional traits
-pub use crate::functional::function_traits::{FunctionCategory, PureFunction};
 
 // Functional model utilities
 pub mod functional_utils {
@@ -64,19 +45,61 @@ pub mod functional_utils {
 
     use super::*;
 
-    /// Creates a type-safe column reference for functional queries
+    /// Create a type-safe column reference for functional queries.
+    ///
+    /// The returned `Column<T, C>` carries the target row type `T` and the column value type `C`,
+    /// and is identified by the provided table and column names.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let _col: crate::functional::query_builder::Column<i32, String> = column("users", "id");
+    /// ```
     pub fn column<T, C>(table: &str, column: &str) -> Column<T, C> {
         Column::new(table.to_string(), column.to_string())
     }
 
-    /// Creates a validation engine with default configuration
-    pub fn validation_engine() -> ValidationEngine<()> {
+    /// Creates a validation engine with the default configuration for the target type `T`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let _engine = crate::models::functional_utils::validation_engine::<i32>();
+    /// ```
+    pub fn validation_engine<T>() -> ValidationEngine<T> {
         ValidationEngine::new()
     }
 
-    /// Creates a validation engine with custom configuration
-    /// Note: ValidationEngine doesn't take config in constructor, use builder pattern
-    pub fn validation_engine_with_config(_config: ValidationConfig) -> ValidationEngine<()> {
-        ValidationEngine::new()
+    /// Creates a validation engine configured for the target type `T`.
+    ///
+    /// The provided `config` customizes validation rules and behavior used by the returned engine.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use crate::models::functional_utils::{validation_engine_with_config, ValidationConfig};
+    /// struct User { name: String }
+    /// let cfg = ValidationConfig::default();
+    /// let engine = validation_engine_with_config::<User>(cfg);
+    /// ```
+    pub fn validation_engine_with_config<T>(config: ValidationConfig) -> ValidationEngine<T> {
+        ValidationEngine::with_config(config)
+    }
+
+    /// Return the list of validation errors with their full structured data.
+    ///
+    /// Returns a `Vec<ValidationError>` containing the full details of each validation error in the same order.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use crate::models::functional_utils::{to_error_messages, ValidationError};
+    ///
+    /// let errors: Vec<ValidationError> = vec![/* ... */];
+    /// let structured_errors = to_error_messages(errors);
+    /// // Each error contains field, code, and message.
+    /// ```
+    pub fn to_error_messages(errors: Vec<ValidationError>) -> Vec<String> {
+        errors.into_iter().map(|error| error.message).collect()
     }
 }

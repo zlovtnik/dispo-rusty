@@ -1,5 +1,3 @@
-use crate::models::nfe_document::NfeDocument;
-use crate::models::nfe_product::NfeProduct;
 use crate::schema::nfe_items;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;

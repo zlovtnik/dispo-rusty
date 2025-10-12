@@ -11,7 +11,7 @@ use crate::{
     models::filters::TenantFilter,
     models::response::ResponseBody,
     models::tenant::{Tenant, TenantDTO, UpdateTenant},
-    models::user::User,
+    models::user::operations as user_ops,
 };
 
 #[derive(Serialize)]
@@ -48,13 +48,9 @@ struct PaginatedTenantResponse {
     next_cursor: Option<i64>,
 }
 
-/// Fetches system-wide statistics and per-tenant connection status.
+/// Collects system-wide metrics and per-tenant connection status.
 ///
-/// Gathers totals for tenants and users and reports each tenant's connection state, returning an HTTP response with serialized `SystemStats`.
-///
-/// # Returns
-///
-/// An `HttpResponse` with status 200 containing the serialized `SystemStats`.
+/// Gathers totals for tenants and users and reports each tenant's connection state, returning an HTTP 200 response containing the serialized `SystemStats`.
 ///
 /// # Examples
 ///
@@ -83,12 +79,12 @@ pub async fn get_system_stats(
     })?;
 
     // Get total users and logged in count (global, since no tenant_id in users)
-    let total_users = User::count_all(&mut conn).map_err(|e| {
+    let total_users = user_ops::count_all_users(&mut conn).map_err(|e| {
         ServiceError::internal_server_error(format!("Failed to count users: {}", e))
             .with_tag("tenant")
             .with_metadata("operation", "get_system_stats")
     })?;
-    let logged_in_users = User::count_logged_in(&mut conn).map_err(|e| {
+    let logged_in_users = user_ops::count_logged_in_users(&mut conn).map_err(|e| {
         ServiceError::internal_server_error(format!("Failed to count logged in users: {}", e))
             .with_tag("tenant")
             .with_metadata("operation", "get_system_stats")

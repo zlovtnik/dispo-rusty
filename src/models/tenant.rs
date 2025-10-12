@@ -1,5 +1,6 @@
 use chrono::NaiveDateTime;
 use diesel::{prelude::*, result, AsChangeset, Identifiable, Insertable, Queryable};
+use log;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
@@ -10,10 +11,11 @@ use crate::{
     schema::tenants::{self, dsl::*},
 };
 
-use super::functional_utils;
+use super::{functional_utils, Custom};
+
+use crate::models::ValidationError;
 
 // Re-export functional utilities for tenant operations
-pub use functional_utils::*;
 
 const MAX_PAGE_SIZE: i64 = 10_000;
 
@@ -43,6 +45,66 @@ pub struct UpdateTenant {
 }
 
 impl Tenant {
+    /// Checks whether a string contains any non-whitespace characters.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use crate::models::tenant::Tenant;
+    ///
+    /// let s = "  a  ".to_string();
+    /// assert!(Tenant::is_not_blank(&s));
+    ///
+    /// let empty = "   ".to_string();
+    /// assert!(!Tenant::is_not_blank(&empty));
+    /// ```
+    ///
+    /// # Returns
+    ///
+    /// `true` if the string contains at least one non-whitespace character, `false` otherwise.
+    fn is_not_blank(value: &String) -> bool {
+        !value.trim().is_empty()
+    }
+
+    /// Checks whether every character in `value` is an alphanumeric character or `-` or `_`.
+    ///
+    /// Returns `true` if all characters satisfy `is_alphanumeric()` or are `'-'` or `'_'`, `false` otherwise.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use crate::models::tenant::Tenant;
+    ///
+    /// assert!(Tenant::is_valid_identifier(&"tenant-123_α".to_string()));
+    /// assert!(!Tenant::is_valid_identifier(&"bad id!".to_string()));
+    /// ```
+    fn is_valid_identifier(value: &String) -> bool {
+        !value.is_empty()
+            && value
+                .chars()
+                .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+    }
+
+    /// Parses a UTC timestamp string in the expected ISO-like format into a `NaiveDateTime`.
+    ///
+    /// Accepts timestamps formatted as `YYYY-MM-DDTHH:MM:SS` with an optional fractional seconds component and a trailing `Z` (example: `"2023-05-01T12:34:56.789Z"`).
+    ///
+    /// # Returns
+    ///
+    /// `Some(NaiveDateTime)` if the input matches the expected format, `None` otherwise.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use crate::models::tenant::Tenant;
+    ///
+    /// let dt = Tenant::parse_timestamp("2023-05-01T12:34:56.789Z").unwrap();
+    /// assert_eq!(dt.format("%Y-%m-%dT%H:%M:%S").to_string(), "2023-05-01T12:34:56");
+    /// ```
+    fn parse_timestamp(value: &str) -> Option<NaiveDateTime> {
+        NaiveDateTime::parse_from_str(value, "%Y-%m-%dT%H:%M:%S%.fZ").ok()
+    }
+
     /// Validates that the provided string is a well-formed URL suitable for a database connection.
     ///
     /// # Examples
@@ -66,26 +128,32 @@ impl Tenant {
         Ok(())
     }
 
-    /// Creates a new tenant from the provided DTO after validating its database URL.
+    /// Inserts a new tenant record after validating the DTO and its database URL.
     ///
-    /// Returns the inserted `Tenant` as stored in the database.
+    /// Returns the inserted `Tenant`.
     ///
     /// # Examples
     ///
     /// ```no_run
-    /// # use crate::models::TenantDTO;
-    /// # use crate::models::Tenant;
+    /// use crate::models::{Tenant, TenantDTO};
+    ///
     /// let dto = TenantDTO {
     ///     id: "tenant_1".into(),
     ///     name: "Tenant One".into(),
     ///     db_url: "postgres://user:pass@localhost/tenant_db".into(),
     /// };
+    ///
     /// let mut conn = crate::config::db::establish_connection();
     /// let tenant = Tenant::create(dto, &mut conn).unwrap();
     /// assert_eq!(tenant.id, "tenant_1");
     /// ```
     pub fn create(dto: TenantDTO, conn: &mut crate::config::db::Connection) -> QueryResult<Tenant> {
-        Self::validate_db_url(&dto.db_url)?;
+        vec![
+            Self::validate_tenant_dto(&dto),
+            Self::validate_db_url(&dto.db_url),
+        ]
+        .into_iter()
+        .collect::<QueryResult<Vec<_>>>()?;
         diesel::insert_into(tenants).values(&dto).get_result(conn)
     }
 
@@ -235,64 +303,75 @@ impl Tenant {
         tenants.filter(name.eq(name_)).first::<Tenant>(conn)
     }
 
-    /// Validates a TenantDTO's `id` and `name` according to application rules.
+    /// Validates a TenantDTO's id and name against application rules.
     ///
-    /// Checks that `id` is not empty and contains only alphanumeric characters, dashes, or underscores,
-    /// and that `name` is not empty.
-    ///
-    /// # Parameters
-    ///
-    /// - `dto`: The `TenantDTO` to validate.
+    /// - `id` must not be empty and must contain only alphanumeric characters, dashes, or underscores.
+    /// - `name` must not be empty.
     ///
     /// # Returns
     ///
-    /// `Ok(())` if validation passes, `Err(diesel::result::Error)` with a human-readable message describing the first
-    /// validation failure otherwise.
+    /// `Ok(())` if validation passes, `Err(diesel::result::Error)` with a joined error message otherwise.
     ///
     /// # Examples
     ///
     /// ```
-    /// let dto = TenantDTO { id: "tenant_1".into(), name: "Tenant One".into(), db_url: "postgres://user:pass@localhost/db".into() };
+    /// let dto = TenantDTO {
+    ///     id: "tenant_1".into(),
+    ///     name: "Tenant One".into(),
+    ///     db_url: "postgres://user:pass@localhost/db".into(),
+    /// };
     /// assert!(Tenant::validate_tenant_dto(&dto).is_ok());
     /// ```
     pub fn validate_tenant_dto(dto: &TenantDTO) -> QueryResult<()> {
-        // Validate ID: non-empty, alphanumeric + dashes/underscores
-        if dto.id.trim().is_empty() {
-            return Err(result::Error::DatabaseError(
-                result::DatabaseErrorKind::Unknown,
-                Box::new("Tenant ID cannot be empty".to_string()),
-            ));
-        }
+        let string_engine = functional_utils::validation_engine::<String>();
 
-        if !dto
-            .id
-            .chars()
-            .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
-        {
-            return Err(result::Error::DatabaseError(
-                result::DatabaseErrorKind::Unknown,
-                Box::new(
-                    "Tenant ID must contain only alphanumeric characters, dashes, and underscores"
-                        .to_string(),
-                ),
-            ));
-        }
+        let validations = [
+            string_engine.validate_field(
+                &dto.id,
+                "id",
+                vec![
+                    Custom::new(
+                        Self::is_not_blank as fn(&String) -> bool,
+                        "REQUIRED",
+                        "{} cannot be empty",
+                    ),
+                    Custom::new(
+                        Self::is_valid_identifier as fn(&String) -> bool,
+                        "INVALID_ID",
+                        "{} must contain only alphanumeric characters, dashes, and underscores",
+                    ),
+                ],
+            ),
+            string_engine.validate_field(
+                &dto.name,
+                "name",
+                vec![Custom::new(
+                    Self::is_not_blank as fn(&String) -> bool,
+                    "REQUIRED",
+                    "{} cannot be empty",
+                )],
+            ),
+        ];
 
-        // Validate name: non-empty
-        if dto.name.trim().is_empty() {
-            return Err(result::Error::DatabaseError(
-                result::DatabaseErrorKind::Unknown,
-                Box::new("Tenant name cannot be empty".to_string()),
-            ));
-        }
+        let errors: Vec<ValidationError> = validations
+            .into_iter()
+            .flat_map(|outcome| outcome.errors)
+            .collect();
 
-        Ok(())
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(result::Error::DatabaseError(
+                result::DatabaseErrorKind::Unknown,
+                Box::new(errors.into_iter().map(|e| e.message).collect::<Vec<_>>().join("; ")),
+            ))
+        }
     }
 
-    /// Inserts multiple tenants in a single database transaction after validating each DTO.
+    /// Insert multiple tenants in a single database transaction after validating each DTO.
     ///
-    /// Validates each `TenantDTO` (id and name) and each `db_url`; if any validation or insertion fails,
-    /// the transaction is rolled back.
+    /// Each `TenantDTO`'s `id`, `name`, and `db_url` are validated before insertion; if any validation
+    /// or the insert operation fails, the transaction is rolled back.
     ///
     /// # Returns
     ///
@@ -318,10 +397,10 @@ impl Tenant {
         conn: &mut crate::config::db::Connection,
     ) -> QueryResult<usize> {
         conn.transaction(|tx_conn| {
-            for dto in &dtos {
+            dtos.iter().try_for_each(|dto| {
                 Self::validate_tenant_dto(dto)?;
-                Self::validate_db_url(&dto.db_url)?;
-            }
+                Self::validate_db_url(&dto.db_url)
+            })?;
             diesel::insert_into(tenants).values(&dtos).execute(tx_conn)
         })
     }
@@ -355,62 +434,73 @@ impl Tenant {
         filter: TenantFilter,
         conn: &mut crate::config::db::Connection,
     ) -> QueryResult<Page<Tenant>> {
-        // Use functional iterator patterns to build query
-        let mut query = tenants::table.into_boxed();
-        for field_filter in &filter.filters {
-            match field_filter.field.as_str() {
-                "id" => match field_filter.operator.as_str() {
-                    "contains" => {
-                        query = query.filter(id.like(format!("%{}%", field_filter.value)))
-                    }
-                    "equals" => query = query.filter(id.eq(&field_filter.value)),
-                    _ => {}
-                },
-                "name" => match field_filter.operator.as_str() {
-                    "contains" => {
-                        query = query.filter(name.like(format!("%{}%", field_filter.value)))
-                    }
-                    "equals" => query = query.filter(name.eq(&field_filter.value)),
-                    _ => {}
-                },
-                "db_url" => match field_filter.operator.as_str() {
-                    "contains" => {
-                        query = query.filter(db_url.like(format!("%{}%", field_filter.value)))
-                    }
-                    "equals" => query = query.filter(db_url.eq(&field_filter.value)),
-                    _ => {}
-                },
-                "created_at" => {
-                    if let Ok(dt) =
-                        NaiveDateTime::parse_from_str(&field_filter.value, "%Y-%m-%dT%H:%M:%S%.fZ")
-                    {
-                        match field_filter.operator.as_str() {
-                            "gt" => query = query.filter(created_at.gt(dt)),
-                            "gte" => query = query.filter(created_at.ge(dt)),
-                            "lt" => query = query.filter(created_at.lt(dt)),
-                            "lte" => query = query.filter(created_at.le(dt)),
-                            "equals" => query = query.filter(created_at.eq(dt)),
-                            _ => {}
-                        }
-                    }
-                }
-                "updated_at" => {
-                    if let Ok(dt) =
-                        NaiveDateTime::parse_from_str(&field_filter.value, "%Y-%m-%dT%H:%M:%S%.fZ")
-                    {
-                        match field_filter.operator.as_str() {
-                            "gt" => query = query.filter(updated_at.gt(dt)),
-                            "gte" => query = query.filter(updated_at.ge(dt)),
-                            "lt" => query = query.filter(updated_at.lt(dt)),
-                            "lte" => query = query.filter(updated_at.le(dt)),
-                            "equals" => query = query.filter(updated_at.eq(dt)),
-                            _ => {}
-                        }
-                    }
-                }
-                _ => {} // Ignore unknown fields
+        // Validate cursor is non-negative
+        if let Some(cursor) = filter.cursor {
+            if cursor < 0 {
+                return Err(result::Error::DatabaseError(
+                    result::DatabaseErrorKind::Unknown,
+                    Box::new("Cursor must be non-negative".to_string()),
+                ));
             }
         }
+        let query = filter.filters.iter().try_fold(
+            tenants::table.into_boxed(),
+            |acc, field_filter| -> QueryResult<_> {
+                let mut acc = acc;
+                match field_filter.field.as_str() {
+                    "id" => match field_filter.operator.as_str() {
+                        "contains" => {
+                            acc = acc.filter(id.like(format!("%{}%", field_filter.value)))
+                        }
+                        "equals" => acc = acc.filter(id.eq(&field_filter.value)),
+                        _ => {}
+                    },
+                    "name" => match field_filter.operator.as_str() {
+                        "contains" => {
+                            acc = acc.filter(name.like(format!("%{}%", field_filter.value)))
+                        }
+                        "equals" => acc = acc.filter(name.eq(&field_filter.value)),
+                        _ => {}
+                    },
+                    "db_url" => match field_filter.operator.as_str() {
+                        "contains" => {
+                            acc = acc.filter(db_url.like(format!("%{}%", field_filter.value)))
+                        }
+                        "equals" => acc = acc.filter(db_url.eq(&field_filter.value)),
+                        _ => {}
+                    },
+                    "created_at" | "updated_at" => {
+                        let timestamp =
+                            Self::parse_timestamp(&field_filter.value).ok_or_else(|| {
+                                log::warn!("Invalid timestamp value: '{}'", field_filter.value);
+                                result::Error::DatabaseError(
+                                    result::DatabaseErrorKind::Unknown,
+                                    Box::new(format!(
+                                        "Invalid timestamp '{}' for field '{}'",
+                                        field_filter.value, field_filter.field
+                                    )),
+                                )
+                            })?;
+
+                        acc = match (field_filter.field.as_str(), field_filter.operator.as_str()) {
+                            ("created_at", "gt") => acc.filter(created_at.gt(timestamp)),
+                            ("created_at", "gte") => acc.filter(created_at.ge(timestamp)),
+                            ("created_at", "lt") => acc.filter(created_at.lt(timestamp)),
+                            ("created_at", "lte") => acc.filter(created_at.le(timestamp)),
+                            ("created_at", "equals") => acc.filter(created_at.eq(timestamp)),
+                            ("updated_at", "gt") => acc.filter(updated_at.gt(timestamp)),
+                            ("updated_at", "gte") => acc.filter(updated_at.ge(timestamp)),
+                            ("updated_at", "lt") => acc.filter(updated_at.lt(timestamp)),
+                            ("updated_at", "lte") => acc.filter(updated_at.le(timestamp)),
+                            ("updated_at", "equals") => acc.filter(updated_at.eq(timestamp)),
+                            _ => acc,
+                        };
+                    }
+                    _ => {}
+                }
+                Ok(acc)
+            },
+        )?;
 
         // Normalize pagination using iterator-based helper (defaulting to constants::DEFAULT_PER_PAGE)
         let default_page_size = constants::DEFAULT_PER_PAGE as usize;
@@ -453,6 +543,7 @@ impl Tenant {
             )
         })?;
 
+        let mut query = query;
         query = query.limit(limit).offset(offset);
 
         let mut results = query.load::<Tenant>(conn)?;

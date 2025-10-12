@@ -1,19 +1,21 @@
 // Authentication Types for JWT Multi-Tenant System
+import type { UserId, TenantId } from './ids';
+
 export interface User {
-  id: string;
+  id: UserId;
   email: string;
   username: string;
   firstName?: string;
   lastName?: string;
   avatar?: string;
   roles: string[];
-  tenantId: string;
+  tenantId: TenantId;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface Tenant {
-  id: string;
+  id: TenantId;
   name: string;
   domain?: string;
   logo?: string;
@@ -58,7 +60,7 @@ export interface AuthState {
 export interface LoginCredentials {
   usernameOrEmail: string;
   password: string;
-  tenantId?: string;
+  tenantId?: TenantId;
   rememberMe?: boolean;
 }
 
@@ -82,9 +84,9 @@ export interface AuthResponse {
 }
 
 export interface TokenPayload {
-  sub: string; // user id
+  sub: UserId; // user id
   email: string;
-  tenantId: string;
+  tenantId: TenantId;
   roles: string[];
   iat: number; // issued at
   exp: number; // expires at

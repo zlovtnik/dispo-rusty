@@ -3,7 +3,7 @@ use diesel::{prelude::*, Associations, Identifiable, Insertable, Queryable};
 
 use crate::{
     config::db::Connection,
-    models::user::User,
+    models::user::{operations as user_ops, User},
     schema::login_history::{self, dsl::*},
 };
 
@@ -23,15 +23,10 @@ pub struct LoginHistoryInsertableDTO {
 }
 
 impl LoginHistory {
-    /// Builds an insertable login-history record for the given username if that user exists.
+    /// Constructs an insertable login-history record for the given username if the user exists.
     ///
     /// Looks up the user by username and, on success, returns a `LoginHistoryInsertableDTO` populated
     /// with the user's `id` and the current UTC timestamp. Returns `None` if no matching user is found.
-    ///
-    /// # Arguments
-    ///
-    /// * `un` - Username to look up.
-    /// * `conn` - Mutable database connection used for the lookup.
     ///
     /// # Returns
     ///
@@ -44,21 +39,38 @@ impl LoginHistory {
     /// let dto = create("alice", &mut conn);
     /// assert!(dto.is_some());
     /// if let Some(record) = dto {
-    ///     assert_eq!(record.user_id > 0, true);
+    ///     assert!(record.user_id > 0);
     /// }
     /// ```
     pub fn create(un: &str, conn: &mut Connection) -> Option<LoginHistoryInsertableDTO> {
-        if let Ok(user) = User::find_user_by_username(un, conn) {
+        user_ops::find_user_by_username(un, conn).ok().map(|user| {
             let now = Utc::now();
-            Some(LoginHistoryInsertableDTO {
+            LoginHistoryInsertableDTO {
                 user_id: user.id,
                 login_timestamp: now.naive_utc(),
-            })
-        } else {
-            None
-        }
+            }
+        })
     }
 
+    /// Inserts a login history record into the database and returns how many rows were affected.
+    ///
+    /// Returns the number of rows inserted on success, or a Diesel error on failure.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use crate::models::login_history::{LoginHistoryInsertableDTO, save_login_history};
+    /// use crate::config::db::Connection;
+    ///
+    /// let mut conn: Connection = /* obtain connection */;
+    /// let record = LoginHistoryInsertableDTO {
+    ///     user_id: 1,
+    ///     login_timestamp: chrono::Utc::now().naive_utc(),
+    /// };
+    ///
+    /// let affected = save_login_history(record, &mut conn).unwrap();
+    /// assert_eq!(affected, 1);
+    /// ```
     pub fn save_login_history(
         insert_record: LoginHistoryInsertableDTO,
         conn: &mut Connection,

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { ConfirmationModal } from '@/components/ConfirmationModal';
-import type { Tenant, PaginatedTenantResponse } from '@/types/tenant';
+import type { Tenant as TenantRecord, PaginatedTenantResponse } from '@/types/tenant';
+import { isApiSuccess } from '@/types/api';
 import {
   Button,
   Input,
@@ -34,12 +35,12 @@ import { tenantService } from '@/services/api';
 
 export const TenantsPage: React.FC = () => {
   const { user } = useAuth();
-  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [tenants, setTenants] = useState<TenantRecord[]>([]);
   const { message } = App.useApp();
 
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
-  const [deleteTenantId, setDeleteTenantId] = useState<string | null>(null);
+  const [editingTenant, setEditingTenant] = useState<TenantRecord | null>(null);
+  const [deleteTenantId, setDeleteTenantId] = useState<TenantRecord['id'] | null>(null);
   const [form] = Form.useForm();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -58,9 +59,27 @@ export const TenantsPage: React.FC = () => {
   const loadTenants = async (params?: { offset?: number; limit?: number }) => {
     try {
       setLoading(true);
-      const response = await tenantService.getAllWithPagination(params) as { data: PaginatedTenantResponse };
-      setTenants(response.data.data);
-      setPagination(prev => ({ ...prev, total: response.data.total }));
+      const result = await tenantService.getAllWithPagination(params);
+
+      if (result.isErr()) {
+        message.error(result.error.message);
+        setTenants([]);
+        setPagination(prev => ({ ...prev, total: 0 }));
+        return;
+      }
+
+      const apiResponse = result.value;
+
+      if (!isApiSuccess(apiResponse)) {
+        message.error(apiResponse.error.message);
+        setTenants([]);
+        setPagination(prev => ({ ...prev, total: 0 }));
+        return;
+      }
+
+  const data = apiResponse.data;
+  setTenants(data.data);
+  setPagination(prev => ({ ...prev, total: data.total }));
     } catch (error) {
       message.error(error instanceof Error ? error.message : 'Failed to load tenants');
       setTenants([]);
@@ -101,12 +120,27 @@ export const TenantsPage: React.FC = () => {
     try {
       if (editingTenant) {
         // Update existing tenant
-        await tenantService.update(editingTenant.id, { name: values.name, db_url: values.db_url });
+        const updateResult = await tenantService.update(editingTenant.id, { name: values.name, db_url: values.db_url });
+        if (updateResult.isErr()) {
+          throw new Error(updateResult.error.message);
+        }
+
+        if (!isApiSuccess(updateResult.value)) {
+          throw new Error(updateResult.value.error.message);
+        }
         // Refresh the current page
         await loadTenants({ offset: (pagination.current - 1) * pagination.pageSize, limit: pagination.pageSize });
       } else {
         // Create new tenant
-        const newTenant = await tenantService.create({ name: values.name, db_url: values.db_url });
+        const createResult = await tenantService.create({ name: values.name, db_url: values.db_url });
+
+        if (createResult.isErr()) {
+          throw new Error(createResult.error.message);
+        }
+
+        if (!isApiSuccess(createResult.value)) {
+          throw new Error(createResult.value.error.message);
+        }
         // Refresh the current page
         await loadTenants({ offset: (pagination.current - 1) * pagination.pageSize, limit: pagination.pageSize });
       }
@@ -128,7 +162,7 @@ export const TenantsPage: React.FC = () => {
   };
 
   // Handle edit
-  const handleEdit = (tenant: Tenant) => {
+  const handleEdit = (tenant: TenantRecord) => {
     setEditingTenant(tenant);
     form.setFieldsValue({
       name: tenant.name,
@@ -138,7 +172,7 @@ export const TenantsPage: React.FC = () => {
   };
 
   // Handle delete - open confirmation modal
-  const handleDelete = (id: string) => {
+  const handleDelete = (id: TenantRecord['id']) => {
     setDeleteTenantId(id);
   };
 
@@ -146,7 +180,14 @@ export const TenantsPage: React.FC = () => {
   const confirmDelete = async () => {
     if (deleteTenantId) {
       try {
-        await tenantService.delete(deleteTenantId);
+        const deleteResult = await tenantService.delete(deleteTenantId);
+        if (deleteResult.isErr()) {
+          throw new Error(deleteResult.error.message);
+        }
+
+        if (!isApiSuccess(deleteResult.value)) {
+          throw new Error(deleteResult.value.error.message);
+        }
         // Update tenants state after successful API response
         await loadTenants({ offset: (pagination.current - 1) * pagination.pageSize, limit: pagination.pageSize });
         message.success('Tenant deleted successfully!');
@@ -199,18 +240,28 @@ export const TenantsPage: React.FC = () => {
       const response = await tenantService.filter({
         filters: validFilters,
         page_size: pagination.pageSize // Use current page size for filtered results
-      }) as any;
-      // Handle paginated response format from filter API
-      const data = response;
+      });
+
+      if (response.isErr()) {
+        throw new Error(response.error.message);
+      }
+
+      const apiResponse = response.value;
+
+      if (!isApiSuccess(apiResponse)) {
+        throw new Error(apiResponse.error.message);
+      }
+
+      const data = apiResponse.data;
+
       if (Array.isArray(data)) {
-        setTenants(data);
-        setPagination(prev => ({ ...prev, current: 1, total: data.length }));
-      } else if (data && data.data && Array.isArray(data.data)) {
-        setTenants(data.data);
-        setPagination(prev => ({ ...prev, current: 1, total: data.total ?? data.data.length ?? 0 }));
+        const records = data as TenantRecord[];
+        setTenants(records);
+        setPagination(prev => ({ ...prev, current: 1, total: records.length }));
       } else {
-        setTenants([]);
-        setPagination(prev => ({ ...prev, current: 1, total: 0 }));
+        const paginated = data as PaginatedTenantResponse;
+        setTenants(paginated.data);
+        setPagination(prev => ({ ...prev, current: 1, total: paginated.total ?? paginated.data.length ?? 0 }));
       }
     } catch (error) {
       message.error('Failed to filter tenants');
@@ -260,7 +311,7 @@ export const TenantsPage: React.FC = () => {
       title: 'Name',
       dataIndex: 'name',
       key: 'name',
-      sorter: (a: Tenant, b: Tenant) => a.name.localeCompare(b.name),
+  sorter: (a: TenantRecord, b: TenantRecord) => a.name.localeCompare(b.name),
     },
     {
       title: 'Database URL',
@@ -289,20 +340,20 @@ export const TenantsPage: React.FC = () => {
       dataIndex: 'created_at',
       key: 'created_at',
       render: (date: string) => formatDate(date),
-      sorter: (a: Tenant, b: Tenant) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+  sorter: (a: TenantRecord, b: TenantRecord) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
     },
     {
       title: 'Updated',
       dataIndex: 'updated_at',
       key: 'updated_at',
       render: (date: string) => formatDate(date),
-      sorter: (a: Tenant, b: Tenant) => new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime(),
+  sorter: (a: TenantRecord, b: TenantRecord) => new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime(),
     },
     {
       title: 'Actions',
       key: 'actions',
       width: 100,
-      render: (_: any, tenant: Tenant) => (
+  render: (_: any, tenant: TenantRecord) => (
         <Space size="small">
           <Button
             type="text"

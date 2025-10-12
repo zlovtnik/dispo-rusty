@@ -4,7 +4,7 @@ use jsonwebtoken::{DecodingKey, TokenData, Validation};
 use crate::{
     config::db::Pool,
     models::{
-        user::User,
+        user::operations as user_ops,
         user_token::{UserToken, SECRET_KEY},
     },
 };
@@ -28,7 +28,7 @@ pub fn decode_token(token: String) -> jsonwebtoken::errors::Result<TokenData<Use
     )
 }
 
-/// Verifies that the JWT claims represent a valid login session and returns the associated user identifier.
+/// Verify that the JWT claims represent a valid login session and return the associated user identifier.
 ///
 /// # Returns
 /// `Ok(String)` containing the user identifier when the session is valid, `Err(String)` with `"Invalid token"` otherwise.
@@ -40,7 +40,11 @@ pub fn decode_token(token: String) -> jsonwebtoken::errors::Result<TokenData<Use
 /// // let user_id = verify_token(&token_data, &pool)?;
 /// ```
 pub fn verify_token(token_data: &TokenData<UserToken>, pool: &Pool) -> Result<String, String> {
-    if User::is_valid_login_session(&token_data.claims, &mut pool.get().unwrap()) {
+    let mut conn = pool
+        .get()
+        .map_err(|e| format!("Failed to get db connection: {}", e))?;
+
+    if user_ops::is_valid_login_session(&token_data.claims, &mut conn) {
         Ok(token_data.claims.user.to_string())
     } else {
         Err("Invalid token".to_string())

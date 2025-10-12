@@ -12,6 +12,9 @@
     "verbatimModuleSyntax": true,
     "noEmit": true,
     "strict": true,
+    "strictNullChecks": true,
+    "noImplicitAny": true,
+    "strictFunctionTypes": true,
     "skipLibCheck": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true,
@@ -28,12 +31,6 @@
       "@/contexts/*": ["src/contexts/*"]
     }
   },
-  "include": [
-    "src/**/*",
-    "*.config.ts"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist"
-  ]
+  "include": ["src/**/*", "*.config.ts"],
+  "exclude": ["node_modules", "dist"]
 }

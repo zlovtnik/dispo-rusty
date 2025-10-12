@@ -1,9 +1,9 @@
 import qs from 'qs';
+import { ResultAsync, err, errAsync, ok, okAsync } from 'neverthrow';
 import { getEnv } from '../config/env';
 import type {
   AuthResponse,
   User,
-  Tenant,
   LoginCredentials,
   RegisterData,
 } from '../types/auth';
@@ -17,34 +17,17 @@ import type {
   ContactImportRequest,
 } from '../types/contact';
 import { Gender } from '../types/contact';
-import type { CreateTenantDTO, UpdateTenantDTO } from '../types/tenant';
-
-// API Response wrapper interface
-export interface ApiResponseWrapper<T> {
-  message: string;
-  data: T;
-  success: boolean;
-  error?: string;
-}
-
-// API Service for Actix Web REST API integration
-// This will be connected to the existing backend endpoints
-
-export interface ApiResponse<T> {
-  success: boolean;
-  data?: T;
-  error?: string;
-  message?: string;
-}
-
-export interface ApiError {
-  code: string;
-  message: string;
-  details?: Record<string, unknown>;
-  type?: 'network' | 'timeout' | 'http' | 'other';
-  statusCode?: number;
-  retryable?: boolean;
-}
+import type { CreateTenantDTO, PaginatedTenantResponse, Tenant, UpdateTenantDTO } from '../types/tenant';
+import type { ApiResponse } from '../types/api';
+import { createErrorResponse, createSuccessResponse } from '../types/api';
+import type { AppError } from '../types/errors';
+import {
+  createAuthError,
+  createBusinessLogicError,
+  createNetworkError,
+  createValidationError,
+} from '../types/errors';
+import type { Result } from '../types/fp';
 
 export interface RetryConfig {
   maxAttempts: number;
@@ -68,10 +51,10 @@ export interface CircuitBreakerState {
 }
 
 export interface IHttpClient {
-  get<T>(endpoint: string): Promise<T>;
-  post<T>(endpoint: string, data?: unknown): Promise<T>;
-  put<T>(endpoint: string, data?: unknown): Promise<T>;
-  delete<T>(endpoint: string): Promise<T>;
+  get<T>(endpoint: string): Promise<Result<ApiResponse<T>, AppError>>;
+  post<T>(endpoint: string, data?: unknown): Promise<Result<ApiResponse<T>, AppError>>;
+  put<T>(endpoint: string, data?: unknown): Promise<Result<ApiResponse<T>, AppError>>;
+  delete<T>(endpoint: string): Promise<Result<ApiResponse<T>, AppError>>;
 }
 
 // Base API configuration
@@ -89,6 +72,106 @@ const DEFAULT_CONFIG: HttpClientConfig = {
     failureThreshold: 5,
     resetTimeout: 60000, // 1 minute
   },
+};
+
+const pipe = <T>(value: T, ...fns: Array<(input: T) => T>): T =>
+  fns.reduce((accumulator, fn) => fn(accumulator), value);
+
+const mapHttpError = (response: Response, body: Record<string, unknown>): AppError => {
+  const message = typeof body.message === 'string' ? body.message : response.statusText;
+  const code = typeof body.code === 'string' ? body.code : undefined;
+  const details = typeof body.details === 'object' && body.details !== null
+    ? (body.details as Record<string, unknown>)
+    : undefined;
+
+  if (response.status === 401 || response.status === 403) {
+    return createAuthError(message || 'Authentication error', details, {
+      code,
+      statusCode: response.status,
+    });
+  }
+
+  if (response.status === 400 || response.status === 422) {
+    return createValidationError(message || 'Validation error', details, {
+      code,
+      statusCode: response.status,
+    });
+  }
+
+  if (response.status >= 500) {
+    return createNetworkError(message || 'Server error', details, {
+      code,
+      statusCode: response.status,
+      retryable: true,
+    });
+  }
+
+  return createBusinessLogicError(message || 'Request failed', details, {
+    code,
+    statusCode: response.status,
+  });
+};
+
+const apiResultFromResponse = <T>(response: Response): ResultAsync<ApiResponse<T>, AppError> => {
+  const contentType = response.headers.get('content-type') ?? '';
+
+  if (!contentType.includes('application/json')) {
+    return errAsync(
+      createBusinessLogicError('Expected JSON response from server', { contentType }, {
+        code: 'INVALID_CONTENT_TYPE',
+        statusCode: response.status,
+      }),
+    );
+  }
+
+  return ResultAsync.fromPromise(
+    response
+      .clone()
+      .json() as Promise<Record<string, unknown>>,
+    (error: unknown) =>
+      createBusinessLogicError('Failed to parse response body', {
+        rawError: error instanceof Error ? { message: error.message } : undefined,
+      }, {
+        code: 'JSON_PARSE_ERROR',
+        statusCode: response.status,
+      }),
+  ).andThen(body => {
+    const message = typeof body.message === 'string' ? body.message : undefined;
+    const success = 'success' in body ? Boolean(body.success) : response.ok;
+
+    if (response.ok && success) {
+      const data = (body.data ?? body) as T;
+      return okAsync(createSuccessResponse<T>(data, message));
+    }
+
+    if (response.ok && !success) {
+      const error = createBusinessLogicError(message ?? 'Request failed', body.error && typeof body.error === 'object'
+        ? (body.error as Record<string, unknown>)
+        : undefined, {
+        statusCode: response.status,
+      });
+      return okAsync(createErrorResponse(error, message));
+    }
+
+    const error = mapHttpError(response, body);
+    return errAsync(error);
+  });
+};
+
+const retryWithBackoff = <T>(
+  operation: () => ResultAsync<T, AppError>,
+  config: RetryConfig,
+  shouldRetry: (error: AppError, attempt: number) => boolean,
+  scheduleDelay: (attempt: number) => ResultAsync<void, AppError>,
+): ResultAsync<T, AppError> => {
+  const attemptOperation = (attempt: number): ResultAsync<T, AppError> =>
+    operation().orElse(error =>
+      shouldRetry(error, attempt)
+        ? scheduleDelay(attempt).andThen(() => attemptOperation(attempt + 1))
+        : errAsync(error),
+    );
+
+  return attemptOperation(1);
 };
 
 //// HTTP Client class with timeout, retry, and circuit breaker support
@@ -146,16 +229,38 @@ class HttpClient implements IHttpClient {
     return Math.min(delay, this.config.retry.maxDelay);
   }
 
-  private isRetryableError(error: ApiError | Error): boolean {
-    // Check if it's an ApiError by checking for type property
-    if ('type' in error && error.type) {
-      const apiError = error;
-      // Network errors, timeouts, and 5xx errors are retryable
-      // 4xx errors are not retryable (client errors)
-      return apiError.type === 'network' ||
-             apiError.type === 'timeout' ||
-             (apiError.statusCode !== undefined && apiError.statusCode >= 500);
+  private evaluateCircuitBreaker(): Result<void, AppError> {
+    if (this.circuitBreakerState.state === 'open') {
+      const elapsed = Date.now() - this.circuitBreakerState.lastFailureTime;
+
+      if (elapsed < this.config.circuitBreaker.resetTimeout) {
+        return err(
+          createNetworkError('Service is temporarily unavailable', undefined, {
+            code: 'CIRCUIT_BREAKER_OPEN',
+            retryable: true,
+          }),
+        );
+      }
+
+      this.circuitBreakerState.state = 'half-open';
     }
+
+    return ok(undefined);
+  }
+
+  private isRetryableError(error: AppError): boolean {
+    if (typeof error.retryable === 'boolean') {
+      return error.retryable;
+    }
+
+    if (error.type === 'network') {
+      return true;
+    }
+
+    if (error.statusCode && error.statusCode >= 500) {
+      return true;
+    }
+
     return false;
   }
 
@@ -163,234 +268,147 @@ class HttpClient implements IHttpClient {
     if (success) {
       this.circuitBreakerState.failureCount = 0;
       this.circuitBreakerState.state = 'closed';
+      return;
+    }
+
+    if (this.circuitBreakerState.state === 'half-open') {
+      this.circuitBreakerState.state = 'open';
     } else {
-      if (this.circuitBreakerState.state === 'half-open') {
-        // Failure in half-open state: immediately go back to open
+      this.circuitBreakerState.failureCount += 1;
+      this.circuitBreakerState.lastFailureTime = Date.now();
+
+      if (this.circuitBreakerState.failureCount >= this.config.circuitBreaker.failureThreshold) {
         this.circuitBreakerState.state = 'open';
-      } else {
-        // In closed state: increment failure count and check threshold
-        this.circuitBreakerState.failureCount++;
-        this.circuitBreakerState.lastFailureTime = Date.now();
-
-        if (this.circuitBreakerState.failureCount >= this.config.circuitBreaker.failureThreshold) {
-          this.circuitBreakerState.state = 'open';
-        }
       }
     }
   }
 
-  private shouldAttemptRequest(): boolean {
-    if (this.circuitBreakerState.state === 'open') {
-      const elapsed = Date.now() - this.circuitBreakerState.lastFailureTime;
-      if (elapsed >= this.config.circuitBreaker.resetTimeout) {
-        this.circuitBreakerState.state = 'half-open';
-        return true;
-      }
-      return false;
-    }
-    return true;
+  private updateCircuitBreakerWithResult<T>(result: ApiResponse<T>): void {
+    this.updateCircuitBreaker(result.status === 'success');
   }
 
-  private buildHeaders(options: RequestInit): Headers {
-    // Add tenant header if available from localStorage
+  private buildRequestInit(options: RequestInit): RequestInit {
+    return pipe(options, this.withBaseHeaders, this.withTenantHeader, this.withAuthHeader);
+  }
+
+  private withBaseHeaders = (options: RequestInit): RequestInit => {
+    const headers = new Headers(options.headers ?? {});
+    headers.set('Content-Type', 'application/json');
+    return { ...options, headers };
+  };
+
+  private withTenantHeader = (options: RequestInit): RequestInit => {
     const tenantId = this.safeGetTenantId();
 
-    // Add authorization header if token exists
+    if (!tenantId) {
+      return options;
+    }
+
+    const headers = new Headers(options.headers);
+    headers.set('X-Tenant-ID', tenantId);
+    return { ...options, headers };
+  };
+
+  private withAuthHeader = (options: RequestInit): RequestInit => {
     const authToken = this.safeGetToken();
 
-    const headers = new Headers({
-      'Content-Type': 'application/json',
-      ...options.headers,
-    });
-
-    if (tenantId) {
-      headers.set('X-Tenant-ID', tenantId);
+    if (!authToken) {
+      return options;
     }
 
-    if (authToken) {
-      headers.set('Authorization', `Bearer ${authToken}`);
-    }
+    const headers = new Headers(options.headers);
+    headers.set('Authorization', `Bearer ${authToken}`);
+    return { ...options, headers };
+  };
 
-    return headers;
-  }
-
-  private async handleSuccessResponse(response: Response): Promise<unknown> {
-    // Validate Content-Type before parsing JSON
-    const contentType = response.headers.get('content-type');
-    if (!contentType || !contentType.includes('application/json')) {
-      // Handle non-JSON response as error
-      let responseText = '';
-      try {
-        responseText = await response.text();
-      } catch {
-        responseText = 'Unable to read response content';
-      }
-
-      this.updateCircuitBreaker(false);
-      const apiError: ApiError = {
-        code: 'INVALID_CONTENT_TYPE',
-        message: `Expected JSON response but received: ${contentType || 'no content-type'}. Response: ${responseText.substring(0, 200)}`,
-        type: 'other',
-        statusCode: response.status,
-      };
-      throw apiError;
-    }
-
-    this.updateCircuitBreaker(true);
-    return await response.json();
-  }
-
-  private async parseErrorData(response: Response): Promise<unknown> {
-    if (response.headers.get('content-type')?.includes('application/json')) {
-      try {
-        return await response.clone().json();
-      } catch {
-        return { code: 'JSON_PARSE_ERROR', message: 'Failed to parse JSON error response' };
-      }
-    } else {
-      // For non-JSON responses (HTML, plain text, etc.), read as text
-      let errorText = '';
-      try {
-        errorText = await response.clone().text();
-      } catch {
-        errorText = 'Unable to read error response content';
-      }
-
-      return {
-        code: 'HTTP_ERROR',
-        message: `HTTP ${response.status}: ${response.statusText}${errorText ? `\nResponse: ${errorText.substring(0, 200)}` : ''}`,
-      };
-    }
-  }
-
-  private createHttpError(response: Response, errorData: unknown): ApiError {
-    const errorDataObj = errorData as Record<string, unknown> & { code: string; message: string };
-    const apiError: ApiError = {
-      ...errorDataObj,
-      type: 'http',
-      statusCode: response.status,
-      retryable: response.status >= 500,
-    };
-    return apiError;
-  }
-
-  private createFetchError(error: unknown): ApiError {
-    const isAborted = error instanceof DOMException && error.name === 'AbortError';
-    const apiError: ApiError = {
-      code: isAborted ? 'TIMEOUT' : 'NETWORK_ERROR',
-      message: isAborted ? 'Request timed out' : 'Network error: Unable to connect to the server',
-      type: isAborted ? 'timeout' : 'network',
-      retryable: true,
-    };
-    return apiError;
-  }
-
-  private shouldRetry(apiError: ApiError, attempt: number): boolean {
-    return this.isRetryableError(apiError) && attempt < this.config.retry.maxAttempts;
-  }
-
-  private async makeRequest(
-    url: string,
-    options: RequestInit
-  ): Promise<Response> {
+  private executeFetch(url: string, options: RequestInit): ResultAsync<Response, AppError> {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => {
-      controller.abort();
-    }, this.config.timeout);
+    const timeoutId = window.setTimeout(() => controller.abort(), this.config.timeout);
 
-    try {
-      const response = await fetch(url, {
-        ...options,
-        signal: controller.signal,
+    return ResultAsync.fromPromise(
+      fetch(url, { ...options, signal: controller.signal }),
+      (error: unknown) => this.createFetchError(error),
+    )
+      .map(response => {
+        clearTimeout(timeoutId);
+        return response;
+      })
+      .mapErr(error => {
+        clearTimeout(timeoutId);
+        return error;
       });
-
-      clearTimeout(timeoutId);
-      return response;
-    } catch (error) {
-      clearTimeout(timeoutId);
-      throw error;
-    }
   }
 
-  private async request<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<T> {
+  private createFetchError(error: unknown): AppError {
+    const isAbortError = error instanceof DOMException && error.name === 'AbortError';
+    const message = isAbortError ? 'Request timed out' : 'Network error: Unable to reach the server';
+
+    return createNetworkError(message, undefined, {
+      code: isAbortError ? 'TIMEOUT' : 'NETWORK_ERROR',
+      retryable: true,
+      cause: error,
+    });
+  }
+
+  private scheduleDelay(attempt: number): ResultAsync<void, AppError> {
+    const delay = this.calculateBackoffDelay(attempt);
+    return ResultAsync.fromPromise(
+      this.sleep(delay),
+      () =>
+        createNetworkError('Failed to schedule retry delay', undefined, {
+          code: 'RETRY_DELAY_FAILURE',
+          retryable: true,
+        }),
+    );
+  }
+
+  private request<T>(endpoint: string, options: RequestInit = {}): Promise<Result<ApiResponse<T>, AppError>> {
+    const circuitResult = this.evaluateCircuitBreaker();
+    if (circuitResult.isErr()) {
+      return Promise.resolve(err(circuitResult.error));
+    }
+
     const url = `${this.baseURL}${endpoint}`;
+    const requestInit = this.buildRequestInit(options);
 
-    // Check circuit breaker
-    if (!this.shouldAttemptRequest()) {
-      const apiError: ApiError = {
-        code: 'CIRCUIT_BREAKER_OPEN',
-        message: 'Service is temporarily unavailable',
-        type: 'other',
-        retryable: true,
-      };
-      throw apiError;
-    }
+    const operation = (): ResultAsync<ApiResponse<T>, AppError> =>
+      this.executeFetch(url, requestInit).andThen(response => apiResultFromResponse<T>(response));
 
-    const headers = this.buildHeaders(options);
-    let lastError: ApiError | Error | undefined;
-
-    for (let attempt = 1; attempt <= this.config.retry.maxAttempts; attempt++) {
-      try {
-        const response = await this.makeRequest(url, { ...options, headers });
-
-        if (response.ok) {
-          return (this.handleSuccessResponse(response) as Promise<T>);
-        }
-
-        // Handle HTTP errors
-        const errorData = await this.parseErrorData(response);
-        const apiError = this.createHttpError(response, errorData);
-
-        if (this.shouldRetry(apiError, attempt)) {
-          lastError = apiError;
-          await this.sleep(this.calculateBackoffDelay(attempt));
-          continue;
-        }
-
+    return retryWithBackoff(operation, this.config.retry, (error, attempt) => this.isRetryableError(error) && attempt < this.config.retry.maxAttempts, attempt => this.scheduleDelay(attempt))
+      .map(result => {
+        this.updateCircuitBreakerWithResult(result);
+        return result;
+      })
+      .mapErr(error => {
         this.updateCircuitBreaker(false);
-        throw apiError;
-
-      } catch (error) {
-        const apiError = this.createFetchError(error);
-
-        if (this.shouldRetry(apiError, attempt)) {
-          lastError = apiError;
-          await this.sleep(this.calculateBackoffDelay(attempt));
-          continue;
-        }
-
-        this.updateCircuitBreaker(false);
-        throw apiError;
-      }
-    }
-
-    // This should never be reached, but just in case
-    throw lastError || new Error('Request failed after all retries');
+        return error;
+      })
+      .match(
+        value => ok<ApiResponse<T>, AppError>(value),
+        error => err<ApiResponse<T>, AppError>(error),
+      );
   }
 
   // HTTP methods
-  async get<T>(endpoint: string): Promise<T> {
+  async get<T>(endpoint: string): Promise<Result<ApiResponse<T>, AppError>> {
     return this.request<T>(endpoint, { method: 'GET' });
   }
 
-  async post<T>(endpoint: string, data?: any): Promise<T> {
+  async post<T>(endpoint: string, data?: unknown): Promise<Result<ApiResponse<T>, AppError>> {
     return this.request<T>(endpoint, {
       method: 'POST',
       body: data ? JSON.stringify(data) : undefined,
     });
   }
 
-  async put<T>(endpoint: string, data?: any): Promise<T> {
+  async put<T>(endpoint: string, data?: unknown): Promise<Result<ApiResponse<T>, AppError>> {
     return this.request<T>(endpoint, {
       method: 'PUT',
       body: data ? JSON.stringify(data) : undefined,
     });
   }
 
-  async delete<T>(endpoint: string): Promise<T> {
+  async delete<T>(endpoint: string): Promise<Result<ApiResponse<T>, AppError>> {
     return this.request<T>(endpoint, { method: 'DELETE' });
   }
 }
@@ -400,31 +418,31 @@ const apiClient = new HttpClient();
 
 // API Services
 export const authService = {
-  async login(credentials: LoginCredentials): Promise<ApiResponseWrapper<AuthResponse>> {
+  async login(credentials: LoginCredentials): Promise<Result<ApiResponse<AuthResponse>, AppError>> {
     const payload = {
       username_or_email: credentials.usernameOrEmail,
       password: credentials.password,
       tenant_id: credentials.tenantId,
     };
-    return apiClient.post<ApiResponseWrapper<AuthResponse>>('/auth/login', payload);
+    return apiClient.post<AuthResponse>('/auth/login', payload);
   },
 
-  async logout(): Promise<ApiResponseWrapper<any>> {
-    return apiClient.post<ApiResponseWrapper<any>>('/auth/logout');
+  async logout(): Promise<Result<ApiResponse<Record<string, unknown>>, AppError>> {
+    return apiClient.post<Record<string, unknown>>('/auth/logout');
   },
 
-  async refreshToken(): Promise<ApiResponseWrapper<AuthResponse>> {
-    return apiClient.post<ApiResponseWrapper<AuthResponse>>('/auth/refresh');
+  async refreshToken(): Promise<Result<ApiResponse<AuthResponse>, AppError>> {
+    return apiClient.post<AuthResponse>('/auth/refresh');
   },
 };
 
 export const healthService = {
-  async check() {
-    return apiClient.get('/health');
+  async check(): Promise<Result<ApiResponse<Record<string, unknown>>, AppError>> {
+    return apiClient.get<Record<string, unknown>>('/health');
   },
 
-  async ping() {
-    return apiClient.get('/ping');
+  async ping(): Promise<Result<ApiResponse<Record<string, unknown>>, AppError>> {
+    return apiClient.get<Record<string, unknown>>('/ping');
   },
 };
 
@@ -439,20 +457,20 @@ export interface TenantFilter {
 }
 
 export const tenantService = {
-  async getAll() {
-    return apiClient.get('/tenants');
+  async getAll(): Promise<Result<ApiResponse<Tenant[]>, AppError>> {
+    return apiClient.get<Tenant[]>('/tenants');
   },
 
-  async getAllWithPagination(params?: { offset?: number; limit?: number }) {
+  async getAllWithPagination(params?: { offset?: number; limit?: number }): Promise<Result<ApiResponse<PaginatedTenantResponse>, AppError>> {
     const queryParams = new URLSearchParams();
     if (params?.offset !== undefined) queryParams.set('offset', params.offset.toString());
     if (params?.limit !== undefined) queryParams.set('limit', params.limit.toString());
 
     const query = queryParams.toString();
-    return apiClient.get(query ? `/tenants?${query}` : '/tenants');
+    return apiClient.get<PaginatedTenantResponse>(query ? `/tenants?${query}` : '/tenants');
   },
 
-  async filter(params: TenantFilter) {
+  async filter(params: TenantFilter): Promise<Result<ApiResponse<PaginatedTenantResponse | Tenant[]>, AppError>> {
     const queryObj: Record<string, any> = {
       filters: params.filters,
     };
@@ -465,23 +483,23 @@ export const tenantService = {
     }
 
     const queryString = qs.stringify(queryObj, { arrayFormat: 'indices' });
-    return apiClient.get(`/tenants/filter?${queryString}`);
+    return apiClient.get<PaginatedTenantResponse | Tenant[]>(`/tenants/filter?${queryString}`);
   },
 
   async getById(id: string) {
-    return apiClient.get(`/tenants/${id}`);
+    return apiClient.get<Tenant>(`/tenants/${id}`);
   },
 
   async create(data: CreateTenantDTO) {
-    return apiClient.post('/tenants', data);
+    return apiClient.post<Tenant>('/tenants', data);
   },
 
   async update(id: string, data: UpdateTenantDTO) {
-    return apiClient.put(`/tenants/${id}`, data);
+    return apiClient.put<Tenant>(`/tenants/${id}`, data);
   },
 
   async delete(id: string) {
-    return apiClient.delete(`/tenants/${id}`);
+    return apiClient.delete<Record<string, unknown>>(`/tenants/${id}`);
   },
 };
 
@@ -528,14 +546,14 @@ export const genderConversion = {
 } as const;
 
 export const addressBookService = {
-  async getAll(params?: { page?: number; limit?: number; search?: string }) {
+  async getAll(params?: { page?: number; limit?: number; search?: string }): Promise<Result<ApiResponse<ContactListResponse>, AppError>> {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.set('page', params.page.toString());
     if (params?.limit) queryParams.set('limit', params.limit.toString());
     if (params?.search) queryParams.set('search', params.search);
 
     const query = queryParams.toString();
-    return apiClient.get(query ? `/address-book?${query}` : '/address-book');
+    return apiClient.get<ContactListResponse>(query ? `/address-book?${query}` : '/address-book');
   },
 
   async create(data: {
@@ -545,8 +563,8 @@ export const addressBookService = {
     age: number;
     address: string;
     phone: string;
-  }) {
-    return apiClient.post('/address-book', data);
+  }): Promise<Result<ApiResponse<Contact>, AppError>> {
+    return apiClient.post<Contact>('/address-book', data);
   },
 
   async update(id: string, data: {
@@ -556,12 +574,12 @@ export const addressBookService = {
     age: number;
     address: string;
     phone: string;
-  }) {
-    return apiClient.put(`/address-book/${id}`, data);
+  }): Promise<Result<ApiResponse<Contact>, AppError>> {
+    return apiClient.put<Contact>(`/address-book/${id}`, data);
   },
 
-  async delete(id: string) {
-    return apiClient.delete(`/address-book/${id}`);
+  async delete(id: string): Promise<Result<ApiResponse<Record<string, unknown>>, AppError>> {
+    return apiClient.delete<Record<string, unknown>>(`/address-book/${id}`);
   },
 };
 
