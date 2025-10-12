@@ -477,8 +477,6 @@ mod functional_auth {
     }
 }
 
-#[cfg(feature = "functional")]
-pub use functional_auth::*;
 
 #[cfg(all(test, feature = "functional"))]
 mod tests {
