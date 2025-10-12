@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import type { LoginCredentials } from '@/types/auth';
+import { asTenantId } from '@/types/ids';
 import { Card, Form, Input, Button, Checkbox, Typography, Alert, Flex } from 'antd';
 
 interface LoginFormValues {
@@ -29,7 +30,7 @@ export const LoginPage: React.FC = () => {
       const credentials: LoginCredentials = {
         usernameOrEmail: values.usernameOrEmail,
         password: values.password,
-        tenantId: values.tenantId,
+        tenantId: values.tenantId ? asTenantId(values.tenantId) : undefined,
         rememberMe,
       };
       await login(credentials);

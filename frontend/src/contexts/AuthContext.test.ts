@@ -1,5 +1,6 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import type { LoginCredentials } from '../types/auth';
+import { asTenantId } from '../types/ids';
 
 // Mock localStorage for testing environment
 const localStorageMock = (() => {
@@ -43,13 +44,13 @@ describe('AuthContext', () => {
       const credentials: LoginCredentials = {
         usernameOrEmail: 'test@example.com',
         password: 'password123',
-        tenantId: 'tenant1',
+        tenantId: asTenantId('tenant1'),
         rememberMe: true,
       };
 
       expect(credentials.usernameOrEmail).toBe('test@example.com');
       expect(credentials.password).toBe('password123');
-      expect(credentials.tenantId).toBe('tenant1');
+  expect(credentials.tenantId).toBe(asTenantId('tenant1'));
       expect(credentials.rememberMe).toBe(true);
     });
 
@@ -57,7 +58,7 @@ describe('AuthContext', () => {
       const credentials: LoginCredentials = {
         usernameOrEmail: 'test@example.com',
         password: 'password123',
-        tenantId: 'tenant1',
+        tenantId: asTenantId('tenant1'),
       };
 
       expect(credentials.rememberMe).toBeUndefined();

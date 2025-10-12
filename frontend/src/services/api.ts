@@ -1,33 +1,40 @@
 import qs from 'qs';
 import { ResultAsync, err, errAsync, ok, okAsync } from 'neverthrow';
+import { z } from 'zod';
+import type { ZodSchema } from 'zod';
 import { getEnv } from '../config/env';
-import type {
-  AuthResponse,
-  User,
-  LoginCredentials,
-  RegisterData,
-} from '../types/auth';
+import type { AuthResponse, LoginCredentials } from '../types/auth';
 import type {
   UpdateContactRequest,
   ContactListParams,
   ContactListResponse,
   Contact,
-  ContactTag,
-  BulkContactOperation,
-  ContactImportRequest,
 } from '../types/contact';
 import { Gender } from '../types/contact';
 import type { CreateTenantDTO, PaginatedTenantResponse, Tenant, UpdateTenantDTO } from '../types/tenant';
 import type { ApiResponse } from '../types/api';
 import { createErrorResponse, createSuccessResponse } from '../types/api';
-import type { AppError } from '../types/errors';
+import type { AppError, AuthError, BusinessLogicError } from '../types/errors';
 import {
   createAuthError,
   createBusinessLogicError,
   createNetworkError,
   createValidationError,
 } from '../types/errors';
-import type { Result } from '../types/fp';
+import type { AsyncResult, Result } from '../types/fp';
+import {
+  authResponseSchema,
+  contactListResponseSchema,
+  contactMutationSchema,
+  contactSchema,
+  createTenantSchema,
+  loginRequestSchema,
+  paginatedTenantResponseSchema,
+  tenantSchema,
+  updateTenantSchema,
+} from '../validation';
+import { liftResult, validateAndDecode } from '../validation';
+import type { AuthResponseSchema, LoginRequestSchema } from '../validation';
 
 export interface RetryConfig {
   maxAttempts: number;
@@ -51,10 +58,10 @@ export interface CircuitBreakerState {
 }
 
 export interface IHttpClient {
-  get<T>(endpoint: string): Promise<Result<ApiResponse<T>, AppError>>;
-  post<T>(endpoint: string, data?: unknown): Promise<Result<ApiResponse<T>, AppError>>;
-  put<T>(endpoint: string, data?: unknown): Promise<Result<ApiResponse<T>, AppError>>;
-  delete<T>(endpoint: string): Promise<Result<ApiResponse<T>, AppError>>;
+  get<T>(endpoint: string): AsyncResult<ApiResponse<T>, AppError>;
+  post<T>(endpoint: string, data?: unknown): AsyncResult<ApiResponse<T>, AppError>;
+  put<T>(endpoint: string, data?: unknown): AsyncResult<ApiResponse<T>, AppError>;
+  delete<T>(endpoint: string): AsyncResult<ApiResponse<T>, AppError>;
 }
 
 // Base API configuration
@@ -74,8 +81,25 @@ const DEFAULT_CONFIG: HttpClientConfig = {
   },
 };
 
-const pipe = <T>(value: T, ...fns: Array<(input: T) => T>): T =>
-  fns.reduce((accumulator, fn) => fn(accumulator), value);
+function pipe<T>(value: T): T;
+function pipe<T, A>(value: T, fn1: (input: T) => A): A;
+function pipe<T, A, B>(value: T, fn1: (input: T) => A, fn2: (input: A) => B): B;
+function pipe<T, A, B, C>(
+  value: T,
+  fn1: (input: T) => A,
+  fn2: (input: A) => B,
+  fn3: (input: B) => C,
+): C;
+function pipe<T, A, B, C, D>(
+  value: T,
+  fn1: (input: T) => A,
+  fn2: (input: A) => B,
+  fn3: (input: B) => C,
+  fn4: (input: C) => D,
+): D;
+function pipe(value: unknown, ...fns: Array<(input: unknown) => unknown>): unknown {
+  return fns.reduce((accumulator, fn) => fn(accumulator), value);
+}
 
 const mapHttpError = (response: Response, body: Record<string, unknown>): AppError => {
   const message = typeof body.message === 'string' ? body.message : response.statusText;
@@ -173,6 +197,71 @@ const retryWithBackoff = <T>(
 
   return attemptOperation(1);
 };
+
+const handleSuccessResponse = <Raw, Parsed>(
+  result: AsyncResult<ApiResponse<Raw>, AppError>,
+  schema: ZodSchema<Parsed>,
+): AsyncResult<Parsed, AppError> =>
+  result.andThen(response => {
+    if (response.status === 'error') {
+      return errAsync(response.error);
+    }
+
+    return liftResult(validateAndDecode<Parsed>(schema, response.data)).mapErr(
+      validationError => validationError as AppError,
+    );
+  });
+
+const toAuthResponse = (payload: AuthResponseSchema): AuthResponse => ({
+  success: payload.success,
+  token: payload.token,
+  refreshToken: payload.refreshToken,
+  user: payload.user,
+  tenant: payload.tenant,
+  expiresIn: payload.expiresIn,
+  message: payload.message,
+});
+
+const toAuthError = (error: AppError): AuthError => {
+  if (error.type === 'auth') {
+    return error;
+  }
+
+  return createAuthError(
+    error.message,
+    {
+      originalType: error.type,
+      originalDetails: error.details,
+    },
+    {
+      code: error.code,
+      cause: error,
+      statusCode: error.statusCode,
+    },
+  );
+};
+
+const toBusinessError = (error: AppError): BusinessLogicError => {
+  if (error.type === 'business') {
+    return error;
+  }
+
+  return createBusinessLogicError(
+    error.message,
+    {
+      originalType: error.type,
+      originalDetails: error.details,
+    },
+    {
+      code: error.code,
+      cause: error,
+      statusCode: error.statusCode,
+    },
+  );
+};
+
+const emptyObjectSchema = z.object({}).passthrough();
+const tenantFilterResponseSchema = z.union([paginatedTenantResponseSchema, z.array(tenantSchema)]);
 
 //// HTTP Client class with timeout, retry, and circuit breaker support
 class HttpClient implements IHttpClient {
@@ -362,10 +451,10 @@ class HttpClient implements IHttpClient {
     );
   }
 
-  private request<T>(endpoint: string, options: RequestInit = {}): Promise<Result<ApiResponse<T>, AppError>> {
+  private request<T>(endpoint: string, options: RequestInit = {}): AsyncResult<ApiResponse<T>, AppError> {
     const circuitResult = this.evaluateCircuitBreaker();
     if (circuitResult.isErr()) {
-      return Promise.resolve(err(circuitResult.error));
+      return errAsync(circuitResult.error);
     }
 
     const url = `${this.baseURL}${endpoint}`;
@@ -374,7 +463,12 @@ class HttpClient implements IHttpClient {
     const operation = (): ResultAsync<ApiResponse<T>, AppError> =>
       this.executeFetch(url, requestInit).andThen(response => apiResultFromResponse<T>(response));
 
-    return retryWithBackoff(operation, this.config.retry, (error, attempt) => this.isRetryableError(error) && attempt < this.config.retry.maxAttempts, attempt => this.scheduleDelay(attempt))
+    return retryWithBackoff(
+      operation,
+      this.config.retry,
+      (error, attempt) => this.isRetryableError(error) && attempt < this.config.retry.maxAttempts,
+      attempt => this.scheduleDelay(attempt),
+    )
       .map(result => {
         this.updateCircuitBreakerWithResult(result);
         return result;
@@ -382,66 +476,84 @@ class HttpClient implements IHttpClient {
       .mapErr(error => {
         this.updateCircuitBreaker(false);
         return error;
-      })
-      .match(
-        value => ok<ApiResponse<T>, AppError>(value),
-        error => err<ApiResponse<T>, AppError>(error),
-      );
+      });
   }
 
   // HTTP methods
-  async get<T>(endpoint: string): Promise<Result<ApiResponse<T>, AppError>> {
+  get<T>(endpoint: string): AsyncResult<ApiResponse<T>, AppError> {
     return this.request<T>(endpoint, { method: 'GET' });
   }
 
-  async post<T>(endpoint: string, data?: unknown): Promise<Result<ApiResponse<T>, AppError>> {
+  post<T>(endpoint: string, data?: unknown): AsyncResult<ApiResponse<T>, AppError> {
     return this.request<T>(endpoint, {
       method: 'POST',
       body: data ? JSON.stringify(data) : undefined,
     });
   }
 
-  async put<T>(endpoint: string, data?: unknown): Promise<Result<ApiResponse<T>, AppError>> {
+  put<T>(endpoint: string, data?: unknown): AsyncResult<ApiResponse<T>, AppError> {
     return this.request<T>(endpoint, {
       method: 'PUT',
       body: data ? JSON.stringify(data) : undefined,
     });
   }
 
-  async delete<T>(endpoint: string): Promise<Result<ApiResponse<T>, AppError>> {
+  delete<T>(endpoint: string): AsyncResult<ApiResponse<T>, AppError> {
     return this.request<T>(endpoint, { method: 'DELETE' });
   }
 }
 
 // Create HTTP client instance
-const apiClient = new HttpClient();
+const apiClient: IHttpClient = new HttpClient();
 
 // API Services
 export const authService = {
-  async login(credentials: LoginCredentials): Promise<Result<ApiResponse<AuthResponse>, AppError>> {
-    const payload = {
-      username_or_email: credentials.usernameOrEmail,
+  login(credentials: LoginCredentials): AsyncResult<AuthResponse, AuthError> {
+    const validation = validateAndDecode<LoginRequestSchema>(loginRequestSchema, {
+      usernameOrEmail: credentials.usernameOrEmail,
       password: credentials.password,
-      tenant_id: credentials.tenantId,
-    };
-    return apiClient.post<AuthResponse>('/auth/login', payload);
+      tenantId: credentials.tenantId ? String(credentials.tenantId) : undefined,
+      rememberMe: credentials.rememberMe,
+    });
+
+    return liftResult(validation)
+      .map(validated => ({
+        username_or_email: validated.usernameOrEmail,
+        password: validated.password,
+        tenant_id: validated.tenantId,
+      }))
+      .andThen(body =>
+        handleSuccessResponse<AuthResponse, AuthResponseSchema>(
+          apiClient.post<AuthResponse>('/auth/login', body),
+          authResponseSchema,
+        ),
+      )
+      .map(toAuthResponse)
+      .mapErr(toAuthError);
   },
 
-  async logout(): Promise<Result<ApiResponse<Record<string, unknown>>, AppError>> {
-    return apiClient.post<Record<string, unknown>>('/auth/logout');
+  logout(): AsyncResult<void, AuthError> {
+    return handleSuccessResponse(apiClient.post<Record<string, unknown>>('/auth/logout'), emptyObjectSchema)
+      .map(() => undefined)
+      .mapErr(toAuthError);
   },
 
-  async refreshToken(): Promise<Result<ApiResponse<AuthResponse>, AppError>> {
-    return apiClient.post<AuthResponse>('/auth/refresh');
+  refreshToken(): AsyncResult<AuthResponse, AuthError> {
+    return handleSuccessResponse<AuthResponse, AuthResponseSchema>(
+      apiClient.post<AuthResponse>('/auth/refresh'),
+      authResponseSchema,
+    )
+      .map(toAuthResponse)
+      .mapErr(toAuthError);
   },
 };
 
 export const healthService = {
-  async check(): Promise<Result<ApiResponse<Record<string, unknown>>, AppError>> {
+  check(): AsyncResult<ApiResponse<Record<string, unknown>>, AppError> {
     return apiClient.get<Record<string, unknown>>('/health');
   },
 
-  async ping(): Promise<Result<ApiResponse<Record<string, unknown>>, AppError>> {
+  ping(): AsyncResult<ApiResponse<Record<string, unknown>>, AppError> {
     return apiClient.get<Record<string, unknown>>('/ping');
   },
 };
@@ -457,11 +569,11 @@ export interface TenantFilter {
 }
 
 export const tenantService = {
-  async getAll(): Promise<Result<ApiResponse<Tenant[]>, AppError>> {
+  getAll(): AsyncResult<ApiResponse<Tenant[]>, AppError> {
     return apiClient.get<Tenant[]>('/tenants');
   },
 
-  async getAllWithPagination(params?: { offset?: number; limit?: number }): Promise<Result<ApiResponse<PaginatedTenantResponse>, AppError>> {
+  getAllWithPagination(params?: { offset?: number; limit?: number }): AsyncResult<ApiResponse<PaginatedTenantResponse>, AppError> {
     const queryParams = new URLSearchParams();
     if (params?.offset !== undefined) queryParams.set('offset', params.offset.toString());
     if (params?.limit !== undefined) queryParams.set('limit', params.limit.toString());
@@ -470,8 +582,8 @@ export const tenantService = {
     return apiClient.get<PaginatedTenantResponse>(query ? `/tenants?${query}` : '/tenants');
   },
 
-  async filter(params: TenantFilter): Promise<Result<ApiResponse<PaginatedTenantResponse | Tenant[]>, AppError>> {
-    const queryObj: Record<string, any> = {
+  filter(params: TenantFilter): AsyncResult<ApiResponse<PaginatedTenantResponse | Tenant[]>, AppError> {
+    const queryObj: Record<string, unknown> = {
       filters: params.filters,
     };
 
@@ -486,19 +598,19 @@ export const tenantService = {
     return apiClient.get<PaginatedTenantResponse | Tenant[]>(`/tenants/filter?${queryString}`);
   },
 
-  async getById(id: string) {
+  getById(id: string): AsyncResult<ApiResponse<Tenant>, AppError> {
     return apiClient.get<Tenant>(`/tenants/${id}`);
   },
 
-  async create(data: CreateTenantDTO) {
+  create(data: CreateTenantDTO): AsyncResult<ApiResponse<Tenant>, AppError> {
     return apiClient.post<Tenant>('/tenants', data);
   },
 
-  async update(id: string, data: UpdateTenantDTO) {
+  update(id: string, data: UpdateTenantDTO): AsyncResult<ApiResponse<Tenant>, AppError> {
     return apiClient.put<Tenant>(`/tenants/${id}`, data);
   },
 
-  async delete(id: string) {
+  delete(id: string): AsyncResult<ApiResponse<Record<string, unknown>>, AppError> {
     return apiClient.delete<Record<string, unknown>>(`/tenants/${id}`);
   },
 };
@@ -546,7 +658,7 @@ export const genderConversion = {
 } as const;
 
 export const addressBookService = {
-  async getAll(params?: { page?: number; limit?: number; search?: string }): Promise<Result<ApiResponse<ContactListResponse>, AppError>> {
+  getAll(params?: { page?: number; limit?: number; search?: string }): AsyncResult<ApiResponse<ContactListResponse>, AppError> {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.set('page', params.page.toString());
     if (params?.limit) queryParams.set('limit', params.limit.toString());
@@ -556,29 +668,29 @@ export const addressBookService = {
     return apiClient.get<ContactListResponse>(query ? `/address-book?${query}` : '/address-book');
   },
 
-  async create(data: {
+  create(data: {
     name: string;
     email: string;
     gender: boolean;
     age: number;
     address: string;
     phone: string;
-  }): Promise<Result<ApiResponse<Contact>, AppError>> {
+  }): AsyncResult<ApiResponse<Contact>, AppError> {
     return apiClient.post<Contact>('/address-book', data);
   },
 
-  async update(id: string, data: {
+  update(id: string, data: {
     name: string;
     email: string;
     gender: boolean;
     age: number;
     address: string;
     phone: string;
-  }): Promise<Result<ApiResponse<Contact>, AppError>> {
+  }): AsyncResult<ApiResponse<Contact>, AppError> {
     return apiClient.put<Contact>(`/address-book/${id}`, data);
   },
 
-  async delete(id: string): Promise<Result<ApiResponse<Record<string, unknown>>, AppError>> {
+  delete(id: string): AsyncResult<ApiResponse<Record<string, unknown>>, AppError> {
     return apiClient.delete<Record<string, unknown>>(`/address-book/${id}`);
   },
 };
@@ -593,4 +705,4 @@ export function createHttpClient(config?: Partial<HttpClientConfig>): IHttpClien
 }
 
 // Export default client (implements IHttpClient interface)
-export default apiClient as IHttpClient;
+export default apiClient;
