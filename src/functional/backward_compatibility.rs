@@ -466,7 +466,7 @@ impl BackwardCompatibilityValidator {
             "tenant_id": tenant2
         });
 
-        let mut response = client
+        let response = client
             .post(&signup_url)
             .insert_header(("Content-Type", "application/json"))
             .send_json(&signup_payload2)
@@ -547,7 +547,7 @@ impl BackwardCompatibilityValidator {
 
         // Test that tenant1 token works with tenant1 header
         let me_url = format!("{}/api/auth/me", self.config.base_url);
-        let mut response = client
+        let response = client
             .get(&me_url)
             .insert_header(("Authorization", format!("Bearer {}", token1)))
             .insert_header(("x-tenant-id", tenant1))
@@ -560,7 +560,7 @@ impl BackwardCompatibilityValidator {
         }
 
         // Test that tenant1 token fails with tenant2 header (should be unauthorized)
-        let mut response = client
+        let response = client
             .get(&me_url)
             .insert_header(("Authorization", format!("Bearer {}", token1)))
             .insert_header(("x-tenant-id", tenant2))
@@ -592,7 +592,7 @@ impl BackwardCompatibilityValidator {
             "tenant_id": self.config.test_tenant_id
         });
 
-        let mut response = client
+        let response = client
             .post(&signup_url)
             .insert_header(("Content-Type", "application/json"))
             .send_json(&signup_payload)
@@ -637,7 +637,7 @@ impl BackwardCompatibilityValidator {
         let address_book_url = format!("{}/api/address-book", self.config.base_url);
 
         // Try to get address book (may be empty)
-        let mut response = client
+        let response = client
             .get(&address_book_url)
             .insert_header(("Authorization", format!("Bearer {}", token)))
             .insert_header(("x-tenant-id", self.config.test_tenant_id.clone()))
@@ -660,7 +660,7 @@ impl BackwardCompatibilityValidator {
                 "phone": "123-456-7890"
             });
 
-            let mut response = client
+            let response = client
                 .post(&address_book_url)
                 .insert_header(("Authorization", format!("Bearer {}", token)))
                 .insert_header(("x-tenant-id", self.config.test_tenant_id.clone()))
@@ -677,7 +677,7 @@ impl BackwardCompatibilityValidator {
             }
 
             // Test retrieval after creation
-            let mut response = client
+            let response = client
                 .get(&address_book_url)
                 .insert_header(("Authorization", format!("Bearer {}", token)))
                 .insert_header(("x-tenant-id", self.config.test_tenant_id.clone()))
@@ -692,7 +692,7 @@ impl BackwardCompatibilityValidator {
 
         // Test logout (database session cleanup)
         let logout_url = format!("{}/api/auth/logout", self.config.base_url);
-        let mut response = client
+        let response = client
             .post(&logout_url)
             .insert_header(("Authorization", format!("Bearer {}", token)))
             .insert_header(("x-tenant-id", self.config.test_tenant_id.clone()))
@@ -715,7 +715,7 @@ impl BackwardCompatibilityValidator {
 
         // Test CORS preflight request
         let ping_url = format!("{}/api/ping", self.config.base_url);
-        let mut response = client
+        let response = client
             .request(awc::http::Method::OPTIONS, &ping_url)
             .insert_header(("Origin", "http://localhost:3000"))
             .insert_header(("Access-Control-Request-Method", "GET"))
@@ -829,7 +829,7 @@ impl BackwardCompatibilityValidator {
             let url = format!("{}{}", self.config.base_url, endpoint);
 
             let start = Instant::now();
-            let mut response = client
+            let response = client
                 .get(&url)
                 .send()
                 .await
@@ -865,7 +865,7 @@ impl BackwardCompatibilityValidator {
                 let url = format!("{}{}", self.config.base_url, endpoint);
 
                 let start = Instant::now();
-                let mut response = client
+                let response = client
                     .get(&url)
                     .insert_header(("Authorization", format!("Bearer {}", token)))
                     .insert_header(("x-tenant-id", self.config.test_tenant_id.clone()))
