@@ -21,9 +21,10 @@ use crate::{
     config::db::Pool,
     constants,
     error::ServiceError,
+    models::user::operations as user_ops,
     models::{
         refresh_token::RefreshToken,
-        user::{LoginDTO, LoginInfoDTO, User, UserDTO, UserResponseDTO, UserUpdateDTO},
+        user::{LoginDTO, LoginInfoDTO, UserDTO, UserResponseDTO, UserUpdateDTO},
         user_token::UserToken,
     },
     services::functional_patterns::Validator,
@@ -160,7 +161,7 @@ pub fn signup(user: UserDTO, pool: &Pool) -> Result<String, ServiceError> {
     // Use functional pipeline with validated data
     crate::services::functional_service_base::ServicePipeline::new(pool.clone())
         .with_data(user)
-        .execute(|user, conn| User::signup(user, conn))
+        .execute(|user, conn| user_ops::signup_user(user, conn))
         .log_error("signup operation")
 }
 
@@ -176,17 +177,17 @@ pub fn login(login: LoginDTO, pool: &Pool) -> Result<TokenBodyResponse, ServiceE
 
     query_service
         .query(|conn| {
-            User::login(login, conn).ok_or_else(|| {
+            user_ops::login_user(login, conn).ok_or_else(|| {
                 ServiceError::unauthorized(constants::MESSAGE_LOGIN_FAILED.to_string())
             })
         })
         .and_then(|logged_user| {
-            // Since User::login now returns None for all authentication failures,
+            // Since login_user now returns None for all authentication failures,
             // we no longer need to check for empty login_session
             // Get user by username and create refresh token
             query_service
                 .query(|conn| {
-                    User::find_user_by_username(&logged_user.username, conn)
+                    user_ops::find_user_by_username(&logged_user.username, conn)
                         .map_err(|_| {
                             ServiceError::internal_server_error("Failed to find user".to_string())
                         })
@@ -247,7 +248,7 @@ pub fn logout(authen_header: &HeaderValue, pool: &Pool) -> Result<(), ServiceErr
         .and_then(|username| {
             query_service
                 .query(|conn| {
-                    User::find_user_by_username(&username, conn).map_err(|_| {
+                    user_ops::find_user_by_username(&username, conn).map_err(|_| {
                         ServiceError::internal_server_error("Database error".to_string())
                     })
                 })
@@ -255,7 +256,7 @@ pub fn logout(authen_header: &HeaderValue, pool: &Pool) -> Result<(), ServiceErr
         })
         .and_then(|(user, _)| {
             query_service.query(|conn| {
-                User::logout(user.id, conn);
+                user_ops::logout_user(user.id, conn);
                 Ok(())
             })
         })
@@ -295,8 +296,8 @@ pub fn refresh(
         })
         .and_then(|token_data| {
             query_service.query(|conn| {
-                if User::is_valid_login_session(&token_data.claims, conn) {
-                    User::find_login_info_by_token(&token_data.claims, conn).map_err(|_| {
+                if user_ops::is_valid_login_session(&token_data.claims, conn) {
+                    user_ops::find_login_info_by_token(&token_data.claims, conn).map_err(|_| {
                         ServiceError::unauthorized(constants::MESSAGE_TOKEN_MISSING.to_string())
                     })
                 } else {
@@ -347,7 +348,7 @@ pub fn refresh_with_token(
             // Get user info for new token generation
             query_service
                 .query(|conn| {
-                    User::find_user_by_id(refresh_token_record.user_id, conn).map_err(|_| {
+                    user_ops::find_user_by_id(refresh_token_record.user_id, conn).map_err(|_| {
                         ServiceError::internal_server_error("Failed to find user".to_string())
                     })
                 })
@@ -418,7 +419,7 @@ pub fn me(authen_header: &HeaderValue, pool: &Pool) -> Result<LoginInfoDTO, Serv
         })
         .and_then(|token_data| {
             query_service.query(|conn| {
-                User::find_login_info_by_token(&token_data.claims, conn)
+                user_ops::find_login_info_by_token(&token_data.claims, conn)
                     .map_err(|_| ServiceError::internal_server_error("Database error".to_string()))
             })
         })
@@ -441,7 +442,7 @@ pub fn find_all_users(
 
     query_service
         .query(|conn| {
-            User::find_all(limit, offset, conn)
+            user_ops::find_all_users(limit, offset, conn)
                 .map_err(|e| ServiceError::internal_server_error(format!("Database error: {}", e)))
         })
         .map(|users| {
@@ -470,17 +471,12 @@ pub fn find_user_by_id(user_id: i32, pool: &Pool) -> Result<UserResponseDTO, Ser
 
     query_service
         .query(|conn| {
-            User::find_user_by_id(user_id, conn).map_err(|e| match e {
+            user_ops::find_user_by_id(user_id, conn).map_err(|e| match e {
                 diesel::result::Error::NotFound => ServiceError::not_found("User not found"),
                 _ => ServiceError::internal_server_error(format!("Database error: {}", e)),
             })
         })
-        .map(|user| UserResponseDTO {
-            id: user.id,
-            username: user.username,
-            email: user.email,
-            active: user.active,
-        })
+        .map(|user| user_ops::user_to_response_dto(&user))
         .log_error("find_user_by_id operation")
 }
 
@@ -503,7 +499,7 @@ pub fn update_user(
 
     // Check if user exists first
     query_service.query(|conn| {
-        User::find_user_by_id(user_id, conn).map_err(|e| match e {
+        user_ops::find_user_by_id(user_id, conn).map_err(|e| match e {
             diesel::result::Error::NotFound => ServiceError::not_found("User not found"),
             _ => ServiceError::internal_server_error(format!("Database error: {}", e)),
         })
@@ -518,7 +514,7 @@ pub fn update_user(
                 password: String::new(), // Password not updated through this endpoint
                 active: updated_user.active,
             };
-            User::update(user_id, user_dto, conn).map_err(|e| match e {
+            user_ops::update_user_in_db(user_id, user_dto, conn).map_err(|e| match e {
                 DieselError::DatabaseError(DatabaseErrorKind::UniqueViolation, info) => {
                     ServiceError::bad_request(info.message().to_string())
                 }
@@ -541,7 +537,7 @@ pub fn delete_user(user_id: i32, pool: &Pool) -> Result<(), ServiceError> {
 
     // Check if user exists first
     query_service.query(|conn| {
-        User::find_user_by_id(user_id, conn).map_err(|e| match e {
+        user_ops::find_user_by_id(user_id, conn).map_err(|e| match e {
             diesel::result::Error::NotFound => ServiceError::not_found("User not found"),
             _ => ServiceError::internal_server_error(format!("Database error: {}", e)),
         })
@@ -550,7 +546,7 @@ pub fn delete_user(user_id: i32, pool: &Pool) -> Result<(), ServiceError> {
     // Perform deletion
     query_service
         .query(|conn| {
-            User::delete(user_id, conn)
+            user_ops::delete_user_from_db(user_id, conn)
                 .map_err(|e| ServiceError::internal_server_error(format!("Database error: {}", e)))
         })
         .map(|_| ())
