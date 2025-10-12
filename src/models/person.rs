@@ -11,6 +11,8 @@ use super::{
     Length, Phone, Range,
 };
 
+use crate::functional::{validation_engine::ValidationOutcome, validation_rules::ValidationRule};
+
 // Re-export functional utilities for person operations
 
 #[derive(Clone, Queryable, Serialize, Deserialize)]
@@ -43,10 +45,10 @@ impl PersonDTO {
     /// # Examples
     ///
     /// ```
-    /// assert!(is_not_blank(&"hello".to_string()));
-    /// assert!(is_not_blank(&"  a  ".to_string()));
-    /// assert!(!is_not_blank(&"   ".to_string()));
-    /// assert!(!is_not_blank(&"".to_string()));
+    /// assert!(crate::models::person::PersonDTO::is_not_blank(&"hello".to_string()));
+    /// assert!(crate::models::person::PersonDTO::is_not_blank(&"  a  ".to_string()));
+    /// assert!(!crate::models::person::PersonDTO::is_not_blank(&"   ".to_string()));
+    /// assert!(!crate::models::person::PersonDTO::is_not_blank(&"".to_string()));
     /// ```
     fn is_not_blank(value: &String) -> bool {
         !value.trim().is_empty()
@@ -90,11 +92,7 @@ impl PersonDTO {
             string_engine.validate_field(
                 &self.name,
                 "name",
-                vec![Custom::new(
-                    Self::is_not_blank as fn(&String) -> bool,
-                    "REQUIRED",
-                    "{} is required",
-                )],
+                vec![Custom::new(|val: &String| !val.trim().is_empty(), "REQUIRED", "{} is required")],
             ),
             string_engine.validate_field(
                 &self.name,
@@ -107,11 +105,7 @@ impl PersonDTO {
             string_engine.validate_field(
                 &self.email,
                 "email",
-                vec![Custom::new(
-                    Self::is_not_blank as fn(&String) -> bool,
-                    "REQUIRED",
-                    "{} is required",
-                )],
+                vec![Custom::new(|val: &String| !val.trim().is_empty(), "REQUIRED", "{} is required")],
             ),
             string_engine.validate_field(&self.email, "email", vec![Email]),
             string_engine.validate_field(
@@ -125,11 +119,7 @@ impl PersonDTO {
             string_engine.validate_field(
                 &self.phone,
                 "phone",
-                vec![Custom::new(
-                    Self::is_not_blank as fn(&String) -> bool,
-                    "REQUIRED",
-                    "{} is required",
-                )],
+                vec![Custom::new(|val: &String| !val.trim().is_empty(), "REQUIRED", "{} is required")],
             ),
             string_engine.validate_field(
                 &self.phone,
@@ -140,23 +130,26 @@ impl PersonDTO {
                 }],
             ),
             string_engine.validate_field(&self.phone, "phone", vec![Phone]),
-            string_engine.validate_field(
-                &self.address,
-                "address",
-                vec![Custom::new(
-                    Self::is_not_blank as fn(&String) -> bool,
-                    "REQUIRED",
-                    "{} is required",
-                )],
-            ),
-            string_engine.validate_field(
-                &self.address,
-                "address",
-                vec![Length {
-                    min: None,
-                    max: Some(500),
-                }],
-            ),
+            {
+                let rules: Vec<Box<dyn ValidationRule<String>>> = vec![
+                    Box::new(Custom::new(|val: &String| !val.trim().is_empty(), "REQUIRED", "{} is required")),
+                    Box::new(Length {
+                        min: None,
+                        max: Some(500),
+                    }),
+                ];
+                let mut errors = Vec::new();
+                for rule in &rules {
+                    if let Err(e) = rule.validate(&self.address, "address") {
+                        errors.push(e);
+                    }
+                }
+                if errors.is_empty() {
+                    ValidationOutcome::success(&self.address)
+                } else {
+                    ValidationOutcome::failure(errors)
+                }
+            },
         ];
 
         let age_validations = [range_engine.validate_field(

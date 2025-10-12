@@ -1,5 +1,6 @@
 use chrono::NaiveDateTime;
 use diesel::{prelude::*, result, AsChangeset, Identifiable, Insertable, Queryable};
+use log;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
@@ -11,6 +12,8 @@ use crate::{
 };
 
 use super::{functional_utils, Custom};
+
+use crate::models::ValidationError;
 
 // Re-export functional utilities for tenant operations
 
@@ -47,11 +50,13 @@ impl Tenant {
     /// # Examples
     ///
     /// ```
+    /// use crate::models::tenant::Tenant;
+    ///
     /// let s = "  a  ".to_string();
-    /// assert!(is_not_blank(&s));
+    /// assert!(Tenant::is_not_blank(&s));
     ///
     /// let empty = "   ".to_string();
-    /// assert!(!is_not_blank(&empty));
+    /// assert!(!Tenant::is_not_blank(&empty));
     /// ```
     ///
     /// # Returns
@@ -68,13 +73,16 @@ impl Tenant {
     /// # Examples
     ///
     /// ```
-    /// assert!(is_valid_identifier(&"tenant-123_α".to_string()));
-    /// assert!(!is_valid_identifier(&"bad id!".to_string()));
+    /// use crate::models::tenant::Tenant;
+    ///
+    /// assert!(Tenant::is_valid_identifier(&"tenant-123_α".to_string()));
+    /// assert!(!Tenant::is_valid_identifier(&"bad id!".to_string()));
     /// ```
     fn is_valid_identifier(value: &String) -> bool {
-        value
-            .chars()
-            .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+        !value.is_empty()
+            && value
+                .chars()
+                .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
     }
 
     /// Parses a UTC timestamp string in the expected ISO-like format into a `NaiveDateTime`.
@@ -88,7 +96,9 @@ impl Tenant {
     /// # Examples
     ///
     /// ```
-    /// let dt = parse_timestamp("2023-05-01T12:34:56.789Z").unwrap();
+    /// use crate::models::tenant::Tenant;
+    ///
+    /// let dt = Tenant::parse_timestamp("2023-05-01T12:34:56.789Z").unwrap();
     /// assert_eq!(dt.format("%Y-%m-%dT%H:%M:%S").to_string(), "2023-05-01T12:34:56");
     /// ```
     fn parse_timestamp(value: &str) -> Option<NaiveDateTime> {
@@ -343,9 +353,9 @@ impl Tenant {
             ),
         ];
 
-        let errors: Vec<String> = validations
+        let errors: Vec<ValidationError> = validations
             .into_iter()
-            .flat_map(|outcome| functional_utils::to_error_messages(outcome.errors))
+            .flat_map(|outcome| outcome.errors)
             .collect();
 
         if errors.is_empty() {
@@ -353,7 +363,7 @@ impl Tenant {
         } else {
             Err(result::Error::DatabaseError(
                 result::DatabaseErrorKind::Unknown,
-                Box::new(errors.join("; ")),
+                Box::new(errors.into_iter().map(|e| e.message).collect::<Vec<_>>().join("; ")),
             ))
         }
     }
@@ -388,13 +398,8 @@ impl Tenant {
     ) -> QueryResult<usize> {
         conn.transaction(|tx_conn| {
             dtos.iter().try_for_each(|dto| {
-                vec![
-                    Self::validate_tenant_dto(dto),
-                    Self::validate_db_url(&dto.db_url),
-                ]
-                .into_iter()
-                .collect::<QueryResult<Vec<_>>>()
-                .map(|_| ())
+                Self::validate_tenant_dto(dto)?;
+                Self::validate_db_url(&dto.db_url)
             })?;
             diesel::insert_into(tenants).values(&dtos).execute(tx_conn)
         })
@@ -429,6 +434,15 @@ impl Tenant {
         filter: TenantFilter,
         conn: &mut crate::config::db::Connection,
     ) -> QueryResult<Page<Tenant>> {
+        // Validate cursor is non-negative
+        if let Some(cursor) = filter.cursor {
+            if cursor < 0 {
+                return Err(result::Error::DatabaseError(
+                    result::DatabaseErrorKind::Unknown,
+                    Box::new("Cursor must be non-negative".to_string()),
+                ));
+            }
+        }
         let query = filter.filters.iter().try_fold(
             tenants::table.into_boxed(),
             |acc, field_filter| -> QueryResult<_> {
@@ -458,6 +472,7 @@ impl Tenant {
                     "created_at" | "updated_at" => {
                         let timestamp =
                             Self::parse_timestamp(&field_filter.value).ok_or_else(|| {
+                                log::warn!("Invalid timestamp value: '{}'", field_filter.value);
                                 result::Error::DatabaseError(
                                     result::DatabaseErrorKind::Unknown,
                                     Box::new(format!(

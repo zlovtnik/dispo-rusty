@@ -312,10 +312,11 @@ pub fn find_user_by_credentials(identifier: &str, conn: &mut Connection) -> Opti
         .ok()
 }
 
-/// Logout user - functional operation
 pub fn logout_user(user_id: i32, conn: &mut Connection) -> Result<(), diesel::result::Error> {
-    let user = find_user_by_id(user_id, conn)?;
-    update_login_session_to_db(&user.username, "", conn)
+    let _ = diesel::update(users.filter(id.eq(user_id)))
+        .set(login_session.eq(""))
+        .execute(conn)?;
+    Ok(())
 }
 
 /// Validates that a UserToken matches an existing user's login session in the database.
@@ -331,9 +332,17 @@ pub fn logout_user(user_id: i32, conn: &mut Connection) -> Result<(), diesel::re
 /// println!("session valid: {}", valid);
 /// ```
 pub fn is_valid_login_session(user_token: &UserToken, conn: &mut Connection) -> bool {
+    let username_trimmed = user_token.user.trim();
+    let session_trimmed = user_token.login_session.trim();
+
+    if username_trimmed.is_empty() || session_trimmed.is_empty() {
+        return false;
+    }
+
     users
-        .filter(username.eq(&user_token.user))
-        .filter(login_session.eq(&user_token.login_session))
+        .filter(username.eq(username_trimmed))
+        .filter(login_session.eq(session_trimmed))
+        .filter(login_session.ne(""))
         .get_result::<User>(conn)
         .is_ok()
 }
@@ -361,9 +370,25 @@ pub fn find_login_info_by_token(
     user_token: &UserToken,
     conn: &mut Connection,
 ) -> Result<LoginInfoDTO, ServiceError> {
+    let username_trimmed = user_token.user.trim();
+    let session_trimmed = user_token.login_session.trim();
+
+    if session_trimmed.is_empty() {
+        return Err(ServiceError::bad_request(
+            "Login session token cannot be empty",
+        ));
+    }
+
+    if username_trimmed.is_empty() {
+        return Err(ServiceError::bad_request(
+            "Username cannot be empty",
+        ));
+    }
+
     let user_result = users
-        .filter(username.eq(&user_token.user))
-        .filter(login_session.eq(&user_token.login_session))
+        .filter(username.eq(username_trimmed))
+        .filter(login_session.eq(session_trimmed))
+        .filter(login_session.ne(""))
         .get_result::<User>(conn);
 
     match user_result {
@@ -500,7 +525,7 @@ pub fn find_all_users(limit: i64, offset: i64, conn: &mut Connection) -> QueryRe
 /// ```
 pub fn update_user(
     user_id: i32,
-    updated_user: UserDTO,
+    updated_user: crate::models::user::UserUpdateDTO,
     conn: &mut Connection,
 ) -> QueryResult<usize> {
     diesel::update(users.filter(id.eq(user_id)))
@@ -548,65 +573,29 @@ pub fn delete_user_by_id(user_id: i32, conn: &mut Connection) -> QueryResult<usi
 /// ```
 pub fn count_logged_in_users(conn: &mut Connection) -> QueryResult<i64> {
     users
-        .filter(login_session.is_not_null().and(login_session.ne("")))
+        .filter(login_session.ne(""))
         .count()
         .get_result(conn)
 }
 
-/// Updates the username, email, and active flag for a user with the given ID in the database.
-///
-/// # Returns
-///
-/// The number of rows affected on success, wrapped in `diesel::QueryResult<usize>`.
-///
-/// # Examples
-///
-/// ```
-/// use crate::models::user::UserDTO;
-/// // `conn` must be a valid &mut diesel::PgConnection (or other Diesel connection) in scope.
-/// let dto = UserDTO {
-///     username: "alice".to_string(),
-///     email: "alice@example.com".to_string(),
-///     active: true,
-///     password: None,
-/// };
-/// let result = update_user_in_db(1, dto, &mut conn);
-/// assert!(result.is_ok());
-/// ```
 pub fn update_user_in_db(
     user_id: i32,
     user_dto: crate::models::user::UserDTO,
     conn: &mut Connection,
 ) -> diesel::QueryResult<usize> {
-    use diesel::prelude::*;
-
-    diesel::update(users::table.filter(users::id.eq(user_id)))
-        .set((
-            users::username.eq(user_dto.username),
-            users::email.eq(user_dto.email),
-            users::active.eq(user_dto.active),
-        ))
-        .execute(conn)
+    update_user(
+        user_id,
+        crate::models::user::UserUpdateDTO {
+            username: user_dto.username,
+            email: user_dto.email,
+            active: user_dto.active,
+        },
+        conn,
+    )
 }
 
-/// Deletes the user with the given ID from the database.
-///
-/// Returns the number of rows that were deleted (`0` if no matching user was found).
-///
-/// # Examples
-///
-/// ```no_run
-/// # use diesel::prelude::*;
-/// # use crate::models::user::operations::delete_user_from_db;
-/// // `conn` is a mutable database connection (diesel::Connection)
-/// let mut conn = /* obtain connection */ unimplemented!();
-/// let deleted = delete_user_from_db(42, &mut conn).expect("query failed");
-/// assert!(deleted <= 1);
-/// ```
 pub fn delete_user_from_db(user_id: i32, conn: &mut Connection) -> diesel::QueryResult<usize> {
-    use diesel::prelude::*;
-
-    diesel::delete(users::table.filter(users::id.eq(user_id))).execute(conn)
+    delete_user_by_id(user_id, conn)
 }
 
 /// Convert a `User` model into a `UserResponseDTO`.

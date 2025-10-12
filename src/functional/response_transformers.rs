@@ -38,7 +38,8 @@
 use std::borrow::Cow;
 use std::str::FromStr;
 
-use actix_web::body::BoxBody;
+#[cfg_attr(not(test), allow(unused_imports))]
+use actix_web::body::{self, BoxBody};
 use actix_web::http::header::{
     self, HeaderName, HeaderValue, InvalidHeaderName, InvalidHeaderValue,
 };

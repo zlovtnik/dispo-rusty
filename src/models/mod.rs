@@ -86,19 +86,18 @@ pub mod functional_utils {
         ValidationEngine::with_config(config)
     }
 
-    /// Convert a list of validation errors into their displayable message strings.
+    /// Return the list of validation errors with their full structured data.
     ///
-    /// Returns a `Vec<String>` containing the `message` field of each `ValidationError` in the same order.
+    /// Returns a `Vec<ValidationError>` containing the full details of each validation error in the same order.
     ///
     /// # Examples
     ///
     /// ```no_run
-    /// use crate::models::functional_utils::to_error_messages;
-    /// use crate::functional::validation_rules::ValidationError;
+    /// use crate::models::functional_utils::{to_error_messages, ValidationError};
     ///
     /// let errors: Vec<ValidationError> = vec![/* ... */];
-    /// let messages = to_error_messages(errors);
-    /// // `messages` now contains each error's `message` string.
+    /// let structured_errors = to_error_messages(errors);
+    /// // Each error contains field, code, and message.
     /// ```
     pub fn to_error_messages(errors: Vec<ValidationError>) -> Vec<String> {
         errors.into_iter().map(|error| error.message).collect()
