@@ -139,14 +139,20 @@ pub fn create_login_session(
 
     // Generate session and update database
     let login_session_str = generate_login_session();
-    if update_login_session_to_db(user_name, &login_session_str, conn) {
-        Some(LoginInfoDTO {
+    match update_login_session_to_db(user_name, &login_session_str, conn) {
+        Ok(()) => Some(LoginInfoDTO {
             username: user_name.to_string(),
             login_session: login_session_str,
             tenant_id,
-        })
-    } else {
-        None
+        }),
+        Err(e) => {
+            log::error!(
+                "Failed to update login session for user '{}': {}",
+                user_name,
+                e
+            );
+            None
+        }
     }
 }
 
@@ -176,13 +182,20 @@ pub fn update_login_session_to_db(
     username_str: &str,
     login_session_str: &str,
     conn: &mut Connection,
-) -> bool {
-    match find_user_by_username(username_str, conn) {
-        Ok(user) => diesel::update(users.filter(id.eq(user.id)))
-            .set(login_session.eq(login_session_str.to_string()))
-            .execute(conn)
-            .is_ok(),
-        Err(_) => false,
+) -> Result<(), diesel::result::Error> {
+    let user = find_user_by_username(username_str, conn)?;
+
+    let rows_updated = diesel::update(users.filter(id.eq(user.id)))
+        .set(login_session.eq(login_session_str.to_string()))
+        .execute(conn)?;
+
+    if rows_updated > 0 {
+        Ok(())
+    } else {
+        Err(diesel::result::Error::DatabaseError(
+            DatabaseErrorKind::Unknown,
+            Box::new("No rows updated while updating login session".to_string()),
+        ))
     }
 }
 
@@ -299,22 +312,10 @@ pub fn find_user_by_credentials(identifier: &str, conn: &mut Connection) -> Opti
         .ok()
 }
 
-/// Clears a user's login session in the database if the user exists.
-///
-/// Finds the user by id and sets their `login_session` field to an empty string; has no effect if the user cannot be found.
-///
-/// # Examples
-///
-/// ```no_run
-/// // Adjust connection setup to your test environment
-/// // use crate::db::establish_connection;
-/// // let mut conn = establish_connection();
-/// // logout_user(42, &mut conn);
-/// ```
-pub fn logout_user(user_id: i32, conn: &mut Connection) {
-    if let Ok(user) = find_user_by_id(user_id, conn) {
-        let _ = update_login_session_to_db(&user.username, "", conn);
-    }
+/// Logout user - functional operation
+pub fn logout_user(user_id: i32, conn: &mut Connection) -> Result<(), diesel::result::Error> {
+    let user = find_user_by_id(user_id, conn)?;
+    update_login_session_to_db(&user.username, "", conn)
 }
 
 /// Validates that a UserToken matches an existing user's login session in the database.

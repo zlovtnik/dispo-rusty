@@ -33,12 +33,8 @@ pub mod user_token;
 // Re-export functional programming utilities for model operations
 pub use crate::functional::{
     query_builder::Column,
-    validation_engine::{
-        ValidationConfig, ValidationEngine,
-    },
-    validation_rules::{
-        Custom, Email, Length, Phone, Range, ValidationError,
-    },
+    validation_engine::{ValidationConfig, ValidationEngine},
+    validation_rules::{Custom, Email, Length, Phone, Range, ValidationError},
 };
 
 // Re-export commonly used functional traits

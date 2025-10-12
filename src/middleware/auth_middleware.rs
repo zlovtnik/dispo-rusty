@@ -477,7 +477,6 @@ mod functional_auth {
     }
 }
 
-
 #[cfg(all(test, feature = "functional"))]
 mod tests {
     use super::*;

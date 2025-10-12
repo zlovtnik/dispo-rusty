@@ -301,8 +301,14 @@ pub fn logout(authen_header: &HeaderValue, pool: &Pool) -> Result<(), ServiceErr
         })
         .and_then(|(user, _)| {
             query_service.query(|conn| {
-                user_ops::logout_user(user.id, conn);
-                Ok(())
+                user_ops::logout_user(user.id, conn).map_err(|e| {
+                    log::error!(
+                        "Failed to clear login session for user {}: {}",
+                        user.username,
+                        e
+                    );
+                    ServiceError::internal_server_error("Failed to clear login session".to_string())
+                })
             })
         })
         .log_error("logout operation")
