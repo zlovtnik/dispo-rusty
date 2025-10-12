@@ -25,6 +25,23 @@ pub struct NewRefreshToken {
 }
 
 impl RefreshToken {
+    /// Generates, stores, and returns a new refresh token for the specified user.
+    ///
+    /// Creates a new UUID-based token, sets its expiry to 30 days from now, inserts a
+    /// corresponding refresh token row into the database, and returns the token string.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(String)` containing the generated refresh token on success, `Err(diesel::result::Error)` on failure.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // `conn` should be a valid mutable database connection in real usage.
+    /// let mut conn = /* obtain test connection */ unimplemented!();
+    /// let token = RefreshToken::create(42, &mut conn).unwrap();
+    /// assert!(!token.is_empty());
+    /// ```
     pub fn create(
         user_id_val: i32,
         conn: &mut Connection,

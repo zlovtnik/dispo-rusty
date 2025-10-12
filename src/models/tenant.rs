@@ -42,16 +42,55 @@ pub struct UpdateTenant {
 }
 
 impl Tenant {
+    /// Checks whether a string contains any non-whitespace characters.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let s = "  a  ".to_string();
+    /// assert!(is_not_blank(&s));
+    ///
+    /// let empty = "   ".to_string();
+    /// assert!(!is_not_blank(&empty));
+    /// ```
+    ///
+    /// # Returns
+    ///
+    /// `true` if the string contains at least one non-whitespace character, `false` otherwise.
     fn is_not_blank(value: &String) -> bool {
         !value.trim().is_empty()
     }
 
+    /// Checks whether every character in `value` is an alphanumeric character or `-` or `_`.
+    ///
+    /// Returns `true` if all characters satisfy `is_alphanumeric()` or are `'-'` or `'_'`, `false` otherwise.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// assert!(is_valid_identifier(&"tenant-123_α".to_string()));
+    /// assert!(!is_valid_identifier(&"bad id!".to_string()));
+    /// ```
     fn is_valid_identifier(value: &String) -> bool {
         value
             .chars()
             .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
     }
 
+    /// Parses a UTC timestamp string in the expected ISO-like format into a `NaiveDateTime`.
+    ///
+    /// Accepts timestamps formatted as `YYYY-MM-DDTHH:MM:SS` with an optional fractional seconds component and a trailing `Z` (example: `"2023-05-01T12:34:56.789Z"`).
+    ///
+    /// # Returns
+    ///
+    /// `Some(NaiveDateTime)` if the input matches the expected format, `None` otherwise.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let dt = parse_timestamp("2023-05-01T12:34:56.789Z").unwrap();
+    /// assert_eq!(dt.format("%Y-%m-%dT%H:%M:%S").to_string(), "2023-05-01T12:34:56");
+    /// ```
     fn parse_timestamp(value: &str) -> Option<NaiveDateTime> {
         NaiveDateTime::parse_from_str(value, "%Y-%m-%dT%H:%M:%S%.fZ").ok()
     }
@@ -79,20 +118,21 @@ impl Tenant {
         Ok(())
     }
 
-    /// Creates a new tenant from the provided DTO after validating its database URL.
+    /// Inserts a new tenant record after validating the DTO and its database URL.
     ///
-    /// Returns the inserted `Tenant` as stored in the database.
+    /// Returns the inserted `Tenant`.
     ///
     /// # Examples
     ///
     /// ```no_run
-    /// # use crate::models::TenantDTO;
-    /// # use crate::models::Tenant;
+    /// use crate::models::{Tenant, TenantDTO};
+    ///
     /// let dto = TenantDTO {
     ///     id: "tenant_1".into(),
     ///     name: "Tenant One".into(),
     ///     db_url: "postgres://user:pass@localhost/tenant_db".into(),
     /// };
+    ///
     /// let mut conn = crate::config::db::establish_connection();
     /// let tenant = Tenant::create(dto, &mut conn).unwrap();
     /// assert_eq!(tenant.id, "tenant_1");
@@ -253,24 +293,23 @@ impl Tenant {
         tenants.filter(name.eq(name_)).first::<Tenant>(conn)
     }
 
-    /// Validates a TenantDTO's `id` and `name` according to application rules.
+    /// Validates a TenantDTO's id and name against application rules.
     ///
-    /// Checks that `id` is not empty and contains only alphanumeric characters, dashes, or underscores,
-    /// and that `name` is not empty.
-    ///
-    /// # Parameters
-    ///
-    /// - `dto`: The `TenantDTO` to validate.
+    /// - `id` must not be empty and must contain only alphanumeric characters, dashes, or underscores.
+    /// - `name` must not be empty.
     ///
     /// # Returns
     ///
-    /// `Ok(())` if validation passes, `Err(diesel::result::Error)` with a human-readable message describing the first
-    /// validation failure otherwise.
+    /// `Ok(())` if validation passes, `Err(diesel::result::Error)` with a joined error message otherwise.
     ///
     /// # Examples
     ///
     /// ```
-    /// let dto = TenantDTO { id: "tenant_1".into(), name: "Tenant One".into(), db_url: "postgres://user:pass@localhost/db".into() };
+    /// let dto = TenantDTO {
+    ///     id: "tenant_1".into(),
+    ///     name: "Tenant One".into(),
+    ///     db_url: "postgres://user:pass@localhost/db".into(),
+    /// };
     /// assert!(Tenant::validate_tenant_dto(&dto).is_ok());
     /// ```
     pub fn validate_tenant_dto(dto: &TenantDTO) -> QueryResult<()> {
@@ -319,10 +358,10 @@ impl Tenant {
         }
     }
 
-    /// Inserts multiple tenants in a single database transaction after validating each DTO.
+    /// Insert multiple tenants in a single database transaction after validating each DTO.
     ///
-    /// Validates each `TenantDTO` (id and name) and each `db_url`; if any validation or insertion fails,
-    /// the transaction is rolled back.
+    /// Each `TenantDTO`'s `id`, `name`, and `db_url` are validated before insertion; if any validation
+    /// or the insert operation fails, the transaction is rolled back.
     ///
     /// # Returns
     ///

@@ -22,7 +22,18 @@ use crate::{
     schema::users::{self, dsl::*},
 };
 
-/// Hash password using Argon2 algorithm - pure function
+/// Hash a plain password using Argon2 with a randomly generated salt.
+///
+/// Returns the encoded Argon2 password hash on success or an error message on failure.
+///
+/// # Examples
+///
+/// ```
+/// let res = hash_password_argon2("s3cr3t");
+/// assert!(res.is_ok());
+/// let hash = res.unwrap();
+/// assert!(hash.starts_with("$argon2"));
+/// ```
 pub fn hash_password_argon2(plain_password: &str) -> Result<String, String> {
     let salt = SaltString::generate(&mut OsRng);
     let argon2 = Argon2::default();
@@ -32,7 +43,27 @@ pub fn hash_password_argon2(plain_password: &str) -> Result<String, String> {
         .map(|hash| hash.to_string())
 }
 
-/// Verify password using hybrid approach: try Argon2 first, fallback to bcrypt
+/// Verify a user-supplied password against a stored password hash that may be Argon2 or bcrypt.
+///
+/// Attempts bcrypt verification when the stored hash has a bcrypt prefix (`$2`); otherwise attempts Argon2 verification. Returns `true` on successful verification, `false` on any mismatch or parsing/verification error.
+///
+/// # Examples
+///
+/// ```
+/// use rand::thread_rng;
+/// use argon2::Argon2;
+/// // bcrypt example
+/// let password = "s3cr3t";
+/// let bcrypt_hash = bcrypt::hash(password, bcrypt::DEFAULT_COST).unwrap();
+/// assert!(verify_password_hybrid(&bcrypt_hash, password));
+///
+/// // argon2 example
+/// use argon2::password_hash::SaltString;
+/// let salt = SaltString::generate(&mut thread_rng());
+/// let argon2 = Argon2::default();
+/// let argon2_hash = argon2.hash_password(password.as_bytes(), &salt).unwrap().to_string();
+/// assert!(verify_password_hybrid(&argon2_hash, password));
+/// ```
 pub fn verify_password_hybrid(stored_hash: &str, provided_password: &str) -> bool {
     let is_bcrypt = stored_hash.starts_with("$2");
 
@@ -52,12 +83,44 @@ pub fn verify_password_hybrid(stored_hash: &str, provided_password: &str) -> boo
     }
 }
 
-/// Generate a new login session UUID
+/// Generates a new login session identifier as a UUID v4 string.
+///
+/// # Examples
+///
+/// ```
+/// use uuid::Uuid;
+/// let s = crate::models::user::operations::generate_login_session();
+/// assert!(Uuid::parse_str(&s).is_ok());
+/// ```
 pub fn generate_login_session() -> String {
     Uuid::new_v4().to_string()
 }
 
-/// Create and save login session for a user - functional composition
+/// Creates and persistently records a new login session for a user.
+///
+/// Attempts to save a login history entry for `user_name`, generates a new session identifier,
+/// updates the user's `login_session` in the database, and returns the corresponding `LoginInfoDTO`
+/// on success; returns `None` if any operation fails.
+///
+/// # Parameters
+///
+/// - `user_name`: username to create the session for.
+/// - `tenant_id`: tenant identifier to include in the returned `LoginInfoDTO`.
+/// - `conn`: mutable database connection used for persistence operations.
+///
+/// # Returns
+///
+/// `Some(LoginInfoDTO)` containing `username`, `login_session`, and `tenant_id` if the login history
+/// was saved and the user's `login_session` was updated successfully; `None` otherwise.
+///
+/// # Examples
+///
+/// ```
+/// // assumes a helper `establish_connection()` exists in test context
+/// let mut conn = establish_connection();
+/// let result = create_login_session("alice", "tenant-1".to_string(), &mut conn);
+/// assert!(result.is_some());
+/// ```
 pub fn create_login_session(
     user_name: &str,
     tenant_id: String,
@@ -87,7 +150,28 @@ pub fn create_login_session(
     }
 }
 
-/// Update login session in database - pure functional operation
+/// Updates a user's login session string in the database by username.
+///
+/// Attempts to find a user with `username_str` and set their `login_session` to `login_session_str`.
+///
+/// # Parameters
+///
+/// - `username_str`: username of the user whose session should be updated.
+/// - `login_session_str`: new login session string to store for the user.
+///
+/// # Returns
+///
+/// `true` if the update succeeded and affected the user's record, `false` otherwise.
+///
+/// # Examples
+///
+/// ```no_run
+/// // Assuming `conn` is a valid diesel::PgConnection
+/// let updated = update_login_session_to_db("alice", "new-session-uuid", &mut conn);
+/// if updated {
+///     println!("session updated");
+/// }
+/// ```
 pub fn update_login_session_to_db(
     username_str: &str,
     login_session_str: &str,
@@ -102,7 +186,33 @@ pub fn update_login_session_to_db(
     }
 }
 
-/// Signup user - functional composition with error handling
+/// Registers a new user by hashing their password and inserting the user record into the database.
+///
+/// Hashes the provided plaintext password with Argon2, constructs a new UserDTO containing the hash,
+/// and attempts to insert it into the users table. If the username (or other unique constraint) already
+/// exists, returns a `bad_request` ServiceError identifying the duplicate; on hashing failures or other
+/// database errors returns an `internal_server_error`.
+///
+/// # Returns
+///
+/// `Ok(String)` with a success message on successful registration.
+/// `Err(ServiceError)` with `bad_request` when the user is already registered, or `internal_server_error` for hashing or other database failures.
+///
+/// # Examples
+///
+/// ```no_run
+/// # use crate::models::user::{signup_user, UserDTO};
+/// # use crate::db::establish_connection;
+/// let user = UserDTO {
+///     username: "alice".to_string(),
+///     email: "alice@example.com".to_string(),
+///     password: "s3cr3t".to_string(),
+///     active: true,
+///     ..Default::default()
+/// };
+/// let mut conn = establish_connection();
+/// let result = signup_user(user, &mut conn);
+/// ```
 pub fn signup_user(user: UserDTO, conn: &mut Connection) -> Result<String, ServiceError> {
     // Hash password using functional composition
     let password_hash = hash_password_argon2(&user.password)
@@ -131,7 +241,32 @@ pub fn signup_user(user: UserDTO, conn: &mut Connection) -> Result<String, Servi
     Ok(constants::MESSAGE_SIGNUP_SUCCESS.to_string())
 }
 
-/// Login user - functional composition pipeline
+/// Authenticate credentials and create a login session for a user.
+///
+/// Attempts to find an active user matching the provided username or email, verifies the provided password
+/// (supports bcrypt and Argon2 formats), and creates a new login session on success.
+///
+/// # Parameters
+///
+/// - `login`: credentials containing `username_or_email`, `password`, and `tenant_id`.
+///
+/// # Returns
+///
+/// `Some(LoginInfoDTO)` with the created login session and username on successful authentication and session creation, `None` if authentication fails or a required database operation does not succeed.
+///
+/// # Examples
+///
+/// ```
+/// let login = LoginDTO {
+///     username_or_email: "alice".into(),
+///     password: "s3cret".into(),
+///     tenant_id: "tenant_1".into(),
+/// };
+/// let result = login_user(login, &mut conn);
+/// if let Some(info) = result {
+///     assert_eq!(info.username, "alice");
+/// }
+/// ```
 pub fn login_user(login: LoginDTO, conn: &mut Connection) -> Option<LoginInfoDTO> {
     // Functional composition: lookup -> validate -> verify -> create session
     find_user_by_credentials(&login.username_or_email, conn)
@@ -140,7 +275,22 @@ pub fn login_user(login: LoginDTO, conn: &mut Connection) -> Option<LoginInfoDTO
         .and_then(|user| create_login_session(&user.username, login.tenant_id, conn))
 }
 
-/// Find user by username or email - pure database query function
+/// Retrieves a user whose username or email matches the given identifier.
+///
+/// Searches the users table for a row where `username` or `email` equals `identifier` and returns that user if found.
+///
+/// # Examples
+///
+/// ```
+/// let maybe_user = find_user_by_credentials("alice@example.com", &mut conn);
+/// if let Some(user) = maybe_user {
+///     assert!(user.username == "alice" || user.email == "alice@example.com");
+/// }
+/// ```
+///
+/// # Returns
+///
+/// `Some(User)` when a matching user is found, `None` if no match is found or the query fails.
 pub fn find_user_by_credentials(identifier: &str, conn: &mut Connection) -> Option<User> {
     users
         .filter(username.eq(identifier))
@@ -149,14 +299,36 @@ pub fn find_user_by_credentials(identifier: &str, conn: &mut Connection) -> Opti
         .ok()
 }
 
-/// Logout user - functional operation
+/// Clears a user's login session in the database if the user exists.
+///
+/// Finds the user by id and sets their `login_session` field to an empty string; has no effect if the user cannot be found.
+///
+/// # Examples
+///
+/// ```no_run
+/// // Adjust connection setup to your test environment
+/// // use crate::db::establish_connection;
+/// // let mut conn = establish_connection();
+/// // logout_user(42, &mut conn);
+/// ```
 pub fn logout_user(user_id: i32, conn: &mut Connection) {
     if let Ok(user) = find_user_by_id(user_id, conn) {
         let _ = update_login_session_to_db(&user.username, "", conn);
     }
 }
 
-/// Check if login session is valid - pure validation function
+/// Validates that a UserToken matches an existing user's login session in the database.
+///
+/// Returns `true` if a user with matching `username` and `login_session` exists, `false` otherwise.
+///
+/// # Examples
+///
+/// ```no_run
+/// let token = UserToken { user: "alice".to_string(), login_session: "sess-123".to_string(), tenant_id: "t1".to_string() };
+/// // `conn` is a live database connection (diesel::PgConnection or similar)
+/// let valid = is_valid_login_session(&token, &mut conn);
+/// println!("session valid: {}", valid);
+/// ```
 pub fn is_valid_login_session(user_token: &UserToken, conn: &mut Connection) -> bool {
     users
         .filter(username.eq(&user_token.user))
@@ -165,7 +337,25 @@ pub fn is_valid_login_session(user_token: &UserToken, conn: &mut Connection) -> 
         .is_ok()
 }
 
-/// Find login info by token - functional composition
+/// Retrieve login information that corresponds to a user token.
+///
+/// Looks up a user whose `username` and `login_session` match the supplied `UserToken` and returns a `LoginInfoDTO`
+/// containing the username, stored login session, and the token's tenant id. If no matching user is found this
+/// returns a `ServiceError::not_found`; unexpected database errors are mapped to `ServiceError::internal_server_error`.
+///
+/// # Examples
+///
+/// ```
+/// // Assumes `conn` is a valid &mut Connection and a user with the matching session exists.
+/// let token = UserToken {
+///     user: "alice".into(),
+///     login_session: "session-uuid".into(),
+///     tenant_id: "tenant-1".into(),
+/// };
+/// let info = find_login_info_by_token(&token, &mut conn).unwrap();
+/// assert_eq!(info.username, "alice");
+/// assert_eq!(info.tenant_id, "tenant-1");
+/// ```
 pub fn find_login_info_by_token(
     user_token: &UserToken,
     conn: &mut Connection,
@@ -191,29 +381,92 @@ pub fn find_login_info_by_token(
     }
 }
 
-/// Find user by username - pure database query
+/// Retrieves the user record that exactly matches the provided username.
+///
+/// # Examples
+///
+/// ```
+/// let user = find_user_by_username("alice", &mut conn).expect("user exists");
+/// assert_eq!(user.username, "alice");
+/// ```
 pub fn find_user_by_username(username_str: &str, conn: &mut Connection) -> QueryResult<User> {
     users
         .filter(username.eq(username_str))
         .get_result::<User>(conn)
 }
 
-/// Find user by email - pure database query
+/// Retrieve a user record that matches the given email.
+///
+/// # Parameters
+///
+/// - `email_str`: Email address to search for.
+/// - `conn`: Mutable database connection.
+///
+/// # Returns
+///
+/// `Ok(User)` with the matching user when a row exists; `Err` with a Diesel error (for example `NotFound` if no match or other database errors) otherwise.
+///
+/// # Examples
+///
+/// ```no_run
+/// # use crate::models::user::operations::find_user_by_email;
+/// # fn example(conn: &mut crate::db::Connection) {
+/// let res = find_user_by_email("alice@example.com", conn);
+/// if let Ok(user) = res {
+///     assert_eq!(user.email, "alice@example.com");
+/// }
+/// # }
+/// ```
 pub fn find_user_by_email(email_str: &str, conn: &mut Connection) -> QueryResult<User> {
     users.filter(email.eq(email_str)).get_result::<User>(conn)
 }
 
-/// Find user by ID - pure database query
+/// Retrieves the user with the specified ID from the database.
+///
+/// # Examples
+///
+/// ```
+/// let user = find_user_by_id(1, &mut conn).unwrap();
+/// assert_eq!(user.id, 1);
+/// ```
 pub fn find_user_by_id(user_id: i32, conn: &mut Connection) -> QueryResult<User> {
     users.filter(id.eq(user_id)).first::<User>(conn)
 }
 
-/// Count all users - pure aggregation query
+/// Retrieve the total number of users in the database.
+///
+/// # Returns
+///
+/// `Ok(i64)` with the total user count on success, or a `diesel::result::Error` wrapped in `Err` on failure.
+///
+/// # Examples
+///
+/// ```no_run
+/// # use diesel::prelude::*;
+/// # use crate::models::user::operations::count_all_users;
+/// # fn example(conn: &mut diesel::PgConnection) {
+/// let total = count_all_users(conn).expect("query failed");
+/// println!("Total users: {}", total);
+/// # }
+/// ```
 pub fn count_all_users(conn: &mut Connection) -> QueryResult<i64> {
     users.count().get_result(conn)
 }
 
-/// Find all users with pagination - pure query with composition
+/// Retrieves a paginated list of users ordered by `id`.
+///
+/// Uses `limit` and `offset` to control pagination; results are ordered ascending by `id`.
+///
+/// # Examples
+///
+/// ```no_run
+/// # use crate::models::user::operations::find_all_users;
+/// # use diesel::r2d2::ConnectionManager;
+/// # use diesel::PgConnection;
+/// // `conn` must be a valid `&mut PgConnection`.
+/// let users = find_all_users(10, 0, conn).expect("query failed");
+/// assert!(users.len() <= 10);
+/// ```
 pub fn find_all_users(limit: i64, offset: i64, conn: &mut Connection) -> QueryResult<Vec<User>> {
     users
         .order(id)
@@ -222,7 +475,28 @@ pub fn find_all_users(limit: i64, offset: i64, conn: &mut Connection) -> QueryRe
         .load::<User>(conn)
 }
 
-/// Update user - functional database operation
+/// Update a user's username, email, and active status by their ID.
+///
+/// Returns the number of rows updated on success, or a `diesel::QueryResult` error on failure.
+///
+/// # Examples
+///
+/// ```
+/// # use diesel::connection::Connection;
+/// # fn example(conn: &mut diesel::pg::PgConnection) {
+/// let dto = crate::models::user::UserDTO {
+///     username: "new_name".into(),
+///     email: "new@example.com".into(),
+///     active: true,
+///     ..Default::default()
+/// };
+/// let res = crate::models::user::operations::update_user(42, dto, conn);
+/// assert!(res.is_ok());
+/// if let Ok(rows) = res {
+///     assert_eq!(rows, 1); // expected one row updated
+/// }
+/// # }
+/// ```
 pub fn update_user(
     user_id: i32,
     updated_user: UserDTO,
@@ -237,12 +511,40 @@ pub fn update_user(
         .execute(conn)
 }
 
-/// Delete user by ID - pure database operation
+/// Deletes the user record with the specified ID from the database.
+///
+/// # Examples
+///
+/// ```no_run
+/// # use diesel::prelude::*;
+/// # use crate::models::user::operations::delete_user_by_id;
+/// # fn establish_connection() -> diesel::SqliteConnection { unimplemented!() }
+/// # let mut conn = establish_connection();
+/// let deleted = delete_user_by_id(42, &mut conn).expect("query failed");
+/// assert!(deleted == 0 || deleted == 1);
+/// ```
+///
+/// # Returns
+///
+/// `Ok(n)` with the number of rows deleted (typically 0 or 1), or a `QueryResult` error.
 pub fn delete_user_by_id(user_id: i32, conn: &mut Connection) -> QueryResult<usize> {
     diesel::delete(users.filter(id.eq(user_id))).execute(conn)
 }
 
-/// Count logged in users - pure aggregation with filtering
+/// Counts users that currently have a non-empty login session.
+///
+/// Returns the number of users whose `login_session` is not null and not an empty string.
+///
+/// # Examples
+///
+/// ```no_run
+/// # use diesel::pg::PgConnection;
+/// # use crate::models::user::operations::count_logged_in_users;
+/// # fn get_conn() -> PgConnection { unimplemented!() }
+/// let mut conn = get_conn();
+/// let total = count_logged_in_users(&mut conn).expect("query failed");
+/// println!("Logged in users: {}", total);
+/// ```
 pub fn count_logged_in_users(conn: &mut Connection) -> QueryResult<i64> {
     users
         .filter(login_session.is_not_null().and(login_session.ne("")))
@@ -250,7 +552,26 @@ pub fn count_logged_in_users(conn: &mut Connection) -> QueryResult<i64> {
         .get_result(conn)
 }
 
-/// Update user in database - functional operation
+/// Updates the username, email, and active flag for a user with the given ID in the database.
+///
+/// # Returns
+///
+/// The number of rows affected on success, wrapped in `diesel::QueryResult<usize>`.
+///
+/// # Examples
+///
+/// ```
+/// use crate::models::user::UserDTO;
+/// // `conn` must be a valid &mut diesel::PgConnection (or other Diesel connection) in scope.
+/// let dto = UserDTO {
+///     username: "alice".to_string(),
+///     email: "alice@example.com".to_string(),
+///     active: true,
+///     password: None,
+/// };
+/// let result = update_user_in_db(1, dto, &mut conn);
+/// assert!(result.is_ok());
+/// ```
 pub fn update_user_in_db(
     user_id: i32,
     user_dto: crate::models::user::UserDTO,
@@ -267,14 +588,48 @@ pub fn update_user_in_db(
         .execute(conn)
 }
 
-/// Delete user from database - functional operation
+/// Deletes the user with the given ID from the database.
+///
+/// Returns the number of rows that were deleted (`0` if no matching user was found).
+///
+/// # Examples
+///
+/// ```no_run
+/// # use diesel::prelude::*;
+/// # use crate::models::user::operations::delete_user_from_db;
+/// // `conn` is a mutable database connection (diesel::Connection)
+/// let mut conn = /* obtain connection */ unimplemented!();
+/// let deleted = delete_user_from_db(42, &mut conn).expect("query failed");
+/// assert!(deleted <= 1);
+/// ```
 pub fn delete_user_from_db(user_id: i32, conn: &mut Connection) -> diesel::QueryResult<usize> {
     use diesel::prelude::*;
 
     diesel::delete(users::table.filter(users::id.eq(user_id))).execute(conn)
 }
 
-/// Functional wrapper to get user response DTO - pure transformation
+/// Convert a `User` model into a `UserResponseDTO`.
+///
+/// # Examples
+///
+/// ```
+/// use crate::models::user::{User, UserResponseDTO};
+///
+/// let user = User {
+///     id: 1,
+///     username: "alice".into(),
+///     email: "alice@example.com".into(),
+///     active: true,
+///     password: "".into(),
+///     login_session: None,
+/// };
+///
+/// let dto: UserResponseDTO = crate::models::user::operations::user_to_response_dto(&user);
+/// assert_eq!(dto.id, 1);
+/// assert_eq!(dto.username, "alice");
+/// assert_eq!(dto.email, "alice@example.com");
+/// assert!(dto.active);
+/// ```
 pub fn user_to_response_dto(user: &User) -> crate::models::user::UserResponseDTO {
     crate::models::user::UserResponseDTO {
         id: user.id,

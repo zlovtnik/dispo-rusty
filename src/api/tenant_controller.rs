@@ -48,13 +48,9 @@ struct PaginatedTenantResponse {
     next_cursor: Option<i64>,
 }
 
-/// Fetches system-wide statistics and per-tenant connection status.
+/// Collects system-wide metrics and per-tenant connection status.
 ///
-/// Gathers totals for tenants and users and reports each tenant's connection state, returning an HTTP response with serialized `SystemStats`.
-///
-/// # Returns
-///
-/// An `HttpResponse` with status 200 containing the serialized `SystemStats`.
+/// Gathers totals for tenants and users and reports each tenant's connection state, returning an HTTP 200 response containing the serialized `SystemStats`.
 ///
 /// # Examples
 ///
