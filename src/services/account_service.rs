@@ -148,12 +148,27 @@ pub struct RefreshTokenRequest {
     pub tenant_id: String,
 }
 
-/// Creates a new user account using iterator-based validation and functional pipelines.
+/// Creates a new user account after validating the provided `UserDTO`.
 ///
-/// Uses iterator chains for validation and composes database operations through functional pipelines.
+/// Validation is performed using the module's iterator-based validators; on success the function
+/// executes a functional pipeline that persists the user via the database and returns a signup message.
 ///
 /// # Returns
-/// `Ok(String)` with signup result message on success, `Err(ServiceError)` on failure.
+///
+/// `Ok(String)` with a success message on success, `Err(ServiceError)` on failure.
+///
+/// # Examples
+///
+/// ```
+/// # use crate::models::user::UserDTO;
+/// # use crate::db::Pool;
+/// # use crate::services::account::signup;
+/// // Construct a valid UserDTO and obtain a `Pool` from your application context.
+/// let user = UserDTO { username: "alice".into(), password: "Password1".into(), email: "alice@example.com".into() };
+/// let pool: Pool = /* obtain pool from app context */;
+/// let result = signup(user, &pool);
+/// // `result` will be Ok(...) on success or Err(...) on failure.
+/// ```
 pub fn signup(user: UserDTO, pool: &Pool) -> Result<String, ServiceError> {
     // Use iterator-based validation pipeline
     validate_user_dto(&user)?;
@@ -165,13 +180,27 @@ pub fn signup(user: UserDTO, pool: &Pool) -> Result<String, ServiceError> {
         .log_error("signup operation")
 }
 
-/// Authenticates credentials using functional composition.
+/// Authenticate login credentials and return access and refresh tokens.
 ///
-/// Validates login credentials, checks session validity, and generates
-/// token through chained functional operations.
+/// Validates the provided credentials, verifies the login session, generates an access token,
+/// creates a new refresh token, and returns both tokens in a `TokenBodyResponse`.
 ///
 /// # Returns
-/// `Ok(TokenBodyResponse)` on successful login, `Err(ServiceError)` on authentication failure.
+///
+/// `Ok(TokenBodyResponse)` on successful authentication, `Err(ServiceError)` on failure.
+///
+/// # Examples
+///
+/// ```
+/// // `get_test_pool` is a test helper that returns a configured `Pool`.
+/// let login = LoginDTO {
+///     username_or_email: "alice".to_string(),
+///     password: "s3cr3tPass".to_string(),
+/// };
+/// let pool = get_test_pool();
+/// let token_body = login(login, &pool).unwrap();
+/// assert_eq!(token_body.token_type, "bearer");
+/// ```
 pub fn login(login: LoginDTO, pool: &Pool) -> Result<TokenBodyResponse, ServiceError> {
     let query_service = FunctionalQueryService::new(pool.clone());
 
@@ -212,13 +241,29 @@ pub fn login(login: LoginDTO, pool: &Pool) -> Result<TokenBodyResponse, ServiceE
         .log_error("login operation")
 }
 
-/// Invalidates user session using functional token validation pipeline.
+/// Invalidate the user's session represented by a bearer Authorization header.
 ///
-/// Composes token extraction, validation, user lookup, and logout
-/// through chained functional operations.
+/// Attempts to extract and validate a bearer token from `authen_header`, verifies the token,
+/// looks up the corresponding user, and invalidates that user's session in the database.
 ///
 /// # Returns
-/// `Ok(())` on successful logout, `Err(ServiceError)` on token or database errors.
+///
+/// `Ok(())` on successful logout, `Err(ServiceError)` on token validation or database errors.
+///
+/// # Examples
+///
+/// ```no_run
+/// use http::HeaderValue;
+/// // `pool` should be a valid database connection pool from your application's setup.
+/// let auth = HeaderValue::from_static("Bearer some-valid-token");
+/// let pool = /* obtain your Pool instance */ unimplemented!();
+///
+/// let result = logout(&auth, &pool);
+/// match result {
+///     Ok(()) => println!("Logged out"),
+///     Err(e) => eprintln!("Logout failed: {:?}", e),
+/// }
+/// ```
 pub fn logout(authen_header: &HeaderValue, pool: &Pool) -> Result<(), ServiceError> {
     let query_service = FunctionalQueryService::new(pool.clone());
 
@@ -263,13 +308,18 @@ pub fn logout(authen_header: &HeaderValue, pool: &Pool) -> Result<(), ServiceErr
         .log_error("logout operation")
 }
 
-/// Refreshes access token using functional composition.
+/// Refreshes an access token using the bearer token from an Authorization header.
 ///
-/// Validates token, checks session validity, and generates new token
-/// through chained database operations.
+/// Validates the Authorization header and token, verifies the login session, and returns a new access token. The returned `TokenBodyResponse` contains a freshly generated access token, an empty `refresh_token` (access-token refresh does not issue a new refresh token), and `token_type` set to `"bearer"`.
 ///
-/// # Returns
-/// `Ok(TokenBodyResponse)` with refreshed token, `Err(ServiceError)` on validation errors.
+/// # Examples
+///
+/// ```no_run
+/// use http::HeaderValue;
+/// // `pool` should be an initialized database pool in real usage.
+/// let header = HeaderValue::from_static("Bearer <token>");
+/// let _ = refresh(&header, &pool);
+/// ```
 pub fn refresh(
     authen_header: &HeaderValue,
     pool: &Pool,
@@ -318,13 +368,26 @@ pub fn refresh(
         .log_error("refresh operation")
 }
 
-/// Refreshes access token using refresh token.
+/// Refreshes the access and refresh tokens for a valid refresh token and tenant.
 ///
-/// Validates refresh token, checks expiry and revocation, then generates
-/// new access token and refresh token pair through functional composition.
+/// Validates the provided refresh token, retrieves the associated user, revokes the old refresh token, creates a new refresh token, and generates a new access token.
+///
+/// # Arguments
+/// - `refresh_token`: the refresh token string to validate and rotate.
+/// - `tenant_id`: tenant identifier used when generating the access token.
 ///
 /// # Returns
-/// `Ok(TokenBodyResponse)` with new token pair, `Err(ServiceError)` on validation errors.
+/// `TokenBodyResponse` containing the new `access_token`, the new `refresh_token`, and `token_type` set to `"bearer"`.
+///
+/// # Examples
+///
+/// ```
+/// // Given a valid `pool`, `refresh_token`, and `tenant_id`
+/// let resp = refresh_with_token(refresh_token, tenant_id, &pool).expect("refresh succeeds");
+/// assert_eq!(resp.token_type, "bearer");
+/// assert!(!resp.access_token.is_empty());
+/// assert!(!resp.refresh_token.is_empty());
+/// ```
 pub fn refresh_with_token(
     refresh_token: &str,
     tenant_id: &str,
@@ -389,13 +452,24 @@ pub fn refresh_with_token(
         .log_error("refresh_with_token operation")
 }
 
-/// Returns user info from token using functional pipeline.
+/// Retrieve login information associated with a bearer token.
 ///
-/// Validates and decodes bearer token, then retrieves user information
-/// through functional database query.
+/// Validates and decodes the `Authorization` header, verifies the token, and queries the database for the corresponding login information.
 ///
 /// # Returns
-/// `Ok(LoginInfoDTO)` on success, `Err(ServiceError)` on token or database errors.
+///
+/// `Ok(LoginInfoDTO)` with the login information when the token is valid and the database query succeeds, `Err(ServiceError)` on token validation/decoding failure or database errors.
+///
+/// # Examples
+///
+/// ```
+/// use http::header::HeaderValue;
+/// # use crate::services::account::me;
+/// # use crate::db::Pool;
+/// let auth = HeaderValue::from_str("Bearer <token>").unwrap();
+/// let pool: Pool = unimplemented!();
+/// let _ = me(&auth, &pool);
+/// ```
 pub fn me(authen_header: &HeaderValue, pool: &Pool) -> Result<LoginInfoDTO, ServiceError> {
     let query_service = FunctionalQueryService::new(pool.clone());
 
@@ -426,13 +500,27 @@ pub fn me(authen_header: &HeaderValue, pool: &Pool) -> Result<LoginInfoDTO, Serv
         .log_error("me operation")
 }
 
-/// Find all users with pagination support.
+/// Retrieve users with pagination and return them as response DTOs.
 ///
-/// Returns a vector of user response DTOs with pagination applied.
-/// Uses functional query service for consistent error handling.
+/// Maps the paginated database user records into `UserResponseDTO` values and converts
+/// database errors into `ServiceError`.
+///
+/// # Parameters
+///
+/// - `limit`: Maximum number of users to return for this page.
+/// - `offset`: Number of users to skip before collecting the page.
 ///
 /// # Returns
-/// `Ok(Vec<UserResponseDTO>)` on success, `Err(ServiceError)` on database errors.
+///
+/// `Ok(Vec<UserResponseDTO>)` with the users for the requested page, `Err(ServiceError)` on database errors.
+///
+/// # Examples
+///
+/// ```
+/// // Assume `pool` is a valid database connection pool available in scope.
+/// let users = find_all_users(25, 0, &pool).expect("query failed");
+/// assert!(users.len() <= 25);
+/// ```
 pub fn find_all_users(
     limit: i64,
     offset: i64,
@@ -459,13 +547,23 @@ pub fn find_all_users(
         .log_error("find_all_users operation")
 }
 
-/// Find a user by ID.
+/// Finds a user by their numeric ID.
 ///
-/// Returns user response DTO if found, NotFound error otherwise.
-/// Uses functional query service for consistent error handling.
+/// Returns the user's public response DTO when the user exists; maps a missing user to a not-found service error and maps other database failures to an internal-server-error.
 ///
 /// # Returns
-/// `Ok(UserResponseDTO)` on success, `Err(ServiceError)` on not found or database errors.
+///
+/// `Ok(UserResponseDTO)` if the user exists, `Err(ServiceError)` when the user is not found or a database error occurs.
+///
+/// # Examples
+///
+/// ```
+/// // assume `pool` is a configured `Pool`
+/// let res = find_user_by_id(42, &pool);
+/// if let Ok(user_dto) = res {
+///     println!("username: {}", user_dto.username);
+/// }
+/// ```
 pub fn find_user_by_id(user_id: i32, pool: &Pool) -> Result<UserResponseDTO, ServiceError> {
     let query_service = FunctionalQueryService::new(pool.clone());
 
@@ -480,13 +578,31 @@ pub fn find_user_by_id(user_id: i32, pool: &Pool) -> Result<UserResponseDTO, Ser
         .log_error("find_user_by_id operation")
 }
 
-/// Update an existing user.
+/// Update an existing user's username, email, and active status.
 ///
-/// Validates input data and updates the user record.
-/// Uses iterator-based validation and functional composition.
+/// Validates the provided `UserUpdateDTO` and applies the changes to the user record
+/// identified by `user_id`. The `password` field of the DTO is ignored by this operation.
+///
+/// # Parameters
+///
+/// - `updated_user`: DTO containing the new username, email, and active flag; password is not updated.
 ///
 /// # Returns
-/// `Ok(())` on success, `Err(ServiceError)` on validation or database errors.
+///
+/// `Ok(())` on success, `Err(ServiceError)` on validation failure or database error.
+///
+/// # Examples
+///
+/// ```no_run
+/// let dto = UserUpdateDTO {
+///     username: "newname".to_string(),
+///     email: "new@example.com".to_string(),
+///     active: true,
+/// };
+/// let pool = create_pool(); // obtain database pool from application context
+/// let res = update_user(42, dto, &pool);
+/// assert!(res.is_ok());
+/// ```
 pub fn update_user(
     user_id: i32,
     updated_user: UserUpdateDTO,
@@ -527,11 +643,19 @@ pub fn update_user(
 
 /// Delete a user by ID.
 ///
-/// Removes the user record from the database.
-/// Uses functional query service for consistent error handling.
+/// Removes the user record from the database. Errors if the user does not exist or if a database
+/// operation fails.
 ///
 /// # Returns
-/// `Ok(())` on success, `Err(ServiceError)` on not found or database errors.
+///
+/// `Ok(())` on success, `Err(ServiceError)` when the user does not exist or a database error occurs.
+///
+/// # Examples
+///
+/// ```no_run
+/// let pool = /* obtain Pool from your application context */ ;
+/// delete_user(42, &pool)?;
+/// ```
 pub fn delete_user(user_id: i32, pool: &Pool) -> Result<(), ServiceError> {
     let query_service = FunctionalQueryService::new(pool.clone());
 

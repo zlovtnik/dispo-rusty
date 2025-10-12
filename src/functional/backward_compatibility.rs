@@ -425,7 +425,15 @@ impl BackwardCompatibilityValidator {
         Ok(())
     }
 
-    /// Test multi-tenant data isolation
+    /// Verifies that users and authentication tokens are isolated between tenants by creating test users in two tenants, ensuring their tokens differ, and confirming that tenant-scoped requests succeed for the correct tenant and are rejected for cross-tenant access.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// // Run inside an async test or runtime
+    /// let validator = BackwardCompatibilityValidator::new(config);
+    /// validator.test_multi_tenant_isolation().await.unwrap();
+    /// ```
     pub async fn test_multi_tenant_isolation(&self) -> Result<(), String> {
         use awc::Client;
 
@@ -576,7 +584,33 @@ impl BackwardCompatibilityValidator {
         Ok(())
     }
 
-    /// Test database operations and migration compatibility
+    /// Verifies database-backed user flows and tenant-scoped data operations against the API.
+    ///
+    /// Performs a signup and login to create a unique test user, exercises tenant-scoped address-book
+    /// endpoints (create and retrieve a contact when available), and logs out to allow backend session
+    /// cleanup. Returns an error if any step encounters a server error, an unexpected status, or if
+    /// required response fields (like an auth token) are missing.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use tokio::runtime::Runtime;
+    /// # use your_crate::{BackwardCompatibilityValidator, CompatibilityTestConfig};
+    /// # let rt = Runtime::new().unwrap();
+    /// rt.block_on(async {
+    ///     let config = CompatibilityTestConfig::default();
+    ///     let validator = BackwardCompatibilityValidator::new(config);
+    ///     let result = validator.test_database_operations().await;
+    ///     // This example assumes an available test server; in CI this would be an integration test.
+    ///     let _ = result; // Inspect or assert in real tests
+    /// });
+    /// ```
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` if all tested database-related endpoints behave as expected; `Err(String)` with a
+    /// descriptive message if any request fails, returns a server error status, or required response
+    /// data (such as an authentication token) is missing.
     pub async fn test_database_operations(&self) -> Result<(), String> {
         use awc::Client;
 
@@ -707,7 +741,27 @@ impl BackwardCompatibilityValidator {
         Ok(())
     }
 
-    /// Test frontend integration (CORS, response formats)
+    /// Verifies frontend integration concerns: CORS behavior and standard JSON response formats.
+    ///
+    /// Performs a CORS preflight check on `/api/ping`, validates presence of CORS response headers
+    /// on both the preflight and a subsequent GET, ensures the `/api/ping` response contains
+    /// a `message` field and either `status` or `data`, and verifies that an invalid login returns
+    /// a client error with a `message` field instead of a server error.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use your_crate::{BackwardCompatibilityValidator, CompatibilityTestConfig};
+    /// # #[tokio::main]
+    /// # async fn main() {
+    /// let cfg = CompatibilityTestConfig::default();
+    /// let validator = BackwardCompatibilityValidator::new(cfg);
+    /// // This example requires the target API to be running and reachable at `base_url`.
+    /// let _ = validator.test_frontend_integration().await;
+    /// # }
+    /// ```
+    ///
+    /// Returns `Ok(())` when all checks pass; returns `Err(String)` with a descriptive message on failure.
     pub async fn test_frontend_integration(&self) -> Result<(), String> {
         use awc::Client;
 
@@ -816,7 +870,27 @@ impl BackwardCompatibilityValidator {
         Ok(())
     }
 
-    /// Test for performance regressions against baselines
+    /// Measures configured endpoints against latency baselines and reports any regressions.
+    ///
+    /// Iterates over `self.config.performance_baselines`, performs a GET to each endpoint, and records a
+    /// `PerformanceRegression` entry when an endpoint's observed latency exceeds its configured
+    /// `expected_max_ms`. If a login token can be obtained via `test_login_flow`, the function also
+    /// checks the authenticated endpoints `/api/auth/me` and `/api/auth/refresh` with their own
+    /// thresholds. Returns an `Err` if any request fails to send or if an endpoint responds with a
+    /// non-success status.
+    ///
+    /// # Returns
+    ///
+    /// A `Vec<PerformanceRegression>` containing one entry per endpoint that exceeded its baseline.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # async fn example(mut validator: crate::BackwardCompatibilityValidator) {
+    /// let regressions = validator.test_performance_regression().await.unwrap();
+    /// // regressions contains any endpoints that violated their latency baselines
+    /// # }
+    /// ```
     pub async fn test_performance_regression(&self) -> Result<Vec<PerformanceRegression>, String> {
         use awc::Client;
         use std::time::Instant;

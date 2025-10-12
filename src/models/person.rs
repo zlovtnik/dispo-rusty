@@ -36,11 +36,52 @@ pub struct PersonDTO {
 }
 
 impl PersonDTO {
+    /// Check whether a string contains any non-whitespace characters.
+    ///
+    /// Returns `true` if the string contains any non-whitespace characters, `false` otherwise.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// assert!(is_not_blank(&"hello".to_string()));
+    /// assert!(is_not_blank(&"  a  ".to_string()));
+    /// assert!(!is_not_blank(&"   ".to_string()));
+    /// assert!(!is_not_blank(&"".to_string()));
+    /// ```
     fn is_not_blank(value: &String) -> bool {
         !value.trim().is_empty()
     }
 
-    /// Validates the PersonDTO using functional validation patterns
+    /// Validate the DTO's fields and collect any validation error messages.
+    ///
+    /// Performs the following checks:
+    /// - name: required (non-blank) and maximum length 100.
+    /// - email: required, valid email format, and maximum length 255.
+    /// - phone: required, length between 10 and 20, and valid phone format.
+    /// - address: required and maximum length 500.
+    /// - age: must be between 0 and 150.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` if all validations pass, `Err(Vec<String>)` containing one or more human-readable error messages otherwise.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let dto = PersonDTO {
+    ///     name: "".into(),
+    ///     gender: true,
+    ///     age: 25,
+    ///     address: "123 Main".into(),
+    ///     phone: "1234567890".into(),
+    ///     email: "test@example.com".into(),
+    /// };
+    ///
+    /// let res = dto.validate();
+    /// assert!(res.is_err());
+    /// let errors = res.unwrap_err();
+    /// assert!(errors.iter().any(|e| e.contains("name")));
+    /// ```
     pub fn validate(&self) -> Result<(), Vec<String>> {
         let string_engine = functional_utils::validation_engine::<String>();
         let range_engine = functional_utils::validation_engine::<i32>();

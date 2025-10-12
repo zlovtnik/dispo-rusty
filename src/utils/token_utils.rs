@@ -28,7 +28,7 @@ pub fn decode_token(token: String) -> jsonwebtoken::errors::Result<TokenData<Use
     )
 }
 
-/// Verifies that the JWT claims represent a valid login session and returns the associated user identifier.
+/// Verify that the JWT claims represent a valid login session and return the associated user identifier.
 ///
 /// # Returns
 /// `Ok(String)` containing the user identifier when the session is valid, `Err(String)` with `"Invalid token"` otherwise.
