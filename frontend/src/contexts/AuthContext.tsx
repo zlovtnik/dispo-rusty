@@ -2,7 +2,11 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { authService } from '../services/api';
 import type { AuthResponse, User, Tenant, LoginCredentials, TenantSettings } from '../types/auth';
-import type { ApiResponseWrapper } from '../services/api';
+import type { ApiResponse } from '../types/api';
+import { isApiSuccess } from '../types/api';
+import type { AppError } from '../types/errors';
+import { asTenantId, asUserId } from '../types/ids';
+import type { Result } from '../types/fp';
 
 export interface AuthContextType {
   user: User | null;
@@ -48,6 +52,20 @@ const decodeJwtPayload = (token: string): JwtPayload | null => {
   }
 };
 
+const unwrapApiResult = <T,>(result: Result<ApiResponse<T>, AppError>): T => {
+  if (result.isErr()) {
+    throw new Error(result.error.message);
+  }
+
+  const apiResponse = result.value;
+
+  if (!isApiSuccess(apiResponse)) {
+    throw new Error(apiResponse.error.message);
+  }
+
+  return apiResponse.data;
+};
+
 // Helper to attempt token refresh and validate/construct user and tenant objects
 const attemptTokenRefresh = async (storedUser: string, storedTenant: string, signal?: AbortSignal): Promise<{ user: User; tenant: Tenant; token: string } | null> => {
   try {
@@ -56,8 +74,9 @@ const attemptTokenRefresh = async (storedUser: string, storedTenant: string, sig
       return null;
     }
 
-    const response = await authService.refreshToken();
-    const newToken = response.data.token;
+  const refreshResult = await authService.refreshToken();
+  const refreshedAuth = unwrapApiResult(refreshResult);
+  const newToken = refreshedAuth.token;
     if (!newToken) {
       console.log('No token received from refresh');
       return null;
@@ -89,8 +108,12 @@ const attemptTokenRefresh = async (storedUser: string, storedTenant: string, sig
           typeof parsedUser.email === 'string' && parsedUser.email.trim() !== '' &&
           typeof parsedUser.username === 'string' && parsedUser.username.trim() !== '' &&
           Array.isArray(parsedUser.roles) && parsedUser.roles.every((role: any) => typeof role === 'string')) {
-        parsedUser.username = newPayload.user;
-        refreshedUser = parsedUser;
+        refreshedUser = {
+          ...parsedUser,
+          id: asUserId(newPayload.user),
+          username: newPayload.user,
+          tenantId: asTenantId(newPayload.tenant_id),
+        };
       }
     } catch (parseError) {
       console.log('Failed to parse stored user data:', parseError);
@@ -102,8 +125,10 @@ const attemptTokenRefresh = async (storedUser: string, storedTenant: string, sig
           typeof parsedTenant.id === 'string' && parsedTenant.id.trim() !== '' &&
           typeof parsedTenant.name === 'string' && parsedTenant.name.trim() !== '' &&
           typeof parsedTenant.settings === 'object' && parsedTenant.settings !== null) {
-        parsedTenant.id = newPayload.tenant_id;
-        refreshedTenant = parsedTenant;
+        refreshedTenant = {
+          ...parsedTenant,
+          id: asTenantId(newPayload.tenant_id),
+        };
       }
     } catch (parseError) {
       console.log('Failed to parse stored tenant data:', parseError);
@@ -273,13 +298,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const login = async (credentials: LoginCredentials): Promise<void> => {
     setIsLoading(true);
     try {
-      // Use "tenant1" for demo purposes, as hardcoded in backend
-      const modifiedCredentials = { ...credentials, tenantId: 'tenant1' };
-      // Call actual login API endpoint
-      const response: ApiResponseWrapper<AuthResponse> = await authService.login(modifiedCredentials);
+      // Use "tenant1" for demo purposes, as hardcoded in backend when tenant is missing
+      const tenantId = credentials.tenantId ?? asTenantId('tenant1');
+      const modifiedCredentials: LoginCredentials = { ...credentials, tenantId };
+      const loginResult = await authService.login(modifiedCredentials);
+      const authPayload = unwrapApiResult(loginResult);
 
       // Extract JWT token from response
-      const token = response.data.token;
+      const token = authPayload.token;
       if (!token) {
         throw new Error('No token received from server');
       }
@@ -298,16 +324,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         throw new Error('Required fields missing in token');
       }
 
+      const userId = asUserId(tokenPayload.user);
+      const tenantIdentifier = asTenantId(tokenPayload.tenant_id);
+
       // Create user object from token payload (remove synthetic fallbacks)
       const now = new Date().toISOString();
       const user: User = {
-        id: tokenPayload.user,
+        id: userId,
         email: credentials.usernameOrEmail,
         username: tokenPayload.user,
         firstName: tokenPayload.user.charAt(0).toUpperCase() + tokenPayload.user.slice(1),
         lastName: 'User',
         roles: ['user'], // Default role
-        tenantId: tokenPayload.tenant_id,
+        tenantId: tenantIdentifier,
         createdAt: now,
         updatedAt: now,
       };
@@ -317,7 +346,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         throw new Error('Tenant ID missing in token');
       }
       const tenant: Tenant = {
-        id: tokenPayload.tenant_id,
+        id: tenantIdentifier,
         name: `Tenant ${tokenPayload.tenant_id}`,
         domain: `${tokenPayload.tenant_id}.demo.com`,
         settings: {
@@ -368,11 +397,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = async (): Promise<void> => {
     try {
-      // Call logout endpoint to clear server-side session
-      await authService.logout();
-      console.log('Server-side logout successful');
+      const logoutResult = await authService.logout();
+
+      if (logoutResult.isErr()) {
+        console.error('Server-side logout failed, clearing local data anyway:', logoutResult.error);
+      } else if (!isApiSuccess(logoutResult.value)) {
+        console.error('Server-side logout returned error response, clearing local data anyway:', logoutResult.value.error);
+      } else {
+        console.log('Server-side logout successful');
+      }
     } catch (error) {
-      // Even if the API call fails, we should clear local data
       console.error('Server-side logout failed, clearing local data anyway:', error);
     } finally {
       // Always clear local data regardless of API call success
@@ -386,30 +420,55 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const refreshToken = async (): Promise<void> => {
     try {
-      // Call backend refresh endpoint to validate and refresh the session
-      const response: ApiResponseWrapper<AuthResponse> = await authService.refreshToken();
+      const refreshResult = await authService.refreshToken();
 
-      // Extract new JWT token from response
-      const newToken = response.data.token;
+      if (refreshResult.isErr()) {
+        const error = refreshResult.error;
+
+        if (error.statusCode === 401 || error.statusCode === 403) {
+          console.log('Authentication failed during refresh, logging out');
+          await logout();
+          throw new Error('Authentication expired');
+        }
+
+        console.log('Token refresh failed due to transient error:', error);
+        throw new Error('Token refresh failed - please check your connection');
+      }
+
+      const refreshResponse = refreshResult.value;
+
+      if (!isApiSuccess(refreshResponse)) {
+        const error = refreshResponse.error;
+
+        if (error.statusCode === 401 || error.statusCode === 403) {
+          console.log('Authentication failed during refresh, logging out');
+          await logout();
+          throw new Error('Authentication expired');
+        }
+
+        console.log('Token refresh failed due to API error:', error);
+        throw new Error(error.message || 'Token refresh failed');
+      }
+
+      const newToken = refreshResponse.data.token;
       if (!newToken) {
         throw new Error('No token received from server during refresh');
       }
 
-      // Store the new JWT token in localStorage as JSON object
       localStorage.setItem('auth_token', JSON.stringify({ token: newToken }));
-
       console.log('Token refresh successful');
-    } catch (error: any) {
-      // Only logout on authentication failures (401/403), not on network/timeout errors
-      if (error?.statusCode === 401 || error?.statusCode === 403) {
-        console.log('Authentication failed during refresh, logging out');
-        await logout(); // Call logout to clear everything
-        throw new Error('Authentication expired');
-      } else {
-        // For network errors, timeouts, or other transient failures, don't logout
-        console.log('Token refresh failed due to transient error:', error);
-        throw new Error('Token refresh failed - please check your connection');
+    } catch (error) {
+      if (error instanceof Error) {
+        if (error.message === 'Authentication expired') {
+          throw error;
+        }
+
+        console.log('Token refresh failed:', error);
+        throw error;
       }
+
+      console.log('Token refresh failed due to unknown error:', error);
+      throw new Error('Token refresh failed');
     }
   };
 

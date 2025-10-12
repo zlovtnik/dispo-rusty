@@ -1,7 +1,9 @@
 // Contact/Address Book Types with Enhanced Fields
+import type { ContactId, TenantId, UserId } from './ids';
+
 export interface Contact {
-  id: string;
-  tenantId: string;
+  id: ContactId;
+  tenantId: TenantId;
   // Personal Information
   firstName: string;
   lastName: string;
@@ -37,8 +39,8 @@ export interface Contact {
   // Metadata
   createdAt: Date;
   updatedAt: Date;
-  createdBy: string;
-  updatedBy: string;
+  createdBy: UserId;
+  updatedBy: UserId;
   isActive: boolean;
 }
 
@@ -124,7 +126,7 @@ export interface CreateContactRequest extends Omit<ContactFormData, 'customField
 }
 
 export interface UpdateContactRequest extends Partial<CreateContactRequest> {
-  id: string;
+  id: ContactId;
 }
 
 export interface ContactResponse {
@@ -136,7 +138,7 @@ export interface ContactResponse {
 
 export interface BulkContactOperation {
   operation: 'delete' | 'tag' | 'untag' | 'export';
-  contactIds: string[];
+  contactIds: ContactId[];
   tagName?: string; // for tag/untag operations
   exportFormat?: 'csv' | 'json' | 'vcard';
 }
@@ -177,17 +179,17 @@ export interface ImportError {
 
 // Contact Tags and Categories
 export interface ContactTag {
-  id: string;
+  id: ContactId;
   name: string;
   color: string;
   description?: string;
-  tenantId: string;
+  tenantId: TenantId;
   createdAt: Date;
   usageCount: number;
 }
 
 export interface ContactTagStats {
-  tagId: string;
+  tagId: ContactId;
   tagName: string;
   contactCount: number;
 }
