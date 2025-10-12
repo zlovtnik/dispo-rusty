@@ -1,5 +1,4 @@
 use diesel::{prelude::*, AsChangeset, BoxableExpression, Insertable, Queryable};
-use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -7,14 +6,12 @@ use crate::{
     models::pagination::SortingAndPaging, schema::people,
 };
 
-use super::{filters::PersonFilter, functional_utils, pagination::HasId, response::Page};
+use super::{
+    filters::PersonFilter, functional_utils, pagination::HasId, response::Page, Custom, Email,
+    Length, Phone, Range,
+};
 
 // Re-export functional utilities for person operations
-pub use functional_utils::*;
-
-// Lazy static for email validation
-use std::sync::OnceLock;
-static EMAIL_REGEX: OnceLock<Regex> = OnceLock::new();
 
 #[derive(Clone, Queryable, Serialize, Deserialize)]
 pub struct Person {
@@ -39,88 +36,107 @@ pub struct PersonDTO {
 }
 
 impl PersonDTO {
+    fn is_not_blank(value: &String) -> bool {
+        !value.trim().is_empty()
+    }
+
     /// Validates the PersonDTO using functional validation patterns
     pub fn validate(&self) -> Result<(), Vec<String>> {
-        let mut errors = Vec::new();
+        let string_engine = functional_utils::validation_engine::<String>();
+        let range_engine = functional_utils::validation_engine::<i32>();
 
-        // Get email regex
-        let email_regex =
-            EMAIL_REGEX.get_or_init(|| Regex::new(r"^[^@\s]+@[^@\s]+\.[^@\s]+$").unwrap());
+        let string_validations = [
+            string_engine.validate_field(
+                &self.name,
+                "name",
+                vec![Custom::new(
+                    Self::is_not_blank as fn(&String) -> bool,
+                    "REQUIRED",
+                    "{} is required",
+                )],
+            ),
+            string_engine.validate_field(
+                &self.name,
+                "name",
+                vec![Length {
+                    min: None,
+                    max: Some(100),
+                }],
+            ),
+            string_engine.validate_field(
+                &self.email,
+                "email",
+                vec![Custom::new(
+                    Self::is_not_blank as fn(&String) -> bool,
+                    "REQUIRED",
+                    "{} is required",
+                )],
+            ),
+            string_engine.validate_field(&self.email, "email", vec![Email]),
+            string_engine.validate_field(
+                &self.email,
+                "email",
+                vec![Length {
+                    min: None,
+                    max: Some(255),
+                }],
+            ),
+            string_engine.validate_field(
+                &self.phone,
+                "phone",
+                vec![Custom::new(
+                    Self::is_not_blank as fn(&String) -> bool,
+                    "REQUIRED",
+                    "{} is required",
+                )],
+            ),
+            string_engine.validate_field(
+                &self.phone,
+                "phone",
+                vec![Length {
+                    min: Some(10),
+                    max: Some(20),
+                }],
+            ),
+            string_engine.validate_field(&self.phone, "phone", vec![Phone]),
+            string_engine.validate_field(
+                &self.address,
+                "address",
+                vec![Custom::new(
+                    Self::is_not_blank as fn(&String) -> bool,
+                    "REQUIRED",
+                    "{} is required",
+                )],
+            ),
+            string_engine.validate_field(
+                &self.address,
+                "address",
+                vec![Length {
+                    min: None,
+                    max: Some(500),
+                }],
+            ),
+        ];
 
-        // Define validation functions with consistent signatures
-        let validate_required = |value: &str, field: &str| -> Option<String> {
-            if value.trim().is_empty() {
-                Some(format!("{} is required", field))
-            } else {
-                None
-            }
-        };
+        let age_validations = [range_engine.validate_field(
+            &self.age,
+            "age",
+            vec![Range {
+                min: Some(0),
+                max: Some(150),
+            }],
+        )];
 
-        let validate_length =
-            |value: &str, field: &str, min: Option<usize>, max: Option<usize>| -> Option<String> {
-                let len = value.len();
-                if let Some(min_len) = min {
-                    if len < min_len {
-                        return Some(format!("{} must be at least {} characters", field, min_len));
-                    }
-                }
-                if let Some(max_len) = max {
-                    if len > max_len {
-                        return Some(format!("{} must be at most {} characters", field, max_len));
-                    }
-                }
-                None
-            };
+        let mut errors: Vec<String> = string_validations
+            .into_iter()
+            .flat_map(|outcome| functional_utils::to_error_messages(outcome.errors))
+            .collect();
 
-        let validate_email = |value: &str, field: &str| -> Option<String> {
-            if !email_regex.is_match(value) {
-                Some(format!("{} must be a valid email address", field))
-            } else {
-                None
-            }
-        };
-
-        let validate_age = |age: i32, field: &str| -> Option<String> {
-            if age < 0 || age > 150 {
-                Some(format!("{} must be between 0 and 150", field))
-            } else {
-                None
-            }
-        };
-
-        // Apply validations using functional composition
-        if let Some(error) = validate_required(&self.name, "name") {
-            errors.push(error);
-        } else if let Some(error) = validate_length(&self.name, "name", None, Some(100)) {
-            errors.push(error);
-        }
-
-        if let Some(error) = validate_required(&self.email, "email") {
-            errors.push(error);
-        } else {
-            if let Some(error) = validate_email(&self.email, "email") {
-                errors.push(error);
-            } else if let Some(error) = validate_length(&self.email, "email", None, Some(255)) {
-                errors.push(error);
-            }
-        }
-
-        if let Some(error) = validate_required(&self.phone, "phone") {
-            errors.push(error);
-        } else if let Some(error) = validate_length(&self.phone, "phone", Some(10), Some(20)) {
-            errors.push(error);
-        }
-
-        if let Some(error) = validate_required(&self.address, "address") {
-            errors.push(error);
-        } else if let Some(error) = validate_length(&self.address, "address", None, Some(500)) {
-            errors.push(error);
-        }
-
-        // Validate age
-        if let Some(error) = validate_age(self.age, "age") {
-            errors.push(error);
-        }
+        errors.extend(
+            age_validations
+                .into_iter()
+                .flat_map(|outcome| functional_utils::to_error_messages(outcome.errors)),
+        );
 
         if errors.is_empty() {
             Ok(())

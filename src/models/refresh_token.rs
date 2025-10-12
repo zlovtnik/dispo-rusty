@@ -30,17 +30,18 @@ impl RefreshToken {
         conn: &mut Connection,
     ) -> Result<String, diesel::result::Error> {
         let token_val = Uuid::new_v4().to_string();
-        let expires_at_val = Utc::now() + chrono::Duration::days(30); // 30 days
+        let expires_at_val = (Utc::now() + chrono::Duration::days(30)).naive_utc();
 
         let new_token = NewRefreshToken {
             user_id: user_id_val,
             token: token_val.clone(),
-            expires_at: expires_at_val.naive_utc(),
+            expires_at: expires_at_val,
         };
 
         diesel::insert_into(refresh_tokens::table)
             .values(&new_token)
-            .execute(conn)?;
+            .execute(conn)
+            .map(|_| token_val.clone())?;
 
         Ok(token_val)
     }

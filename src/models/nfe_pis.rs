@@ -1,4 +1,3 @@
-use crate::models::nfe_item::NfeItem;
 use crate::schema::nfe_pis;
 use chrono::NaiveDateTime;
 use diesel::prelude::*;

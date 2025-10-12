@@ -10,10 +10,9 @@ use crate::{
     schema::tenants::{self, dsl::*},
 };
 
-use super::functional_utils;
+use super::{functional_utils, Custom};
 
 // Re-export functional utilities for tenant operations
-pub use functional_utils::*;
 
 const MAX_PAGE_SIZE: i64 = 10_000;
 
@@ -43,6 +42,20 @@ pub struct UpdateTenant {
 }
 
 impl Tenant {
+    fn is_not_blank(value: &String) -> bool {
+        !value.trim().is_empty()
+    }
+
+    fn is_valid_identifier(value: &String) -> bool {
+        value
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+    }
+
+    fn parse_timestamp(value: &str) -> Option<NaiveDateTime> {
+        NaiveDateTime::parse_from_str(value, "%Y-%m-%dT%H:%M:%S%.fZ").ok()
+    }
+
     /// Validates that the provided string is a well-formed URL suitable for a database connection.
     ///
     /// # Examples
@@ -85,7 +98,12 @@ impl Tenant {
     /// assert_eq!(tenant.id, "tenant_1");
     /// ```
     pub fn create(dto: TenantDTO, conn: &mut crate::config::db::Connection) -> QueryResult<Tenant> {
-        Self::validate_db_url(&dto.db_url)?;
+        vec![
+            Self::validate_tenant_dto(&dto),
+            Self::validate_db_url(&dto.db_url),
+        ]
+        .into_iter()
+        .collect::<QueryResult<Vec<_>>>()?;
         diesel::insert_into(tenants).values(&dto).get_result(conn)
     }
 
@@ -256,37 +274,49 @@ impl Tenant {
     /// assert!(Tenant::validate_tenant_dto(&dto).is_ok());
     /// ```
     pub fn validate_tenant_dto(dto: &TenantDTO) -> QueryResult<()> {
-        // Validate ID: non-empty, alphanumeric + dashes/underscores
-        if dto.id.trim().is_empty() {
-            return Err(result::Error::DatabaseError(
-                result::DatabaseErrorKind::Unknown,
-                Box::new("Tenant ID cannot be empty".to_string()),
-            ));
-        }
+        let string_engine = functional_utils::validation_engine::<String>();
 
-        if !dto
-            .id
-            .chars()
-            .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
-        {
-            return Err(result::Error::DatabaseError(
-                result::DatabaseErrorKind::Unknown,
-                Box::new(
-                    "Tenant ID must contain only alphanumeric characters, dashes, and underscores"
-                        .to_string(),
-                ),
-            ));
-        }
+        let validations = [
+            string_engine.validate_field(
+                &dto.id,
+                "id",
+                vec![
+                    Custom::new(
+                        Self::is_not_blank as fn(&String) -> bool,
+                        "REQUIRED",
+                        "{} cannot be empty",
+                    ),
+                    Custom::new(
+                        Self::is_valid_identifier as fn(&String) -> bool,
+                        "INVALID_ID",
+                        "{} must contain only alphanumeric characters, dashes, and underscores",
+                    ),
+                ],
+            ),
+            string_engine.validate_field(
+                &dto.name,
+                "name",
+                vec![Custom::new(
+                    Self::is_not_blank as fn(&String) -> bool,
+                    "REQUIRED",
+                    "{} cannot be empty",
+                )],
+            ),
+        ];
 
-        // Validate name: non-empty
-        if dto.name.trim().is_empty() {
-            return Err(result::Error::DatabaseError(
-                result::DatabaseErrorKind::Unknown,
-                Box::new("Tenant name cannot be empty".to_string()),
-            ));
-        }
+        let errors: Vec<String> = validations
+            .into_iter()
+            .flat_map(|outcome| functional_utils::to_error_messages(outcome.errors))
+            .collect();
 
-        Ok(())
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(result::Error::DatabaseError(
+                result::DatabaseErrorKind::Unknown,
+                Box::new(errors.join("; ")),
+            ))
+        }
     }
 
     /// Inserts multiple tenants in a single database transaction after validating each DTO.
@@ -318,10 +348,15 @@ impl Tenant {
         conn: &mut crate::config::db::Connection,
     ) -> QueryResult<usize> {
         conn.transaction(|tx_conn| {
-            for dto in &dtos {
-                Self::validate_tenant_dto(dto)?;
-                Self::validate_db_url(&dto.db_url)?;
-            }
+            dtos.iter().try_for_each(|dto| {
+                vec![
+                    Self::validate_tenant_dto(dto),
+                    Self::validate_db_url(&dto.db_url),
+                ]
+                .into_iter()
+                .collect::<QueryResult<Vec<_>>>()
+                .map(|_| ())
+            })?;
             diesel::insert_into(tenants).values(&dtos).execute(tx_conn)
         })
     }
@@ -355,62 +390,63 @@ impl Tenant {
         filter: TenantFilter,
         conn: &mut crate::config::db::Connection,
     ) -> QueryResult<Page<Tenant>> {
-        // Use functional iterator patterns to build query
-        let mut query = tenants::table.into_boxed();
-        for field_filter in &filter.filters {
-            match field_filter.field.as_str() {
-                "id" => match field_filter.operator.as_str() {
-                    "contains" => {
-                        query = query.filter(id.like(format!("%{}%", field_filter.value)))
-                    }
-                    "equals" => query = query.filter(id.eq(&field_filter.value)),
-                    _ => {}
-                },
-                "name" => match field_filter.operator.as_str() {
-                    "contains" => {
-                        query = query.filter(name.like(format!("%{}%", field_filter.value)))
-                    }
-                    "equals" => query = query.filter(name.eq(&field_filter.value)),
-                    _ => {}
-                },
-                "db_url" => match field_filter.operator.as_str() {
-                    "contains" => {
-                        query = query.filter(db_url.like(format!("%{}%", field_filter.value)))
-                    }
-                    "equals" => query = query.filter(db_url.eq(&field_filter.value)),
-                    _ => {}
-                },
-                "created_at" => {
-                    if let Ok(dt) =
-                        NaiveDateTime::parse_from_str(&field_filter.value, "%Y-%m-%dT%H:%M:%S%.fZ")
-                    {
-                        match field_filter.operator.as_str() {
-                            "gt" => query = query.filter(created_at.gt(dt)),
-                            "gte" => query = query.filter(created_at.ge(dt)),
-                            "lt" => query = query.filter(created_at.lt(dt)),
-                            "lte" => query = query.filter(created_at.le(dt)),
-                            "equals" => query = query.filter(created_at.eq(dt)),
-                            _ => {}
+        let query = filter.filters.iter().try_fold(
+            tenants::table.into_boxed(),
+            |acc, field_filter| -> QueryResult<_> {
+                let mut acc = acc;
+                match field_filter.field.as_str() {
+                    "id" => match field_filter.operator.as_str() {
+                        "contains" => {
+                            acc = acc.filter(id.like(format!("%{}%", field_filter.value)))
                         }
-                    }
-                }
-                "updated_at" => {
-                    if let Ok(dt) =
-                        NaiveDateTime::parse_from_str(&field_filter.value, "%Y-%m-%dT%H:%M:%S%.fZ")
-                    {
-                        match field_filter.operator.as_str() {
-                            "gt" => query = query.filter(updated_at.gt(dt)),
-                            "gte" => query = query.filter(updated_at.ge(dt)),
-                            "lt" => query = query.filter(updated_at.lt(dt)),
-                            "lte" => query = query.filter(updated_at.le(dt)),
-                            "equals" => query = query.filter(updated_at.eq(dt)),
-                            _ => {}
+                        "equals" => acc = acc.filter(id.eq(&field_filter.value)),
+                        _ => {}
+                    },
+                    "name" => match field_filter.operator.as_str() {
+                        "contains" => {
+                            acc = acc.filter(name.like(format!("%{}%", field_filter.value)))
                         }
+                        "equals" => acc = acc.filter(name.eq(&field_filter.value)),
+                        _ => {}
+                    },
+                    "db_url" => match field_filter.operator.as_str() {
+                        "contains" => {
+                            acc = acc.filter(db_url.like(format!("%{}%", field_filter.value)))
+                        }
+                        "equals" => acc = acc.filter(db_url.eq(&field_filter.value)),
+                        _ => {}
+                    },
+                    "created_at" | "updated_at" => {
+                        let timestamp =
+                            Self::parse_timestamp(&field_filter.value).ok_or_else(|| {
+                                result::Error::DatabaseError(
+                                    result::DatabaseErrorKind::Unknown,
+                                    Box::new(format!(
+                                        "Invalid timestamp '{}' for field '{}'",
+                                        field_filter.value, field_filter.field
+                                    )),
+                                )
+                            })?;
+
+                        acc = match (field_filter.field.as_str(), field_filter.operator.as_str()) {
+                            ("created_at", "gt") => acc.filter(created_at.gt(timestamp)),
+                            ("created_at", "gte") => acc.filter(created_at.ge(timestamp)),
+                            ("created_at", "lt") => acc.filter(created_at.lt(timestamp)),
+                            ("created_at", "lte") => acc.filter(created_at.le(timestamp)),
+                            ("created_at", "equals") => acc.filter(created_at.eq(timestamp)),
+                            ("updated_at", "gt") => acc.filter(updated_at.gt(timestamp)),
+                            ("updated_at", "gte") => acc.filter(updated_at.ge(timestamp)),
+                            ("updated_at", "lt") => acc.filter(updated_at.lt(timestamp)),
+                            ("updated_at", "lte") => acc.filter(updated_at.le(timestamp)),
+                            ("updated_at", "equals") => acc.filter(updated_at.eq(timestamp)),
+                            _ => acc,
+                        };
                     }
+                    _ => {}
                 }
-                _ => {} // Ignore unknown fields
-            }
-        }
+                Ok(acc)
+            },
+        )?;
 
         // Normalize pagination using iterator-based helper (defaulting to constants::DEFAULT_PER_PAGE)
         let default_page_size = constants::DEFAULT_PER_PAGE as usize;
@@ -453,6 +489,7 @@ impl Tenant {
             )
         })?;
 
+        let mut query = query;
         query = query.limit(limit).offset(offset);
 
         let mut results = query.load::<Tenant>(conn)?;

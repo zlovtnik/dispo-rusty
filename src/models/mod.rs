@@ -32,31 +32,16 @@ pub mod user_token;
 
 // Re-export functional programming utilities for model operations
 pub use crate::functional::{
-    iterator_engine::{IteratorChain, IteratorEngine},
-    pure_function_registry::{PureFunctionRegistry, RegistryError, SharedRegistry},
-    query_builder::{
-        compare, contains, equals, null_check, Column, Operator, Predicate, QueryFilter,
-        TypeSafeQueryBuilder,
-    },
-    query_composition::{
-        composable_predicate, field_filter_to_composable, ComposablePredicate,
-        FunctionalQueryComposer, LazyEvaluationConfig, ParameterSanitizer, QueryOptimizationEngine,
-        QueryPerformanceMetrics,
-    },
-    response_transformers::ResponseTransformer,
+    query_builder::Column,
     validation_engine::{
-        validate_struct_field, validator, validator_with_config, LazyValidationIterator,
-        ValidationConfig, ValidationContext, ValidationEngine, ValidationOutcome,
-        ValidationPipeline, ValidationPipelineResult,
+        ValidationConfig, ValidationEngine,
     },
     validation_rules::{
-        all, any, not, when, Custom, Email, Length, MustBeTrue, OneOf, Phone, Range, Required,
-        Unique, Url, ValidationError, ValidationResult, ValidationRule,
+        Custom, Email, Length, Phone, Range, ValidationError,
     },
 };
 
 // Re-export commonly used functional traits
-pub use crate::functional::function_traits::{FunctionCategory, PureFunction};
 
 // Functional model utilities
 pub mod functional_utils {
@@ -69,14 +54,18 @@ pub mod functional_utils {
         Column::new(table.to_string(), column.to_string())
     }
 
-    /// Creates a validation engine with default configuration
-    pub fn validation_engine() -> ValidationEngine<()> {
+    /// Creates a validation engine with default configuration for the target type
+    pub fn validation_engine<T>() -> ValidationEngine<T> {
         ValidationEngine::new()
     }
 
-    /// Creates a validation engine with custom configuration
-    /// Note: ValidationEngine doesn't take config in constructor, use builder pattern
-    pub fn validation_engine_with_config(_config: ValidationConfig) -> ValidationEngine<()> {
-        ValidationEngine::new()
+    /// Creates a validation engine with custom configuration for the target type
+    pub fn validation_engine_with_config<T>(config: ValidationConfig) -> ValidationEngine<T> {
+        ValidationEngine::with_config(config)
+    }
+
+    /// Converts a list of validation errors into displayable messages
+    pub fn to_error_messages(errors: Vec<ValidationError>) -> Vec<String> {
+        errors.into_iter().map(|error| error.message).collect()
     }
 }
