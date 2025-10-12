@@ -664,6 +664,7 @@ fn prefers_pretty_json(req: &HttpRequest) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use actix_web::body;
     use actix_web::http::header::{ACCEPT, CONTENT_TYPE};
     use actix_web::http::StatusCode;
     use actix_web::test::TestRequest;

@@ -479,7 +479,8 @@ mod functional_auth {
 
 #[cfg(all(test, feature = "functional"))]
 mod tests {
-    use super::*;
+    use super::functional_auth::{FunctionalAuthentication, FunctionalAuthenticationMiddleware};
+    use crate::constants;
     use crate::functional::pure_function_registry::PureFunctionRegistry;
     use actix_web::http::StatusCode;
     use actix_web::{test, web, App, HttpResponse};
@@ -537,7 +538,7 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
     }
 
-    #[test]
+    #[actix_rt::test]
     async fn functional_auth_extract_token_missing_header() {
         let req = test::TestRequest::get().uri("/test").to_srv_request();
         let result = FunctionalAuthenticationMiddleware::<()>::extract_token(&req);
@@ -546,7 +547,7 @@ mod tests {
         assert_eq!(result.unwrap_err(), "Missing authorization header");
     }
 
-    #[test]
+    #[actix_rt::test]
     async fn functional_auth_extract_token_invalid_scheme() {
         let req = test::TestRequest::get()
             .uri("/test")
@@ -559,7 +560,7 @@ mod tests {
         assert_eq!(result.unwrap_err(), "Invalid authorization scheme");
     }
 
-    #[test]
+    #[actix_rt::test]
     async fn functional_auth_extract_token_empty_token() {
         let req = test::TestRequest::get()
             .uri("/test")
@@ -572,7 +573,7 @@ mod tests {
         assert_eq!(result.unwrap_err(), "Empty token");
     }
 
-    #[test]
+    #[actix_rt::test]
     async fn functional_auth_extract_token_success() {
         let req = test::TestRequest::get()
             .uri("/test")
@@ -585,7 +586,7 @@ mod tests {
         assert_eq!(result.unwrap(), "valid_token_here");
     }
 
-    #[test]
+    #[actix_rt::test]
     async fn functional_auth_should_skip_health_endpoint() {
         let req = test::TestRequest::get().uri("/health").to_srv_request();
 
@@ -594,7 +595,7 @@ mod tests {
         assert!(should_skip);
     }
 
-    #[test]
+    #[actix_rt::test]
     async fn functional_auth_should_skip_api_doc() {
         let req = test::TestRequest::get().uri("/api-doc").to_srv_request();
 
@@ -603,7 +604,7 @@ mod tests {
         assert!(should_skip);
     }
 
-    #[test]
+    #[actix_rt::test]
     async fn functional_auth_should_not_skip_protected_route() {
         let req = test::TestRequest::get()
             .uri("/api/protected")
