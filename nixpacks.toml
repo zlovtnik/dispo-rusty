@@ -2,11 +2,14 @@
 nixPkgs = [
   "pkg-config",
   "openssl",
-  "postgresql"
+  "postgresql",
+  "rustup"
 ]
 
 [phases.install]
 cmds = [
+  "rustup toolchain install stable --profile minimal",
+  "rustup default stable",
   "cargo fetch"
 ]
 
