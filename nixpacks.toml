@@ -3,8 +3,7 @@ nixPkgs = [
   "pkg-config",
   "openssl",
   "rustup",
-  "musl",
-  "musl-dev"
+  "musl"
 ]
 
 [phases.install]
