@@ -1,0 +1,89 @@
+# Sevalla-optimized Dockerfile for Actix Web REST API
+# This Dockerfile is designed to work with Sevalla's (formerly Kinsta) deployment platform
+#
+# Key features:
+# - Multi-stage build for minimal final image size
+# - Proper port binding with PORT environment variable
+# - PostgreSQL support via Diesel ORM
+# - Runtime secret injection (never build-time)
+
+# Stage 1: Build Rust backend
+FROM rust:1.90.0-slim AS rust-builder
+
+# Install build dependencies for PostgreSQL and OpenSSL
+RUN apt-get update && apt-get install -y \
+    libpq-dev \
+    libssl-dev \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy dependency manifests first for better layer caching
+COPY Cargo.toml Cargo.lock ./
+COPY diesel.toml ./
+
+# Copy source code
+COPY src/ ./src/
+COPY migrations/ ./migrations/
+
+# Build release binary
+RUN cargo build --release --bin rcs
+
+# Stage 2: Frontend build (optional - can be deployed separately)
+FROM oven/bun:1-slim AS frontend-builder
+
+WORKDIR /app
+
+# Copy package files
+COPY frontend/package.json frontend/bun.lockb* ./
+
+# Install dependencies
+RUN bun install --frozen-lockfile
+
+# Copy frontend source
+COPY frontend/ ./
+
+# Build frontend
+RUN bun run build
+
+# Stage 3: Minimal runtime image
+FROM debian:13.1-slim
+
+# Install only runtime dependencies
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libpq5 \
+    libssl3t64 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy compiled backend binary
+COPY --from=rust-builder /app/target/release/rcs /app/rcs
+
+# Copy database configuration and migrations
+COPY --from=rust-builder /app/diesel.toml /app/diesel.toml
+COPY --from=rust-builder /app/migrations/ /app/migrations/
+
+# Copy frontend static files (optional)
+COPY --from=frontend-builder /app/dist/ /app/dist/
+
+# Create secrets directory for runtime secret injection
+RUN mkdir -p /run/secrets
+
+# Sevalla automatically sets the PORT environment variable
+# Our app reads APP_PORT from environment, defaulting to 8000
+ENV APP_HOST=0.0.0.0
+
+# Expose port (Sevalla will map this dynamically)
+EXPOSE 8000
+
+# Health check endpoint
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:${PORT:-8000}/api/ping || exit 1
+
+# Run the backend
+# Sevalla injects PORT at runtime, we pass it as APP_PORT to our Rust app
+CMD APP_PORT=${PORT:-8000} /app/rcs
