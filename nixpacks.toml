@@ -3,7 +3,11 @@ nixPkgs = [
   "pkg-config",
   "openssl",
   "postgresql",
-  "rustup"
+  "rustup",
+  "clang",
+  "gcc",
+  "gnumake",
+  "cmake"
 ]
 
 [phases.install]
