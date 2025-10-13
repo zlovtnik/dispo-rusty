@@ -4,7 +4,6 @@ nixPkgs = [
   "openssl",
   "postgresql",
   "rustup",
-  "clang",
   "gcc",
   "gnumake",
   "cmake"
