@@ -4,7 +4,6 @@ nixPkgs = [
   "openssl",
   "postgresql",
   "rustup",
-  "libpq-dev",
   "gcc",
   "gnumake",
   "cmake"
@@ -19,6 +18,7 @@ cmds = [
 
 [phases.build]
 cmds = [
+  "export LIBRARY_PATH=$LIBRARY_PATH:$(find /nix/store -name libpq.so -type f | head -1 | xargs dirname)",
   "cargo build --release --bin rcs"
 ]
 cacheDirectories = [
