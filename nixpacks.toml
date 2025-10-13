@@ -4,6 +4,7 @@ nixPkgs = [
   "openssl",
   "postgresql",
   "rustup",
+  "libpq-dev",
   "gcc",
   "gnumake",
   "cmake"
