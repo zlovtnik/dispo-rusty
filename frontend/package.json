@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "bun scripts/validate-env.js && vite build",
+    "build": "node scripts/validate-env.js && vite build",
+    "build:bun": "bun scripts/validate-env.js && vite build",
     "preview": "vite preview",
     "test": "bun test --coverage",
     "test:watch": "bun test --watch",

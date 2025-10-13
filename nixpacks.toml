@@ -1,6 +1,10 @@
 [variables]
 NIXPACKS_NO_MUSL = "1"
 
+# Force Rust provider only (ignore Node.js/frontend detection)
+[providers]
+rust = true
+
 [phases.setup]
 nixPkgs = [
   "pkg-config",
