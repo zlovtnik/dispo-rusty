@@ -1,8 +1,9 @@
-# Sevalla-optimized Dockerfile for Actix Web REST API
+# Sevalla-optimized Dockerfile for Actix Web REST API (Backend Only)
 # This Dockerfile is designed to work with Sevalla's (formerly Kinsta) deployment platform
 #
 # Key features:
 # - Multi-stage build for minimal final image size
+# - Backend only (deploy frontend separately)
 # - Proper port binding with PORT environment variable
 # - PostgreSQL support via Diesel ORM
 # - Runtime secret injection (never build-time)
@@ -22,32 +23,19 @@ WORKDIR /app
 # Copy dependency manifests first for better layer caching
 COPY Cargo.toml Cargo.lock ./
 COPY diesel.toml ./
+COPY rust-toolchain.toml ./
 
-# Copy source code
+# Copy source code and migrations
 COPY src/ ./src/
 COPY migrations/ ./migrations/
+
+# Copy benchmarks directory
+COPY benches/ ./benches/
 
 # Build release binary
 RUN cargo build --release --bin rcs
 
-# Stage 2: Frontend build (optional - can be deployed separately)
-FROM oven/bun:1-slim AS frontend-builder
-
-WORKDIR /app
-
-# Copy package files
-COPY frontend/package.json frontend/bun.lockb* ./
-
-# Install dependencies
-RUN bun install --frozen-lockfile
-
-# Copy frontend source
-COPY frontend/ ./
-
-# Build frontend
-RUN bun run build
-
-# Stage 3: Minimal runtime image
+# Stage 2: Minimal runtime image
 FROM debian:13.1-slim
 
 # Install only runtime dependencies
@@ -67,9 +55,6 @@ COPY --from=rust-builder /app/target/release/rcs /app/rcs
 COPY --from=rust-builder /app/diesel.toml /app/diesel.toml
 COPY --from=rust-builder /app/migrations/ /app/migrations/
 
-# Copy frontend static files (optional)
-COPY --from=frontend-builder /app/dist/ /app/dist/
-
 # Create secrets directory for runtime secret injection
 RUN mkdir -p /run/secrets
 
@@ -86,4 +71,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
 
 # Run the backend
 # Sevalla injects PORT at runtime, we pass it as APP_PORT to our Rust app
-CMD APP_PORT=${PORT:-8000} /app/rcs
+CMD ["sh", "-c", "APP_PORT=${PORT:-8000} /app/rcs"]
