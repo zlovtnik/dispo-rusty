@@ -59,10 +59,10 @@ COPY --from=rust-builder /app/migrations/ /app/migrations/
 RUN mkdir -p /run/secrets
 
 # Sevalla automatically sets the PORT environment variable
-# Our app reads APP_PORT from environment, defaulting to 8000
+# Our app reads APP_PORT from environment
 ENV APP_HOST=0.0.0.0
 
-# Expose port (Sevalla will map this dynamically)
+# Expose default port (Sevalla will map to its own PORT)
 EXPOSE 8000
 
 # Health check endpoint
@@ -70,5 +70,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:${PORT:-8000}/api/ping || exit 1
 
 # Run the backend
-# Sevalla injects PORT at runtime, we pass it as APP_PORT to our Rust app
-CMD ["sh", "-c", "APP_PORT=${PORT:-8000} /app/rcs"]
+# Use PORT if set by Sevalla, otherwise default to 8000
+CMD APP_PORT=${PORT:-8000} /app/rcs
