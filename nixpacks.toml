@@ -1,28 +1,24 @@
 [phases.setup]
 nixPkgs = [
   "pkg-config",
-  "openssl",
-  "postgresql",
-  "rustup",
-  "gcc",
-  "gnumake",
-  "cmake"
+  "openssl"
 ]
 
 [phases.install]
 cmds = [
   "rustup toolchain install stable --profile minimal",
   "rustup default stable",
+  "rustup target add x86_64-unknown-linux-musl",
   "cargo fetch"
 ]
 
 [phases.build]
 cmds = [
-  "export PKG_CONFIG_PATH=$PKG_CONFIG_PATH:$(find /nix/store -name libpq.pc -type f | head -1 | xargs dirname) && cargo build --release --bin rcs"
+  "cargo build --release --target x86_64-unknown-linux-musl --bin rcs"
 ]
 cacheDirectories = [
   "target"
 ]
 
 [start]
-cmd = "APP_HOST=0.0.0.0 APP_PORT=${PORT:-8000} ./target/release/rcs"
+cmd = "APP_HOST=0.0.0.0 APP_PORT=${PORT:-8000} ./target/x86_64-unknown-linux-musl/release/rcs"
