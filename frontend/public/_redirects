@@ -1,0 +1,3 @@
+# SPA Routing - redirect all routes to index.html
+# This ensures React Router works correctly on refresh
+/*    /index.html   200
