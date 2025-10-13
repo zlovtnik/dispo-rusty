@@ -1,3 +1,6 @@
+[variables]
+NIXPACKS_NO_MUSL = "1"
+
 [phases.setup]
 nixPkgs = [
   "pkg-config",
