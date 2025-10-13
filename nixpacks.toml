@@ -1,0 +1,22 @@
+[phases.setup]
+nixPkgs = [
+  "pkg-config",
+  "openssl",
+  "postgresql"
+]
+
+[phases.install]
+cmds = [
+  "cargo fetch"
+]
+
+[phases.build]
+cmds = [
+  "cargo build --release --bin rcs"
+]
+cacheDirectories = [
+  "target"
+]
+
+[start]
+cmd = "APP_HOST=0.0.0.0 APP_PORT=${PORT:-8000} ./target/release/rcs"
