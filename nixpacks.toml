@@ -2,25 +2,23 @@
 nixPkgs = [
   "pkg-config",
   "openssl",
-  "rustup",
-  "musl"
+  "rustup"
 ]
 
 [phases.install]
 cmds = [
   "rustup toolchain install stable --profile minimal",
   "rustup default stable",
-  "rustup target add x86_64-unknown-linux-musl",
   "cargo fetch"
 ]
 
 [phases.build]
 cmds = [
-  "cargo build --release --target x86_64-unknown-linux-musl --bin rcs"
+  "cargo build --release --bin rcs"
 ]
 cacheDirectories = [
   "target"
 ]
 
 [start]
-cmd = "APP_HOST=0.0.0.0 APP_PORT=${PORT:-8000} ./target/x86_64-unknown-linux-musl/release/rcs"
+cmd = "APP_HOST=0.0.0.0 APP_PORT=${PORT:-8000} ./target/release/rcs"
