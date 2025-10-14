@@ -186,8 +186,9 @@ export const validatePhone = (
  * Common weak passwords and patterns to block
  * Curated list of most commonly used passwords from security research
  * Source: Based on top compromised passwords from Have I Been Pwned and similar databases
+ * Note: Stored in lowercase for case-insensitive comparison
  */
-const COMMON_WEAK_PASSWORDS = [
+const COMMON_WEAK_PASSWORDS = new Set([
   // Extremely common patterns
   'password', 'password123', 'password1', 'pass', 'passwd',
   // Number sequences
@@ -204,9 +205,9 @@ const COMMON_WEAK_PASSWORDS = [
   'sunshine', 'princess', 'football', 'soccer', 'baseball',
   'iloveyou', 'trustno1', 'starwars',
   // Weak combinations
-  'password!', 'Password1', 'Pass1234', 'Welcome1', 'Admin123',
+  'password!', 'password1', 'pass1234', 'welcome1', 'admin123',
   '000000', '111111', '123123', '696969',
-];
+]);
 
 /**
  * Validate password with comprehensive strength requirements
@@ -257,9 +258,10 @@ export const validatePassword = (password: string): Result<Password, FormValidat
     ));
   }
 
-  // Check for common weak passwords - check if password matches exactly (not just contains)
-  const passwordLower = password.toLowerCase();
-  if (COMMON_WEAK_PASSWORDS.some(weak => passwordLower === weak.toLowerCase())) {
+  // Check for common weak passwords - compare complete normalized password
+  // Use Set for O(1) lookup and normalize both password and weak passwords
+  const passwordLower = password.trim().toLowerCase();
+  if (COMMON_WEAK_PASSWORDS.has(passwordLower)) {
     return err(FormValidationErrors.invalidPassword(
       'Password is too common'
     ));

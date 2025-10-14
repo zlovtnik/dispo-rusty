@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useAuth as useAuthContext } from '../contexts/AuthContext.fp';
-import type { Result, AsyncResult } from '../types/fp';
+import type { Result } from '../types/fp';
 import { ok, err } from 'neverthrow';
 import type { AuthFlowError, CredentialValidationError } from '../types/errors';
 import { AuthFlowErrors } from '../types/errors';
@@ -57,11 +57,9 @@ export function useAuth() {
     isAuthenticated: auth.isAuthenticated,
     isLoading: auth.isLoading,
     error: auth.error,
-
-    // Result-based API
-    ...resultApi,
-
-    // Control methods
     clearError: auth.clearError,
+
+    // Result-based API (spread last to ensure these override)
+    ...resultApi,
   };
 }

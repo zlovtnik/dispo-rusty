@@ -133,13 +133,12 @@ export function useAsync<T, E>(
   }, []);
 
   // Auto-execute when deps change
-  // Note: deps is used as a single dependency for shallow reference check
+  // Spread deps array so React tracks individual dependency changes
   useEffect(() => {
     if (deps.length > 0) {
       execute();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [execute, deps]);
+  }, [execute, ...deps]);
 
   return {
     loading,

@@ -122,7 +122,7 @@ export class ErrorBoundary extends Component<Props, State> {
           />
         );
 
-      default:
+      default: {
         // TypeScript exhaustiveness check - this should never happen
         // but if it does, we want to display the error
         const _exhaustive: never = error;
@@ -135,6 +135,7 @@ export class ErrorBoundary extends Component<Props, State> {
             showIcon
           />
         );
+      }
     }
   };
 

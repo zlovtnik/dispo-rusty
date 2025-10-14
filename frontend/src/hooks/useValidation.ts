@@ -164,7 +164,7 @@ export function useValidation<T, E = string>(
   // Set value without validation
   const setValue = useCallback((newValue: T | undefined) => {
     setValueState(newValue);
-    if (validateOnChange && newValue !== undefined) {
+    if (validateOnChange) {
       const validationResult = validateValue(newValue);
       setResult(validationResult);
     }

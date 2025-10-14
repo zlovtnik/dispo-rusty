@@ -330,10 +330,10 @@ export function withCache<TArgs extends unknown[], TResult>(
 }
 
 /**
- * Invalidate cache entries for a specific entity type
+ * Invalidate all cache entries for a specific entity type
  * 
- * @param entityType - Type of entity ('user', 'contact', etc.)
- * @returns Result with count of invalidated entries
+ * @param entityType - Entity type prefix (e.g., 'user', 'contact')
+ * @returns Result with count of invalidated entries or error
  * 
  * @example
  * ```typescript
@@ -345,7 +345,9 @@ export function withCache<TArgs extends unknown[], TResult>(
  * ```
  */
 export function invalidateEntity(entityType: string): Result<number, AppError> {
-  const pattern = new RegExp(`^${entityType}-`);
+  // Sanitize entityType to prevent ReDoS - escape regex metacharacters
+  const sanitized = entityType.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp(`^${sanitized}-`);
   return resultCache.invalidatePattern(pattern);
 }
 

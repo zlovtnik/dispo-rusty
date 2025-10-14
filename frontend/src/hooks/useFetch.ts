@@ -89,12 +89,13 @@ export function useFetch<T = any>(
       const fullUrl = baseURL ? `${baseURL}${url}` : url;
 
       for (let attempt = 0; attempt <= retries; attempt++) {
+        let timeoutId: NodeJS.Timeout | undefined;
         try {
           // Create AbortController for timeout and cancellation
           const controller = new AbortController();
 
           // Set up timeout
-          const timeoutId = setTimeout(() => {
+          timeoutId = setTimeout(() => {
             controller.abort();
           }, timeout);
 
@@ -160,6 +161,11 @@ export function useFetch<T = any>(
           );
 
           return err(transformError ? transformError(netError) : netError);
+        } finally {
+          // Always clear timeout
+          if (timeoutId !== undefined) {
+            clearTimeout(timeoutId);
+          }
         }
       }
 
@@ -182,6 +188,8 @@ export function useFetch<T = any>(
 
   const asyncState = useAsync<T, AppError>(fetchData, url ? [url] : []);
 
+  // Note: useFetch returns Result<T, AppError> via asyncState.result for FP patterns
+  // For consumers needing ApiResponseWrapper, wrap at the service boundary
   return {
     data: asyncState.result?.isOk() ? asyncState.result.value : null,
     loading: asyncState.loading,
@@ -220,12 +228,20 @@ export function useOptimisticFetch<T>(
     }
   }, [optimisticUpdate, optimisticData]);
 
-  // Handle fetch completion - Note: This simulates result checking, full implementation would need access to result
+  // Rollback on error when optimistic update failed
   React.useEffect(() => {
-    // In a real implementation, we'd check fetchState.result here
-    // For now, this is simplified
-    setIsOptimistic(false);
-  }, [fetchState.loading]);
+    if (isOptimistic && fetchState.error && rollbackUpdate && optimisticData !== null) {
+      setOptimisticData(rollbackUpdate(optimisticData, fetchState.error));
+      setIsOptimistic(false);
+    }
+  }, [isOptimistic, fetchState.error, rollbackUpdate, optimisticData]);
+
+  // Finalize on success
+  React.useEffect(() => {
+    if (isOptimistic && !fetchState.loading && !fetchState.error) {
+      setIsOptimistic(false);
+    }
+  }, [isOptimistic, fetchState.loading, fetchState.error]);
 
   return {
     ...fetchState,
@@ -275,14 +291,11 @@ export function useCachedFetch<T>(
   const fetchState = useFetch<T>(shouldUseCache ? null : url, fetchOptions);
 
   // Update cache when fetch completes successfully
+  // Note: Data is already transformed in useFetch, avoid double-transforming
   React.useEffect(() => {
     if (fetchState.data && !fetchState.loading && !fetchState.error) {
-      const transformedData = fetchOptions.transformResponse 
-        ? fetchOptions.transformResponse(fetchState.data) 
-        : fetchState.data;
-      
       globalFetchCache.set(cacheKey, {
-        data: transformedData,
+        data: fetchState.data,
         timestamp: Date.now(),
         isStale: false
       });
@@ -290,7 +303,7 @@ export function useCachedFetch<T>(
       // Trigger re-render
       setCacheVersion(v => v + 1);
     }
-  }, [fetchState.data, fetchState.loading, fetchState.error, cacheKey, fetchOptions]);
+  }, [fetchState.data, fetchState.loading, fetchState.error, cacheKey]);
 
   // Return cached data if available
   const data = shouldUseCache ? cachedEntry!.data : fetchState.data;

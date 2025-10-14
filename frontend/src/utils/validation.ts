@@ -288,7 +288,8 @@ export const validateOptional = <T, E>(
   value: string | undefined | null,
   validator: (v: string) => Result<T, E>
 ): Result<T | undefined, E> => {
-  if (!value || value.trim().length === 0) {
+  // Explicit emptiness check to handle meaningful falsy values like 0 or "0"
+  if (value === undefined || value === null || (typeof value === 'string' && value.trim().length === 0)) {
     return ok(undefined);
   }
   return validator(value);

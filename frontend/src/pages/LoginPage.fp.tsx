@@ -11,8 +11,9 @@
 
 import React, { useState } from 'react';
 import { useNavigate, useLocation, Navigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import type { LoginCredentials } from '@/types/auth';
+import type { AuthFlowError } from '@/types/errors';
 import { asTenantId } from '@/types/ids';
 import { Card, Form, Input, Button, Checkbox, Typography, Alert, Flex } from 'antd';
 import { Result, ok, err } from 'neverthrow';
@@ -26,6 +27,7 @@ import {
   type ValidatedPassword,
   type CredentialValidationError,
 } from '@/utils/validation';
+import { validateEmail } from '@/utils/formValidation';
 import type { TenantId } from '@/types/ids';
 import {
   createFormPipeline,
@@ -54,7 +56,7 @@ interface LoginFormData {
  * Validated login credentials (branded types)
  */
 interface ValidatedLoginData {
-  username: ValidatedUsername;
+  usernameOrEmail: ValidatedUsername | string; // Could be either username or email
   password: ValidatedPassword;
   tenantId: TenantId;
   rememberMe: boolean;
@@ -85,16 +87,21 @@ interface LoginResponse {
 const validateLoginForm: FormValidator<LoginFormData, ValidatedLoginData, CredentialValidationError> = (
   formData: LoginFormData
 ): Result<ValidatedLoginData, Record<string, CredentialValidationError>> => {
-  // Validate all fields
+  // Validate username or email field - accept either
   const usernameResult = validateUsername(formData.usernameOrEmail);
+  const emailResult = usernameResult.isErr() ? validateEmail(formData.usernameOrEmail) : usernameResult;
+  
+  // If both username and email validation fail, use the username error
+  const usernameOrEmailResult = emailResult.isErr() ? usernameResult : emailResult;
+  
   const passwordResult = validatePassword(formData.password);
   const tenantIdResult = validateTenantId(formData.tenantId);
 
   // Collect all errors
   const errors: Partial<Record<keyof LoginFormData, CredentialValidationError>> = {};
 
-  if (usernameResult.isErr()) {
-    errors.usernameOrEmail = usernameResult.error;
+  if (usernameOrEmailResult.isErr()) {
+    errors.usernameOrEmail = usernameOrEmailResult.error;
   }
   if (passwordResult.isErr()) {
     errors.password = passwordResult.error;
@@ -110,7 +117,7 @@ const validateLoginForm: FormValidator<LoginFormData, ValidatedLoginData, Creden
 
   // All validations passed - use _unsafeUnwrap since we checked errors
   return ok({
-    username: usernameResult._unsafeUnwrap(),
+    usernameOrEmail: usernameOrEmailResult._unsafeUnwrap(),
     password: passwordResult._unsafeUnwrap(),
     tenantId: tenantIdResult._unsafeUnwrap(),
     rememberMe: formData.rememberMe,
@@ -124,7 +131,7 @@ const transformToLoginDTO: Transformer<ValidatedLoginData, LoginDTO, CredentialV
   validated: ValidatedLoginData
 ): Result<LoginDTO, PipelineError<CredentialValidationError>> => {
   return ok({
-    usernameOrEmail: validated.username,
+    usernameOrEmail: validated.usernameOrEmail,
     password: validated.password,
     tenantId: validated.tenantId,
     rememberMe: validated.rememberMe,
@@ -132,12 +139,19 @@ const transformToLoginDTO: Transformer<ValidatedLoginData, LoginDTO, CredentialV
 };
 
 /**
+ * Type for location state
+ */
+interface LocationState {
+  from?: { pathname: string };
+}
+
+/**
  * Login Page Component with FP Patterns
  */
 export const LoginPageFP: React.FC = () => {
   const { login, isAuthenticated, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
+  const location = useLocation() as ReturnType<typeof useLocation> & { state: LocationState | null };
   const [form] = Form.useForm<LoginFormData>();
   
   // Pipeline state management using discriminated union
@@ -164,26 +178,31 @@ export const LoginPageFP: React.FC = () => {
         rememberMe: dto.rememberMe,
       };
 
-      await login(credentials);
+      // Await the login call and treat it as a Result
+      const loginResult: Result<void, AuthFlowError | CredentialValidationError> = await login(credentials);
 
-      return ok({
-        success: true,
-        message: 'Login successful',
-      });
-    } catch (error) {
-      // Map error to PipelineError
-      if (error instanceof Error) {
-        const statusCode = (error as Error & { statusCode?: number }).statusCode;
-        return err({
-          type: 'SUBMISSION_ERROR',
-          statusCode,
-          message: error.message,
+      // Check if the result is Ok
+      if (loginResult.isOk()) {
+        return ok({
+          success: true,
+          message: 'Login successful',
         });
       }
       
+      // Map the error to a PipelineError (isErr() case)
+      const error = loginResult.error;
+      const statusCode = 'statusCode' in error ? (error as any).statusCode : undefined;
+      
       return err({
         type: 'SUBMISSION_ERROR',
-        message: 'Login failed. Please check your credentials.',
+        message: 'message' in error ? String(error.message || error) : 'Login failed',
+        statusCode,
+      });
+    } catch (error) {
+      // Keep try/catch only for unexpected exceptions
+      return err({
+        type: 'SUBMISSION_ERROR',
+        message: error instanceof Error ? error.message : 'Unexpected error occurred during login',
       });
     }
   };
@@ -265,7 +284,7 @@ export const LoginPageFP: React.FC = () => {
       .with({ status: 'error' }, (state) => (
         <Form.Item>
           <Alert
-            message={formatPipelineError(state.error)}
+            message={formatPipelineError(state.error, formatCredentialValidationError)}
             type="error"
             closable
             onClose={() => setPipelineState(PipelineStates.idle())}
@@ -430,10 +449,11 @@ export const LoginPageFP: React.FC = () => {
               loading={isFormLoading}
               className="login-submit-button"
             >
-              {match(pipelineState)
-                .with({ status: 'validating' }, () => 'Validating...')
-                .with({ status: 'submitting' }, () => 'Signing In...')
-                .otherwise(() => 'Sign In')}
+              {authLoading
+                ? 'Signing In...'
+                : match(pipelineState)
+                    .with({ status: 'validating' }, () => 'Validating...')
+                    .otherwise(() => 'Sign In')}
             </Button>
           </Form.Item>
         </Form>
