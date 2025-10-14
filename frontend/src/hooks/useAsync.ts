@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { DependencyList } from 'react';
-import { err, ok, ResultAsync } from 'neverthrow';
+import { err, ok, ResultAsync, errAsync } from 'neverthrow';
 import type { Result, AsyncResult } from '../types/fp';
 
 /**
@@ -66,8 +66,8 @@ export function useAsync<T, E>(
   }, [asyncFn]);
 
   const toAsyncResult = useCallback((value: AsyncResult<T, E> | Promise<Result<T, E>>): AsyncResult<T, E> => {
-    if (value && typeof (value as AsyncResult<T, E>).map === 'function' && typeof (value as AsyncResult<T, E>).mapErr === 'function') {
-      return value as AsyncResult<T, E>;
+    if (value instanceof ResultAsync) {
+      return value;
     }
 
     const promise = Promise.resolve(value)
@@ -97,21 +97,18 @@ export function useAsync<T, E>(
     try {
       asyncResult = toAsyncResult(asyncFn());
     } catch (syncError) {
-      const failure = ResultAsync.fromPromise(
-        Promise.reject(syncError),
-        (error: unknown) => error as E
-      );
+      const failure = errAsync<T, E>(syncError as E);
 
       failure
-        .match(
-          () => undefined,
-          (error) => {
+        .match({
+          ok: () => undefined,
+          err: (error: E) => {
             if (abortControllerRef.current === controller && !controller.signal.aborted) {
               setResult(err(error));
             }
             return error;
-          }
-        )
+          },
+        })
         .finally(() => {
           if (abortControllerRef.current === controller && !controller.signal.aborted) {
             setLoading(false);
@@ -122,20 +119,20 @@ export function useAsync<T, E>(
     }
 
     asyncResult
-      .match(
-        (value) => {
+      .match({
+        ok: (value: T) => {
           if (abortControllerRef.current === controller && !controller.signal.aborted) {
             setResult(ok(value));
           }
           return value;
         },
-        (error) => {
+        err: (error: E) => {
           if (abortControllerRef.current === controller && !controller.signal.aborted) {
             setResult(err(error));
           }
           return error;
-        }
-      )
+        },
+      })
       .finally(() => {
         if (abortControllerRef.current === controller && !controller.signal.aborted) {
           setLoading(false);

@@ -1,18 +1,21 @@
 import { useAsync } from './useAsync';
 import type { AsyncResult, Result } from '../types/fp';
 import type { AppError, ApiCallError } from '../types/errors';
+import { createNetworkError } from '../types/errors';
 import { err } from 'neverthrow';
 
 /**
  * Configuration options for API calls
  */
-export interface ApiCallOptions<T, E> {
-  /** Function to transform Result into a different Result type */
-  transformResult?: (result: Result<T, E>) => Result<T, E>;
+export interface ApiCallOptions<TIn, EIn, TOut = TIn, EOut = EIn> {
+  /** Function to transform the Result before consumers receive it */
+  transformResult?: (result: Result<TIn, EIn>) => Result<TOut, EOut>;
+  /** Optional mapper for unexpected errors (sync throws, etc.) */
+  transformError?: (error: unknown) => EOut;
   /** Function to handle errors automatically */
-  onError?: (error: E) => void;
+  onError?: (error: EOut & ApiCallError) => void;
   /** Function to handle success automatically */
-  onSuccess?: (data: T) => void;
+  onSuccess?: (data: TOut) => void;
   /** Whether to retry on failure */
   retryOnError?: boolean;
   /** Maximum number of retries */
@@ -27,12 +30,18 @@ export interface ApiCallOptions<T, E> {
  * Provides automatic error handling, retry logic, and Result transformation
  * using railway-oriented programming patterns.
  */
-export function useApiCall<TData, TError extends AppError = AppError>(
-  apiFunction: () => AsyncResult<TData, TError>,
-  options: ApiCallOptions<TData, TError> = {}
+export function useApiCall<
+  TIn,
+  EIn extends AppError = AppError,
+  TOut = TIn,
+  EOut extends AppError = EIn
+>(
+  apiFunction: () => AsyncResult<TIn, EIn>,
+  options: ApiCallOptions<TIn, EIn, TOut, EOut> = {}
 ) {
   const {
     transformResult,
+    transformError,
     onError,
     onSuccess,
     retryOnError = false,
@@ -41,55 +50,69 @@ export function useApiCall<TData, TError extends AppError = AppError>(
   } = options;
 
   // Enhanced API function with error handling and retry logic
-  const enhancedApiCall = async (): Promise<Result<TData, TError & ApiCallError>> => {
-    // Initialize lastError with a default value
-    let lastError: TError & ApiCallError = {
-      type: 'network',
-      message: 'Request failed',
-    } as TError & ApiCallError;
+  const enhancedApiCall = async (): Promise<Result<TOut, EOut & ApiCallError>> => {
+    const withRetryMetadata = (error: EOut, attempt: number): EOut & ApiCallError => ({
+      ...error,
+      attemptNumber: attempt,
+      maxRetries,
+      retryable: retryOnError && attempt < maxRetries,
+    });
+
+    let lastError: (EOut & ApiCallError) | null = null;
+
+    const coerceResult = (result: Result<TIn, EIn>): Result<TOut, EOut> => {
+      if (transformResult) {
+        return transformResult(result);
+      }
+
+      return result as unknown as Result<TOut, EOut>;
+    };
+
+    const mapUnknownError = (error: unknown): EOut => {
+      if (transformError) {
+        return transformError(error);
+      }
+
+      if (error && typeof error === 'object' && 'type' in (error as Record<string, unknown>)) {
+        return error as EOut;
+      }
+
+      const base = createNetworkError(
+        error instanceof Error ? error.message : 'Unexpected request failure',
+        undefined,
+        {
+          cause: error instanceof Error ? error : undefined,
+        }
+      );
+
+      return base as unknown as EOut;
+    };
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         const asyncResult = apiFunction();
+        const rawResult = await asyncResult;
+        const finalResult = coerceResult(rawResult);
 
-        // Await the AsyncResult
-        const result = await asyncResult;
-
-        if (result.isOk()) {
-          // Apply result transformation if provided
-          const finalResult = transformResult
-            ? (transformResult(result as Result<TData, TError>) as Result<TData, TError & ApiCallError>)
-            : (result as Result<TData, TError & ApiCallError>);
-          
-          // Call success handler with transformed value
-          if (finalResult.isOk() && onSuccess) {
+        if (finalResult.isOk()) {
+          if (onSuccess) {
             onSuccess(finalResult.value);
           }
-          
-          return finalResult;
-        } else {
-          // Guard result.error and build safe baseError
-          const baseError: Partial<TError> = typeof result.error === 'object' && result.error !== null
-            ? result.error
-            : { message: String(result.error) } as Partial<TError>;
 
-          // Augment error with ApiCallError fields
-          lastError = {
-            ...baseError,
-            attemptNumber: attempt,
-            maxRetries,
-            retryable: retryOnError && attempt < maxRetries,
-          } as TError & ApiCallError;
+          return finalResult as Result<TOut, EOut & ApiCallError>;
+        } else {
+          const normalizedError = finalResult.error;
+          const enrichedError = withRetryMetadata(normalizedError, attempt);
+          lastError = enrichedError;
 
           // Call error handler
           if (onError) {
-            onError(lastError);
+            onError(enrichedError);
           }
 
           // If not retrying or last attempt, return enriched error (do not call transformResult on error)
           if (!retryOnError || attempt === maxRetries) {
-            const enrichedErrorResult = err(lastError) as Result<TData, TError & ApiCallError>;
-            return enrichedErrorResult;
+            return err(enrichedError);
           }
 
           // Wait before retry
@@ -98,26 +121,15 @@ export function useApiCall<TData, TError extends AppError = AppError>(
           }
         }
       } catch (error) {
-        // Create defensive/type-guarded error object
-        const safeError = error instanceof Error
-          ? { type: 'unknown' as const, message: error.message, ...(error.stack && { stack: error.stack }) }
-          : { type: 'unknown' as const, message: String(error) };
-
-        // Augment error with ApiCallError fields
-        lastError = {
-          ...safeError,
-          attemptNumber: attempt,
-          maxRetries,
-          retryable: retryOnError && attempt < maxRetries,
-        } as unknown as TError & ApiCallError;
+        const mappedError = mapUnknownError(error);
+        lastError = withRetryMetadata(mappedError, attempt);
 
         if (onError) {
           onError(lastError);
         }
 
         if (!retryOnError || attempt === maxRetries) {
-          const enrichedErrorResult = err(lastError) as Result<TData, TError & ApiCallError>;
-          return enrichedErrorResult;
+          return err(lastError);
         }
 
         // Wait before retry
@@ -127,12 +139,16 @@ export function useApiCall<TData, TError extends AppError = AppError>(
       }
     }
 
-    // Return the last error (always assigned in the loop above)
-    return err(lastError) as Result<TData, TError & ApiCallError>;
+    const fallbackError = lastError ?? withRetryMetadata(
+      mapUnknownError(new Error('Request failed without details')),
+      maxRetries
+    );
+
+    return err(fallbackError);
   };
 
   // Use the useAsync hook with our enhanced API call
-  const asyncState = useAsync<TData, TError & ApiCallError>(
+  const asyncState = useAsync<TOut, EOut & ApiCallError>(
     () => enhancedApiCall(),
     [] // We don't auto-execute, let the user control execution
   );

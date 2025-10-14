@@ -74,6 +74,12 @@ where
     fn call(&self, req: ServiceRequest) -> Self::Future {
         let mut authenticate_pass: bool = false;
 
+        // Let CORS middleware handle preflight requests without auth checks
+        if Method::OPTIONS == *req.method() {
+            let fut = self.service.call(req);
+            return Box::pin(async move { fut.await.map(ServiceResponse::map_into_left_body) });
+        }
+
         // Check if route should be bypassed (no authentication required)
         let path = req.path();
         if constants::IGNORE_ROUTES

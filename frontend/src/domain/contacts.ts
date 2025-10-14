@@ -8,9 +8,11 @@
  * making it pure, testable, and composable.
  */
 
-import { ok, err, Result } from 'neverthrow';
+import { ok, err } from 'neverthrow';
+import type { Result } from '../types/fp';
 import type { Contact } from '../types/contact';
 import type { ContactId, UserId, TenantId } from '../types/ids';
+import { validateEmailFormat, validatePhoneFormat } from './rules/contactRules';
 
 /**
  * Contact-specific errors
@@ -277,13 +279,23 @@ function validateContactData(data: ContactCreateData): Result<ContactCreateData,
   }
 
   // Email validation
-  if (data.email && !isValidEmail(data.email)) {
-    errors.email = 'Invalid email format';
+  if (data.email) {
+    const emailValidation = validateEmailFormat(data.email);
+    if (emailValidation.isErr()) {
+      errors.email = 'reason' in emailValidation.error
+        ? emailValidation.error.reason
+        : 'Invalid email format';
+    }
   }
 
   // Phone validation
-  if (data.phone && !isValidPhone(data.phone)) {
-    errors.phone = 'Invalid phone format';
+  if (data.phone) {
+    const phoneValidation = validatePhoneFormat(data.phone);
+    if (phoneValidation.isErr()) {
+      errors.phone = 'reason' in phoneValidation.error
+        ? phoneValidation.error.reason
+        : 'Invalid phone format';
+    }
   }
 
   // Date of birth validation
@@ -311,13 +323,23 @@ function validateContactUpdateData(data: ContactUpdateData): Result<ContactUpdat
   const errors: Record<string, string> = {};
 
   // Email validation
-  if (data.email !== undefined && data.email !== null && !isValidEmail(data.email)) {
-    errors.email = 'Invalid email format';
+  if (data.email !== undefined && data.email !== null) {
+    const emailValidation = validateEmailFormat(data.email);
+    if (emailValidation.isErr()) {
+      errors.email = 'reason' in emailValidation.error
+        ? emailValidation.error.reason
+        : 'Invalid email format';
+    }
   }
 
   // Phone validation
-  if (data.phone !== undefined && data.phone !== null && !isValidPhone(data.phone)) {
-    errors.phone = 'Invalid phone format';
+  if (data.phone !== undefined && data.phone !== null) {
+    const phoneValidation = validatePhoneFormat(data.phone);
+    if (phoneValidation.isErr()) {
+      errors.phone = 'reason' in phoneValidation.error
+        ? phoneValidation.error.reason
+        : 'Invalid phone format';
+    }
   }
 
   // Date of birth validation
@@ -352,22 +374,6 @@ function calculateAge(dateOfBirth: Date): number {
   }
   
   return age;
-}
-
-/**
- * Validate email format
- */
-function isValidEmail(email: string): boolean {
-  const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-  return emailRegex.test(email);
-}
-
-/**
- * Validate phone format (simple validation)
- */
-function isValidPhone(phone: string): boolean {
-  const phoneRegex = /^\+?[1-9]\d{1,14}$/;
-  return phoneRegex.test(phone.replace(/[\s-()]/g, ''));
 }
 
 /**

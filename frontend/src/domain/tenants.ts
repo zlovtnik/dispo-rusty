@@ -192,6 +192,22 @@ export function validateUsageLimit(
 ): Result<void, TenantError> {
   const limit = tenant.subscription.limits[limitType];
 
+  if (limit === -1 || limit === Infinity) {
+    return ok(undefined);
+  }
+
+  if (limit === 0) {
+    if (currentUsage > 0) {
+      return err({
+        type: 'LIMIT_EXCEEDED',
+        limit: limitType,
+        max: limit,
+        current: currentUsage,
+      });
+    }
+    return ok(undefined);
+  }
+
   if (currentUsage >= limit) {
     return err({
       type: 'LIMIT_EXCEEDED',
@@ -270,6 +286,31 @@ export function shouldShowExpirationWarning(tenant: Tenant, warningThreshold: nu
   return daysUntilExpiration <= warningThreshold && daysUntilExpiration > 0;
 }
 
+const BASIC_FEATURES = [
+  'contacts',
+  'basic_search',
+  'export_csv',
+] as const;
+
+const PROFESSIONAL_FEATURES = [
+  ...BASIC_FEATURES,
+  'advanced_search',
+  'custom_fields',
+  'bulk_operations',
+  'integrations',
+  'api_access',
+] as const;
+
+const ENTERPRISE_FEATURES = [
+  ...PROFESSIONAL_FEATURES,
+  'advanced_analytics',
+  'custom_branding',
+  'sso',
+  'audit_logs',
+  'priority_support',
+  'unlimited_users',
+] as const;
+
 /**
  * Get available features for tenant based on subscription plan
  * 
@@ -277,40 +318,13 @@ export function shouldShowExpirationWarning(tenant: Tenant, warningThreshold: nu
  * @returns Array of available feature names
  */
 export function getAvailableFeaturesForPlan(plan: 'basic' | 'professional' | 'enterprise'): string[] {
-  const basicFeatures = [
-    'contacts',
-    'basic_search',
-    'export_csv',
-  ];
-
-  const professionalFeatures = [
-    ...basicFeatures,
-    'advanced_search',
-    'custom_fields',
-    'bulk_operations',
-    'integrations',
-    'api_access',
-  ];
-
-  const enterpriseFeatures = [
-    ...professionalFeatures,
-    'advanced_analytics',
-    'custom_branding',
-    'sso',
-    'audit_logs',
-    'priority_support',
-    'unlimited_users',
-  ];
-
   switch (plan) {
     case 'basic':
-      return basicFeatures;
+      return [...BASIC_FEATURES];
     case 'professional':
-      return professionalFeatures;
+      return [...PROFESSIONAL_FEATURES];
     case 'enterprise':
-      return enterpriseFeatures;
-    default:
-      return basicFeatures;
+      return [...ENTERPRISE_FEATURES];
   }
 }
 
@@ -329,8 +343,12 @@ export function getUsagePercentage(
 ): number {
   const limit = tenant.subscription.limits[limitType];
   
-  if (limit === 0) {
+  if (limit === -1 || limit === Infinity) {
     return 0;
+  }
+
+  if (limit === 0) {
+    return currentUsage > 0 ? 100 : 0;
   }
 
   return Math.min(100, Math.round((currentUsage / limit) * 100));
@@ -369,9 +387,10 @@ export function validateTenantSettings(settings: TenantSettings): Result<TenantS
     errors.theme = 'Invalid theme value';
   }
 
-  // Validate language (simple check for now)
-  if (!settings.language || settings.language.length < 2) {
-    errors.language = 'Invalid language code';
+  // Validate language (ISO 639-1 with optional region)
+  const languageRegex = /^[a-z]{2}(-[A-Z]{2})?$/;
+  if (!settings.language || !languageRegex.test(settings.language)) {
+    errors.language = 'Invalid language code format (expected: ISO 639-1, e.g., "en" or "en-US")';
   }
 
   // Validate branding colors (hex format)

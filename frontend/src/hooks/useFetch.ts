@@ -105,7 +105,7 @@ export function useFetch<T = any>(
       const fullUrl = baseURL ? `${baseURL}${url}` : url;
 
       for (let attempt = 0; attempt <= retries; attempt++) {
-        let timeoutId: NodeJS.Timeout | undefined;
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
         try {
           // Create AbortController for timeout and cancellation
           const controller = new AbortController();
@@ -157,8 +157,11 @@ export function useFetch<T = any>(
           return ok(transformedData);
 
         } catch (error) {
-          const isNetworkError = error instanceof TypeError ||
-                                (error instanceof Error && error.name === 'AbortError');
+          const isAbort =
+            (typeof DOMException !== 'undefined' && error instanceof DOMException && error.name === 'AbortError') ||
+            (error instanceof Error && error.name === 'AbortError');
+          const isTypeErr = error instanceof TypeError;
+          const isNetworkError = isAbort || isTypeErr;
 
           if (isNetworkError && retryOnNetworkError && attempt < retries) {
             // Exponential backoff for network errors

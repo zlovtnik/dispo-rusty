@@ -190,7 +190,11 @@ export const AddressBookPage: React.FC = () => {
       address: addressSegments.join(', ') || formValues.street1,
       phone: formValues.phone ?? '',
       email: formValues.email ?? '',
-      gender: genderConversion.toBoolean(formValues.gender).unwrapOr(true),
+      // Only include gender when conversion succeeds to avoid misclassification
+      ...(() => {
+        const resolvedGender = genderConversion.toBoolean(formValues.gender).unwrapOr(undefined);
+        return resolvedGender !== undefined ? { gender: resolvedGender } : {};
+      })(),
       age: typeof formValues.age === 'number' ? formValues.age : 25,
     };
   };

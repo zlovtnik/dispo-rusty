@@ -362,10 +362,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, defaultTen
       // Map error types appropriately based on status code and error type
       let authError: AuthFlowError;
       
-      if (apiError.statusCode === 401 || apiError.statusCode === 403) {
-        // Authentication/authorization failures
-        authError = AuthFlowErrors.invalidCredentials(
+      if (apiError.statusCode === 401) {
+        authError = AuthFlowErrors.unauthorized(
           apiError.message || 'Invalid username or password'
+        );
+      } else if (apiError.statusCode === 403) {
+        authError = AuthFlowErrors.forbidden(
+          apiError.message || 'Access denied'
         );
       } else if (apiError.statusCode === 408 || apiError.statusCode === 504 || !apiError.statusCode) {
         // Network errors or timeouts (no status code often indicates network failure)
