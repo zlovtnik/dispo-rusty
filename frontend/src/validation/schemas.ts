@@ -177,13 +177,15 @@ export const apiErrorSchema = z.object({
 });
 
 export const authResponseSchema = z.object({
-  success: z.literal(true),
-  token: z.string().min(1),
-  refreshToken: z.string().min(1),
-  user: userSchema,
-  tenant: authTenantSchema,
-  expiresIn: z.number().positive(),
-  message: z.string().optional(),
+  message: z.string(),
+  data: z.object({
+    access_token: z.string().min(1),
+    refresh_token: z.string().min(1),
+    token_type: z.string().min(1),
+  }),
+  metadata: z.object({
+    tenant_id: z.string().min(1),
+  }),
 });
 
 export const loginRequestSchema = z.object({
