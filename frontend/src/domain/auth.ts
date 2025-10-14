@@ -126,14 +126,19 @@ export function verifyToken(token: string): Result<TokenPayload, TokenError> {
     }
 
     // Decode payload (middle part)
-    const payloadBase64 = parts[1];
-    if (!payloadBase64) {
+    const payloadBase64Url = parts[1];
+    if (!payloadBase64Url) {
       return err({
         type: 'INVALID_FORMAT',
         reason: 'JWT payload part is missing',
       });
     }
-    const payloadJson = atob(payloadBase64);
+    let normalizedPayload = payloadBase64Url.replace(/-/g, '+').replace(/_/g, '/');
+    while (normalizedPayload.length % 4 !== 0) {
+      normalizedPayload += '=';
+    }
+
+    const payloadJson = atob(normalizedPayload);
     const payload = JSON.parse(payloadJson) as TokenPayload;
 
     // Validate required claims
