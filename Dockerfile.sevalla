@@ -69,6 +69,7 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:${PORT:-8000}/api/ping || exit 1
 
-# Run the backend
+# Run the backend with exec form to make Rust binary PID 1 for proper signal handling
 # Use PORT if set by Sevalla, otherwise default to 8000
-CMD APP_PORT=${PORT:-8000} /app/rcs
+# The shell interprets ${PORT:-8000} and exec replaces the shell with the binary
+CMD ["/bin/sh", "-c", "exec env APP_PORT=${PORT:-8000} /app/rcs"]
