@@ -256,17 +256,22 @@ export function useOptimisticFetch<T>(
       return err(createBusinessLogicError('No optimistic update handler provided'));
     }
 
-    const baseResult = (isOptimistic && optimisticResult) || fetchState.result || lastStableResult.current;
-    const currentValue = baseResult?.isOk() ? baseResult.value : initialData ?? null;
+    // Derive baseResult: use optimistic result when isOptimistic is true, otherwise use fetch or stable result
+    const baseResult = (isOptimistic && optimisticResult) 
+      ? optimisticResult 
+      : (fetchState.result || lastStableResult.current);
+    
+    // Compute currentValue from baseResult if it's ok, falling back to initialData or null
+    const currentValue = baseResult?.isOk() ? baseResult.value : (initialData ?? null);
 
     const updateResult = optimisticUpdate(currentValue);
 
+    // Always set the optimistic result
+    setOptimisticResult(updateResult);
+    
+    // Only set isOptimistic to true when update succeeds, leave unchanged on error
     if (updateResult.isOk()) {
-      setOptimisticResult(updateResult);
       setIsOptimistic(true);
-    } else {
-      setOptimisticResult(updateResult);
-      setIsOptimistic(false);
     }
 
     return updateResult;
@@ -374,16 +379,25 @@ export function useCachedFetch<T>(
   }, [fetchState.loading, fetchState.result, cacheKey]);
 
   const activeResult = shouldUseCache && cachedEntry ? cachedEntry.result : fetchState.result;
-  const data = activeResult?.isOk()
-    ? activeResult.value
-    : fetchState.result?.isOk()
-      ? fetchState.result.value
-      : null;
-  const error = activeResult?.isErr()
-    ? activeResult.error
-    : fetchState.result?.isErr()
-      ? fetchState.result.error
-      : fetchState.error;
+  
+  // Derive data: check activeResult first, then fetchState.result, then null
+  let data: T | null = null;
+  if (activeResult?.isOk()) {
+    data = activeResult.value;
+  } else if (fetchState.result?.isOk()) {
+    data = fetchState.result.value;
+  }
+  
+  // Derive error: check activeResult first, then fetchState.result, then fetchState.error
+  let error: AppError | null = null;
+  if (activeResult?.isErr()) {
+    error = activeResult.error;
+  } else if (fetchState.result?.isErr()) {
+    error = fetchState.result.error;
+  } else if (fetchState.error) {
+    error = fetchState.error;
+  }
+  
   const loading = fetchState.loading && (!shouldUseCache || isCacheStale);
 
   const refetch = useCallback((): AsyncResult<T, AppError> => {
