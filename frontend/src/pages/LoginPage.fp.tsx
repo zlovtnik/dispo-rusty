@@ -87,12 +87,16 @@ interface LoginResponse {
 const validateLoginForm: FormValidator<LoginFormData, ValidatedLoginData, CredentialValidationError> = (
   formData: LoginFormData
 ): Result<ValidatedLoginData, Record<string, CredentialValidationError>> => {
-  // Validate username or email field - accept either
-  const usernameResult = validateUsername(formData.usernameOrEmail);
-  const emailResult = usernameResult.isErr() ? validateEmail(formData.usernameOrEmail) : usernameResult;
-  
-  // If both username and email validation fail, use the username error
-  const usernameOrEmailResult = emailResult.isErr() ? usernameResult : emailResult;
+  // Validate username or email field - prefer email
+  const emailResult = validateEmail(formData.usernameOrEmail);
+
+  const usernameOrEmailResult = emailResult.isErr()
+    ? err({
+        type: 'INVALID_USERNAME',
+        field: 'usernameOrEmail',
+        message: 'Please enter a valid username or email address',
+      } as unknown as CredentialValidationError)
+    : emailResult;
   
   const passwordResult = validatePassword(formData.password);
   const tenantIdResult = validateTenantId(formData.tenantId);

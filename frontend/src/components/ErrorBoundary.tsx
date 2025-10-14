@@ -1,21 +1,24 @@
 import React, { Component } from 'react';
 import type { ErrorInfo, ReactNode } from 'react';
 import { Button, Result, Alert } from 'antd';
+import { err } from 'neverthrow';
 import { logger } from '../utils/logger';
 import type { Result as FPResult } from '../types/fp';
 import type { AppError } from '../types/errors';
-import {
-  formatStorageError,
-  formatParseError,
-  formatCredentialValidationError,
-  formatAuthFlowError,
-} from '../types/errors';
+
+export interface ResultRecoveryStrategy {
+  canHandle: (error: AppError) => boolean;
+  recover: () => FPResult<ReactNode, AppError>;
+}
 
 interface Props {
   children: ReactNode;
   fallback?: ReactNode;
   onError?: (error: Error, errorInfo: ErrorInfo) => void;
   onResultError?: (result: FPResult<any, AppError>) => ReactNode;
+  recoveryStrategies?: ResultRecoveryStrategy[];
+  transformResultError?: (error: AppError) => FPResult<AppError, AppError>;
+  reportResultError?: (error: AppError) => FPResult<void, AppError>;
 }
 
 interface State {
@@ -47,29 +50,98 @@ export class ErrorBoundary extends Component<Props, State> {
     }
   }
 
+  private normalizeResultError = (error: AppError): AppError => {
+    const { transformResultError } = this.props;
+    if (!transformResultError) {
+      return error;
+    }
+
+    const transformed = transformResultError(error);
+    if (transformed.isOk()) {
+      return transformed.value;
+    }
+
+    logger.warn('Result error transformation failed', {
+      originalType: error.type,
+      transformationFailure: transformed.error,
+    });
+    return error;
+  };
+
+  private notifyResultError = (error: AppError): void => {
+    const { reportResultError } = this.props;
+    if (!reportResultError) {
+      logger.error('Result error captured by boundary', {
+        type: error.type,
+        message: error.message,
+      });
+      return;
+    }
+
+    const reportOutcome = reportResultError(error);
+    if (reportOutcome.isErr()) {
+      logger.warn('Reporting result error failed', {
+        originalType: error.type,
+        reportingError: reportOutcome.error,
+      });
+    }
+  };
+
+  private runRecoveryStrategies = (error: AppError): ReactNode | null => {
+    const { recoveryStrategies } = this.props;
+    if (!recoveryStrategies || recoveryStrategies.length === 0) {
+      return null;
+    }
+
+    for (const strategy of recoveryStrategies) {
+      if (!strategy.canHandle(error)) {
+        continue;
+      }
+
+      const recovery = strategy.recover();
+      if (recovery.isOk()) {
+        return recovery.value;
+      }
+
+      logger.warn('Recovery strategy failed', {
+        errorType: error.type,
+        recoveryError: recovery.error,
+      });
+    }
+
+    return null;
+  };
+
   /**
    * Handle Result-based errors with custom recovery strategies
    */
   public handleResultError = (result: FPResult<any, AppError>) => {
-    if (result.isErr()) {
-      // Update state to trigger render
-      this.setState({ resultError: result });
-
-      // Check if custom handler provided
-      if (this.props.onResultError) {
-        return this.props.onResultError(result);
-      }
-
-      // Pattern match on error type for custom UI
-      return this.renderResultError(result.error);
+    if (!result.isErr()) {
+      return null;
     }
-    return null;
+
+    const normalizedError = this.normalizeResultError(result.error);
+    this.notifyResultError(normalizedError);
+
+    const normalizedResult = err(normalizedError) as FPResult<any, AppError>;
+    this.setState({ resultError: normalizedResult });
+
+    if (this.props.onResultError) {
+      return this.props.onResultError(normalizedResult);
+    }
+
+    return this.renderResultError(normalizedError);
   };
 
   /**
    * Render error UI based on Result error type
    */
   private renderResultError = (error: AppError) => {
+    const recoveryFallback = this.runRecoveryStrategies(error);
+    if (recoveryFallback) {
+      return recoveryFallback;
+    }
+
     switch (error.type) {
       case 'network':
         return (

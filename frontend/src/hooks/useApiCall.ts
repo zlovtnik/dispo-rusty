@@ -68,9 +68,14 @@ export function useApiCall<TData, TError extends AppError = AppError>(
           
           return finalResult;
         } else {
+          // Guard result.error and build safe baseError
+          const baseError: Partial<TError> = typeof result.error === 'object' && result.error !== null
+            ? result.error
+            : { message: String(result.error) } as Partial<TError>;
+
           // Augment error with ApiCallError fields
           lastError = {
-            ...result.error,
+            ...baseError,
             attemptNumber: attempt,
             maxRetries,
             retryable: retryOnError && attempt < maxRetries,
@@ -81,13 +86,10 @@ export function useApiCall<TData, TError extends AppError = AppError>(
             onError(lastError);
           }
 
-          // If not retrying or last attempt, return enriched error
+          // If not retrying or last attempt, return enriched error (do not call transformResult on error)
           if (!retryOnError || attempt === maxRetries) {
             const enrichedErrorResult = err(lastError) as Result<TData, TError & ApiCallError>;
-            const transformedResult = transformResult
-              ? (transformResult(enrichedErrorResult as Result<TData, TError>) as Result<TData, TError & ApiCallError>)
-              : enrichedErrorResult;
-            return transformedResult;
+            return enrichedErrorResult;
           }
 
           // Wait before retry
@@ -96,13 +98,18 @@ export function useApiCall<TData, TError extends AppError = AppError>(
           }
         }
       } catch (error) {
+        // Create defensive/type-guarded error object
+        const safeError = error instanceof Error
+          ? { type: 'unknown' as const, message: error.message, ...(error.stack && { stack: error.stack }) }
+          : { type: 'unknown' as const, message: String(error) };
+
         // Augment error with ApiCallError fields
         lastError = {
-          ...(error as TError),
+          ...safeError,
           attemptNumber: attempt,
           maxRetries,
           retryable: retryOnError && attempt < maxRetries,
-        } as TError & ApiCallError;
+        } as unknown as TError & ApiCallError;
 
         if (onError) {
           onError(lastError);
@@ -110,10 +117,7 @@ export function useApiCall<TData, TError extends AppError = AppError>(
 
         if (!retryOnError || attempt === maxRetries) {
           const enrichedErrorResult = err(lastError) as Result<TData, TError & ApiCallError>;
-          const transformedResult = transformResult 
-            ? (transformResult(enrichedErrorResult as Result<TData, TError>) as Result<TData, TError & ApiCallError>)
-            : enrichedErrorResult;
-          return transformedResult;
+          return enrichedErrorResult;
         }
 
         // Wait before retry
