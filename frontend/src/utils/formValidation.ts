@@ -40,8 +40,8 @@ const EMAIL_PATTERN = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 const PHONE_PATTERNS = {
   // US format: +1-234-567-8900, (234) 567-8900, 234-567-8900, 2345678900
   US: /^(\+1)?[-.\s]?(\()?[0-9]{3}(\))?[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}$/,
-  // International format: +XX-XXX-XXX-XXXX
-  INTERNATIONAL: /^\+?[1-9]\d{1,14}$/,
+  // International format: +XX followed by spaces, dashes, or digits (10-15 digits total)
+  INTERNATIONAL: /^\+?[1-9]\d{0,3}[\s.-]?\d{1,4}[\s.-]?\d{1,4}[\s.-]?\d{1,9}$/,
 };
 const ZIP_CODE_PATTERNS = {
   // US: 12345 or 12345-6789
@@ -114,6 +114,11 @@ export const validateEmail = (email: string): Result<Email, FormValidationError>
   const [localPart, domain] = trimmed.split('@');
   if (localPart && localPart.length > 64) {
     return err(FormValidationErrors.invalidEmail(email, 'Local part too long (max 64 characters)'));
+  }
+
+  // Check for consecutive dots in local part
+  if (localPart && localPart.includes('..')) {
+    return err(FormValidationErrors.invalidEmail(email, 'Email contains consecutive dots'));
   }
 
   if (domain && domain.includes('..')) {
@@ -252,11 +257,11 @@ export const validatePassword = (password: string): Result<Password, FormValidat
     ));
   }
 
-  // Check for common weak passwords - use comprehensive list
+  // Check for common weak passwords - check if password matches exactly (not just contains)
   const passwordLower = password.toLowerCase();
-  if (COMMON_WEAK_PASSWORDS.some(weak => passwordLower.includes(weak.toLowerCase()))) {
+  if (COMMON_WEAK_PASSWORDS.some(weak => passwordLower === weak.toLowerCase())) {
     return err(FormValidationErrors.invalidPassword(
-      'Password contains common weak patterns'
+      'Password is too common'
     ));
   }
 
