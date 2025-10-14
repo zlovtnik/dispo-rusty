@@ -44,7 +44,7 @@ export type PasswordValidationError =
   | { type: 'MISSING_LOWERCASE' }
   | { type: 'MISSING_NUMBERS' }
   | { type: 'MISSING_SPECIAL_CHARS'; required: number }
-  | { type: 'COMMON_PASSWORD'; password: string }
+  | { type: 'COMMON_PASSWORD' }
   | { type: 'CONTAINS_USERNAME' };
 
 /**
@@ -135,7 +135,6 @@ export function validatePasswordStrength(
   if (isCommonPassword(password)) {
     return err({
       type: 'COMMON_PASSWORD',
-      password,
     });
   }
 
@@ -211,8 +210,13 @@ export function getMinutesUntilTimeout(
 /**
  * Check if password is in common passwords list
  * 
- * In production, this should check against a comprehensive list like
- * the "10 million password list" or "Have I Been Pwned" API.
+ * **PRODUCTION WARNING**: This is a minimal dev-only list with only 25 entries.
+ * Replace before release with one of:
+ * - Have I Been Pwned API (https://haveibeenpwned.com/API/v3#PwnedPasswords)
+ * - Loading a comprehensive password list (e.g., 10 million passwords)
+ * - Using a Bloom filter for efficient checking
+ * 
+ * TODO: Replace this implementation before production release
  * 
  * @param password - Password to check
  * @returns true if password is common

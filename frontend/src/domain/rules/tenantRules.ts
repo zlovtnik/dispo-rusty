@@ -293,7 +293,7 @@ export function getDaysRemaining(subscription: TenantSubscription): number | nul
   const diffTime = expiresAt.getTime() - now.getTime();
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   
-  return diffDays;
+  return Math.max(0, diffDays);
 }
 
 /**

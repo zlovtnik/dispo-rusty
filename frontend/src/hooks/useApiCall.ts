@@ -139,11 +139,7 @@ export function useApiCall<TData, TError extends AppError = AppError>(
 
   // Return asyncState with the execute method from useAsync
   // This ensures loading/result state updates properly
-  return {
-    ...asyncState,
-    // Use asyncState.execute to ensure proper state management
-    execute: asyncState.execute,
-  };
+  return asyncState;
 }
 
 /**

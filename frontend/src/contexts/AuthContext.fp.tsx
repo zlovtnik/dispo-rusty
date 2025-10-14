@@ -373,6 +373,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, defaultTen
           apiError.message || 'Network connection failed',
           apiError.statusCode
         );
+      } else if (apiError.statusCode && apiError.statusCode >= 400 && apiError.statusCode < 500) {
+        // Client errors (4xx) - validation or request issues
+        authError = AuthFlowErrors.invalidCredentials(
+          apiError.message || 'Request validation failed'
+        );
       } else if (apiError.statusCode && apiError.statusCode >= 500) {
         // Server errors (5xx)
         authError = AuthFlowErrors.serverError(

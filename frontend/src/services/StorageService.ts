@@ -277,7 +277,7 @@ export class StorageService {
   has(key: StorageKey | string): boolean {
     try {
       if (!this.storage) return false;
-      return this.storage!.getItem(key) !== null;
+      return this.storage.getItem(key) !== null;
     } catch {
       return false;
     }
@@ -291,8 +291,8 @@ export class StorageService {
     try {
       if (!this.storage) return [];
       const keys: string[] = [];
-      for (let i = 0; i < this.storage!.length; i++) {
-        const key = this.storage!.key(i);
+      for (let i = 0; i < this.storage.length; i++) {
+        const key = this.storage.key(i);
         if (key !== null && key !== STORAGE_VERSION_KEY) {
           keys.push(key);
         }
@@ -311,8 +311,8 @@ export class StorageService {
     try {
       if (!this.storage) return false;
       const testKey = '__storage_test__';
-      this.storage!.setItem(testKey, 'test');
-      this.storage!.removeItem(testKey);
+      this.storage.setItem(testKey, 'test');
+      this.storage.removeItem(testKey);
       return true;
     } catch {
       return false;

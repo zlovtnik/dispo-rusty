@@ -183,6 +183,17 @@ export const validatePhone = (
 };
 
 /**
+ * Normalize password for consistent comparison
+ * Trims whitespace and converts to lowercase
+ * 
+ * @param password - Password to normalize
+ * @returns Normalized password string
+ */
+function normalizePassword(password: string): string {
+  return password.trim().toLowerCase();
+}
+
+/**
  * Common weak passwords and patterns to block
  * Curated list of most commonly used passwords from security research
  * Source: Based on top compromised passwords from Have I Been Pwned and similar databases
@@ -260,8 +271,7 @@ export const validatePassword = (password: string): Result<Password, FormValidat
 
   // Check for common weak passwords - compare complete normalized password
   // Use Set for O(1) lookup and normalize both password and weak passwords
-  const passwordLower = password.trim().toLowerCase();
-  if (COMMON_WEAK_PASSWORDS.has(passwordLower)) {
+  if (COMMON_WEAK_PASSWORDS.has(normalizePassword(password))) {
     return err(FormValidationErrors.invalidPassword(
       'Password is too common'
     ));
