@@ -52,21 +52,33 @@ interface VersionedData<T> {
  * StorageService class with Result-based API
  */
 export class StorageService {
-  private storage: Storage;
+  private storage: Storage | null;
 
   /**
    * Create a new StorageService instance
-   * @param storage - The storage backend (defaults to localStorage)
+   * @param storage - The storage backend (defaults to localStorage if available)
    */
-  constructor(storage: Storage = localStorage) {
-    this.storage = storage;
-    this.initializeVersion();
+  constructor(storage?: Storage) {
+    // Guard against non-browser environments
+    if (storage) {
+      this.storage = storage;
+    } else {
+      this.storage = typeof window !== 'undefined' && window.localStorage 
+        ? window.localStorage 
+        : null;
+    }
+    
+    if (this.storage) {
+      this.initializeVersion();
+    }
   }
 
   /**
    * Initialize storage version
    */
   private initializeVersion(): void {
+    if (!this.storage) return;
+    
     try {
       const version = this.storage.getItem(STORAGE_VERSION_KEY);
       if (!version) {
@@ -120,7 +132,9 @@ export class StorageService {
     //   }
     // }
     
-    this.storage.setItem(STORAGE_VERSION_KEY, to.toString());
+    if (this.storage) {
+      this.storage.setItem(STORAGE_VERSION_KEY, to.toString());
+    }
   }
 
   /**
@@ -135,7 +149,7 @@ export class StorageService {
         return err(StorageErrors.unavailable('Storage is not available in this environment'));
       }
 
-      const raw = this.storage.getItem(key);
+      const raw = this.storage!.getItem(key);
       
       if (raw === null) {
         return err(StorageErrors.notFound(key));
@@ -184,7 +198,7 @@ export class StorageService {
 
       try {
         const serialized = JSON.stringify(value);
-        this.storage.setItem(key, serialized);
+        this.storage!.setItem(key, serialized);
         return ok(undefined);
       } catch (stringifyError) {
         if (stringifyError instanceof Error && stringifyError.name === 'QuotaExceededError') {
@@ -226,7 +240,7 @@ export class StorageService {
         return err(StorageErrors.unavailable('Storage is not available in this environment'));
       }
 
-      this.storage.removeItem(key);
+      this.storage!.removeItem(key);
       return ok(undefined);
     } catch (error) {
       const reason = error instanceof Error ? error.message : 'Unknown error';
@@ -245,7 +259,7 @@ export class StorageService {
         return err(StorageErrors.unavailable('Storage is not available in this environment'));
       }
 
-      this.storage.clear();
+      this.storage!.clear();
       // Reinitialize version after clear
       this.initializeVersion();
       return ok(undefined);
@@ -262,6 +276,7 @@ export class StorageService {
    */
   has(key: StorageKey | string): boolean {
     try {
+      if (!this.storage) return false;
       return this.storage.getItem(key) !== null;
     } catch {
       return false;
@@ -274,6 +289,7 @@ export class StorageService {
    */
   keys(): string[] {
     try {
+      if (!this.storage) return [];
       const keys: string[] = [];
       for (let i = 0; i < this.storage.length; i++) {
         const key = this.storage.key(i);
@@ -293,6 +309,7 @@ export class StorageService {
    */
   private isStorageAvailable(): boolean {
     try {
+      if (!this.storage) return false;
       const testKey = '__storage_test__';
       this.storage.setItem(testKey, 'test');
       this.storage.removeItem(testKey);

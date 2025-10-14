@@ -131,10 +131,12 @@ async fn main() -> io::Result<()> {
             builder
         } else {
             // יהי רצון שימצא עבודה, פיתוח/בדיקה: CORS מתיר יותר אך מפורש
+            // Note: send_wildcard() conflicts with allowed_origin(), so we use explicit origins
             Cors::default()
-                .send_wildcard()
                 .allowed_origin("http://localhost:3000")
+                .allowed_origin("http://localhost:3001")
                 .allowed_origin("http://127.0.0.1:3000")
+                .allowed_origin("http://127.0.0.1:3001")
                 .allowed_origin("http://localhost:5173") // Vite dev server
                 .allowed_origin("http://127.0.0.1:5173") // Vite dev server
         };
@@ -151,6 +153,11 @@ async fn main() -> io::Result<()> {
             .allowed_headers(vec![
                 http::header::AUTHORIZATION,
                 http::header::ACCEPT,
+                http::header::CONTENT_TYPE,
+                http::header::HeaderName::from_static("x-tenant-id"),
+            ])
+            .expose_headers(vec![
+                http::header::AUTHORIZATION,
                 http::header::CONTENT_TYPE,
                 http::header::HeaderName::from_static("x-tenant-id"),
             ])

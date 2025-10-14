@@ -34,7 +34,7 @@ export interface ValidationState<T, E> {
   validate: (newValue: T | undefined) => ValidationResult<T, E>;
   /** Function to reset validation state */
   reset: () => void;
-  /** Function to set value without validation */
+  /** Function to set value conditionally triggers validation when validateOnChange is true */
   setValue: (newValue: T | undefined) => void;
 }
 
@@ -161,10 +161,11 @@ export function useValidation<T, E = string>(
     }
   }, [validateValue]);
 
-  // Set value without validation
+  // Set value conditionally triggers validation when validateOnChange is true
+  // Clearing a field (undefined/null) will run validation so consumers know required-field errors may appear immediately
   const setValue = useCallback((newValue: T | undefined) => {
     setValueState(newValue);
-    if (validateOnChange && newValue !== undefined) {
+    if (validateOnChange) {
       const validationResult = validateValue(newValue);
       setResult(validationResult);
     }

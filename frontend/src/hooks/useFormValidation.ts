@@ -1,11 +1,7 @@
-import { useMemo, useCallback, useReducer, useEffect } from 'react';
+import { useMemo, useCallback, useReducer, useEffect, useRef } from 'react';
 import type { Result } from '../types/fp';
 import type { FormValidationError } from '../utils/formValidation';
-
-/**
- * Validation function type that returns a Result
- */
-export type ValidationFn<T, E> = (value: T) => Result<T, E>;
+import type { ValidationFn } from './useValidation';
 
 /**
  * Represents the state of a form field with its validation
@@ -124,7 +120,12 @@ function formReducer<T extends Record<string, unknown>>(
 ): FormState<T> {
   switch (action.type) {
     case 'SET_FIELD_VALUE': {
-      const currentField = state.fields[action.field];
+      const currentField = state.fields[action.field] || { 
+        value: state.initialValues[action.field], 
+        touched: false, 
+        dirty: false, 
+        errors: [] 
+      };
       const initialValue = state.initialValues[action.field];
       const isDirty = action.value !== initialValue;
       
@@ -147,7 +148,12 @@ function formReducer<T extends Record<string, unknown>>(
         fields: {
           ...state.fields,
           [action.field]: {
-            ...state.fields[action.field],
+            ...(state.fields[action.field] || { 
+              value: state.initialValues[action.field], 
+              touched: false, 
+              dirty: false, 
+              errors: [] 
+            }),
             touched: action.touched,
           },
         },
@@ -159,7 +165,7 @@ function formReducer<T extends Record<string, unknown>>(
         fields: {
           ...state.fields,
           [action.field]: {
-            ...state.fields[action.field],
+            ...(state.fields[action.field] || { value: state.initialValues[action.field], touched: false, dirty: false }),
             errors: action.errors,
           },
         },
@@ -218,6 +224,9 @@ export function useFormValidation<T extends Record<string, unknown>>(
     initialValues,
     createInitialState
   );
+
+  // Capture initial validateOnMount value to avoid re-running effect
+  const initialValidateOnMount = useRef(validateOnMount);
 
   // Validation function for a field
   const validateFieldValue = useCallback(
@@ -284,14 +293,15 @@ export function useFormValidation<T extends Record<string, unknown>>(
     [state.fields, validateFieldValue]
   );
 
-  // Validate on mount if enabled
+  // Validate on mount if enabled (run only once)
   useEffect(() => {
-    if (validateOnMount) {
-      for (const key of Object.keys(state.fields) as Array<keyof T>) {
+    if (initialValidateOnMount.current) {
+      const keys = Object.keys(state.fields) as Array<keyof T>;
+      for (const key of keys) {
         validateAndUpdateField(key);
       }
     }
-  }, [validateOnMount, validateAndUpdateField, state.fields]); // Re-run when fields or validator change
+  }, []); // Empty dependency array - run only once on mount
 
   // Field states with validation info
   const fieldStates = useMemo(() => {
@@ -440,8 +450,8 @@ export function useFormValidationStatus<T extends Record<string, unknown>>(
     isDirty: formState.form.isDirty,
     errorsCount,
     fieldErrors: formState.form.errors,
-    hasFieldErrors: (field: keyof T) => formState.form.errors[field].length > 0,
-    getFieldError: (field: keyof T) => formState.form.errors[field][0] || null,
+    hasFieldErrors: (field: keyof T) => (formState.form.errors[field] ?? []).length > 0,
+    getFieldError: (field: keyof T) => (formState.form.errors[field] ?? [])[0] || null,
     canSubmit: formState.form.isValid && formState.form.isDirty,
   }), [formState.form.isValid, formState.form.hasErrors, formState.form.isDirty, errorsCount, formState.form.errors]);
 }

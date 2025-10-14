@@ -324,7 +324,8 @@ export const verifyDataMatchesToken = (
     );
   }
 
-  if (tenant.id !== payload.tenant_id) {
+  // Compare branded TenantId as strings
+  if (String(tenant.id) !== payload.tenant_id) {
     return err(
       ParseErrors.invalidTenantStructure(
         `Tenant ID mismatch: token has '${payload.tenant_id}', tenant has '${tenant.id}'`

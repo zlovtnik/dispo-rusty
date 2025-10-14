@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { err } from 'neverthrow';
+import type { DependencyList } from 'react';
+import { err, ok, ResultAsync } from 'neverthrow';
 import type { Result, AsyncResult } from '../types/fp';
 
 /**
@@ -11,7 +12,7 @@ export interface AsyncState<T, E> {
   /** The result of the operation, null when loading */
   result: Result<T, E> | null;
   /** Function to execute the operation */
-  execute: () => Promise<Result<T, E>>;
+  execute: () => AsyncResult<T, E>;
   /** Function to reset the state */
   reset: () => void;
 }
@@ -43,7 +44,7 @@ export interface AsyncState<T, E> {
  */
 export function useAsync<T, E>(
   asyncFn: () => AsyncResult<T, E> | Promise<Result<T, E>>,
-  deps: React.DependencyList = []
+  deps: DependencyList = []
 ): AsyncState<T, E> {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<Result<T, E> | null>(null);
@@ -64,56 +65,85 @@ export function useAsync<T, E>(
     asyncFnRef.current = asyncFn;
   }, [asyncFn]);
 
-  const execute = useCallback(async (): Promise<Result<T, E>> => {
-    // Cancel any previous operation
+  const toAsyncResult = useCallback((value: AsyncResult<T, E> | Promise<Result<T, E>>): AsyncResult<T, E> => {
+    if (value && typeof (value as AsyncResult<T, E>).map === 'function' && typeof (value as AsyncResult<T, E>).mapErr === 'function') {
+      return value as AsyncResult<T, E>;
+    }
+
+    const promise = Promise.resolve(value)
+      .then(resolved => {
+        if (resolved.isOk()) {
+          return resolved.value;
+        }
+        throw resolved.error;
+      });
+
+    return ResultAsync.fromPromise(promise, (error: unknown) => error as E);
+  }, []);
+
+  const execute = useCallback((): AsyncResult<T, E> => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
 
-    // Create new abort controller
-    abortControllerRef.current = new AbortController();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
     setLoading(true);
     setResult(null);
 
-    try {
-      const asyncResult = asyncFn();
+    let asyncResult: AsyncResult<T, E>;
 
-      // Check if it's an AsyncResult (has mapErr method) or Promise<Result>
-      if ('mapErr' in asyncResult && typeof asyncResult.mapErr === 'function') {
-        // For AsyncResult (neverthrow), we can map to handle abort
-        const mappedResult = asyncResult.mapErr((error: E) => {
-          if (abortControllerRef.current?.signal.aborted) {
-            return error; // Return the original error when aborted
+    try {
+      asyncResult = toAsyncResult(asyncFn());
+    } catch (syncError) {
+      const failure = ResultAsync.fromPromise(
+        Promise.reject(syncError),
+        (error: unknown) => error as E
+      );
+
+      failure
+        .match(
+          () => undefined,
+          (error) => {
+            if (abortControllerRef.current === controller && !controller.signal.aborted) {
+              setResult(err(error));
+            }
+            return error;
           }
-          return error;
+        )
+        .finally(() => {
+          if (abortControllerRef.current === controller && !controller.signal.aborted) {
+            setLoading(false);
+          }
         });
 
-        const finalResult = await mappedResult;
-        if (!abortControllerRef.current?.signal.aborted) {
-          setResult(finalResult);
-        }
-        return finalResult;
-      } else {
-        // For Promise<Result>, directly await it
-        const finalResult = await asyncResult;
-        if (!abortControllerRef.current?.signal.aborted) {
-          setResult(finalResult);
-        }
-        return finalResult;
-      }
-    } catch (error) {
-      const errorResult = err(error as E);
-      if (!abortControllerRef.current?.signal.aborted) {
-        setResult(errorResult);
-      }
-      return errorResult;
-    } finally {
-      if (!abortControllerRef.current?.signal.aborted) {
-        setLoading(false);
-      }
+      return failure;
     }
-  }, [asyncFn]);
+
+    asyncResult
+      .match(
+        (value) => {
+          if (abortControllerRef.current === controller && !controller.signal.aborted) {
+            setResult(ok(value));
+          }
+          return value;
+        },
+        (error) => {
+          if (abortControllerRef.current === controller && !controller.signal.aborted) {
+            setResult(err(error));
+          }
+          return error;
+        }
+      )
+      .finally(() => {
+        if (abortControllerRef.current === controller && !controller.signal.aborted) {
+          setLoading(false);
+        }
+      });
+
+    return asyncResult;
+  }, [asyncFn, toAsyncResult]);
 
   const reset = useCallback(() => {
     if (abortControllerRef.current) {
@@ -133,13 +163,13 @@ export function useAsync<T, E>(
   }, []);
 
   // Auto-execute when deps change
-  // Note: deps is used as a single dependency for shallow reference check
+  // Spread deps array so React tracks individual dependency changes
   useEffect(() => {
     if (deps.length > 0) {
       execute();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [execute, deps]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [execute, ...deps]);
 
   return {
     loading,

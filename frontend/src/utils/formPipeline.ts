@@ -9,6 +9,7 @@
 
 import { Result, ok, err } from 'neverthrow';
 import type { FormValidationError } from './formValidation';
+import { formatFormValidationError } from './formValidation';
 
 /**
  * Pipeline error types
@@ -261,23 +262,8 @@ export const createFieldValidator = <T>(
     return result.match(
       () => true,
       (error) => {
-        // Import and use formatFormValidationError
-        switch (error.type) {
-          case 'INVALID_EMAIL':
-            return `Invalid email: ${error.reason}`;
-          case 'INVALID_PHONE':
-            return `Invalid phone: ${error.reason}`;
-          case 'INVALID_PASSWORD':
-            return error.reason;
-          case 'INVALID_AGE':
-            return `Invalid age: ${error.reason}`;
-          case 'INVALID_ZIP_CODE':
-            return `Invalid ZIP code: ${error.reason}`;
-          case 'REQUIRED_FIELD':
-            return `${error.fieldName} is required`;
-          default:
-            return 'Validation failed';
-        }
+        // Use shared formatFormValidationError for consistent error messages
+        return formatFormValidationError(error);
       }
     );
   };

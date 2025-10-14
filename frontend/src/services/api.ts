@@ -4,13 +4,7 @@ import { z } from 'zod';
 import type { ZodSchema } from 'zod';
 import { getEnv } from '../config/env';
 import type { AuthResponse, LoginCredentials } from '../types/auth';
-import type {
-  UpdateContactRequest,
-  ContactListParams,
-  ContactListResponse,
-  Contact,
-} from '../types/contact';
-import { Gender } from '../types/contact';
+import type { ContactListResponse, Contact } from '../types/contact';
 import type { CreateTenantDTO, PaginatedTenantResponse, Tenant, UpdateTenantDTO } from '../types/tenant';
 import type { ApiResponse } from '../types/api';
 import { createErrorResponse, createSuccessResponse } from '../types/api';
@@ -22,32 +16,23 @@ import {
   createValidationError,
 } from '../types/errors';
 import type { AsyncResult, Result } from '../types/fp';
-import {
-  authResponseSchema,
-  contactListResponseSchema,
-  contactMutationSchema,
-  contactSchema,
-  createTenantSchema,
-  loginRequestSchema,
-  paginatedTenantResponseSchema,
-  tenantSchema,
-  updateTenantSchema,
-} from '../validation';
+import { authResponseSchema, loginRequestSchema } from '../validation';
 import { liftResult, validateAndDecode } from '../validation';
 import type { AuthResponseSchema, LoginRequestSchema } from '../validation';
+import { contactListFromApiResponse, mapContact } from '../transformers';
 
 export interface RetryConfig {
   maxAttempts: number;
-  baseDelay: number; // in milliseconds
-  maxDelay: number; // in milliseconds
+  baseDelay: number;
+  maxDelay: number;
 }
 
 export interface HttpClientConfig {
-  timeout: number; // in milliseconds
+  timeout: number;
   retry: RetryConfig;
   circuitBreaker: {
     failureThreshold: number;
-    resetTimeout: number; // in milliseconds
+    resetTimeout: number;
   };
 }
 
@@ -64,10 +49,8 @@ export interface IHttpClient {
   delete<T>(endpoint: string): AsyncResult<ApiResponse<T>, AppError>;
 }
 
-// Base API configuration
 const API_BASE_URL = getEnv().apiUrl;
 
-// Default configuration
 const DEFAULT_CONFIG: HttpClientConfig = {
   timeout: 30000, // 30 seconds
   retry: {
@@ -222,6 +205,20 @@ const toAuthResponse = (payload: AuthResponseSchema): AuthResponse => ({
   message: payload.message,
 });
 
+const transformApiResponse = <Raw, Domain>(
+  result: AsyncResult<ApiResponse<Raw>, AppError>,
+  transform: (value: Raw) => Result<Domain, AppError>,
+): AsyncResult<ApiResponse<Domain>, AppError> =>
+  result.andThen(response => {
+    if (response.status === 'error') {
+      return okAsync(createErrorResponse(response.error, response.message));
+    }
+
+    return liftResult(transform(response.data)).map(domainData =>
+      createSuccessResponse(domainData, response.message),
+    );
+  });
+
 const toAuthError = (error: AppError): AuthError => {
   if (error.type === 'auth') {
     return error;
@@ -261,8 +258,6 @@ const toBusinessError = (error: AppError): BusinessLogicError => {
 };
 
 const emptyObjectSchema = z.object({}).passthrough();
-const tenantFilterResponseSchema = z.union([paginatedTenantResponseSchema, z.array(tenantSchema)]);
-
 //// HTTP Client class with timeout, retry, and circuit breaker support
 class HttpClient implements IHttpClient {
   private readonly baseURL: string;
@@ -615,48 +610,6 @@ export const tenantService = {
   },
 };
 
-/**
- * Internal helper functions for address book API layer
- * These handle the conversion between frontend Gender enum and backend boolean encoding.
- *
- * BACKEND ENCODING CONVENTION (DO NOT CHANGE):
- * - Backend stores gender as boolean in the database
- * - true = male
- * - false = female
- *
- * These functions should ONLY be used at the API boundary when transforming
- * data between frontend (Gender enum) and backend (boolean) representations.
- * All frontend code should use the Gender enum from types/contact.ts.
- *
- * @internal
- */
-
-/**
- * Converts frontend Gender enum to backend boolean representation.
- * @internal
- * @param gender - Gender enum value (Gender.male or Gender.female)
- * @returns boolean - true for male, false for female
- */
-const _genderToBoolean = (gender: Gender): boolean => gender === Gender.male;
-
-/**
- * Converts backend boolean gender to frontend Gender enum.
- * @internal
- * @param genderBool - boolean value from backend (true = male, false = female)
- * @returns Gender enum value
- */
-const _booleanToGender = (genderBool: boolean): Gender => genderBool ? Gender.male : Gender.female;
-
-/**
- * Export internal conversion helpers for use at API boundaries.
- * These should ONLY be used when transforming data between frontend and backend.
- * @internal
- */
-export const genderConversion = {
-  toBoolean: _genderToBoolean,
-  fromBoolean: _booleanToGender,
-} as const;
-
 export const addressBookService = {
   getAll(params?: { page?: number; limit?: number; search?: string }): AsyncResult<ApiResponse<ContactListResponse>, AppError> {
     const queryParams = new URLSearchParams();
@@ -665,7 +618,10 @@ export const addressBookService = {
     if (params?.search) queryParams.set('search', params.search);
 
     const query = queryParams.toString();
-    return apiClient.get<ContactListResponse>(query ? `/address-book?${query}` : '/address-book');
+    return transformApiResponse(
+      apiClient.get<unknown>(query ? `/address-book?${query}` : '/address-book'),
+      contactListFromApiResponse,
+    );
   },
 
   create(data: {
@@ -676,7 +632,10 @@ export const addressBookService = {
     address: string;
     phone: string;
   }): AsyncResult<ApiResponse<Contact>, AppError> {
-    return apiClient.post<Contact>('/address-book', data);
+    return transformApiResponse(
+      apiClient.post<unknown>('/address-book', data),
+      mapContact.fromApi,
+    );
   },
 
   update(id: string, data: {
@@ -687,7 +646,10 @@ export const addressBookService = {
     address: string;
     phone: string;
   }): AsyncResult<ApiResponse<Contact>, AppError> {
-    return apiClient.put<Contact>(`/address-book/${id}`, data);
+    return transformApiResponse(
+      apiClient.put<unknown>(`/address-book/${id}`, data),
+      mapContact.fromApi,
+    );
   },
 
   delete(id: string): AsyncResult<ApiResponse<Record<string, unknown>>, AppError> {

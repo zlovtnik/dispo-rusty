@@ -3,7 +3,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { ConfirmationModal } from '@/components/ConfirmationModal';
 import type { Contact, ContactListResponse } from '@/types/contact';
 import { Gender } from '@/types/contact';
-import { addressBookService, genderConversion } from '@/services/api';
+import { addressBookService } from '@/services/api';
+import { genderConversion } from '@/transformers/gender';
 import {
   Button,
   Input,
@@ -92,7 +93,7 @@ export const AddressBookPage: React.FC = () => {
         return person.gender === Gender.female ? Gender.female : person.gender === Gender.male ? Gender.male : undefined;
       }
       if (typeof person?.gender === 'boolean') {
-        return genderConversion.fromBoolean(person.gender);
+        return genderConversion.fromBoolean(person.gender).unwrapOr(undefined);
       }
       return undefined;
     })();
@@ -189,7 +190,7 @@ export const AddressBookPage: React.FC = () => {
       address: addressSegments.join(', ') || formValues.street1,
       phone: formValues.phone ?? '',
       email: formValues.email ?? '',
-      gender: genderConversion.toBoolean(formValues.gender),
+      gender: genderConversion.toBoolean(formValues.gender).unwrapOr(true),
       age: typeof formValues.age === 'number' ? formValues.age : 25,
     };
   };

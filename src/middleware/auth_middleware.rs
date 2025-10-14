@@ -74,13 +74,6 @@ where
     fn call(&self, req: ServiceRequest) -> Self::Future {
         let mut authenticate_pass: bool = false;
 
-        // Special handling for OPTIONS requests - return 200 OK immediately
-        if Method::OPTIONS == *req.method() {
-            let (request, _pl) = req.into_parts();
-            let response = HttpResponse::Ok().finish().map_into_right_body();
-            return Box::pin(async { Ok(ServiceResponse::new(request, response)) });
-        }
-
         // Check if route should be bypassed (no authentication required)
         let path = req.path();
         if constants::IGNORE_ROUTES

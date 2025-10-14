@@ -56,28 +56,40 @@ export function useApiCall<TData, TError extends AppError = AppError>(
         const result = await asyncResult;
 
         if (result.isOk()) {
-          // Call success handler
-          if (onSuccess) {
-            onSuccess(result.value);
-          }
-
           // Apply result transformation if provided
-          const finalResult = transformResult ? transformResult(result) : result;
+          const finalResult = transformResult
+            ? (transformResult(result as Result<TData, TError>) as Result<TData, TError & ApiCallError>)
+            : (result as Result<TData, TError & ApiCallError>);
+          
+          // Call success handler with transformed value
+          if (finalResult.isOk() && onSuccess) {
+            onSuccess(finalResult.value);
+          }
+          
           return finalResult;
         } else {
-          lastError = result.error as TError & ApiCallError;
+          // Guard result.error and build safe baseError
+          const baseError: Partial<TError> = typeof result.error === 'object' && result.error !== null
+            ? result.error
+            : { message: String(result.error) } as Partial<TError>;
+
+          // Augment error with ApiCallError fields
+          lastError = {
+            ...baseError,
+            attemptNumber: attempt,
+            maxRetries,
+            retryable: retryOnError && attempt < maxRetries,
+          } as TError & ApiCallError;
 
           // Call error handler
           if (onError) {
             onError(lastError);
           }
 
-          // If not retrying or last attempt, return error
+          // If not retrying or last attempt, return enriched error (do not call transformResult on error)
           if (!retryOnError || attempt === maxRetries) {
-            const transformedResult = transformResult
-              ? transformResult(result as Result<TData, TError>)
-              : result;
-            return transformedResult as Result<TData, TError & ApiCallError>;
+            const enrichedErrorResult = err(lastError) as Result<TData, TError & ApiCallError>;
+            return enrichedErrorResult;
           }
 
           // Wait before retry
@@ -86,15 +98,26 @@ export function useApiCall<TData, TError extends AppError = AppError>(
           }
         }
       } catch (error) {
-        lastError = error as TError & ApiCallError;
+        // Create defensive/type-guarded error object
+        const safeError = error instanceof Error
+          ? { type: 'unknown' as const, message: error.message, ...(error.stack && { stack: error.stack }) }
+          : { type: 'unknown' as const, message: String(error) };
+
+        // Augment error with ApiCallError fields
+        lastError = {
+          ...safeError,
+          attemptNumber: attempt,
+          maxRetries,
+          retryable: retryOnError && attempt < maxRetries,
+        } as unknown as TError & ApiCallError;
 
         if (onError) {
           onError(lastError);
         }
 
         if (!retryOnError || attempt === maxRetries) {
-          const errorResult = err(lastError);
-          return transformResult ? transformResult(errorResult as Result<TData, TError>) : errorResult as Result<TData, TError & ApiCallError>;
+          const enrichedErrorResult = err(lastError) as Result<TData, TError & ApiCallError>;
+          return enrichedErrorResult;
         }
 
         // Wait before retry
@@ -114,15 +137,9 @@ export function useApiCall<TData, TError extends AppError = AppError>(
     [] // We don't auto-execute, let the user control execution
   );
 
-  // Override execute to use our enhanced version
-  const execute = async (): Promise<Result<TData, TError & ApiCallError>> => {
-    return enhancedApiCall();
-  };
-
-  return {
-    ...asyncState,
-    execute,
-  };
+  // Return asyncState with the execute method from useAsync
+  // This ensures loading/result state updates properly
+  return asyncState;
 }
 
 /**
