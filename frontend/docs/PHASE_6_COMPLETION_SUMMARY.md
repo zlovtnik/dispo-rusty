@@ -48,7 +48,7 @@ Contact management business logic with CRUD operations.
 - Merge conflict detection and resolution strategies
 - Display formatting utilities
 
-#### 3. **`src/domain/tenants.ts`** (400 lines)
+#### 3. **`src/domain/tenants.ts`** (397 lines)
 Tenant management and multi-tenant access control.
 
 **Key Functions:**
@@ -58,15 +58,21 @@ Tenant management and multi-tenant access control.
 - `validateFeatureAccess()` - Check feature availability for plan
 - `validateUsageLimit()` - Enforce usage limits
 - `getTenantDisplayName()` - Get display name with fallbacks
+- `isTrial()` - Detect trial subscriptions
+- `isActive()` - Determine active subscriptions
 - `getDaysUntilExpiration()` - Calculate days remaining
+- `shouldShowExpirationWarning()` - Decide when to warn about expiration
 - `getUsagePercentage()` - Calculate usage percentage
 - `isApproachingLimit()` - Warning for near-limit usage
+- `getAvailableFeaturesForPlan()` - List plan capabilities
+- `validateTenantSettings()` - Validate branding and localization settings
 
 **Features:**
-- TenantError with SUBSCRIPTION_EXPIRED, FEATURE_NOT_AVAILABLE, LIMIT_EXCEEDED, etc.
+- TenantError with NOT_FOUND, ACCESS_DENIED, SUBSCRIPTION_EXPIRED, FEATURE_NOT_AVAILABLE, LIMIT_EXCEEDED, SWITCH_FAILED, VALIDATION_FAILED
 - Trial period support
 - Expiration warnings
-- Usage analytics
+- Usage analytics and limit forecasting
+- Feature availability matrix and branding validation
 
 #### 4. **`src/domain/rules/authRules.ts`** (300 lines)
 Authentication business rules and policies.
@@ -293,7 +299,7 @@ Domain layer has **no dependencies** on React, API clients, storage, or UI frame
 
 ### 5. **Clean Architecture**
 Clear separation between layers:
-```
+```text
 ┌─────────────────────────────────────┐
 │  Presentation Layer (React)         │  ← Components, Hooks, Context
 ├─────────────────────────────────────┤
@@ -322,11 +328,11 @@ Clear separation between layers:
 **Function Count:**
 - Auth domain: 15 functions
 - Contacts domain: 11 functions
-- Tenants domain: 13 functions
+- Tenants domain: 14 functions
 - Auth rules: 8 functions
 - Contact rules: 12 functions
 - Tenant rules: 15 functions
-- **Total: 74 functions**
+- **Total: 75 functions**
 
 **Error Types:**
 - AuthFlowError: 4 variants

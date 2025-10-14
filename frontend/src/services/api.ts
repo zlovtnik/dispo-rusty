@@ -627,7 +627,7 @@ export const addressBookService = {
   create(data: {
     name: string;
     email: string;
-    gender: boolean;
+    gender?: boolean;
     age: number;
     address: string;
     phone: string;
@@ -641,7 +641,7 @@ export const addressBookService = {
   update(id: string, data: {
     name: string;
     email: string;
-    gender: boolean;
+    gender?: boolean;
     age: number;
     address: string;
     phone: string;

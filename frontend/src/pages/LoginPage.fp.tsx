@@ -22,12 +22,13 @@ import {
   validateUsername,
   validatePassword,
   validateTenantId,
+  validateEmail,
   formatCredentialValidationError,
   type ValidatedUsername,
   type ValidatedPassword,
   type CredentialValidationError,
+  type ValidatedEmail,
 } from '@/utils/validation';
-import { validateEmail } from '@/utils/formValidation';
 import type { TenantId } from '@/types/ids';
 import {
   createFormPipeline,
@@ -56,7 +57,7 @@ interface LoginFormData {
  * Validated login credentials (branded types)
  */
 interface ValidatedLoginData {
-  usernameOrEmail: ValidatedUsername | string; // Could be either username or email
+  usernameOrEmail: ValidatedUsername | ValidatedEmail;
   password: ValidatedPassword;
   tenantId: TenantId;
   rememberMe: boolean;
@@ -87,16 +88,10 @@ interface LoginResponse {
 const validateLoginForm: FormValidator<LoginFormData, ValidatedLoginData, CredentialValidationError> = (
   formData: LoginFormData
 ): Result<ValidatedLoginData, Record<string, CredentialValidationError>> => {
-  // Validate username or email field - prefer email
-  const emailResult = validateEmail(formData.usernameOrEmail);
-
-  const usernameOrEmailResult = emailResult.isErr()
-    ? err({
-        type: 'INVALID_USERNAME',
-        field: 'usernameOrEmail',
-        message: 'Please enter a valid username or email address',
-      } as unknown as CredentialValidationError)
-    : emailResult;
+  // Accept either email or username; try email first, then fall back to username validation
+  const usernameOrEmailResult = validateEmail(formData.usernameOrEmail).orElse(() =>
+    validateUsername(formData.usernameOrEmail)
+  );
   
   const passwordResult = validatePassword(formData.password);
   const tenantIdResult = validateTenantId(formData.tenantId);
@@ -149,13 +144,27 @@ interface LocationState {
   from?: { pathname: string };
 }
 
+const isLocationState = (state: unknown): state is LocationState => {
+  if (state === null || typeof state !== 'object') {
+    return false;
+  }
+
+  const candidate = state as { from?: unknown };
+  if (candidate.from === undefined || candidate.from === null) {
+    return true;
+  }
+
+  return typeof (candidate.from as { pathname?: unknown }).pathname === 'string';
+};
+
 /**
  * Login Page Component with FP Patterns
  */
 export const LoginPageFP: React.FC = () => {
   const { login, isAuthenticated, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation() as ReturnType<typeof useLocation> & { state: LocationState | null };
+  const location = useLocation();
+  const locationState = isLocationState(location.state) ? location.state : null;
   const [form] = Form.useForm<LoginFormData>();
   
   // Pipeline state management using discriminated union
@@ -166,7 +175,7 @@ export const LoginPageFP: React.FC = () => {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   // Get the intended destination
-  const from = location.state?.from?.pathname || '/dashboard';
+  const from = locationState?.from?.pathname || '/dashboard';
 
   /**
    * Submit function that wraps the login API call

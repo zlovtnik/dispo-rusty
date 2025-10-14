@@ -59,15 +59,20 @@ export class StorageService {
    * @param storage - The storage backend (defaults to localStorage if available)
    */
   constructor(storage?: Storage) {
-    // Guard against non-browser environments
+    this.storage = null;
+
     if (storage) {
       this.storage = storage;
-    } else {
-      this.storage = typeof window !== 'undefined' && window.localStorage 
-        ? window.localStorage 
-        : null;
+    } else if (typeof window !== 'undefined') {
+      try {
+        const localStorageRef = window.localStorage;
+        this.storage = localStorageRef ?? null;
+      } catch (error) {
+        console.warn('Storage unavailable during initialization:', error);
+        this.storage = null;
+      }
     }
-    
+
     if (this.storage) {
       this.initializeVersion();
     }

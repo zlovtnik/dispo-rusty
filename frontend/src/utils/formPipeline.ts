@@ -304,7 +304,7 @@ export const createFormResolver = <TForm extends Record<string, unknown>, TValid
         errors: {
           root: {
             type: 'validation',
-            message: formatSingleValidationError(result.error as FormValidationError),
+            message: formatFormValidationError(result.error as FormValidationError),
           },
         },
       };
@@ -315,7 +315,7 @@ export const createFormResolver = <TForm extends Record<string, unknown>, TValid
     for (const [field, error] of Object.entries(result.error)) {
       formattedErrors[field] = {
         type: 'validation',
-        message: formatSingleValidationError(error as FormValidationError),
+        message: formatFormValidationError(error as FormValidationError),
       };
     }
 
@@ -324,34 +324,6 @@ export const createFormResolver = <TForm extends Record<string, unknown>, TValid
       errors: formattedErrors,
     };
   };
-};
-
-/**
- * Format single validation error helper
- */
-const formatSingleValidationError = (error: FormValidationError): string => {
-  switch (error.type) {
-    case 'INVALID_EMAIL':
-      return `Invalid email: ${error.reason}`;
-    case 'INVALID_PHONE':
-      return `Invalid phone: ${error.reason}`;
-    case 'INVALID_PASSWORD':
-      return error.reason;
-    case 'INVALID_AGE':
-      return `Invalid age: ${error.reason}`;
-    case 'INVALID_ZIP_CODE':
-      return `Invalid ZIP code: ${error.reason}`;
-    case 'REQUIRED_FIELD':
-      return `${error.fieldName} is required`;
-    case 'STRING_TOO_SHORT':
-      return `${error.fieldName} must be at least ${error.min} characters`;
-    case 'STRING_TOO_LONG':
-      return `${error.fieldName} must be at most ${error.max} characters`;
-    case 'PATTERN_MISMATCH':
-      return `${error.fieldName} format is invalid`;
-    case 'CUSTOM_VALIDATION':
-      return error.message;
-  }
 };
 
 /**
@@ -368,7 +340,7 @@ export const formatPipelineError = <E = FormValidationError>(
         // Single validation error
         return errorFormatter 
           ? errorFormatter(error.errors as E)
-          : formatSingleValidationError(error.errors as unknown as FormValidationError);
+          : formatFormValidationError(error.errors as unknown as FormValidationError);
       }
       
       // Multiple field errors - format each field error individually
@@ -378,7 +350,7 @@ export const formatPipelineError = <E = FormValidationError>(
         for (const [fieldName, fieldError] of Object.entries(error.errors)) {
           const formattedError = errorFormatter
             ? errorFormatter(fieldError as E)
-            : formatSingleValidationError(fieldError as FormValidationError);
+            : formatFormValidationError(fieldError as FormValidationError);
           
           fieldErrors.push(`${fieldName}: ${formattedError}`);
         }
