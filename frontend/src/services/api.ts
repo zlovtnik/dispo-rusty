@@ -3,9 +3,9 @@ import { ResultAsync, err, errAsync, ok, okAsync } from 'neverthrow';
 import { z } from 'zod';
 import type { ZodSchema } from 'zod';
 import { getEnv } from '../config/env';
-import type { AuthResponse, LoginCredentials } from '../types/auth';
+import type { AuthResponse, LoginCredentials, User, Tenant } from '../types/auth';
 import type { ContactListResponse, Contact } from '../types/contact';
-import type { CreateTenantDTO, PaginatedTenantResponse, Tenant, UpdateTenantDTO } from '../types/tenant';
+import type { CreateTenantDTO, PaginatedTenantResponse, UpdateTenantDTO } from '../types/tenant';
 import type { ApiResponse } from '../types/api';
 import { createErrorResponse, createSuccessResponse } from '../types/api';
 import type { AppError, AuthError, BusinessLogicError } from '../types/errors';
@@ -20,6 +20,8 @@ import { authResponseSchema, loginRequestSchema } from '../validation';
 import { liftResult, validateAndDecode } from '../validation';
 import type { AuthResponseSchema, LoginRequestSchema } from '../validation';
 import { contactListFromApiResponse, mapContact } from '../transformers';
+import { decodeJwtPayload } from '../utils/parsing';
+import { asUserId, asTenantId } from '../types/ids';
 
 export interface RetryConfig {
   maxAttempts: number;
@@ -195,15 +197,73 @@ const handleSuccessResponse = <Raw, Parsed>(
     );
   });
 
-const toAuthResponse = (payload: AuthResponseSchema): AuthResponse => ({
-  success: payload.success,
-  token: payload.token,
-  refreshToken: payload.refreshToken,
-  user: payload.user,
-  tenant: payload.tenant,
-  expiresIn: payload.expiresIn,
-  message: payload.message,
-});
+const toAuthResponse = (payload: AuthResponseSchema): AuthResponse => {
+  // Decode JWT to get user info
+  const jwtResult = decodeJwtPayload(payload.data.access_token);
+  
+  if (jwtResult.isErr()) {
+    throw new Error('Invalid JWT token received from server');
+  }
+  
+  const jwtPayload = jwtResult.value;
+  
+  // Create user object from JWT
+  const user: User = {
+    id: asUserId(jwtPayload.user),
+    email: jwtPayload.user,
+    username: jwtPayload.user,
+    roles: ['user'],
+    tenantId: asTenantId(jwtPayload.tenant_id),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  
+  // Default tenant settings
+  const defaultSettings = {
+    theme: 'light' as const,
+    language: 'en',
+    timezone: 'UTC',
+    dateFormat: 'YYYY-MM-DD',
+    features: [],
+    branding: {
+      primaryColor: '#000000',
+      secondaryColor: '#ffffff',
+      accentColor: '#000000',
+    },
+  };
+  
+  // Default tenant subscription
+  const defaultSubscription = {
+    plan: 'basic' as const,
+    status: 'active' as const,
+    limits: {
+      users: 0,
+      contacts: 0,
+      storage: 0,
+    },
+  };
+  
+  // Create tenant object
+  const tenant: Tenant = {
+    id: asTenantId(jwtPayload.tenant_id),
+    name: jwtPayload.tenant_id,
+    settings: defaultSettings,
+    subscription: defaultSubscription,
+  };
+  
+  // Calculate expires in seconds
+  const expiresIn = jwtPayload.exp - Math.floor(Date.now() / 1000);
+  
+  return {
+    success: true,
+    token: payload.data.access_token,
+    refreshToken: payload.data.refresh_token,
+    user,
+    tenant,
+    expiresIn,
+    message: payload.message,
+  };
+};
 
 const transformApiResponse = <Raw, Domain>(
   result: AsyncResult<ApiResponse<Raw>, AppError>,
