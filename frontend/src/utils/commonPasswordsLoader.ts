@@ -37,15 +37,49 @@ export class CommonPasswordsLoader {
   private constructor(private readonly config: CommonPasswordsConfig) {}
 
   /**
+   * Validate configuration values
+   */
+  private static validateConfig(config: CommonPasswordsConfig): void {
+    if (config.maxCacheEntries !== undefined) {
+      if (!Number.isInteger(config.maxCacheEntries) || config.maxCacheEntries < 1) {
+        throw new Error(
+          `Invalid maxCacheEntries: must be a positive integer, got ${config.maxCacheEntries}`
+        );
+      }
+    }
+    if (config.cacheTtlMs < 0) {
+      throw new Error(
+        `Invalid cacheTtlMs: must be non-negative, got ${config.cacheTtlMs}`
+      );
+    }
+    if (config.requestTimeoutMs < 0) {
+      throw new Error(
+        `Invalid requestTimeoutMs: must be non-negative, got ${config.requestTimeoutMs}`
+      );
+    }
+  }
+
+  /**
    * Get singleton instance
    */
   static getInstance(config?: Partial<CommonPasswordsConfig>): CommonPasswordsLoader {
     if (!CommonPasswordsLoader.instance) {
       const { DEFAULT_COMMON_PASSWORDS_CONFIG } = require('@/config/commonPasswords');
-      CommonPasswordsLoader.instance = new CommonPasswordsLoader({
+      const finalConfig = {
         ...DEFAULT_COMMON_PASSWORDS_CONFIG,
         ...config,
-      });
+      };
+      CommonPasswordsLoader.validateConfig(finalConfig);
+      CommonPasswordsLoader.instance = new CommonPasswordsLoader(finalConfig);
+    } else if (config) {
+      // Reconfigure existing instance by merging configs
+      const currentConfig = CommonPasswordsLoader.instance.config;
+      const newConfig = { ...currentConfig, ...config };
+      CommonPasswordsLoader.validateConfig(newConfig);
+      CommonPasswordsLoader.instance = new CommonPasswordsLoader(newConfig);
+      // Invalidate cached state
+      CommonPasswordsLoader.instance.cachedList = null;
+      CommonPasswordsLoader.instance.loadingPromise = null;
     }
     return CommonPasswordsLoader.instance;
   }
@@ -150,7 +184,7 @@ export class CommonPasswordsLoader {
 
     const url = this.config.filePath.startsWith('http')
       ? this.config.filePath
-      : `${window.location.origin}${this.config.filePath}`;
+      : new URL(this.config.filePath, window.location.origin).toString();
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.config.requestTimeoutMs);
@@ -197,7 +231,19 @@ export class CommonPasswordsLoader {
     }
 
     // Remove duplicates
-    return [...new Set(passwords)];
+    const uniquePasswords = [...new Set(passwords)];
+
+    // Enforce maxCacheEntries limit (count-based eviction)
+    const maxEntries = this.config.maxCacheEntries ?? 10000;
+    if (maxEntries > 0 && uniquePasswords.length > maxEntries) {
+      testLogger.warn(
+        `[CommonPasswordsLoader] Password list (${uniquePasswords.length}) exceeds maxCacheEntries (${maxEntries}). ` +
+        `Truncating to limit cache memory growth.`
+      );
+      return uniquePasswords.slice(0, maxEntries);
+    }
+
+    return uniquePasswords;
   }
 
   /**

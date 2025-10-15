@@ -144,6 +144,7 @@ export const TenantsPage: React.FC = () => {
       } else {
         // Create new tenant
         const createResult = await tenantService.create({
+          id: `tenant-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           name: values.name,
           db_url: values.db_url,
         });

@@ -6,6 +6,7 @@
  */
 
 import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'bun:test';
+import React from 'react';
 import {
   renderWithProviders,
   renderWithAuth,
@@ -18,6 +19,7 @@ import {
   mockUser,
   mockTenant,
 } from '../index';
+import { ButtonExample } from '../components/ButtonExample';
 
 // Simple example component for testing
 function WelcomeMessage({ name }: { name?: string }) {
@@ -65,23 +67,6 @@ describe('Test Infrastructure Example', () => {
   });
 
   describe('User Interactions', () => {
-    function ButtonExample() {
-      const [count, setCount] = React.useState(0);
-
-      return (
-        <div>
-          <p>Count: {count}</p>
-          <button
-            onClick={() => {
-              setCount(count + 1);
-            }}
-          >
-            Increment
-          </button>
-        </div>
-      );
-    }
-
     test('should handle user interactions', async () => {
       const user = userEvent.setup();
 
@@ -129,7 +114,7 @@ describe('Test Infrastructure Example', () => {
 });
 
 // Import React for JSX
-import React from 'react';
+// import React from 'react'; // Moved to top
 
 describe('MSW API Mocking Example', () => {
   // Setup MSW server

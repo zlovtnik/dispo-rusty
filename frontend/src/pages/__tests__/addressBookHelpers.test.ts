@@ -79,6 +79,16 @@ describe('AddressBook helper functions', () => {
       const person = createPerson({ gender: 'non-binary' });
       expect(resolveContactGender(person)).toBe(Gender.other);
     });
+
+    it('handles undefined gender gracefully', () => {
+      const person = createPerson({ gender: undefined });
+      expect(resolveContactGender(person)).toBe(undefined);
+    });
+
+    it('handles null gender gracefully', () => {
+      const person = createPerson({ gender: null });
+      expect(resolveContactGender(person)).toBe(undefined);
+    });
   });
 
   describe('normalizeContactAddress', () => {

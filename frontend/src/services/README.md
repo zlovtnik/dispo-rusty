@@ -297,10 +297,7 @@ interface AppError {
 ## Custom Configuration
 
 Create a custom HTTP client with different settings:
-When the circuit breaker is open, requests fail immediately without hitting the network. This prevents wasting resources on a failing service.
 
-
-Exponential backoff prevents overwhelming a recovering service with retry requests. Use custom configuration for time-sensitive operations:
 ```typescript
 import { createHttpClient } from './services/api';
 
@@ -309,24 +306,29 @@ const fastClient = createHttpClient({
   retry: {
     maxAttempts: 2,
     baseDelay: 500,
-The HttpClient uses AbortController to cancel requests that exceed the timeout. This prevents memory leaks and zombie requests.
     maxDelay: 5000
   },
   circuitBreaker: {
     failureThreshold: 3,
-- **Current:** Tokens stored in localStorage (XSS vulnerability)
-- **Recommended:** Use httpOnly cookies if backend supports it
-- **Alternative:** Store in memory only (lost on page refresh)
- 
     resetTimeout: 30000
-When using cookies, ensure backend implements CSRF tokens and include them in requests.
   }
 });
-Configure CSP headers to prevent XSS attacks:
 
 // Use custom client
 const result = await fastClient.get('/api/fast-endpoint');
 ```
+
+### Notes
+
+- **Circuit Breaker Behavior**: When the circuit breaker is open, requests fail immediately without hitting the network. This prevents wasting resources on a failing service.
+- **Exponential Backoff**: Prevents overwhelming a recovering service with retry requests. Use custom configuration for time-sensitive operations.
+- **Timeout Handling**: The HttpClient uses AbortController to cancel requests that exceed the timeout. This prevents memory leaks and zombie requests.
+- **Security Considerations**:
+  - **Current:** Tokens stored in localStorage (XSS vulnerability)
+  - **Recommended:** Use httpOnly cookies if backend supports it
+  - **Alternative:** Store in memory only (lost on page refresh)
+  - When using cookies, ensure backend implements CSRF tokens and include them in requests
+  - Configure CSP headers to prevent XSS attacks
 
 ## Storage Conventions
 

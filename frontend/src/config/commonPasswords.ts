@@ -8,18 +8,14 @@
  * See MIGRATION.md for instructions on updating this list.
  */
 
-export const COMMON_PASSWORDS_FALLBACK: readonly string[] = [
-  '123456',
-  'password',
-  '123456789',
-  'qwerty',
-  '111111',
-  'abc123',
-  'password1',
-  'letmein',
-  'welcome',
-  'admin',
-];
+import { TOP_1000_COMMON_PASSWORDS } from './top1000CommonPasswords';
+
+/**
+ * Fallback list of common passwords (top 1000 most breached passwords from OWASP, Have I Been Pwned, and RockYou datasets)
+ * Used when the remote password list cannot be loaded.
+ * Count: 1000 entries
+ */
+export const COMMON_PASSWORDS_FALLBACK: readonly string[] = TOP_1000_COMMON_PASSWORDS;
 
 /**
  * Configuration for loading common passwords
@@ -33,6 +29,8 @@ export interface CommonPasswordsConfig {
   cacheTtlMs: number;
   /** Request timeout in milliseconds */
   requestTimeoutMs: number;
+  /** Maximum number of password entries to keep in cache (count-based limit to prevent unbounded memory growth) */
+  maxCacheEntries?: number;
 }
 
 /**
@@ -43,4 +41,5 @@ export const DEFAULT_COMMON_PASSWORDS_CONFIG: CommonPasswordsConfig = {
   enabled: true,
   cacheTtlMs: 24 * 60 * 60 * 1000, // 24 hours
   requestTimeoutMs: 5000,
+  maxCacheEntries: 10000, // Default to 10,000 entries (count-based limit)
 };

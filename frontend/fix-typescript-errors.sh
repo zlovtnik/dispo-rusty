@@ -10,10 +10,7 @@ echo "🔧 Fixing TypeScript/ESLint errors..."
 # Fix deprecated Zod APIs
 echo "📦 Fixing deprecated Zod APIs..."
 find src -type f -name "*.ts" -o -name "*.tsx" | xargs sed -i '' \
-  -e 's/ZodSchema/ZodType/g' \
-  -e 's/z\.string()\.email()/z.string().email()/g' \
-  -e 's/z\.string()\.url()/z.string().url()/g' \
-  -e 's/\.passthrough()/.passthrough()/g'
+  -e 's/ZodSchema/ZodType/g'
 
 # Prefix unused variables with underscore
 echo "🚫 Prefixing unused variables..."

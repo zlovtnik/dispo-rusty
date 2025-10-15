@@ -26,6 +26,7 @@ import {
 import type { LoginCredentials } from '../types/auth';
 import type { CreateTenantDTO, UpdateTenantDTO } from '../types/tenant';
 import { asTenantId } from '../types/ids';
+import { Gender } from '../types/person';
 
 // Get API base URL from environment
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
@@ -141,12 +142,14 @@ describe('authService', () => {
       // Create client with short timeout for testing
       const fastClient = createHttpClient({ timeout: 100 });
 
-      // Note: This test requires modifying the service to use custom client
-      // For now, we'll test with default timeout and expect it to work
-      const result = await authService.login(credentials);
+      // Use the fast client with authService
+      const result = await authService.login(credentials, fastClient);
 
-      // With MSW, the request completes immediately, so it should succeed
-      expect(result.isOk()).toBe(true);
+      // Should fail with timeout error
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(['network', 'timeout'].includes(result.error.type)).toBe(true);
+      }
     }, 40000); // Extended timeout for this test
 
     test('should handle malformed JSON response', async () => {
@@ -389,6 +392,7 @@ describe('tenantService', () => {
   describe('create', () => {
     test('should create new tenant with valid data', async () => {
       const newTenant: CreateTenantDTO = {
+        id: 'new-tenant',
         name: 'New Tenant',
         db_url: 'postgres://localhost:5432/newtenant',
       };
@@ -420,6 +424,7 @@ describe('tenantService', () => {
       );
 
       const invalidTenant: CreateTenantDTO = {
+        id: 'invalid-tenant',
         name: '',
         db_url: '',
       };
@@ -443,6 +448,7 @@ describe('tenantService', () => {
       );
 
       const tenant: CreateTenantDTO = {
+        id: 'existing-tenant',
         name: 'Existing Tenant',
         db_url: 'postgres://localhost:5432/existing',
       };
@@ -631,7 +637,7 @@ describe('addressBookService', () => {
         phone: '+1234567890',
         address: '123 Main St',
         age: 30,
-        gender: true, // male
+        gender: Gender.male,
       };
 
       const result = await addressBookService.create(newContact);

@@ -277,11 +277,11 @@ function validateContactData(data: ContactCreateData): Result<ContactCreateData,
   const errors: Record<string, string> = {};
 
   // Required fields
-  if (data.firstName.trim().length === 0) {
+  if (!isNonEmptyString(data.firstName)) {
     errors.firstName = 'First name is required';
   }
 
-  if (data.lastName.trim().length === 0) {
+  if (!isNonEmptyString(data.lastName)) {
     errors.lastName = 'Last name is required';
   }
 
@@ -382,7 +382,7 @@ function calculateAge(dateOfBirth: Date): number {
 }
 
 function isNonEmptyString(value: string | null | undefined): value is string {
-  return typeof value === 'string' && value !== '';
+  return typeof value === 'string' && value.trim().length > 0;
 }
 
 function normalizeString(value?: string | null): string | undefined {

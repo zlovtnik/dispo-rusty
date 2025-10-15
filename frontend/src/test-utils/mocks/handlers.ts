@@ -21,54 +21,68 @@ import { getEnv } from '../../config/env';
 const API_BASE_URL = getEnv().apiUrl;
 
 /**
+ * Factory function for mock contacts
+ */
+function createMockContacts(): ContactApiDTO[] {
+  return [
+    {
+      id: 1,
+      tenant_id: 'tenant-1',
+      first_name: 'John',
+      last_name: 'Doe',
+      email: 'john.doe@example.com',
+      phone: '+1234567890',
+      age: 30,
+      gender: 'male',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    {
+      id: 2,
+      tenant_id: 'tenant-1',
+      first_name: 'Jane',
+      last_name: 'Smith',
+      email: 'jane.smith@example.com',
+      phone: '+0987654321',
+      age: 28,
+      gender: 'female',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+  ];
+}
+
+/**
+ * Factory function for mock tenants
+ */
+function createMockTenants(): BackendTenant[] {
+  return [
+    {
+      id: asTenantId('tenant-1'),
+      name: 'Test Tenant 1',
+      db_url: 'postgres://localhost:5432/tenant1',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    {
+      id: asTenantId('tenant-2'),
+      name: 'Test Tenant 2',
+      db_url: 'postgres://localhost:5432/tenant2',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+  ];
+}
+
+/**
  * Mock contacts database
  */
-let mockContacts: ContactApiDTO[] = [
-  {
-    id: 1,
-    tenant_id: 'tenant-1',
-    first_name: 'John',
-    last_name: 'Doe',
-    email: 'john.doe@example.com',
-    phone: '+1234567890',
-    age: 30,
-    gender: 'male',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: 2,
-    tenant_id: 'tenant-1',
-    first_name: 'Jane',
-    last_name: 'Smith',
-    email: 'jane.smith@example.com',
-    phone: '+0987654321',
-    age: 28,
-    gender: 'female',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-];
+let mockContacts: ContactApiDTO[] = createMockContacts();
 
 /**
  * Mock tenants database
  */
-let mockTenants: BackendTenant[] = [
-  {
-    id: asTenantId('tenant-1'),
-    name: 'Test Tenant 1',
-    db_url: 'postgres://localhost:5432/tenant1',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: asTenantId('tenant-2'),
-    name: 'Test Tenant 2',
-    db_url: 'postgres://localhost:5432/tenant2',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-];
+let mockTenants: BackendTenant[] = createMockTenants();
 
 /**
  * API Request Handlers
@@ -261,8 +275,7 @@ export const handlers = [
       );
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    const existingTenant = mockTenants[tenantIndex]!;
+    const existingTenant = mockTenants[tenantIndex] as BackendTenant;
     const updatedTenant: BackendTenant = {
       id: existingTenant.id,
       name: body.name ?? existingTenant.name,
@@ -630,47 +643,6 @@ export const handlers = [
  * Useful for cleaning up between tests
  */
 export function resetMockData(): void {
-  mockContacts = [
-    {
-      id: 1,
-      tenant_id: 'tenant-1',
-      first_name: 'John',
-      last_name: 'Doe',
-      email: 'john.doe@example.com',
-      phone: '+1234567890',
-      age: 30,
-      gender: 'male',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    {
-      id: 2,
-      tenant_id: 'tenant-1',
-      first_name: 'Jane',
-      last_name: 'Smith',
-      email: 'jane.smith@example.com',
-      phone: '+0987654321',
-      age: 28,
-      gender: 'female',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-  ];
-
-  mockTenants = [
-    {
-      id: asTenantId('tenant-1'),
-      name: 'Test Tenant 1',
-      db_url: 'postgres://localhost:5432/tenant1',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    {
-      id: asTenantId('tenant-2'),
-      name: 'Test Tenant 2',
-      db_url: 'postgres://localhost:5432/tenant2',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-  ];
+  mockContacts = createMockContacts();
+  mockTenants = createMockTenants();
 }

@@ -55,6 +55,25 @@ describe('CommonPasswordsLoader', () => {
       const loader = CommonPasswordsLoader.getInstance(config);
       expect(loader).toBeDefined();
     });
+
+    it('should throw error when maxCacheEntries is not a positive integer', () => {
+      expect(() => {
+        CommonPasswordsLoader.getInstance({ maxCacheEntries: 0 });
+      }).toThrow();
+
+      expect(() => {
+        CommonPasswordsLoader.getInstance({ maxCacheEntries: -1 });
+      }).toThrow();
+
+      expect(() => {
+        CommonPasswordsLoader.getInstance({ maxCacheEntries: 3.5 });
+      }).toThrow();
+    });
+
+    it('should accept valid maxCacheEntries', () => {
+      const loader = CommonPasswordsLoader.getInstance({ maxCacheEntries: 5000 });
+      expect(loader).toBeDefined();
+    });
   });
 
   describe('getCommonPasswords', () => {
@@ -115,6 +134,37 @@ describe('CommonPasswordsLoader', () => {
       const passwords = await loader.getCommonPasswords();
 
       expect(passwords).toEqual(COMMON_PASSWORDS_FALLBACK);
+    });
+
+    it('should enforce maxCacheEntries limit when loading', async () => {
+      mockFetch = async (url: string) => {
+        if (url.includes('/config/common-passwords.json')) {
+          return {
+            ok: true,
+            status: 200,
+            statusText: 'OK',
+            json: async () => ({
+              version: '1.0.0',
+              description: 'Test passwords',
+              lastUpdated: '2025-01-01',
+              source: 'test',
+              passwords: Array.from({ length: 100 }, (_, i) => `password${i}`)
+            })
+          };
+        }
+        return originalFetch(url);
+      };
+      global.fetch = mockFetch;
+
+      const loader = CommonPasswordsLoader.getInstance({
+        filePath: '/config/common-passwords.json',
+        enabled: true,
+        maxCacheEntries: 50
+      });
+      const passwords = await loader.getCommonPasswords();
+
+      // Should be truncated to maxCacheEntries
+      expect(passwords.length).toBeLessThanOrEqual(50);
     });
   });
 

@@ -598,7 +598,7 @@ class HttpClient implements IHttpClient {
 
   private executeFetch(url: string, options: RequestInit): ResultAsync<Response, AppError> {
     const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => {
+    const timeoutId = setTimeout(() => {
       controller.abort();
     }, this.config.timeout);
 
@@ -744,7 +744,9 @@ export const authService = {
    * });
    * ```
    */
-  login(credentials: LoginCredentials): AsyncResult<AuthResponse, AuthError> {
+  login(credentials: LoginCredentials, client?: IHttpClient): AsyncResult<AuthResponse, AuthError> {
+    const httpClient = client || apiClient;
+    
     const validation = validateAndDecode<LoginRequestSchema>(loginRequestSchema, {
       usernameOrEmail: credentials.usernameOrEmail,
       password: credentials.password,
@@ -760,7 +762,7 @@ export const authService = {
       }))
       .andThen(body =>
         handleSuccessResponse<AuthResponse, AuthResponseSchema>(
-          apiClient.post<AuthResponse>('/auth/login', body),
+          httpClient.post<AuthResponse>('/auth/login', body),
           authResponseSchema
         )
       )

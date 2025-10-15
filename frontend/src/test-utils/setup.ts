@@ -7,6 +7,29 @@
  */
 
 import '@testing-library/jest-dom';
+import { expect } from 'bun:test';
+
+// Extend expect with jest-dom matchers for Bun
+// This is needed because Bun doesn't automatically extend expect like Jest does
+const jestDom = require('@testing-library/jest-dom/matchers');
+expect.extend(jestDom);
+
+// Type augmentation for Bun's expect to include jest-dom matchers
+declare module 'bun:test' {
+  interface Matchers<T> {
+    toBeInTheDocument(): T;
+    toHaveClass(...classNames: string[]): T;
+    toHaveAttribute(attr: string, value?: string): T;
+    toHaveValue(value?: string | number | string[]): T;
+    toBeChecked(): T;
+    toBeDisabled(): T;
+    toBeEnabled(): T;
+    toBeVisible(): T;
+    toBeHidden(): T;
+    toHaveFocus(): T;
+    toHaveTextContent(text?: string | RegExp, options?: { normalizeWhitespace?: boolean }): T;
+  }
+}
 import { cleanup } from '@testing-library/react';
 import { afterEach, beforeAll, afterAll } from 'bun:test';
 import { setupMSW, teardownMSW, resetMSW } from './mocks/server';

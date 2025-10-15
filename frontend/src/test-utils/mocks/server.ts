@@ -1,6 +1,6 @@
 /**
  * Mock Service Worker (MSW) Server Setup
- *
+ * 
  * This file configures the MSW server for intercepting API calls in tests.
  */
 
@@ -40,7 +40,7 @@ export function teardownMSW(): void {
 export function resetMSW(): void {
   // Reset handlers to initial state
   server.resetHandlers();
-
+  
   // Reset mock data
   resetMockData();
 }

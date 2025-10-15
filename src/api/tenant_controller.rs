@@ -542,7 +542,12 @@ pub async fn create(
     tenant_dto: web::Json<TenantDTO>,
     pool: web::Data<DatabasePool>,
 ) -> Result<HttpResponse, ServiceError> {
-    let dto = tenant_dto.into_inner();
+    let mut dto = tenant_dto.into_inner();
+
+    // Auto-generate tenant ID if not provided
+    if dto.id.is_empty() {
+        dto.id = crate::utils::generate_tenant_id();
+    }
 
     // Validate input data format and required fields
     if let Err(validation_error) = Tenant::validate_tenant_dto(&dto) {
@@ -551,12 +556,14 @@ pub async fn create(
             .with_metadata("operation", "create"));
     }
 
+    let tenant_name = dto.name.clone();
     let tenant_id = dto.id.clone();
 
     let mut conn = pool.get().map_err(|e| {
         ServiceError::internal_server_error(format!("Failed to get db connection: {}", e))
             .with_tag("tenant")
             .with_metadata("operation", "create")
+            .with_metadata("tenant_name", tenant_name.clone())
             .with_metadata("tenant_id", tenant_id.clone())
     })?;
 

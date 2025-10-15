@@ -141,10 +141,6 @@ const normalizeGender = (value: unknown): Gender | null | undefined => {
     return Gender.other;
   }
 
-  if (typeof value === 'boolean') {
-    return value ? Gender.male : Gender.female;
-  }
-
   return undefined;
 };
 

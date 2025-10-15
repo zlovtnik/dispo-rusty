@@ -9,6 +9,7 @@ export interface Tenant {
 }
 
 export interface CreateTenantDTO {
+  id: string;
   name: string;
   db_url: string;
 }

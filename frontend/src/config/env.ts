@@ -72,12 +72,12 @@ export function getEnvConfig(): EnvConfig {
     const apiUrl = getRequiredEnv('VITE_API_URL');
     validateUrl(apiUrl, 'VITE_API_URL');
 
-    const rawDefaultCountry = getOptionalEnv('VITE_DEFAULT_COUNTRY', '');
-    const defaultCountry = typeof rawDefaultCountry === 'string' ? rawDefaultCountry.trim() : '';
-    const passwordCheckDefault = import.meta.env.MODE === 'production' ? 'true' : 'false';
+    const defaultCountry = getOptionalEnv('VITE_DEFAULT_COUNTRY', '').trim();
     const enablePwnedPasswordCheck =
-      getOptionalEnv('VITE_ENABLE_PWNED_PASSWORD_CHECK', passwordCheckDefault).toLowerCase() ===
-      'true';
+      getOptionalEnv(
+        'VITE_ENABLE_PWNED_PASSWORD_CHECK',
+        import.meta.env.MODE === 'production' ? 'true' : 'false'
+      ).toLowerCase() === 'true';
 
     return {
       apiUrl,

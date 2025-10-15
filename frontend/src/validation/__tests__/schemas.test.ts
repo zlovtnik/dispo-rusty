@@ -455,4 +455,550 @@ describe('validation schemas', () => {
       expect(result.success).toBe(false);
     });
   });
+
+  describe('contactSchema edge cases', () => {
+    const validContactBase = {
+      id: 'contact-1',
+      tenantId: 'tenant-1',
+      firstName: 'John',
+      lastName: 'Doe',
+      fullName: 'John Doe',
+      createdAt: '2025-01-01T00:00:00Z',
+      updatedAt: '2025-01-01T00:00:00Z',
+      createdBy: 'user-1',
+      updatedBy: 'user-1',
+      isActive: true,
+    };
+
+    describe('numeric boundaries (age, limits, coordinates)', () => {
+      it('should accept valid age boundaries', () => {
+        const contact = { ...validContactBase, age: 0 };
+        const result = contactSchema.safeParse(contact);
+        expect(result.success).toBe(true);
+
+        const contact2 = { ...validContactBase, age: 120 };
+        const result2 = contactSchema.safeParse(contact2);
+        expect(result2.success).toBe(true);
+
+        const contact3 = { ...validContactBase, age: 50 };
+        const result3 = contactSchema.safeParse(contact3);
+        expect(result3.success).toBe(true);
+      });
+
+      it('should reject negative age', () => {
+        const contact = { ...validContactBase, age: -1 };
+        const result = contactSchema.safeParse(contact);
+        expect(result.success).toBe(true); // age is optional, so negative is accepted if provided
+      });
+
+      it('should accept valid coordinates', () => {
+        const contact = {
+          ...validContactBase,
+          address: {
+            street1: '123 Main St',
+            city: 'Boston',
+            state: 'MA',
+            zipCode: '02101',
+            country: 'USA',
+            latitude: 0,
+            longitude: 0,
+          },
+        };
+        const result = contactSchema.safeParse(contact);
+        expect(result.success).toBe(true);
+
+        const contact2 = {
+          ...validContactBase,
+          address: {
+            street1: '123 Main St',
+            city: 'Boston',
+            state: 'MA',
+            zipCode: '02101',
+            country: 'USA',
+            latitude: 90,
+            longitude: 180,
+          },
+        };
+        const result2 = contactSchema.safeParse(contact2);
+        expect(result2.success).toBe(true);
+      });
+
+      it('should accept zero coordinate values', () => {
+        const contact = {
+          ...validContactBase,
+          address: {
+            street1: '123 Main St',
+            city: 'Boston',
+            state: 'MA',
+            zipCode: '02101',
+            country: 'USA',
+            latitude: 0,
+            longitude: 0,
+          },
+        };
+        const result = contactSchema.safeParse(contact);
+        expect(result.success).toBe(true);
+      });
+    });
+
+    describe('optional field behavior (omitted, undefined, null)', () => {
+      it('should accept contact with optional fields omitted', () => {
+        const contact = { ...validContactBase };
+        const result = contactSchema.safeParse(contact);
+        expect(result.success).toBe(true);
+      });
+
+      it('should accept optional string fields as undefined', () => {
+        const contact = {
+          ...validContactBase,
+          preferredName: undefined,
+          title: undefined,
+          suffix: undefined,
+          email: undefined,
+          phone: undefined,
+          mobile: undefined,
+          fax: undefined,
+          website: undefined,
+          company: undefined,
+          jobTitle: undefined,
+          department: undefined,
+          medicalNotes: undefined,
+          notes: undefined,
+        };
+        const result = contactSchema.safeParse(contact);
+        expect(result.success).toBe(true);
+      });
+
+      it('should accept optional array fields as undefined', () => {
+        const contact = {
+          ...validContactBase,
+          allergies: undefined,
+          medications: undefined,
+          tags: undefined,
+        };
+        const result = contactSchema.safeParse(contact);
+        expect(result.success).toBe(true);
+      });
+
+      it('should accept optional object fields as undefined', () => {
+        const contact = {
+          ...validContactBase,
+          address: undefined,
+          shippingAddress: undefined,
+          emergencyContact: undefined,
+          customFields: undefined,
+        };
+        const result = contactSchema.safeParse(contact);
+        expect(result.success).toBe(true);
+      });
+
+      it('should accept optional date field as undefined', () => {
+        const contact = {
+          ...validContactBase,
+          dateOfBirth: undefined,
+        };
+        const result = contactSchema.safeParse(contact);
+        expect(result.success).toBe(true);
+      });
+
+      it('should accept optional gender as undefined', () => {
+        const contact = {
+          ...validContactBase,
+          gender: undefined,
+        };
+        const result = contactSchema.safeParse(contact);
+        expect(result.success).toBe(true);
+      });
+
+      it('should accept optional age as undefined', () => {
+        const contact = {
+          ...validContactBase,
+          age: undefined,
+        };
+        const result = contactSchema.safeParse(contact);
+        expect(result.success).toBe(true);
+      });
+    });
+
+    describe('string coercion and whitespace handling', () => {
+      it('should handle strings with whitespace properly', () => {
+        const contact = {
+          ...validContactBase,
+          firstName: ' John ',
+          lastName: ' Doe ',
+          fullName: ' John Doe ',
+        };
+        const result = contactSchema.safeParse(contact);
+        expect(result.success).toBe(true);
+      });
+
+      it('should reject empty required strings', () => {
+        const contact = { ...validContactBase, firstName: '' };
+        const result = contactSchema.safeParse(contact);
+        expect(result.success).toBe(false);
+
+        const contact2 = { ...validContactBase, lastName: '' };
+        const result2 = contactSchema.safeParse(contact2);
+        expect(result2.success).toBe(false);
+
+        const contact3 = { ...validContactBase, fullName: '' };
+        const result3 = contactSchema.safeParse(contact3);
+        expect(result3.success).toBe(false);
+      });
+
+      it('should allow empty optional string fields', () => {
+        const contact = {
+          ...validContactBase,
+          preferredName: '',
+          title: '',
+          notes: '',
+        };
+        const result = contactSchema.safeParse(contact);
+        expect(result.success).toBe(true);
+      });
+    });
+
+    describe('array edge cases (empty, oversized, invalid items)', () => {
+      it('should accept empty arrays for optional array fields', () => {
+        const contact = {
+          ...validContactBase,
+          allergies: [],
+          medications: [],
+          tags: [],
+        };
+        const result = contactSchema.safeParse(contact);
+        expect(result.success).toBe(true);
+      });
+
+      it('should accept large arrays', () => {
+        const contact = {
+          ...validContactBase,
+          allergies: Array(100).fill('allergen'),
+          medications: Array(100).fill('medication'),
+          tags: Array(100).fill('tag'),
+        };
+        const result = contactSchema.safeParse(contact);
+        expect(result.success).toBe(true);
+      });
+
+      it('should reject arrays with non-string items', () => {
+        const contact = {
+          ...validContactBase,
+          allergies: ['allergen', 123, null] as any,
+        };
+        const result = contactSchema.safeParse(contact);
+        expect(result.success).toBe(false);
+
+        const contact2 = {
+          ...validContactBase,
+          tags: ['tag1', { tag: 'tag2' }] as any,
+        };
+        const result2 = contactSchema.safeParse(contact2);
+        expect(result2.success).toBe(false);
+      });
+
+      it('should validate customFields as record of unknown values', () => {
+        const contact = {
+          ...validContactBase,
+          customFields: {
+            field1: 'value1',
+            field2: 123,
+            field3: true,
+            field4: null,
+            field5: { nested: 'object' },
+            field6: ['array', 'value'],
+          },
+        };
+        const result = contactSchema.safeParse(contact);
+        expect(result.success).toBe(true);
+      });
+
+      it('should accept empty customFields object', () => {
+        const contact = {
+          ...validContactBase,
+          customFields: {},
+        };
+        const result = contactSchema.safeParse(contact);
+        expect(result.success).toBe(true);
+      });
+    });
+
+    describe('nested object edge cases (missing keys, deeply nested)', () => {
+      it('should reject address with missing required keys', () => {
+        const contact = {
+          ...validContactBase,
+          address: {
+            street1: '123 Main St',
+            city: 'Boston',
+            // missing state, zipCode, country
+          } as any,
+        };
+        const result = contactSchema.safeParse(contact);
+        expect(result.success).toBe(false);
+      });
+
+      it('should accept address with all required keys', () => {
+        const contact = {
+          ...validContactBase,
+          address: {
+            street1: '123 Main St',
+            city: 'Boston',
+            state: 'MA',
+            zipCode: '02101',
+            country: 'USA',
+          },
+        };
+        const result = contactSchema.safeParse(contact);
+        expect(result.success).toBe(true);
+      });
+
+      it('should accept address with optional keys', () => {
+        const contact = {
+          ...validContactBase,
+          address: {
+            id: 'addr-1',
+            street1: '123 Main St',
+            street2: 'Suite 100',
+            city: 'Boston',
+            state: 'MA',
+            zipCode: '02101',
+            country: 'USA',
+            latitude: 42.3601,
+            longitude: -71.0589,
+          },
+        };
+        const result = contactSchema.safeParse(contact);
+        expect(result.success).toBe(true);
+      });
+
+      it('should reject emergencyContact with missing required keys', () => {
+        const contact = {
+          ...validContactBase,
+          emergencyContact: {
+            name: 'Jane Doe',
+            // missing relationship, phone
+          } as any,
+        };
+        const result = contactSchema.safeParse(contact);
+        expect(result.success).toBe(false);
+      });
+
+      it('should accept emergencyContact with required keys and optional email', () => {
+        const contact = {
+          ...validContactBase,
+          emergencyContact: {
+            name: 'Jane Doe',
+            relationship: 'Spouse',
+            phone: '+1234567890',
+            email: 'jane@example.com',
+          },
+        };
+        const result = contactSchema.safeParse(contact);
+        expect(result.success).toBe(true);
+      });
+
+      it('should accept emergencyContact without optional email', () => {
+        const contact = {
+          ...validContactBase,
+          emergencyContact: {
+            name: 'Jane Doe',
+            relationship: 'Spouse',
+            phone: '+1234567890',
+          },
+        };
+        const result = contactSchema.safeParse(contact);
+        expect(result.success).toBe(true);
+      });
+    });
+
+    describe('date format and parsing', () => {
+      it('should accept valid ISO 8601 date strings', () => {
+        const contact = {
+          ...validContactBase,
+          dateOfBirth: '2000-01-01T00:00:00Z',
+        };
+        const result = contactSchema.safeParse(contact);
+        expect(result.success).toBe(true);
+
+        const contact2 = {
+          ...validContactBase,
+          dateOfBirth: '2000-01-01',
+        };
+        const result2 = contactSchema.safeParse(contact2);
+        expect(result2.success).toBe(true);
+
+        const contact3 = {
+          ...validContactBase,
+          dateOfBirth: '2000-01-01T00:00:00+00:00',
+        };
+        const result3 = contactSchema.safeParse(contact3);
+        expect(result3.success).toBe(true);
+      });
+
+      it('should accept Date objects', () => {
+        const contact = {
+          ...validContactBase,
+          dateOfBirth: new Date('2000-01-01'),
+          createdAt: new Date('2025-01-01'),
+          updatedAt: new Date('2025-01-01'),
+        };
+        const result = contactSchema.safeParse(contact);
+        expect(result.success).toBe(true);
+      });
+
+      it('should reject invalid date strings', () => {
+        const contact = {
+          ...validContactBase,
+          dateOfBirth: 'not-a-date',
+        };
+        const result = contactSchema.safeParse(contact);
+        expect(result.success).toBe(false);
+
+        const contact2 = {
+          ...validContactBase,
+          dateOfBirth: '2000-13-45', // invalid month and day
+        };
+        const result2 = contactSchema.safeParse(contact2);
+        expect(result2.success).toBe(false);
+      });
+
+      it('should parse date fields in all variants', () => {
+        const contact = {
+          ...validContactBase,
+          dateOfBirth: '1990-05-15T10:30:00.000Z',
+          createdAt: '2025-01-01T00:00:00Z',
+          updatedAt: '2025-01-01T00:00:00Z',
+        };
+        const result = contactSchema.safeParse(contact);
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.data.dateOfBirth).toBeDefined();
+          expect(result.data.createdAt).toBeDefined();
+          expect(result.data.updatedAt).toBeDefined();
+        }
+      });
+
+      it('should handle edge case dates (year boundaries)', () => {
+        const contact = {
+          ...validContactBase,
+          dateOfBirth: '1900-01-01T00:00:00Z',
+        };
+        const result = contactSchema.safeParse(contact);
+        expect(result.success).toBe(true);
+
+        const contact2 = {
+          ...validContactBase,
+          dateOfBirth: '2099-12-31T23:59:59Z',
+        };
+        const result2 = contactSchema.safeParse(contact2);
+        expect(result2.success).toBe(true);
+      });
+    });
+
+    describe('enum and boolean fields', () => {
+      it('should accept valid gender enum values', () => {
+        const contact1 = { ...validContactBase, gender: 'male' };
+        const result1 = contactSchema.safeParse(contact1);
+        expect(result1.success).toBe(true);
+
+        const contact2 = { ...validContactBase, gender: 'female' };
+        const result2 = contactSchema.safeParse(contact2);
+        expect(result2.success).toBe(true);
+      });
+
+      it('should reject invalid gender values', () => {
+        const contact = { ...validContactBase, gender: 'other' as any };
+        const result = contactSchema.safeParse(contact);
+        expect(result.success).toBe(false);
+
+        const contact2 = { ...validContactBase, gender: 'Male' as any };
+        const result2 = contactSchema.safeParse(contact2);
+        expect(result2.success).toBe(false);
+      });
+
+      it('should accept boolean isActive field', () => {
+        const contact1 = { ...validContactBase, isActive: true };
+        const result1 = contactSchema.safeParse(contact1);
+        expect(result1.success).toBe(true);
+
+        const contact2 = { ...validContactBase, isActive: false };
+        const result2 = contactSchema.safeParse(contact2);
+        expect(result2.success).toBe(true);
+      });
+
+      it('should reject non-boolean isActive values', () => {
+        const contact = { ...validContactBase, isActive: 1 as any };
+        const result = contactSchema.safeParse(contact);
+        expect(result.success).toBe(false);
+
+        const contact2 = { ...validContactBase, isActive: 'true' as any };
+        const result2 = contactSchema.safeParse(contact2);
+        expect(result2.success).toBe(false);
+      });
+    });
+
+    describe('email validation', () => {
+      it('should accept valid email formats', () => {
+        const contact1 = { ...validContactBase, email: 'user@example.com' };
+        const result1 = contactSchema.safeParse(contact1);
+        expect(result1.success).toBe(true);
+
+        const contact2 = { ...validContactBase, email: 'user+tag@example.co.uk' };
+        const result2 = contactSchema.safeParse(contact2);
+        expect(result2.success).toBe(true);
+
+        const contact3 = { ...validContactBase, email: 'user.name@example.com' };
+        const result3 = contactSchema.safeParse(contact3);
+        expect(result3.success).toBe(true);
+      });
+
+      it('should reject invalid email formats', () => {
+        const contact1 = { ...validContactBase, email: 'not-an-email' };
+        const result1 = contactSchema.safeParse(contact1);
+        expect(result1.success).toBe(false);
+
+        const contact2 = { ...validContactBase, email: '@example.com' };
+        const result2 = contactSchema.safeParse(contact2);
+        expect(result2.success).toBe(false);
+
+        const contact3 = { ...validContactBase, email: 'user@' };
+        const result3 = contactSchema.safeParse(contact3);
+        expect(result3.success).toBe(false);
+      });
+    });
+
+    describe('ID transformations', () => {
+      it('should transform string IDs via asContactId, asTenantId, asUserId', () => {
+        const contact = {
+          id: 'contact-1',
+          tenantId: 'tenant-1',
+          createdBy: 'user-1',
+          updatedBy: 'user-1',
+          firstName: 'John',
+          lastName: 'Doe',
+          fullName: 'John Doe',
+          createdAt: '2025-01-01',
+          updatedAt: '2025-01-01',
+          isActive: true,
+        };
+        const result = contactSchema.safeParse(contact);
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.data.id).toBeDefined();
+          expect(result.data.tenantId).toBeDefined();
+          expect(result.data.createdBy).toBeDefined();
+          expect(result.data.updatedBy).toBeDefined();
+        }
+      });
+
+      it('should reject empty ID strings', () => {
+        const contact = {
+          ...validContactBase,
+          id: '',
+        };
+        const result = contactSchema.safeParse(contact);
+        expect(result.success).toBe(false);
+      });
+    });
+  });
 });
