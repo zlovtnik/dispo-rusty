@@ -199,7 +199,7 @@ const handleSuccessResponse = <Raw, Parsed>(
 
 const toAuthResponse = (payload: AuthResponseSchema): AuthResponse => {
   // Decode JWT to get user info
-  const jwtResult = decodeJwtPayload(payload.data.access_token);
+  const jwtResult = decodeJwtPayload(payload.access_token);
   
   if (jwtResult.isErr()) {
     throw new Error('Invalid JWT token received from server');
@@ -256,12 +256,11 @@ const toAuthResponse = (payload: AuthResponseSchema): AuthResponse => {
   
   return {
     success: true,
-    token: payload.data.access_token,
-    refreshToken: payload.data.refresh_token,
+    token: payload.access_token,
+    refreshToken: payload.refresh_token,
     user,
     tenant,
     expiresIn,
-    message: payload.message,
   };
 };
 
