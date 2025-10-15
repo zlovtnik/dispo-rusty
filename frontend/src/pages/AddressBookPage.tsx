@@ -40,10 +40,22 @@ interface AddressFormValues {
   country: string;
 }
 
-const DEFAULT_COUNTRY = (() => {
-  const value = getEnv().defaultCountry;
-  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : '';
-})();
+let cachedDefaultCountry: string | null = null;
+
+function getDefaultCountry(): string {
+  if (cachedDefaultCountry === null) {
+    try {
+      const value = getEnv().defaultCountry;
+      cachedDefaultCountry = typeof value === 'string' && value.trim().length > 0 ? value.trim() : '';
+    } catch {
+      // Fallback if environment not available during tests
+      cachedDefaultCountry = '';
+    }
+  }
+  return cachedDefaultCountry;
+}
+
+const DEFAULT_COUNTRY = getDefaultCountry();
 
 /**
  * Resolve the contact identifier from a backend person payload.
@@ -96,6 +108,11 @@ export const resolveContactGender = (person: PersonDTO): Gender | undefined => {
 
   if (normalized.gender === null || normalized.gender === undefined) {
     return undefined;
+  }
+
+  // Handle boolean values (true -> male, false -> female)
+  if (typeof normalized.gender === 'boolean') {
+    return normalized.gender ? Gender.male : Gender.female;
   }
 
   if (

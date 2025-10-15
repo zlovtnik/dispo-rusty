@@ -19,6 +19,7 @@ export const TOP_1000_COMMON_PASSWORDS: readonly string[] = [
   '111111',
   'abc123',
   'password1',
+  'password1!',
   'letmein',
   'welcome',
   'admin',

@@ -9,16 +9,25 @@ import {
   normalizeContactAddress,
 } from '../AddressBookPage';
 
-const createPerson = (overrides: Record<string, unknown> = {}): PersonDTO =>
-  normalizePersonDTO({
+const createPerson = (overrides: Record<string, unknown> = {}): PersonDTO => {
+  const defaults: Record<string, unknown> = {
     id: 'contact-1',
     tenant_id: 'tenant-1',
-    first_name: 'Test',
-    last_name: 'User',
     email: 'test@example.com',
     is_active: true,
+  };
+  
+  // Only add default names if not explicitly overriding with fullName
+  if (!overrides.full_name && !overrides.fullName) {
+    defaults.first_name = 'Test';
+    defaults.last_name = 'User';
+  }
+  
+  return normalizePersonDTO({
+    ...defaults,
     ...overrides,
   });
+};
 
 describe('AddressBook helper functions', () => {
   describe('resolveContactId', () => {

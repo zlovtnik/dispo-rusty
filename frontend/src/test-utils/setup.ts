@@ -9,6 +9,22 @@
 import '@testing-library/jest-dom';
 import { expect } from 'bun:test';
 
+// Ensure environment variables are available in import.meta.env
+// Bun loads .env automatically, but we need to explicitly set import.meta.env for tests
+if (!import.meta.env.VITE_API_URL) {
+  const apiUrl = process.env.VITE_API_URL || 'http://localhost:8000/api';
+  (import.meta.env as Record<string, string>).VITE_API_URL = apiUrl;
+}
+if (!import.meta.env.MODE) {
+  (import.meta.env as Record<string, string>).MODE = process.env.NODE_ENV || 'test';
+}
+if (!import.meta.env.DEV) {
+  (import.meta.env as Record<string, boolean>).DEV = (process.env.NODE_ENV || 'test') !== 'production';
+}
+if (!import.meta.env.PROD) {
+  (import.meta.env as Record<string, boolean>).PROD = (process.env.NODE_ENV || 'test') === 'production';
+}
+
 // Extend expect with jest-dom matchers for Bun
 // This is needed because Bun doesn't automatically extend expect like Jest does
 const jestDom = require('@testing-library/jest-dom/matchers');

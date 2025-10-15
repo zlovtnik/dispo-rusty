@@ -120,6 +120,10 @@ const normalizeGender = (value: unknown): Gender | null | undefined => {
     return null;
   }
 
+  if (typeof value === 'boolean') {
+    return value ? Gender.male : Gender.female;
+  }
+
   if (typeof value === 'string') {
     const normalized = value.trim().toLowerCase();
     if (!normalized) {

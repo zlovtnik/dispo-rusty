@@ -13,13 +13,37 @@ const parseDate = (value: string | Date): Date => {
 
 const dateSchema = z
   .union([nonEmptyString, z.date()])
-  .transform((value: string | Date): Date => parseDate(value));
+  .transform((value: string | Date): Date => {
+    // If string, parse it and handle invalid dates
+    if (typeof value === 'string') {
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) {
+        // Return Invalid Date to fail refine check
+        return new Date(NaN);
+      }
+      return date;
+    }
+    return value;
+  })
+  .refine((date) => !Number.isNaN(date.getTime()), 'Invalid date format');
 
 const optionalDateSchema = z
   .union([nonEmptyString, z.date()])
   .optional()
-  .transform((value: string | Date | undefined): Date | undefined =>
-    value === undefined ? undefined : parseDate(value)
+  .transform((value: string | Date | undefined): Date | undefined => {
+    if (value === undefined) return undefined;
+    if (typeof value === 'string') {
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) {
+        return new Date(NaN);
+      }
+      return date;
+    }
+    return value;
+  })
+  .refine(
+    (date) => date === undefined || !Number.isNaN(date.getTime()),
+    'Invalid date format'
   );
 
 const tenantBrandingSchema = z.object({

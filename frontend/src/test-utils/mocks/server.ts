@@ -5,13 +5,38 @@
  */
 
 import { setupServer } from 'msw/node';
-import { handlers, resetMockData } from './handlers';
+import { getHandlers, resetMockData } from './handlers';
 
 /**
- * MSW Server instance
- * Use this in tests to control API behavior
+ * Lazy-initialized MSW Server instance
+ * Delayed until first use to ensure environment variables are loaded
  */
-export const server = setupServer(...handlers);
+let _server: ReturnType<typeof setupServer> | null = null;
+
+function ensureServer() {
+  if (!_server) {
+    _server = setupServer(...getHandlers());
+  }
+  return _server;
+}
+
+/**
+ * Get the MSW server instance
+ * Lazily initializes on first call
+ */
+export function getServer() {
+  return ensureServer();
+}
+
+// Create a lazy proxy for backward compatibility
+export const server = new Proxy({} as unknown as ReturnType<typeof setupServer>, {
+  get(target, prop) {
+    return (ensureServer() as unknown as Record<string, unknown>)[prop as string];
+  },
+  has(target, prop) {
+    return prop in (ensureServer() as unknown as Record<string, unknown>);
+  },
+});
 
 /**
  * Setup MSW server for all tests
@@ -19,7 +44,7 @@ export const server = setupServer(...handlers);
  */
 export function setupMSW(): void {
   // Start server before all tests
-  server.listen({
+  ensureServer().listen({
     onUnhandledRequest: 'warn', // Warn about unhandled requests
   });
 }
@@ -30,7 +55,9 @@ export function setupMSW(): void {
  */
 export function teardownMSW(): void {
   // Close server after all tests
-  server.close();
+  if (_server) {
+    _server.close();
+  }
 }
 
 /**
@@ -39,12 +66,14 @@ export function teardownMSW(): void {
  */
 export function resetMSW(): void {
   // Reset handlers to initial state
-  server.resetHandlers();
+  if (_server) {
+    _server.resetHandlers();
+  }
   
   // Reset mock data
   resetMockData();
 }
 
 // Re-export utilities
-export { handlers, resetMockData } from './handlers';
+export { getHandlers, resetMockData } from './handlers';
 export { http, HttpResponse } from 'msw';

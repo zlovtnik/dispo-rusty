@@ -14,11 +14,22 @@ import { asTenantId } from '../../types/ids';
 import { createMockAuthJwt } from '../jwt';
 import { testLogger } from '../logger';
 
-// Get API base URL from environment
+// Get API base URL from environment (delay until runtime to ensure env vars are loaded)
 import { getEnv } from '../../config/env';
 
-// Use the same base URL as the service
-const API_BASE_URL = getEnv().apiUrl;
+// Create a function to get the base URL at runtime instead of module load time
+function getApiBaseUrl(): string {
+  // In tests, prioritize process.env which Bun loads from .env files
+  // Fall back to import.meta.env for browser/build time
+  const apiUrl = process.env.VITE_API_URL || 
+                 (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) ||
+                 'http://localhost:8000/api';
+  
+  if (!apiUrl) {
+    throw new Error('Missing required environment variable: VITE_API_URL');
+  }
+  return apiUrl;
+}
 
 /**
  * Factory function for mock contacts
@@ -87,7 +98,9 @@ let mockTenants: BackendTenant[] = createMockTenants();
 /**
  * API Request Handlers
  */
-export const handlers = [
+export function getHandlers() {
+  const API_BASE_URL = getApiBaseUrl();
+  return [
   // ============ Authentication ============
 
   /**
@@ -207,6 +220,107 @@ export const handlers = [
   }),
 
   /**
+   * GET /admin/tenants/filter - Filter tenants (MUST be before /:id to match specific path)
+   */
+  http.get(`${API_BASE_URL}/admin/tenants/filter`, ({ request }) => {
+    try {
+      const url = new URL(request.url);
+      const cursor = parseInt(url.searchParams.get('cursor') || '0');
+      const pageSize = parseInt(url.searchParams.get('page_size') || '10');
+
+      // Parse filters from query parameters (qs.stringify with arrayFormat: 'indices')
+      const filters: any[] = [];
+      const filterKeys = Array.from(url.searchParams.keys()).filter(key =>
+        key.startsWith('filters[')
+      );
+
+      // Group filter parameters by index
+      const filterGroups: Record<string, any> = {};
+      filterKeys.forEach(key => {
+        const match = /^filters\[(\d+)\]\[(\w+)\]$/.exec(key);
+        if (match) {
+          const [, indexStr, field] = match;
+          const value = url.searchParams.get(key);
+          const index = indexStr!;
+          if (!(filterGroups as any)[index]) {
+            (filterGroups as any)[index] = {};
+          }
+          // @ts-ignore - Dynamic property access
+          (filterGroups as any)[index][field] = value;
+        }
+      });
+
+      // Convert to array
+      Object.values(filterGroups).forEach(group => {
+        if (group.field && group.operator && group.value !== undefined) {
+          filters.push({
+            field: group.field,
+            operator: group.operator,
+            value: group.value,
+          });
+        }
+      });
+
+      let filteredTenants = [...mockTenants];
+
+      // Apply filters
+      if (filters.length > 0) {
+        filteredTenants = mockTenants.filter(tenant => {
+          return filters.every((filter: any) => {
+            const { field, operator, value } = filter;
+            const tenantValue = (tenant as any)[field];
+
+            switch (operator) {
+              case 'eq':
+                return tenantValue === value;
+              case 'ne':
+                return tenantValue !== value;
+              case 'like':
+                return (
+                  typeof tenantValue === 'string' &&
+                  tenantValue.toLowerCase().includes(value.toLowerCase())
+                );
+              case 'gt':
+                return typeof tenantValue === 'number' && tenantValue > Number(value);
+              case 'lt':
+                return typeof tenantValue === 'number' && tenantValue < Number(value);
+              default:
+                return true; // Unknown operator, include item
+            }
+          });
+        });
+      }
+
+      // Apply cursor-based pagination
+      const startIndex = cursor;
+      const endIndex = startIndex + pageSize;
+      const paginatedTenants = filteredTenants.slice(startIndex, endIndex);
+
+      return HttpResponse.json(
+        {
+          message: 'Success',
+          data: {
+            data: paginatedTenants,
+            total: filteredTenants.length,
+            offset: startIndex,
+            limit: pageSize,
+          },
+        },
+        { status: 200 }
+      );
+    } catch (error) {
+      testLogger.error('Filter handler error:', error);
+      return HttpResponse.json(
+        {
+          message: 'Internal server error',
+          error: 'Failed to process filter request',
+        },
+        { status: 500 }
+      );
+    }
+  }),
+
+  /**
    * GET /admin/tenants/:id - Get tenant by ID
    */
   http.get(`${API_BASE_URL}/admin/tenants/:id`, ({ params }) => {
@@ -321,107 +435,6 @@ export const handlers = [
       },
       { status: 200 }
     );
-  }),
-
-  /**
-   * GET /admin/tenants/filter - Filter tenants
-   */
-  http.get(`${API_BASE_URL}/admin/tenants/filter`, ({ request }) => {
-    try {
-      const url = new URL(request.url);
-      const cursor = parseInt(url.searchParams.get('cursor') || '0');
-      const pageSize = parseInt(url.searchParams.get('page_size') || '10');
-
-      // Parse filters from query parameters (qs.stringify with arrayFormat: 'indices')
-      const filters: any[] = [];
-      const filterKeys = Array.from(url.searchParams.keys()).filter(key =>
-        key.startsWith('filters[')
-      );
-
-      // Group filter parameters by index
-      const filterGroups: Record<string, any> = {};
-      filterKeys.forEach(key => {
-        const match = /^filters\[(\d+)\]\[(\w+)\]$/.exec(key);
-        if (match) {
-          const [, indexStr, field] = match;
-          const value = url.searchParams.get(key);
-          const index = indexStr!;
-          if (!(filterGroups as any)[index]) {
-            (filterGroups as any)[index] = {};
-          }
-          // @ts-ignore - Dynamic property access
-          (filterGroups as any)[index][field] = value;
-        }
-      });
-
-      // Convert to array
-      Object.values(filterGroups).forEach(group => {
-        if (group.field && group.operator && group.value !== undefined) {
-          filters.push({
-            field: group.field,
-            operator: group.operator,
-            value: group.value,
-          });
-        }
-      });
-
-      let filteredTenants = [...mockTenants];
-
-      // Apply filters
-      if (filters.length > 0) {
-        filteredTenants = mockTenants.filter(tenant => {
-          return filters.every((filter: any) => {
-            const { field, operator, value } = filter;
-            const tenantValue = (tenant as any)[field];
-
-            switch (operator) {
-              case 'eq':
-                return tenantValue === value;
-              case 'ne':
-                return tenantValue !== value;
-              case 'like':
-                return (
-                  typeof tenantValue === 'string' &&
-                  tenantValue.toLowerCase().includes(value.toLowerCase())
-                );
-              case 'gt':
-                return typeof tenantValue === 'number' && tenantValue > Number(value);
-              case 'lt':
-                return typeof tenantValue === 'number' && tenantValue < Number(value);
-              default:
-                return true; // Unknown operator, include item
-            }
-          });
-        });
-      }
-
-      // Apply cursor-based pagination
-      const startIndex = cursor;
-      const endIndex = startIndex + pageSize;
-      const paginatedTenants = filteredTenants.slice(startIndex, endIndex);
-
-      return HttpResponse.json(
-        {
-          message: 'Success',
-          data: {
-            data: paginatedTenants,
-            total: filteredTenants.length,
-            offset: startIndex,
-            limit: pageSize,
-          },
-        },
-        { status: 200 }
-      );
-    } catch (error) {
-      testLogger.error('Filter handler error:', error);
-      return HttpResponse.json(
-        {
-          message: 'Internal server error',
-          error: 'Failed to process filter request',
-        },
-        { status: 500 }
-      );
-    }
   }),
 
   // ============ Contacts / Address Book ============
@@ -636,7 +649,8 @@ export const handlers = [
       { status: 200 }
     );
   }),
-];
+  ];
+}
 
 /**
  * Reset mock databases to initial state

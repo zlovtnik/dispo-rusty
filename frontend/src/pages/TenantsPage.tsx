@@ -142,9 +142,9 @@ export const TenantsPage: React.FC = () => {
           limit: pagination.pageSize,
         });
       } else {
-        // Create new tenant
+        // Create new tenant with cryptographically secure UUID
         const createResult = await tenantService.create({
-          id: `tenant-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          id: crypto.randomUUID(),
           name: values.name,
           db_url: values.db_url,
         });

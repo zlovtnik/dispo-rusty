@@ -15,7 +15,7 @@ export * from './render';
 
 // Re-export MSW utilities
 export { server, setupMSW, teardownMSW, resetMSW } from './mocks/server';
-export { handlers, resetMockData } from './mocks/handlers';
+export { getHandlers, resetMockData } from './mocks/handlers';
 
 // Re-export test logger
 export { testLogger, testConsoleError } from './logger';

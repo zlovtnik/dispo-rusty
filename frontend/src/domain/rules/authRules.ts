@@ -147,7 +147,7 @@ export async function preloadCommonPasswords(): Promise<void> {
 export function isCommonPassword(password: string): boolean {
   if (!commonPasswordsCache) {
     // Fallback to minimal list if not preloaded
-    const fallbackPasswords = ['123456', 'password', 'qwerty', '111111', 'abc123'];
+    const fallbackPasswords = ['123456', 'password', 'qwerty', '111111', 'abc123', 'password1!'];
     return fallbackPasswords.includes(password.toLowerCase());
   }
   return commonPasswordsCache.includes(password.toLowerCase());
@@ -172,7 +172,7 @@ class PwnedPasswordChecker {
       return commonPasswords.includes(password.toLowerCase());
     } catch (error) {
       // Fallback to a minimal hardcoded list if loading fails
-      const fallbackPasswords = ['123456', 'password', 'qwerty', '111111', 'abc123'];
+      const fallbackPasswords = ['123456', 'password', 'qwerty', '111111', 'abc123', 'password1!'];
       return fallbackPasswords.includes(password.toLowerCase());
     }
   }

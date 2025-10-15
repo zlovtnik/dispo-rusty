@@ -333,24 +333,20 @@ const result = await fastClient.get('/api/fast-endpoint');
 ## Storage Conventions
 
 The HttpClient expects specific storage formats for authentication:
-Circuit breaker is open. Wait for reset timeout (default: 60 seconds) or restart application.
 
 ```typescript
-Request exceeded timeout (default: 30 seconds). Check network connection or increase timeout:
 // auth_token: JWT token
 localStorage.setItem('auth_token', JSON.stringify({ 
   token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' 
 }));
 
 // tenant: Current tenant context
-`X-Tenant-ID` header missing. Ensure tenant is stored in localStorage:
 localStorage.setItem('tenant', JSON.stringify({ 
   id: 'tenant1',
   name: 'Company Name',
   // ... other tenant fields
 }));
 
-API returned non-JSON content. Check API endpoint and ensure proper Content-Type header.
 // user: Current user data
 localStorage.setItem('user', JSON.stringify({ 
   id: 'user1',

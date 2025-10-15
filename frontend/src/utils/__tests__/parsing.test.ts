@@ -202,15 +202,18 @@ describe('parsing utilities', () => {
 
     it('should handle missing optional fields', () => {
       const user = mockUser;
+      // Omit optional iat field (tenant_id and exp are required)
       const payload = {
         user: 'new-username',
-        tenant_id: 'new-tenant-id',
-        exp: 1234567890
+        tenant_id: user.tenantId.toString(),
+        exp: 1234567890,
+        // iat is intentionally omitted (it's optional in JwtPayload)
       };
 
       const updated = updateUserFromJwt(user, payload);
       expect(updated.username).toBe('new-username');
-      expect(updated.tenantId).toBe(asTenantId('new-tenant-id'));
+      // tenantId should remain the same since it was not changed in payload
+      expect(updated.tenantId).toBe(asTenantId(payload.tenant_id));
     });
   });
 

@@ -52,7 +52,7 @@
     "eslint-plugin-react-hooks": "^7.0.0",
     "eslint-plugin-react-refresh": "^0.4.23",
     "globals": "^16.4.0",
-    "@happy-dom/global-registrator": "^15.11.11",
+    "@happy-dom/global-registrator": "^20.0.1",
     "happy-dom": "^20.0.1",
     "msw": "^2.11.5",
     "postcss": "^8.5.6",
