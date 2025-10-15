@@ -176,7 +176,7 @@ export const apiErrorSchema = z.object({
   statusCode: z.number().optional(),
 });
 
-// Schema for the inner data returned by auth endpoints
+// Schema for the auth response returned by auth endpoints
 export const authResponseSchema = z.object({
   access_token: z.string().min(1),
   refresh_token: z.string().min(1),
