@@ -176,6 +176,9 @@ fn configure_admin_routes(cfg: &mut web::ServiceConfig) {
         .add_route(|cfg| {
             cfg.service(web::scope("/tenant").configure(configure_tenant_admin_routes));
         })
+        .add_route(|cfg| {
+            cfg.service(web::scope("/tenants").configure(configure_tenant_crud_routes));
+        })
         .build(cfg);
 }
 
@@ -208,6 +211,48 @@ fn configure_tenant_admin_routes(cfg: &mut web::ServiceConfig) {
         .add_route(|cfg| {
             cfg.service(
                 web::resource("/status").route(web::get().to(tenant_controller::get_tenant_status)),
+            );
+        })
+        .build(cfg);
+}
+
+/// Register tenant CRUD endpoints using functional composition.
+///
+/// The configured routes (relative to the scope) are:
+/// - GET `/` -> `tenant_controller::find_all` (list all tenants with pagination)
+/// - GET `/filter` -> `tenant_controller::filter` (filter tenants)
+/// - POST `/` -> `tenant_controller::create` (create a new tenant)
+/// - GET `/{id}` -> `tenant_controller::find_by_id` (get tenant by ID)
+/// - PUT `/{id}` -> `tenant_controller::update` (update tenant)
+/// - DELETE `/{id}` -> `tenant_controller::delete` (delete tenant)
+///
+/// # Examples
+///
+/// ```
+/// use actix_web::{web, App};
+///
+/// let _app = App::new().service(web::scope("/admin/tenants").configure(configure_tenant_crud_routes));
+/// ```
+fn configure_tenant_crud_routes(cfg: &mut web::ServiceConfig) {
+    RouteBuilder::new()
+        .add_route(|cfg| {
+            cfg.service(
+                web::resource("")
+                    .route(web::get().to(tenant_controller::find_all))
+                    .route(web::post().to(tenant_controller::create)),
+            );
+        })
+        .add_route(|cfg| {
+            cfg.service(
+                web::resource("/filter").route(web::get().to(tenant_controller::filter)),
+            );
+        })
+        .add_route(|cfg| {
+            cfg.service(
+                web::resource("/{id}")
+                    .route(web::get().to(tenant_controller::find_by_id))
+                    .route(web::put().to(tenant_controller::update))
+                    .route(web::delete().to(tenant_controller::delete)),
             );
         })
         .build(cfg);

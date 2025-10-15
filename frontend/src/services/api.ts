@@ -624,7 +624,7 @@ export interface TenantFilter {
 
 export const tenantService = {
   getAll(): AsyncResult<ApiResponse<Tenant[]>, AppError> {
-    return apiClient.get<Tenant[]>('/tenants');
+    return apiClient.get<Tenant[]>('/admin/tenants');
   },
 
   getAllWithPagination(params?: { offset?: number; limit?: number }): AsyncResult<ApiResponse<PaginatedTenantResponse>, AppError> {
@@ -633,7 +633,7 @@ export const tenantService = {
     if (params?.limit !== undefined) queryParams.set('limit', params.limit.toString());
 
     const query = queryParams.toString();
-    return apiClient.get<PaginatedTenantResponse>(query ? `/tenants?${query}` : '/tenants');
+    return apiClient.get<PaginatedTenantResponse>(query ? `/admin/tenants?${query}` : '/admin/tenants');
   },
 
   filter(params: TenantFilter): AsyncResult<ApiResponse<PaginatedTenantResponse | Tenant[]>, AppError> {
@@ -649,23 +649,23 @@ export const tenantService = {
     }
 
     const queryString = qs.stringify(queryObj, { arrayFormat: 'indices' });
-    return apiClient.get<PaginatedTenantResponse | Tenant[]>(`/tenants/filter?${queryString}`);
+    return apiClient.get<PaginatedTenantResponse | Tenant[]>(`/admin/tenants/filter?${queryString}`);
   },
 
   getById(id: string): AsyncResult<ApiResponse<Tenant>, AppError> {
-    return apiClient.get<Tenant>(`/tenants/${id}`);
+    return apiClient.get<Tenant>(`/admin/tenants/${id}`);
   },
 
   create(data: CreateTenantDTO): AsyncResult<ApiResponse<Tenant>, AppError> {
-    return apiClient.post<Tenant>('/tenants', data);
+    return apiClient.post<Tenant>('/admin/tenants', data);
   },
 
   update(id: string, data: UpdateTenantDTO): AsyncResult<ApiResponse<Tenant>, AppError> {
-    return apiClient.put<Tenant>(`/tenants/${id}`, data);
+    return apiClient.put<Tenant>(`/admin/tenants/${id}`, data);
   },
 
   delete(id: string): AsyncResult<ApiResponse<Record<string, unknown>>, AppError> {
-    return apiClient.delete<Record<string, unknown>>(`/tenants/${id}`);
+    return apiClient.delete<Record<string, unknown>>(`/admin/tenants/${id}`);
   },
 };
 
