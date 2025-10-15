@@ -1,12 +1,12 @@
-import { z } from "zod";
-import { asContactId, asTenantId, asUserId } from "../types/ids";
+import { z } from 'zod';
+import { asContactId, asTenantId, asUserId } from '../types/ids';
 
-const nonEmptyString = z.string().min(1, "Value is required");
+const nonEmptyString = z.string().min(1, 'Value is required');
 
 const parseDate = (value: string | Date): Date => {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) {
-    throw new Error("Invalid date value");
+    throw new Error('Invalid date value');
   }
   return date;
 };
@@ -29,7 +29,7 @@ const tenantBrandingSchema = z.object({
 });
 
 const tenantSettingsSchema = z.object({
-  theme: z.enum(["light", "dark", "natural"]),
+  theme: z.enum(['light', 'dark', 'natural']),
   language: z.string().min(1),
   timezone: z.string().min(1),
   dateFormat: z.string().min(1),
@@ -44,8 +44,8 @@ const tenantLimitsSchema = z.object({
 });
 
 const tenantSubscriptionSchema = z.object({
-  plan: z.enum(["basic", "professional", "enterprise"]),
-  status: z.enum(["active", "trial", "expired", "cancelled"]),
+  plan: z.enum(['basic', 'professional', 'enterprise']),
+  status: z.enum(['active', 'trial', 'expired', 'cancelled']),
   expiresAt: z
     .union([z.string(), z.date()])
     .optional()
@@ -55,7 +55,7 @@ const tenantSubscriptionSchema = z.object({
       }
       const date = value instanceof Date ? value : new Date(value);
       if (Number.isNaN(date.getTime())) {
-        throw new Error("Invalid date value");
+        throw new Error('Invalid date value');
       }
       return date;
     }),
@@ -79,7 +79,7 @@ export const userSchema = z.object({
     .string()
     .min(1)
     .transform((value: string) => asUserId(value)),
-  email: z.string().email(),
+  email: z.email(),
   username: z.string().min(1),
   firstName: z.string().optional(),
   lastName: z.string().optional(),
@@ -109,7 +109,7 @@ const emergencyContactSchema = z.object({
   name: z.string().min(1),
   relationship: z.string().min(1),
   phone: z.string().min(1),
-  email: z.string().email().optional(),
+  email: z.email().optional(),
 });
 
 export const contactSchema = z
@@ -128,7 +128,7 @@ export const contactSchema = z
     preferredName: z.string().optional(),
     title: z.string().optional(),
     suffix: z.string().optional(),
-    email: z.string().email().optional(),
+    email: z.email().optional(),
     phone: z.string().optional(),
     mobile: z.string().optional(),
     fax: z.string().optional(),
@@ -139,7 +139,7 @@ export const contactSchema = z
     jobTitle: z.string().optional(),
     department: z.string().optional(),
     dateOfBirth: optionalDateSchema,
-    gender: z.enum(["male", "female"]).optional(),
+    gender: z.enum(['male', 'female']).optional(),
     age: z.number().optional(),
     allergies: z.array(z.string()).optional(),
     medications: z.array(z.string()).optional(),
@@ -160,7 +160,7 @@ export const contactSchema = z
       .transform((value: string) => asUserId(value)),
     isActive: z.boolean(),
   })
-  .passthrough();
+  .loose();
 
 export const contactListResponseSchema = z.object({
   contacts: z.array(contactSchema),
@@ -188,7 +188,7 @@ export const paginatedTenantResponseSchema = z.object({
 });
 
 export const apiErrorSchema = z.object({
-  type: z.enum(["validation", "network", "auth", "business"]),
+  type: z.enum(['validation', 'network', 'auth', 'business']),
   message: z.string(),
   code: z.string().optional(),
   details: z.record(z.string(), z.unknown()).optional(),
@@ -213,14 +213,14 @@ export const loginRequestSchema = z.object({
 
 export const createTenantSchema = z.object({
   name: z.string().min(1),
-  db_url: z.string().url(),
+  db_url: z.url(),
 });
 
 export const updateTenantSchema = createTenantSchema.partial();
 
 export const contactMutationSchema = z.object({
   name: z.string().min(1),
-  email: z.string().email(),
+  email: z.email(),
   gender: z.boolean(),
   age: z.number().int().nonnegative(),
   address: z.string().min(1),
@@ -232,11 +232,7 @@ export type AuthTenantSchema = z.infer<typeof authTenantSchema>;
 export type TenantSchema = z.infer<typeof tenantSchema>;
 export type ContactSchema = z.infer<typeof contactSchema>;
 export type AuthResponseSchema = z.infer<typeof authResponseSchema>;
-export type ContactListResponseSchema = z.infer<
-  typeof contactListResponseSchema
->;
-export type PaginatedTenantResponseSchema = z.infer<
-  typeof paginatedTenantResponseSchema
->;
+export type ContactListResponseSchema = z.infer<typeof contactListResponseSchema>;
+export type PaginatedTenantResponseSchema = z.infer<typeof paginatedTenantResponseSchema>;
 export type ApiErrorSchema = z.infer<typeof apiErrorSchema>;
 export type LoginRequestSchema = z.infer<typeof loginRequestSchema>;

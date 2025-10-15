@@ -1,13 +1,13 @@
 /**
  * Form Processing Pipeline with Railway-Oriented Programming
- * 
+ *
  * Implements form submission pipeline: validate → sanitize → transform → submit
  * Uses Result types for type-safe error handling throughout the pipeline.
- * 
+ *
  * @module formPipeline
  */
 
-import { Result, ok, err } from 'neverthrow';
+import { type Result, ok, err } from 'neverthrow';
 import type { FormValidationError } from './formValidation';
 import { formatFormValidationError } from './formValidation';
 
@@ -31,7 +31,7 @@ export type FormValidator<TForm, TValidated, E = FormValidationError> = (
 
 /**
  * Sanitizer function type
- * 
+ *
  * @warning Sanitizers may mutate field values (e.g., converting "" to undefined, deleting nullish values).
  * The returned type T should be compatible with these transformations. For example, fields that may
  * be removed should be optional in the type definition.
@@ -41,12 +41,16 @@ export type Sanitizer<T, E = FormValidationError> = (data: T) => Result<T, Pipel
 /**
  * Transformer function type (DTO conversion)
  */
-export type Transformer<TInput, TOutput, E = FormValidationError> = (input: TInput) => Result<TOutput, PipelineError<E>>;
+export type Transformer<TInput, TOutput, E = FormValidationError> = (
+  input: TInput
+) => Result<TOutput, PipelineError<E>>;
 
 /**
  * Submission function type
  */
-export type Submitter<TData, TResponse, E = FormValidationError> = (data: TData) => Promise<Result<TResponse, PipelineError<E>>>;
+export type Submitter<TData, TResponse, E = FormValidationError> = (
+  data: TData
+) => Promise<Result<TResponse, PipelineError<E>>>;
 
 /**
  * Complete form pipeline configuration
@@ -72,10 +76,10 @@ export type PipelineState<T, E = FormValidationError> =
 
 /**
  * Create a form submission pipeline with railway-oriented programming
- * 
+ *
  * @param config - Pipeline configuration with validate, sanitize, transform, submit steps
  * @returns Function that executes the complete pipeline
- * 
+ *
  * @example
  * ```typescript
  * const pipeline = createFormPipeline({
@@ -84,7 +88,7 @@ export type PipelineState<T, E = FormValidationError> =
  *   transform: transformToLoginDTO,
  *   submit: submitLogin
  * });
- * 
+ *
  * const result = await pipeline(formData);
  * result.match(
  *   (response) => console.log('Success:', response),
@@ -137,28 +141,28 @@ export const createFormPipeline = <TForm, TValidated, TDTO, TResponse, E = FormV
 
 /**
  * Default sanitization functions
- * 
+ *
  * @warning These sanitizers mutate field values and may remove or transform fields.
  * Ensure your type definitions account for these changes (e.g., optional fields).
  */
 export const Sanitizers = {
   /**
    * Trim whitespace from all string fields
-   * 
+   *
    * @warning Only modifies string fields. Safe for most types but ensure trimmed values
    * are acceptable for your validation logic (e.g., minimum length checks).
    */
   trimStrings: <T extends Record<string, unknown>>(data: T): Result<T, PipelineError> => {
     try {
       const sanitized = { ...data };
-      
+
       for (const [key, value] of Object.entries(sanitized)) {
         if (typeof value === 'string') {
           // Safe mutation - trimming preserves string type
           sanitized[key as keyof T] = value.trim() as T[keyof T];
         }
       }
-      
+
       return ok(sanitized);
     } catch (error) {
       return err({
@@ -170,7 +174,7 @@ export const Sanitizers = {
 
   /**
    * Remove null and undefined values
-   * 
+   *
    * @warning Deletes fields with null/undefined values. Ensure your type definition
    * marks these fields as optional (e.g., field?: string) or use Partial<T> for the result.
    * This may violate type contracts if fields are non-optional.
@@ -178,13 +182,13 @@ export const Sanitizers = {
   removeNullish: <T extends Record<string, unknown>>(data: T): Result<T, PipelineError> => {
     try {
       const sanitized = { ...data };
-      
+
       for (const [key, value] of Object.entries(sanitized)) {
         if (value === null || value === undefined) {
           delete sanitized[key as keyof T];
         }
       }
-      
+
       // Type assertion: caller must ensure deleted fields are optional in T
       return ok(sanitized);
     } catch (error) {
@@ -197,22 +201,24 @@ export const Sanitizers = {
 
   /**
    * Convert empty strings to undefined
-   * 
+   *
    * @warning Mutates string fields from "" to undefined. Ensure your type definition
    * allows undefined for string fields (e.g., field?: string | undefined).
    * This may violate type contracts if fields are non-nullable strings.
    */
-  emptyStringsToUndefined: <T extends Record<string, unknown>>(data: T): Result<T, PipelineError> => {
+  emptyStringsToUndefined: <T extends Record<string, unknown>>(
+    data: T
+  ): Result<T, PipelineError> => {
     try {
       const sanitized = { ...data };
-      
+
       for (const [key, value] of Object.entries(sanitized)) {
         if (value === '') {
           // Type assertion: caller must ensure field accepts undefined
           sanitized[key as keyof T] = undefined as T[keyof T];
         }
       }
-      
+
       return ok(sanitized);
     } catch (error) {
       return err({
@@ -228,14 +234,14 @@ export const Sanitizers = {
   compose: <T>(...sanitizers: Sanitizer<T>[]): Sanitizer<T> => {
     return (data: T) => {
       let result: Result<T, PipelineError> = ok(data);
-      
+
       for (const sanitizer of sanitizers) {
         if (result.isErr()) {
           return result;
         }
         result = sanitizer(result.value);
       }
-      
+
       return result;
     };
   },
@@ -243,14 +249,14 @@ export const Sanitizers = {
 
 /**
  * Helper to create field-level validators for React Hook Form
- * 
+ *
  * @param validator - Validation function
  * @returns Validator compatible with React Hook Form
- * 
+ *
  * @example
  * ```typescript
  * const emailValidator = createFieldValidator(validateEmail);
- * 
+ *
  * <input {...register('email', { validate: emailValidator })} />
  * ```
  */
@@ -261,7 +267,7 @@ export const createFieldValidator = <T>(
     const result = validator(value);
     return result.match(
       () => true,
-      (error) => {
+      error => {
         // Use shared formatFormValidationError for consistent error messages
         return formatFormValidationError(error);
       }
@@ -271,14 +277,14 @@ export const createFieldValidator = <T>(
 
 /**
  * Create custom resolver for React Hook Form using Result types
- * 
+ *
  * @param validator - Form validator function
  * @returns Resolver compatible with React Hook Form
- * 
+ *
  * @example
  * ```typescript
  * const resolver = createFormResolver(validateLoginForm);
- * 
+ *
  * const { register, handleSubmit } = useForm({
  *   resolver
  * });
@@ -315,7 +321,7 @@ export const createFormResolver = <TForm extends Record<string, unknown>, TValid
     for (const [field, error] of Object.entries(result.error)) {
       formattedErrors[field] = {
         type: 'validation',
-        message: formatFormValidationError(error as FormValidationError),
+        message: formatFormValidationError(error),
       };
     }
 
@@ -338,35 +344,35 @@ export const formatPipelineError = <E = FormValidationError>(
     case 'VALIDATION_ERROR':
       if (typeof error.errors === 'object' && error.errors !== null && 'type' in error.errors) {
         // Single validation error
-        return errorFormatter 
+        return errorFormatter
           ? errorFormatter(error.errors as E)
           : formatFormValidationError(error.errors as unknown as FormValidationError);
       }
-      
+
       // Multiple field errors - format each field error individually
       if (typeof error.errors === 'object' && error.errors !== null) {
         const fieldErrors: string[] = [];
-        
+
         for (const [fieldName, fieldError] of Object.entries(error.errors)) {
           const formattedError = errorFormatter
             ? errorFormatter(fieldError as E)
             : formatFormValidationError(fieldError as FormValidationError);
-          
+
           fieldErrors.push(`${fieldName}: ${formattedError}`);
         }
-        
+
         if (fieldErrors.length > 0) {
           return `Form validation failed: ${fieldErrors.join(', ')}`;
         }
       }
-      
+
       return 'Form validation failed. Please check your inputs.';
     case 'SANITIZATION_ERROR':
       return `Data sanitization error: ${error.reason}`;
     case 'TRANSFORMATION_ERROR':
       return `Data transformation error: ${error.reason}`;
     case 'SUBMISSION_ERROR':
-      return error.statusCode 
+      return error.statusCode
         ? `Submission failed (${error.statusCode}): ${error.message}`
         : `Submission failed: ${error.message}`;
   }
@@ -381,16 +387,26 @@ export const PipelineStates = {
   sanitizing: <T, E = FormValidationError>(): PipelineState<T, E> => ({ status: 'sanitizing' }),
   transforming: <T, E = FormValidationError>(): PipelineState<T, E> => ({ status: 'transforming' }),
   submitting: <T, E = FormValidationError>(): PipelineState<T, E> => ({ status: 'submitting' }),
-  success: <T, E = FormValidationError>(data: T): PipelineState<T, E> => ({ status: 'success', data }),
-  error: <T, E = FormValidationError>(error: PipelineError<E>): PipelineState<T, E> => ({ status: 'error', error }),
+  success: <T, E = FormValidationError>(data: T): PipelineState<T, E> => ({
+    status: 'success',
+    data,
+  }),
+  error: <T, E = FormValidationError>(error: PipelineError<E>): PipelineState<T, E> => ({
+    status: 'error',
+    error,
+  }),
 };
 
 /**
  * Check if pipeline is in loading state
  */
-export const isPipelineLoading = <T, E = FormValidationError>(state: PipelineState<T, E>): boolean => {
-  return state.status === 'validating' ||
-         state.status === 'sanitizing' ||
-         state.status === 'transforming' ||
-         state.status === 'submitting';
+export const isPipelineLoading = <T, E = FormValidationError>(
+  state: PipelineState<T, E>
+): boolean => {
+  return (
+    state.status === 'validating' ||
+    state.status === 'sanitizing' ||
+    state.status === 'transforming' ||
+    state.status === 'submitting'
+  );
 };

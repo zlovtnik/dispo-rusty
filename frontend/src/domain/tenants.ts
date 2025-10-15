@@ -1,14 +1,14 @@
 /**
  * Tenant Management Domain Logic
- * 
+ *
  * Pure functions for tenant management operations using Railway-Oriented Programming.
  * All functions return Result<T, E> for explicit error handling.
- * 
+ *
  * This module extracts business logic from the service layer,
  * making it pure, testable, and composable.
  */
 
-import { ok, err, Result } from 'neverthrow';
+import { ok, err, type Result } from 'neverthrow';
 import type { Tenant, TenantSettings, TenantSubscription } from '../types/auth';
 import type { User } from '../types/auth';
 import type { TenantId, UserId } from '../types/ids';
@@ -45,17 +45,14 @@ export type SwitchError =
 
 /**
  * Validate tenant access for a user
- * 
+ *
  * Checks if user has permission to access the tenant
- * 
+ *
  * @param user - User attempting access
  * @param tenantId - Tenant ID to access
  * @returns Result containing void on success or AccessError
  */
-export function validateTenantAccess(
-  user: User,
-  tenantId: TenantId
-): Result<void, AccessError> {
+export function validateTenantAccess(user: User, tenantId: TenantId): Result<void, AccessError> {
   // Check if user's tenant matches
   if (user.tenantId !== tenantId) {
     return err({
@@ -67,15 +64,15 @@ export function validateTenantAccess(
 
   // Additional role-based checks could go here
   // For example, check if user has 'tenant:access' role
-  
+
   return ok(undefined);
 }
 
 /**
  * Switch user to a different tenant
- * 
+ *
  * Validates access and prepares tenant switch
- * 
+ *
  * @param user - Current user
  * @param newTenant - Tenant to switch to
  * @param availableTenants - List of tenants user has access to
@@ -117,7 +114,7 @@ export function switchTenant(
 
 /**
  * Validate tenant subscription status
- * 
+ *
  * @param tenant - Tenant to validate
  * @returns Result containing void on success or TenantError
  */
@@ -150,15 +147,12 @@ export function validateTenantSubscription(tenant: Tenant): Result<void, TenantE
 
 /**
  * Check if tenant has access to a specific feature
- * 
+ *
  * @param tenant - Tenant to check
  * @param feature - Feature name
  * @returns Result containing void on success or TenantError
  */
-export function validateFeatureAccess(
-  tenant: Tenant,
-  feature: string
-): Result<void, TenantError> {
+export function validateFeatureAccess(tenant: Tenant, feature: string): Result<void, TenantError> {
   // First check subscription
   const subscriptionCheck = validateTenantSubscription(tenant);
   if (subscriptionCheck.isErr()) {
@@ -179,7 +173,7 @@ export function validateFeatureAccess(
 
 /**
  * Check if tenant is within usage limits
- * 
+ *
  * @param tenant - Tenant to check
  * @param limitType - Type of limit to check ('users', 'contacts', 'storage')
  * @param currentUsage - Current usage count
@@ -222,7 +216,7 @@ export function validateUsageLimit(
 
 /**
  * Get tenant display name
- * 
+ *
  * @param tenant - Tenant
  * @returns Display name
  */
@@ -232,7 +226,7 @@ export function getTenantDisplayName(tenant: Tenant): string {
 
 /**
  * Check if tenant subscription is trial
- * 
+ *
  * @param tenant - Tenant
  * @returns true if subscription is in trial period
  */
@@ -242,7 +236,7 @@ export function isTrial(tenant: Tenant): boolean {
 
 /**
  * Check if tenant subscription is active
- * 
+ *
  * @param tenant - Tenant
  * @returns true if subscription is active
  */
@@ -252,7 +246,7 @@ export function isActive(tenant: Tenant): boolean {
 
 /**
  * Get days until subscription expires
- * 
+ *
  * @param tenant - Tenant
  * @returns Number of days until expiration, or null if not applicable
  */
@@ -271,14 +265,14 @@ export function getDaysUntilExpiration(tenant: Tenant): number | null {
 
 /**
  * Check if tenant should show expiration warning
- * 
+ *
  * @param tenant - Tenant
  * @param warningThreshold - Days threshold for warning (default: 7)
  * @returns true if warning should be shown
  */
-export function shouldShowExpirationWarning(tenant: Tenant, warningThreshold: number = 7): boolean {
+export function shouldShowExpirationWarning(tenant: Tenant, warningThreshold = 7): boolean {
   const daysUntilExpiration = getDaysUntilExpiration(tenant);
-  
+
   if (daysUntilExpiration === null) {
     return false;
   }
@@ -286,11 +280,7 @@ export function shouldShowExpirationWarning(tenant: Tenant, warningThreshold: nu
   return daysUntilExpiration <= warningThreshold && daysUntilExpiration > 0;
 }
 
-const BASIC_FEATURES = [
-  'contacts',
-  'basic_search',
-  'export_csv',
-] as const;
+const BASIC_FEATURES = ['contacts', 'basic_search', 'export_csv'] as const;
 
 const PROFESSIONAL_FEATURES = [
   ...BASIC_FEATURES,
@@ -313,11 +303,13 @@ const ENTERPRISE_FEATURES = [
 
 /**
  * Get available features for tenant based on subscription plan
- * 
+ *
  * @param plan - Subscription plan
  * @returns Array of available feature names
  */
-export function getAvailableFeaturesForPlan(plan: 'basic' | 'professional' | 'enterprise'): string[] {
+export function getAvailableFeaturesForPlan(
+  plan: 'basic' | 'professional' | 'enterprise'
+): string[] {
   switch (plan) {
     case 'basic':
       return [...BASIC_FEATURES];
@@ -330,7 +322,7 @@ export function getAvailableFeaturesForPlan(plan: 'basic' | 'professional' | 'en
 
 /**
  * Get usage percentage for a specific limit
- * 
+ *
  * @param tenant - Tenant
  * @param limitType - Type of limit
  * @param currentUsage - Current usage count
@@ -342,7 +334,7 @@ export function getUsagePercentage(
   currentUsage: number
 ): number {
   const limit = tenant.subscription.limits[limitType];
-  
+
   if (limit === -1 || limit === Infinity) {
     return 0;
   }
@@ -356,7 +348,7 @@ export function getUsagePercentage(
 
 /**
  * Check if usage is approaching limit
- * 
+ *
  * @param tenant - Tenant
  * @param limitType - Type of limit
  * @param currentUsage - Current usage count
@@ -367,7 +359,7 @@ export function isApproachingLimit(
   tenant: Tenant,
   limitType: 'users' | 'contacts' | 'storage',
   currentUsage: number,
-  threshold: number = 80
+  threshold = 80
 ): boolean {
   const percentage = getUsagePercentage(tenant, limitType, currentUsage);
   return percentage >= threshold;
@@ -375,11 +367,13 @@ export function isApproachingLimit(
 
 /**
  * Validate tenant settings
- * 
+ *
  * @param settings - Tenant settings to validate
  * @returns Result containing settings or TenantError
  */
-export function validateTenantSettings(settings: TenantSettings): Result<TenantSettings, TenantError> {
+export function validateTenantSettings(
+  settings: TenantSettings
+): Result<TenantSettings, TenantError> {
   const errors: Record<string, string> = {};
 
   // Validate theme

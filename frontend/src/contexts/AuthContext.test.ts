@@ -50,7 +50,7 @@ describe('AuthContext', () => {
 
       expect(credentials.usernameOrEmail).toBe('test@example.com');
       expect(credentials.password).toBe('password123');
-  expect(credentials.tenantId).toBe(asTenantId('tenant1'));
+      expect(credentials.tenantId).toBe(asTenantId('tenant1'));
       expect(credentials.rememberMe).toBe(true);
     });
 

@@ -1,6 +1,6 @@
 /**
  * Environment Configuration and Validation Utility
- * 
+ *
  * This module provides type-safe access to environment variables and
  * validates that all required variables are present at runtime.
  */
@@ -26,15 +26,15 @@ class EnvironmentError extends Error {
  */
 function getRequiredEnv(key: string): string {
   const value = import.meta.env[key as keyof ImportMetaEnv];
-  
+
   if (!value || (typeof value === 'string' && value.trim() === '')) {
     throw new EnvironmentError(
       `Missing required environment variable: ${key}\n\n` +
-      `Please ensure ${key} is set in your .env file.\n` +
-      `See .env.example for reference.`
+        `Please ensure ${key} is set in your .env file.\n` +
+        `See .env.example for reference.`
     );
   }
-  
+
   return String(value);
 }
 
@@ -56,7 +56,7 @@ function validateUrl(url: string, varName: string): string {
   } catch {
     throw new EnvironmentError(
       `Invalid URL for ${varName}: ${url}\n\n` +
-      `Please provide a valid URL (e.g., http://localhost:8000/api)`
+        `Please provide a valid URL (e.g., http://localhost:8000/api)`
     );
   }
 }

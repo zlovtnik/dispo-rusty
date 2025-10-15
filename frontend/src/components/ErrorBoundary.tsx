@@ -15,7 +15,7 @@ interface Props {
   children: ReactNode;
   fallback?: ReactNode;
   onError?: (error: Error, errorInfo: ErrorInfo) => void;
-  onResultError?: (result: FPResult<any, AppError>) => ReactNode;
+  onResultError?: (result: FPResult<unknown, AppError>) => ReactNode;
   recoveryStrategies?: ResultRecoveryStrategy[];
   transformResultError?: (error: AppError) => FPResult<AppError, AppError>;
   reportResultError?: (error: AppError) => FPResult<void, AppError>;
@@ -24,7 +24,7 @@ interface Props {
 interface State {
   hasError: boolean;
   error?: Error;
-  resultError?: FPResult<any, AppError>;
+  resultError?: FPResult<unknown, AppError>;
 }
 
 export class ErrorBoundary extends Component<Props, State> {
@@ -115,7 +115,7 @@ export class ErrorBoundary extends Component<Props, State> {
   /**
    * Handle Result-based errors with custom recovery strategies
    */
-  public handleResultError = (result: FPResult<any, AppError>) => {
+  public handleResultError = (result: FPResult<unknown, AppError>) => {
     if (!result.isErr()) {
       return null;
     }
@@ -123,7 +123,7 @@ export class ErrorBoundary extends Component<Props, State> {
     const normalizedError = this.normalizeResultError(result.error);
     this.notifyResultError(normalizedError);
 
-    const normalizedResult = err(normalizedError) as FPResult<any, AppError>;
+    const normalizedResult = err(normalizedError) as FPResult<unknown, AppError>;
     this.setState({ resultError: normalizedResult });
 
     if (this.props.onResultError) {
@@ -152,7 +152,12 @@ export class ErrorBoundary extends Component<Props, State> {
             showIcon
             action={
               error.retryable !== false ? (
-                <Button size="small" onClick={() => this.handleRetry()}>
+                <Button
+                  size="small"
+                  onClick={() => {
+                    this.handleRetry();
+                  }}
+                >
                   Retry
                 </Button>
               ) : undefined
@@ -167,7 +172,7 @@ export class ErrorBoundary extends Component<Props, State> {
             title="Authentication Error"
             subTitle={error.message}
             extra={
-              <Button type="primary" onClick={() => window.location.href = '/login'}>
+              <Button type="primary" onClick={() => (window.location.href = '/login')}>
                 Go to Login
               </Button>
             }
@@ -186,12 +191,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
       case 'validation':
         return (
-          <Alert
-            message="Validation Error"
-            description={error.message}
-            type="error"
-            showIcon
-          />
+          <Alert message="Validation Error" description={error.message} type="error" showIcon />
         );
 
       default: {
@@ -199,14 +199,7 @@ export class ErrorBoundary extends Component<Props, State> {
         // but if it does, we want to display the error
         const _exhaustive: never = error;
         const unknownError = _exhaustive as AppError;
-        return (
-          <Alert
-            message="Error"
-            description={unknownError.message}
-            type="error"
-            showIcon
-          />
-        );
+        return <Alert message="Error" description={unknownError.message} type="error" showIcon />;
       }
     }
   };
@@ -225,7 +218,7 @@ export class ErrorBoundary extends Component<Props, State> {
         <Result
           status="error"
           title="Something went wrong"
-          subTitle={this.state.error?.message || "An unexpected error occurred"}
+          subTitle={this.state.error?.message || 'An unexpected error occurred'}
           extra={
             <Button type="primary" onClick={this.handleRetry}>
               Try Again
@@ -236,7 +229,7 @@ export class ErrorBoundary extends Component<Props, State> {
     }
 
     // If there's a Result error, render it directly (no setState during render)
-    if (this.state.resultError && this.state.resultError.isErr()) {
+    if (this.state.resultError?.isErr()) {
       // Check if custom handler provided
       if (this.props.onResultError) {
         return this.props.onResultError(this.state.resultError);

@@ -2,15 +2,18 @@ import { err, errAsync, ok, okAsync } from 'neverthrow';
 import type { AsyncResult, Result } from '../types/fp';
 import { createValidationError } from '../types/errors';
 import type { ValidationError } from '../types/errors';
-import type { ZodSchema } from 'zod';
+import type { ZodType } from 'zod';
 
-export const validateAndDecode = <T>(schema: ZodSchema<T>, data: unknown): Result<T, ValidationError> => {
+export const validateAndDecode = <T>(
+  schema: ZodType<T>,
+  data: unknown
+): Result<T, ValidationError> => {
   const parsed = schema.safeParse(data);
   if (!parsed.success) {
     return err(
       createValidationError('Validation failed', {
         issues: parsed.error.issues,
-      }),
+      })
     );
   }
   return ok(parsed.data);
@@ -19,5 +22,5 @@ export const validateAndDecode = <T>(schema: ZodSchema<T>, data: unknown): Resul
 export const liftResult = <T, E>(result: Result<T, E>): AsyncResult<T, E> =>
   result.match(
     value => okAsync(value),
-    error => errAsync(error),
+    error => errAsync(error)
   );

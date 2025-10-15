@@ -80,42 +80,40 @@ export function useAuth() {
 
     const getTokenResult = (): Result<string, AuthFlowError> =>
       getAuthToken()
-        .map((stored) => stored.token)
+        .map(stored => stored.token)
         .mapErr(mapStorageErrorToAuthFlowError);
 
     const getTenantIdFromToken = (): Result<string, AuthFlowError> =>
-      getTokenResult().andThen((token) =>
+      getTokenResult().andThen(token =>
         extractTenantId(token).mapErr(mapTokenErrorToAuthFlowError)
       );
 
     const getUserIdFromToken = (): Result<string, AuthFlowError> =>
-      getTokenResult().andThen((token) =>
-        extractUserId(token).mapErr(mapTokenErrorToAuthFlowError)
-      );
+      getTokenResult().andThen(token => extractUserId(token).mapErr(mapTokenErrorToAuthFlowError));
 
     const requireRole = (role: string): Result<void, AuthFlowError> =>
-      getUserResult().andThen((user) =>
+      getUserResult().andThen(user =>
         user.roles.includes(role)
           ? ok(undefined)
           : err(AuthFlowErrors.forbidden(`Missing required role: ${role}`))
       );
 
     const requireAnyRole = (roles: string[]): Result<void, AuthFlowError> =>
-      getUserResult().andThen((user) =>
-        roles.some((role) => user.roles.includes(role))
+      getUserResult().andThen(user =>
+        roles.some(role => user.roles.includes(role))
           ? ok(undefined)
           : err(AuthFlowErrors.forbidden(`User lacks required roles: ${roles.join(', ')}`))
       );
 
     const requireAllRoles = (roles: string[]): Result<void, AuthFlowError> =>
-      getUserResult().andThen((user) =>
-        roles.every((role) => user.roles.includes(role))
+      getUserResult().andThen(user =>
+        roles.every(role => user.roles.includes(role))
           ? ok(undefined)
           : err(AuthFlowErrors.forbidden(`User must have roles: ${roles.join(', ')}`))
       );
 
     const requireTenantAccess = (tenantId: TenantId): Result<void, AuthFlowError | AccessError> =>
-      getUserResult().andThen((user) => validateTenantAccess(user, tenantId));
+      getUserResult().andThen(user => validateTenantAccess(user, tenantId));
 
     return {
       login: (credentials: LoginCredentials) => auth.login(credentials),

@@ -1,13 +1,13 @@
 /**
  * Form Validation Library - Extended Validators
- * 
+ *
  * Pure validation functions for form fields using Result types and branded types.
  * Implements railway-oriented programming patterns for composable validation.
- * 
+ *
  * @module formValidation
  */
 
-import { Result, ok, err } from 'neverthrow';
+import { type Result, ok, err } from 'neverthrow';
 
 /**
  * Form validation error types (discriminated unions)
@@ -58,34 +58,61 @@ const PASSWORD_MAX_LENGTH = 128;
  * Error factory functions
  */
 export const FormValidationErrors = {
-  invalidEmail: (email: string, reason: string): FormValidationError => 
-    ({ type: 'INVALID_EMAIL', email, reason }),
-  invalidPhone: (phone: string, reason: string): FormValidationError => 
-    ({ type: 'INVALID_PHONE', phone, reason }),
-  invalidPassword: (reason: string): FormValidationError => 
-    ({ type: 'INVALID_PASSWORD', reason }),
-  invalidAge: (age: number, reason: string): FormValidationError => 
-    ({ type: 'INVALID_AGE', age, reason }),
-  invalidZipCode: (zipCode: string, reason: string): FormValidationError => 
-    ({ type: 'INVALID_ZIP_CODE', zipCode, reason }),
-  requiredField: (fieldName: string): FormValidationError => 
-    ({ type: 'REQUIRED_FIELD', fieldName }),
-  stringTooShort: (fieldName: string, min: number, actual: number): FormValidationError => 
-    ({ type: 'STRING_TOO_SHORT', fieldName, min, actual }),
-  stringTooLong: (fieldName: string, max: number, actual: number): FormValidationError => 
-    ({ type: 'STRING_TOO_LONG', fieldName, max, actual }),
-  patternMismatch: (fieldName: string, pattern: string): FormValidationError => 
-    ({ type: 'PATTERN_MISMATCH', fieldName, pattern }),
-  customValidation: (fieldName: string, message: string): FormValidationError => 
-    ({ type: 'CUSTOM_VALIDATION', fieldName, message }),
+  invalidEmail: (email: string, reason: string): FormValidationError => ({
+    type: 'INVALID_EMAIL',
+    email,
+    reason,
+  }),
+  invalidPhone: (phone: string, reason: string): FormValidationError => ({
+    type: 'INVALID_PHONE',
+    phone,
+    reason,
+  }),
+  invalidPassword: (reason: string): FormValidationError => ({ type: 'INVALID_PASSWORD', reason }),
+  invalidAge: (age: number, reason: string): FormValidationError => ({
+    type: 'INVALID_AGE',
+    age,
+    reason,
+  }),
+  invalidZipCode: (zipCode: string, reason: string): FormValidationError => ({
+    type: 'INVALID_ZIP_CODE',
+    zipCode,
+    reason,
+  }),
+  requiredField: (fieldName: string): FormValidationError => ({
+    type: 'REQUIRED_FIELD',
+    fieldName,
+  }),
+  stringTooShort: (fieldName: string, min: number, actual: number): FormValidationError => ({
+    type: 'STRING_TOO_SHORT',
+    fieldName,
+    min,
+    actual,
+  }),
+  stringTooLong: (fieldName: string, max: number, actual: number): FormValidationError => ({
+    type: 'STRING_TOO_LONG',
+    fieldName,
+    max,
+    actual,
+  }),
+  patternMismatch: (fieldName: string, pattern: string): FormValidationError => ({
+    type: 'PATTERN_MISMATCH',
+    fieldName,
+    pattern,
+  }),
+  customValidation: (fieldName: string, message: string): FormValidationError => ({
+    type: 'CUSTOM_VALIDATION',
+    fieldName,
+    message,
+  }),
 };
 
 /**
  * Validate email address (RFC 5322 simplified)
- * 
+ *
  * @param email - Email address to validate
  * @returns Result with branded Email type or validation error
- * 
+ *
  * @example
  * ```typescript
  * const result = validateEmail('user@example.com');
@@ -103,7 +130,9 @@ export const validateEmail = (email: string): Result<Email, FormValidationError>
   }
 
   if (trimmed.length > 254) {
-    return err(FormValidationErrors.invalidEmail(email, 'Email address too long (max 254 characters)'));
+    return err(
+      FormValidationErrors.invalidEmail(email, 'Email address too long (max 254 characters)')
+    );
   }
 
   if (!EMAIL_PATTERN.test(trimmed)) {
@@ -117,11 +146,11 @@ export const validateEmail = (email: string): Result<Email, FormValidationError>
   }
 
   // Check for consecutive dots in local part
-  if (localPart && localPart.includes('..')) {
+  if (localPart?.includes('..')) {
     return err(FormValidationErrors.invalidEmail(email, 'Email contains consecutive dots'));
   }
 
-  if (domain && domain.includes('..')) {
+  if (domain?.includes('..')) {
     return err(FormValidationErrors.invalidEmail(email, 'Domain contains consecutive dots'));
   }
 
@@ -130,18 +159,18 @@ export const validateEmail = (email: string): Result<Email, FormValidationError>
 
 /**
  * Validate phone number (supports US and international formats)
- * 
+ *
  * @param phone - Phone number to validate
  * @param format - Optional format specification ('US', 'INTERNATIONAL', or 'AUTO')
  * @returns Result with branded Phone type or validation error
- * 
+ *
  * @example
  * ```typescript
  * const result = validatePhone('+1-234-567-8900');
  * ```
  */
 export const validatePhone = (
-  phone: string, 
+  phone: string,
   format: 'US' | 'INTERNATIONAL' | 'AUTO' = 'AUTO'
 ): Result<Phone, FormValidationError> => {
   const trimmed = phone.trim();
@@ -154,7 +183,9 @@ export const validatePhone = (
   const digitsOnly = trimmed.replace(/\D/g, '');
 
   if (digitsOnly.length < 10) {
-    return err(FormValidationErrors.invalidPhone(phone, 'Phone number must have at least 10 digits'));
+    return err(
+      FormValidationErrors.invalidPhone(phone, 'Phone number must have at least 10 digits')
+    );
   }
 
   if (digitsOnly.length > 15) {
@@ -167,13 +198,15 @@ export const validatePhone = (
   }
 
   if (format === 'INTERNATIONAL' && !PHONE_PATTERNS.INTERNATIONAL.test(trimmed)) {
-    return err(FormValidationErrors.invalidPhone(phone, 'Invalid international phone number format'));
+    return err(
+      FormValidationErrors.invalidPhone(phone, 'Invalid international phone number format')
+    );
   }
 
   if (format === 'AUTO') {
     const isValidUS = PHONE_PATTERNS.US.test(trimmed);
     const isValidInternational = PHONE_PATTERNS.INTERNATIONAL.test(trimmed);
-    
+
     if (!isValidUS && !isValidInternational) {
       return err(FormValidationErrors.invalidPhone(phone, 'Invalid phone number format'));
     }
@@ -185,7 +218,7 @@ export const validatePhone = (
 /**
  * Normalize password for consistent comparison
  * Trims whitespace and converts to lowercase
- * 
+ *
  * @param password - Password to normalize
  * @returns Normalized password string
  */
@@ -201,31 +234,75 @@ function normalizePassword(password: string): string {
  */
 const COMMON_WEAK_PASSWORDS = new Set([
   // Extremely common patterns
-  'password', 'password123', 'password1', 'pass', 'passwd',
+  'password',
+  'password123',
+  'password1',
+  'pass',
+  'passwd',
   // Number sequences
-  '12345678', '123456789', '1234567890', '12345', '123456', '1234567',
+  '12345678',
+  '123456789',
+  '1234567890',
+  '12345',
+  '123456',
+  '1234567',
   // Keyboard patterns
-  'qwerty', 'qwertyuiop', 'qwerty123', 'asdfgh', 'asdfghjkl', 'zxcvbn',
-  'qazwsx', '1qaz2wsx', 'qwertyui',
+  'qwerty',
+  'qwertyuiop',
+  'qwerty123',
+  'asdfgh',
+  'asdfghjkl',
+  'zxcvbn',
+  'qazwsx',
+  '1qaz2wsx',
+  'qwertyui',
   // Simple patterns
-  'abc123', 'abc12345', '123abc', 'abc', 'abcd1234', 'a1b2c3',
+  'abc123',
+  'abc12345',
+  '123abc',
+  'abc',
+  'abcd1234',
+  'a1b2c3',
   // Common words
-  'welcome', 'monkey', 'dragon', 'master', 'letmein', 'login',
-  'admin', 'administrator', 'root', 'user', 'guest', 'test',
+  'welcome',
+  'monkey',
+  'dragon',
+  'master',
+  'letmein',
+  'login',
+  'admin',
+  'administrator',
+  'root',
+  'user',
+  'guest',
+  'test',
   // Names and dates
-  'sunshine', 'princess', 'football', 'soccer', 'baseball',
-  'iloveyou', 'trustno1', 'starwars',
+  'sunshine',
+  'princess',
+  'football',
+  'soccer',
+  'baseball',
+  'iloveyou',
+  'trustno1',
+  'starwars',
   // Weak combinations
-  'password!', 'password1', 'pass1234', 'welcome1', 'admin123',
-  '000000', '111111', '123123', '696969',
+  'password!',
+  'password1',
+  'pass1234',
+  'welcome1',
+  'admin123',
+  '000000',
+  '111111',
+  '123123',
+  '696969',
 ]);
 
 /**
  * Validate password with comprehensive strength requirements
- * 
+ *
  * @param password - Password to validate
  * @returns Result with branded Password type or validation error
- * 
+ *
  * @example
  * ```typescript
  * const result = validatePassword('SecureP@ss123');
@@ -237,15 +314,19 @@ export const validatePassword = (password: string): Result<Password, FormValidat
   }
 
   if (password.length < PASSWORD_MIN_LENGTH) {
-    return err(FormValidationErrors.invalidPassword(
-      `Password must be at least ${PASSWORD_MIN_LENGTH} characters long`
-    ));
+    return err(
+      FormValidationErrors.invalidPassword(
+        `Password must be at least ${PASSWORD_MIN_LENGTH} characters long`
+      )
+    );
   }
 
   if (password.length > PASSWORD_MAX_LENGTH) {
-    return err(FormValidationErrors.invalidPassword(
-      `Password must be at most ${PASSWORD_MAX_LENGTH} characters long`
-    ));
+    return err(
+      FormValidationErrors.invalidPassword(
+        `Password must be at most ${PASSWORD_MAX_LENGTH} characters long`
+      )
+    );
   }
 
   // Check password strength requirements
@@ -258,23 +339,24 @@ export const validatePassword = (password: string): Result<Password, FormValidat
   if (!hasUpperCase) missingRequirements.push('one uppercase letter');
   if (!hasLowerCase) missingRequirements.push('one lowercase letter');
   if (!hasNumber) missingRequirements.push('one number');
-  
+
   // Special char is recommended but not required for basic validation
-  const strengthScore = [hasUpperCase, hasLowerCase, hasNumber, hasSpecialChar]
-    .filter(Boolean).length;
+  const strengthScore = [hasUpperCase, hasLowerCase, hasNumber, hasSpecialChar].filter(
+    Boolean
+  ).length;
 
   if (missingRequirements.length > 0) {
-    return err(FormValidationErrors.invalidPassword(
-      `Password must contain at least: ${missingRequirements.join(', ')}`
-    ));
+    return err(
+      FormValidationErrors.invalidPassword(
+        `Password must contain at least: ${missingRequirements.join(', ')}`
+      )
+    );
   }
 
   // Check for common weak passwords - compare complete normalized password
   // Use Set for O(1) lookup and normalize both password and weak passwords
   if (COMMON_WEAK_PASSWORDS.has(normalizePassword(password))) {
-    return err(FormValidationErrors.invalidPassword(
-      'Password is too common'
-    ));
+    return err(FormValidationErrors.invalidPassword('Password is too common'));
   }
 
   return ok(password as Password);
@@ -282,11 +364,11 @@ export const validatePassword = (password: string): Result<Password, FormValidat
 
 /**
  * Validate age (must be a positive integer within reasonable range)
- * 
+ *
  * @param age - Age to validate
  * @param options - Optional min/max age constraints
  * @returns Result with branded Age type or validation error
- * 
+ *
  * @example
  * ```typescript
  * const result = validateAge(25, { min: 18, max: 120 });
@@ -319,11 +401,11 @@ export const validateAge = (
 
 /**
  * Validate ZIP/postal code (supports US and Canada)
- * 
+ *
  * @param zipCode - ZIP/postal code to validate
  * @param country - Country code ('US', 'CANADA', or 'INTERNATIONAL')
  * @returns Result with branded ZipCode type or validation error
- * 
+ *
  * @example
  * ```typescript
  * const result = validateZipCode('12345', 'US');
@@ -341,10 +423,9 @@ export const validateZipCode = (
 
   const pattern = ZIP_CODE_PATTERNS[country];
   if (!pattern.test(trimmed)) {
-    return err(FormValidationErrors.invalidZipCode(
-      zipCode,
-      `Invalid ${country} ZIP/postal code format`
-    ));
+    return err(
+      FormValidationErrors.invalidZipCode(zipCode, `Invalid ${country} ZIP/postal code format`)
+    );
   }
 
   return ok(trimmed as ZipCode);
@@ -353,10 +434,10 @@ export const validateZipCode = (
 /**
  * Combinator: Validate all fields in parallel
  * Returns the first error encountered, or all validated values
- * 
+ *
  * @param validations - Array of validation Result objects (can be mixed types)
  * @returns Result with array of validated values or first error
- * 
+ *
  * @example
  * ```typescript
  * const result = validateAll([
@@ -366,28 +447,26 @@ export const validateZipCode = (
  * ]);
  * ```
  */
-export const validateAll = <E>(
-  validations: Result<unknown, E>[]
-): Result<unknown[], E> => {
+export const validateAll = <E>(validations: Result<unknown, E>[]): Result<unknown[], E> => {
   const results: unknown[] = [];
-  
+
   for (const validation of validations) {
     if (validation.isErr()) {
       return err(validation.error);
     }
     results.push(validation.value);
   }
-  
+
   return ok(results);
 };
 
 /**
  * Combinator: Validate fields in sequence (railway-oriented programming)
  * Each validation only runs if the previous one succeeded
- * 
+ *
  * @param validations - Array of validation functions
  * @returns Result with array of validated values or first error
- * 
+ *
  * @example
  * ```typescript
  * const result = validateSequence([
@@ -397,11 +476,9 @@ export const validateAll = <E>(
  * ]);
  * ```
  */
-export const validateSequence = <T, E>(
-  validations: (() => Result<T, E>)[]
-): Result<T[], E> => {
+export const validateSequence = <T, E>(validations: (() => Result<T, E>)[]): Result<T[], E> => {
   const results: T[] = [];
-  
+
   for (const validate of validations) {
     const result = validate();
     if (result.isErr()) {
@@ -409,18 +486,18 @@ export const validateSequence = <T, E>(
     }
     results.push(result.value);
   }
-  
+
   return ok(results);
 };
 
 /**
  * Combinator: Validate optional field
  * Returns Ok(undefined) if empty/null, validates if present
- * 
+ *
  * @param value - Optional value to validate
  * @param validator - Validation function to apply if value exists
  * @returns Result with validated value, undefined, or error
- * 
+ *
  * @example
  * ```typescript
  * const result = validateOptional(maybePhone, validatePhone);
@@ -433,21 +510,21 @@ export const validateOptional = <T, V, E>(
   if (value === undefined || value === null) {
     return ok(undefined);
   }
-  
+
   if (typeof value === 'string' && value.trim().length === 0) {
     return ok(undefined);
   }
-  
+
   return validator(value);
 };
 
 /**
  * Combinator: Collect all validation errors instead of failing fast
  * Useful for form validation where you want to show all errors at once
- * 
+ *
  * @param validations - Object mapping field names to validation results
  * @returns Result with validated values or all errors
- * 
+ *
  * @example
  * ```typescript
  * const result = validateAllOrCollectErrors({
@@ -457,12 +534,12 @@ export const validateOptional = <T, V, E>(
  * });
  * ```
  */
-export const validateAllOrCollectErrors = <T extends Record<string, unknown>, E>(
-  validations: { [K in keyof T]: Result<T[K], E> }
-): Result<T, Record<keyof T, E>> => {
+export const validateAllOrCollectErrors = <T extends Record<string, unknown>, E>(validations: {
+  [K in keyof T]: Result<T[K], E>;
+}): Result<T, Record<keyof T, E>> => {
   const errors: Partial<Record<keyof T, E>> = {};
   const values: Partial<T> = {};
-  
+
   for (const [key, validation] of Object.entries(validations)) {
     if (validation.isErr()) {
       errors[key as keyof T] = validation.error;
@@ -470,17 +547,17 @@ export const validateAllOrCollectErrors = <T extends Record<string, unknown>, E>
       values[key as keyof T] = validation.value as T[keyof T];
     }
   }
-  
+
   if (Object.keys(errors).length > 0) {
     return err(errors as Record<keyof T, E>);
   }
-  
+
   return ok(values as T);
 };
 
 /**
  * Format validation error to user-friendly message
- * 
+ *
  * @param error - Form validation error
  * @returns Human-readable error message
  */

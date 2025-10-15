@@ -1,6 +1,6 @@
 /**
  * Cache Utilities Tests
- * 
+ *
  * Tests for Result-based cache layer with focus on regex sanitization
  * in invalidateEntity to prevent ReDoS attacks.
  */
@@ -27,7 +27,7 @@ describe('cache', () => {
 
         // Assert: Should succeed without hanging or throwing
         expect(result.isOk()).toBe(true);
-        
+
         if (result.isOk()) {
           // Should only match entries that literally start with "user.*-"
           expect(result.value).toBe(2);
@@ -50,7 +50,7 @@ describe('cache', () => {
 
         // Assert
         expect(result.isOk()).toBe(true);
-        
+
         if (result.isOk()) {
           // Should match literal "entity[0-9]+-" prefix
           expect(result.value).toBe(2);
@@ -73,7 +73,7 @@ describe('cache', () => {
 
         // Assert: Should not hang or throw ReDoS error
         expect(result.isOk()).toBe(true);
-        
+
         if (result.isOk()) {
           expect(result.value).toBe(2);
         }
@@ -95,7 +95,7 @@ describe('cache', () => {
 
         // Assert
         expect(result.isOk()).toBe(true);
-        
+
         if (result.isOk()) {
           expect(result.value).toBe(2);
         }
@@ -117,7 +117,7 @@ describe('cache', () => {
 
         // Assert
         expect(result.isOk()).toBe(true);
-        
+
         if (result.isOk()) {
           expect(result.value).toBe(2);
         }
@@ -139,7 +139,7 @@ describe('cache', () => {
 
         // Assert
         expect(result.isOk()).toBe(true);
-        
+
         if (result.isOk()) {
           expect(result.value).toBe(2);
         }
@@ -161,7 +161,7 @@ describe('cache', () => {
 
         // Assert
         expect(result.isOk()).toBe(true);
-        
+
         if (result.isOk()) {
           expect(result.value).toBe(2);
         }
@@ -183,7 +183,7 @@ describe('cache', () => {
 
         // Assert
         expect(result.isOk()).toBe(true);
-        
+
         if (result.isOk()) {
           expect(result.value).toBe(2);
         }
@@ -205,7 +205,7 @@ describe('cache', () => {
 
         // Assert
         expect(result.isOk()).toBe(true);
-        
+
         if (result.isOk()) {
           expect(result.value).toBe(2);
         }
@@ -228,7 +228,7 @@ describe('cache', () => {
 
         // Assert: Should complete quickly without hanging
         expect(result.isOk()).toBe(true);
-        
+
         if (result.isOk()) {
           expect(result.value).toBe(2);
         }
@@ -252,7 +252,7 @@ describe('cache', () => {
 
         // Assert
         expect(result.isOk()).toBe(true);
-        
+
         if (result.isOk()) {
           expect(result.value).toBe(2);
         }
@@ -274,7 +274,7 @@ describe('cache', () => {
 
         // Assert
         expect(result.isOk()).toBe(true);
-        
+
         if (result.isOk()) {
           expect(result.value).toBe(2);
         }
@@ -296,7 +296,7 @@ describe('cache', () => {
 
         // Assert
         expect(result.isOk()).toBe(true);
-        
+
         if (result.isOk()) {
           expect(result.value).toBe(2);
         }
@@ -317,7 +317,7 @@ describe('cache', () => {
 
         // Assert
         expect(result.isOk()).toBe(true);
-        
+
         if (result.isOk()) {
           expect(result.value).toBe(0);
         }
@@ -338,7 +338,7 @@ describe('cache', () => {
 
         // Assert
         expect(result.isOk()).toBe(true);
-        
+
         if (result.isOk()) {
           // Should match entries starting with "-"
           expect(result.value).toBe(2);
@@ -358,7 +358,7 @@ describe('cache', () => {
 
         // Assert: Should succeed without issues
         expect(result.isOk()).toBe(true);
-        
+
         if (result.isOk()) {
           expect(result.value).toBe(2);
         }
@@ -369,7 +369,7 @@ describe('cache', () => {
         for (let i = 0; i < 1000; i++) {
           resultCache.set(`user-${i}`, { id: i }, 5000);
         }
-        
+
         for (let i = 0; i < 100; i++) {
           resultCache.set(`contact-${i}`, { id: i }, 5000);
         }
@@ -381,14 +381,14 @@ describe('cache', () => {
 
         // Assert
         expect(result.isOk()).toBe(true);
-        
+
         if (result.isOk()) {
           expect(result.value).toBe(1000);
         }
-        
+
         // Should complete in reasonable time (< 100ms even with 1000+ entries)
         expect(endTime - startTime).toBeLessThan(100);
-        
+
         // Verify contacts weren't touched
         expect(resultCache.has('contact-0')).toBe(true);
         expect(resultCache.has('contact-50')).toBe(true);
@@ -404,13 +404,13 @@ describe('cache', () => {
           '((a*)*(b*))*',
         ];
 
-        pathologicalPatterns.forEach((pattern) => {
+        pathologicalPatterns.forEach(pattern => {
           // Setup
           resultCache.set(`${pattern}-test`, { pattern }, 5000);
-          
+
           // Execute: Should not hang or throw
           const result = invalidateEntity(pattern);
-          
+
           // Assert
           expect(result.isOk()).toBe(true);
           expect(() => {
@@ -431,7 +431,7 @@ describe('cache', () => {
 
         // Assert
         expect(result.isOk()).toBe(true);
-        
+
         if (result.isOk()) {
           expect(result.value).toBe(2);
         }
@@ -453,7 +453,7 @@ describe('cache', () => {
 
         // Assert
         expect(result.isOk()).toBe(true);
-        
+
         if (result.isOk()) {
           // Only entries starting with "user-" should match
           expect(result.value).toBe(1);
@@ -469,18 +469,11 @@ describe('cache', () => {
     describe('result type guarantees', () => {
       it('should always return Result type, never throw', () => {
         // Various inputs that should all return Result
-        const testInputs = [
-          'user',
-          'user.*',
-          '(a|b)*',
-          '[0-9]+',
-          '',
-          'very'.repeat(1000),
-        ];
+        const testInputs = ['user', 'user.*', '(a|b)*', '[0-9]+', '', 'very'.repeat(1000)];
 
-        testInputs.forEach((input) => {
+        testInputs.forEach(input => {
           const result = invalidateEntity(input);
-          
+
           // Should always be a Result
           expect(result.isOk || result.isErr).toBeTruthy();
           expect(typeof result.isOk).toBe('function');
@@ -498,7 +491,7 @@ describe('cache', () => {
 
         // Assert
         expect(result.isOk()).toBe(true);
-        
+
         if (result.isOk()) {
           expect(typeof result.value).toBe('number');
           expect(result.value).toBe(2);

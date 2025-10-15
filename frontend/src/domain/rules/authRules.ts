@@ -1,6 +1,6 @@
 /**
  * Authentication Business Rules
- * 
+ *
  * Pure business logic for authentication-related operations.
  * These rules define password policies, session timeouts, and auth requirements.
  */
@@ -70,7 +70,7 @@ export const DEFAULT_SESSION_TIMEOUT: SessionTimeoutConfig = {
 
 /**
  * Validate password against strength requirements
- * 
+ *
  * @param password - Password to validate
  * @param requirements - Password requirements (optional, uses defaults)
  * @param username - Username to check against (optional)
@@ -117,7 +117,7 @@ export function validatePasswordStrength(
   if (requirements.requireSpecialChars) {
     const specialChars = password.match(/[^a-zA-Z0-9]/g);
     const specialCharCount = specialChars ? specialChars.length : 0;
-    
+
     if (specialCharCount < requirements.minSpecialChars) {
       return err({
         type: 'MISSING_SPECIAL_CHARS',
@@ -143,7 +143,7 @@ export function validatePasswordStrength(
 
 /**
  * Check if session should timeout based on idle time
- * 
+ *
  * @param lastActivity - Last activity timestamp
  * @param config - Session timeout configuration (optional, uses defaults)
  * @returns true if session should timeout
@@ -159,7 +159,7 @@ export function shouldTimeoutFromIdle(
 
 /**
  * Check if session should timeout based on absolute time
- * 
+ *
  * @param sessionStart - Session start timestamp
  * @param config - Session timeout configuration (optional, uses defaults)
  * @returns true if session should timeout
@@ -175,7 +175,7 @@ export function shouldTimeoutFromAbsolute(
 
 /**
  * Check if should show timeout warning
- * 
+ *
  * @param lastActivity - Last activity timestamp
  * @param config - Session timeout configuration (optional, uses defaults)
  * @returns true if warning should be shown
@@ -192,7 +192,7 @@ export function shouldShowTimeoutWarning(
 
 /**
  * Get minutes until session timeout
- * 
+ *
  * @param lastActivity - Last activity timestamp
  * @param config - Session timeout configuration (optional, uses defaults)
  * @returns Minutes until timeout, or 0 if already timed out
@@ -209,25 +209,45 @@ export function getMinutesUntilTimeout(
 
 /**
  * Check if password is in common passwords list
- * 
+ *
  * **PRODUCTION WARNING**: This is a minimal dev-only list with only 25 entries.
  * Replace before release with one of:
  * - Have I Been Pwned API (https://haveibeenpwned.com/API/v3#PwnedPasswords)
  * - Loading a comprehensive password list (e.g., 10 million passwords)
  * - Using a Bloom filter for efficient checking
- * 
+ *
  * TODO: Replace this implementation before production release
- * 
+ *
  * @param password - Password to check
  * @returns true if password is common
  */
 function isCommonPassword(password: string): boolean {
   const commonPasswords = [
-    'password', 'password123', '123456', '12345678', 'qwerty',
-    'abc123', 'monkey', '1234567', 'letmein', 'trustno1',
-    'dragon', 'baseball', 'iloveyou', 'master', 'sunshine',
-    'ashley', 'bailey', 'passw0rd', 'shadow', '123123',
-    '654321', 'superman', 'qazwsx', 'michael', 'football',
+    'password',
+    'password123',
+    '123456',
+    '12345678',
+    'qwerty',
+    'abc123',
+    'monkey',
+    '1234567',
+    'letmein',
+    'trustno1',
+    'dragon',
+    'baseball',
+    'iloveyou',
+    'master',
+    'sunshine',
+    'ashley',
+    'bailey',
+    'passw0rd',
+    'shadow',
+    '123123',
+    '654321',
+    'superman',
+    'qazwsx',
+    'michael',
+    'football',
   ];
 
   return commonPasswords.includes(password.toLowerCase());
@@ -235,7 +255,7 @@ function isCommonPassword(password: string): boolean {
 
 /**
  * Calculate password strength score (0-100)
- * 
+ *
  * @param password - Password to score
  * @returns Strength score from 0 (weakest) to 100 (strongest)
  */
@@ -266,11 +286,13 @@ export function calculatePasswordStrength(password: string): number {
 
 /**
  * Get password strength label
- * 
+ *
  * @param score - Password strength score (0-100)
  * @returns Human-readable strength label
  */
-export function getPasswordStrengthLabel(score: number): 'weak' | 'fair' | 'good' | 'strong' | 'very strong' {
+export function getPasswordStrengthLabel(
+  score: number
+): 'weak' | 'fair' | 'good' | 'strong' | 'very strong' {
   if (score < 30) return 'weak';
   if (score < 50) return 'fair';
   if (score < 70) return 'good';

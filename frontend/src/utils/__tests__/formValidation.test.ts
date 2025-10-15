@@ -1,6 +1,6 @@
 /**
  * Form Validation Tests - Example Test Suite
- * 
+ *
  * Demonstrates testing strategies for FP validation patterns
  */
 
@@ -29,7 +29,7 @@ describe('formValidation', () => {
         'user_name@company.org',
       ];
 
-      validEmails.forEach((email) => {
+      validEmails.forEach(email => {
         const result = validateEmail(email);
         expect(result.isOk()).toBe(true);
         if (result.isOk()) {
@@ -51,7 +51,7 @@ describe('formValidation', () => {
         'user@domain..com',
       ];
 
-      invalidEmails.forEach((email) => {
+      invalidEmails.forEach(email => {
         const result = validateEmail(email);
         expect(result.isErr()).toBe(true);
         if (result.isErr()) {
@@ -79,27 +79,18 @@ describe('formValidation', () => {
 
   describe('validatePhone', () => {
     it('should accept valid US phone numbers', () => {
-      const validPhones = [
-        '+1-234-567-8900',
-        '(234) 567-8900',
-        '234-567-8900',
-        '2345678900',
-      ];
+      const validPhones = ['+1-234-567-8900', '(234) 567-8900', '234-567-8900', '2345678900'];
 
-      validPhones.forEach((phone) => {
+      validPhones.forEach(phone => {
         const result = validatePhone(phone, 'US');
         expect(result.isOk()).toBe(true);
       });
     });
 
     it('should accept valid international phone numbers', () => {
-      const validPhones = [
-        '+44 20 7123 4567',
-        '+81 3-1234-5678',
-        '+61 2 1234 5678',
-      ];
+      const validPhones = ['+44 20 7123 4567', '+81 3-1234-5678', '+61 2 1234 5678'];
 
-      validPhones.forEach((phone) => {
+      validPhones.forEach(phone => {
         const result = validatePhone(phone, 'INTERNATIONAL');
         expect(result.isOk()).toBe(true);
       });
@@ -107,12 +98,12 @@ describe('formValidation', () => {
 
     it('should reject invalid phone numbers', () => {
       const invalidPhones = [
-        '123',           // Too short
-        '12345678901234567890',  // Too long
-        'abc-def-ghij',  // Non-numeric
+        '123', // Too short
+        '12345678901234567890', // Too long
+        'abc-def-ghij', // Non-numeric
       ];
 
-      invalidPhones.forEach((phone) => {
+      invalidPhones.forEach(phone => {
         const result = validatePhone(phone);
         expect(result.isErr()).toBe(true);
       });
@@ -121,14 +112,9 @@ describe('formValidation', () => {
 
   describe('validatePassword', () => {
     it('should accept strong passwords', () => {
-      const strongPasswords = [
-        'MyP@ssw0rd',
-        'Str0ngPwd!',
-        'SecurePass123',
-        'C0mpl3xP@ss',
-      ];
+      const strongPasswords = ['MyP@ssw0rd', 'Str0ngPwd!', 'SecurePass123', 'C0mpl3xP@ss'];
 
-      strongPasswords.forEach((password) => {
+      strongPasswords.forEach(password => {
         const result = validatePassword(password);
         expect(result.isOk()).toBe(true);
       });
@@ -136,13 +122,13 @@ describe('formValidation', () => {
 
     it('should reject weak passwords', () => {
       const weakPasswords = [
-        'short',         // Too short
-        'nouppercase1',  // No uppercase
-        'NOLOWERCASE1',  // No lowercase
-        'NoNumbers',     // No numbers
+        'short', // Too short
+        'nouppercase1', // No uppercase
+        'NOLOWERCASE1', // No lowercase
+        'NoNumbers', // No numbers
       ];
 
-      weakPasswords.forEach((password) => {
+      weakPasswords.forEach(password => {
         const result = validatePassword(password);
         expect(result.isErr()).toBe(true);
         if (result.isErr()) {
@@ -152,13 +138,9 @@ describe('formValidation', () => {
     });
 
     it('should reject common weak passwords', () => {
-      const commonWeak = [
-        'password123',
-        '12345678',
-        'qwerty123',
-      ];
+      const commonWeak = ['password123', '12345678', 'qwerty123'];
 
-      commonWeak.forEach((password) => {
+      commonWeak.forEach(password => {
         const result = validatePassword(password);
         expect(result.isErr()).toBe(true);
       });
@@ -181,7 +163,7 @@ describe('formValidation', () => {
     it('should accept valid ages', () => {
       const validAges = [0, 18, 25, 65, 100];
 
-      validAges.forEach((age) => {
+      validAges.forEach(age => {
         const result = validateAge(age);
         expect(result.isOk()).toBe(true);
       });
@@ -189,14 +171,14 @@ describe('formValidation', () => {
 
     it('should reject invalid ages', () => {
       const invalidAges = [
-        -5,      // Negative
-        200,     // Too old
-        25.5,    // Not integer
-        NaN,     // Not a number
+        -5, // Negative
+        200, // Too old
+        25.5, // Not integer
+        NaN, // Not a number
         Infinity,
       ];
 
-      invalidAges.forEach((age) => {
+      invalidAges.forEach(age => {
         const result = validateAge(age);
         expect(result.isErr()).toBe(true);
       });
@@ -218,7 +200,7 @@ describe('formValidation', () => {
     it('should accept valid US ZIP codes', () => {
       const validZips = ['12345', '12345-6789'];
 
-      validZips.forEach((zip) => {
+      validZips.forEach(zip => {
         const result = validateZipCode(zip, 'US');
         expect(result.isOk()).toBe(true);
       });
@@ -227,7 +209,7 @@ describe('formValidation', () => {
     it('should accept valid Canadian postal codes', () => {
       const validPostal = ['K1A 0B1', 'M5V 3A8', 'V6B2M9'];
 
-      validPostal.forEach((postal) => {
+      validPostal.forEach(postal => {
         const result = validateZipCode(postal, 'CANADA');
         expect(result.isOk()).toBe(true);
       });
@@ -236,7 +218,7 @@ describe('formValidation', () => {
     it('should reject invalid ZIP codes', () => {
       const invalidZips = ['1234', '123456', 'ABCDE'];
 
-      invalidZips.forEach((zip) => {
+      invalidZips.forEach(zip => {
         const result = validateZipCode(zip, 'US');
         expect(result.isErr()).toBe(true);
       });
@@ -330,8 +312,8 @@ describe('formValidation', () => {
       it('should collect partial errors', () => {
         const result = validateAllOrCollectErrors({
           email: validateEmail('user@example.com'), // Valid
-          phone: validatePhone('123'),              // Invalid
-          age: validateAge(25),                     // Valid
+          phone: validatePhone('123'), // Invalid
+          age: validateAge(25), // Valid
         });
 
         expect(result.isErr()).toBe(true);
@@ -348,7 +330,7 @@ describe('formValidation', () => {
     it('should format validation errors', () => {
       const result = validateEmail('invalid');
       expect(result.isErr()).toBe(true);
-      
+
       if (result.isErr()) {
         // Check the error structure
         expect(result.error.type).toBe('INVALID_EMAIL');
@@ -363,14 +345,14 @@ describe('formValidation', () => {
   describe('type safety', () => {
     it('should use branded types', () => {
       const emailResult = validateEmail('user@example.com');
-      
+
       if (emailResult.isOk()) {
         // Type test - this should compile
         const email: Email = emailResult.value;
-        
+
         // This would fail to compile (can't assign string to Email):
         // const email: Email = 'user@example.com';
-        
+
         expect(email as string).toBe('user@example.com');
       }
     });
@@ -413,7 +395,7 @@ describe('form validation integration', () => {
 
     const result = validateContactForm(invalidData);
     expect(result.isErr()).toBe(true);
-    
+
     if (result.isErr()) {
       expect(Object.keys(result.error)).toHaveLength(3);
     }

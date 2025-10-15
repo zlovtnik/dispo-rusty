@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from "react";
-import type { DependencyList } from "react";
-import { err, ok, ResultAsync, errAsync } from "neverthrow";
-import type { Result, AsyncResult } from "../types/fp";
+import { useState, useEffect, useRef, useCallback } from 'react';
+import type { DependencyList } from 'react';
+import { err, ok, ResultAsync, errAsync } from 'neverthrow';
+import type { Result, AsyncResult } from '../types/fp';
 
 /**
  * Represents the state of an async operation using railway-oriented programming
@@ -54,11 +54,11 @@ export function useAsync<T, E>(
   const asyncFnRef = useRef(asyncFn);
 
   useEffect(() => {
-    if (process.env.NODE_ENV === "development") {
+    if (process.env.NODE_ENV === 'development') {
       if (asyncFnRef.current !== asyncFn) {
         console.warn(
-          "useAsync: asyncFn reference changed. This can cause infinite re-renders. " +
-            "Please wrap asyncFn in useCallback to maintain a stable reference."
+          'useAsync: asyncFn reference changed. This can cause infinite re-renders. ' +
+            'Please wrap asyncFn in useCallback to maintain a stable reference.'
         );
       }
     }
@@ -71,7 +71,7 @@ export function useAsync<T, E>(
         return value;
       }
 
-      const promise = Promise.resolve(value).then((resolved) => {
+      const promise = Promise.resolve(value).then(resolved => {
         if (resolved.isOk()) {
           return resolved.value;
         }
@@ -101,24 +101,15 @@ export function useAsync<T, E>(
     } catch (syncError) {
       const failure = errAsync<T, E>(syncError as E);
 
-      failure
-        .match({
-          ok: () => undefined,
-          err: (error: E) => {
-            if (
-              abortControllerRef.current === controller &&
-              !controller.signal.aborted
-            ) {
-              setResult(err(error));
-            }
-            return error;
-          },
+      void failure
+        .mapErr((error: E) => {
+          if (abortControllerRef.current === controller && !controller.signal.aborted) {
+            setResult(err(error));
+          }
+          return error;
         })
-        .finally(() => {
-          if (
-            abortControllerRef.current === controller &&
-            !controller.signal.aborted
-          ) {
+        .then(() => {
+          if (abortControllerRef.current === controller && !controller.signal.aborted) {
             setLoading(false);
           }
         });
@@ -126,32 +117,21 @@ export function useAsync<T, E>(
       return failure;
     }
 
-    asyncResult
-      .match({
-        ok: (value: T) => {
-          if (
-            abortControllerRef.current === controller &&
-            !controller.signal.aborted
-          ) {
-            setResult(ok(value));
-          }
-          return value;
-        },
-        err: (error: E) => {
-          if (
-            abortControllerRef.current === controller &&
-            !controller.signal.aborted
-          ) {
-            setResult(err(error));
-          }
-          return error;
-        },
+    void asyncResult
+      .map((value: T) => {
+        if (abortControllerRef.current === controller && !controller.signal.aborted) {
+          setResult(ok(value));
+        }
+        return value;
       })
-      .finally(() => {
-        if (
-          abortControllerRef.current === controller &&
-          !controller.signal.aborted
-        ) {
+      .mapErr((error: E) => {
+        if (abortControllerRef.current === controller && !controller.signal.aborted) {
+          setResult(err(error));
+        }
+        return error;
+      })
+      .then(() => {
+        if (abortControllerRef.current === controller && !controller.signal.aborted) {
           setLoading(false);
         }
       });

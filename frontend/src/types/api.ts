@@ -26,5 +26,7 @@ export const createErrorResponse = (error: AppError, message?: string): ApiError
   message,
 });
 
-export const isApiSuccess = <T>(response: ApiResponse<T>): response is ApiSuccessResponse<T> => response.status === 'success';
-export const isApiError = <T>(response: ApiResponse<T>): response is ApiErrorResponse => response.status === 'error';
+export const isApiSuccess = <T>(response: ApiResponse<T>): response is ApiSuccessResponse<T> =>
+  response.status === 'success';
+export const isApiError = <T>(response: ApiResponse<T>): response is ApiErrorResponse =>
+  response.status === 'error';

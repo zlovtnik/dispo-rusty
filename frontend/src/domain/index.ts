@@ -1,6 +1,6 @@
 /**
  * Domain Layer Public API
- * 
+ *
  * Exports all domain logic and business rules for use throughout the application.
  * This follows the clean architecture principle of separating business logic
  * from infrastructure and UI concerns.

@@ -1,19 +1,7 @@
 import React from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Link } from 'react-router-dom';
-import {
-  Card,
-  Row,
-  Col,
-  Statistic,
-  Alert,
-  List,
-  Avatar,
-  Space,
-  Button,
-  Tag,
-  Divider,
-} from 'antd';
+import { Card, Row, Col, Statistic, Alert, List, Avatar, Space, Button, Tag, Divider } from 'antd';
 import {
   ContactsOutlined,
   HeartOutlined,
@@ -138,9 +126,15 @@ export const DashboardPage: React.FC = () => {
             />
             <Divider />
             <div style={{ fontSize: '12px' }}>
-              <div><strong>Email:</strong> {user?.email}</div>
-              <div><strong>Username:</strong> {user?.username}</div>
-              <div><strong>Roles:</strong> {user?.roles?.join(', ') || 'None'}</div>
+              <div>
+                <strong>Email:</strong> {user?.email}
+              </div>
+              <div>
+                <strong>Username:</strong> {user?.username}
+              </div>
+              <div>
+                <strong>Roles:</strong> {user?.roles?.join(', ') || 'None'}
+              </div>
             </div>
           </Card>
         </Col>
@@ -148,17 +142,19 @@ export const DashboardPage: React.FC = () => {
 
       {/* Recent Activity */}
       <Card
-        title={<><BarsOutlined style={{ marginRight: 8 }} />Recent Activity</>}
+        title={
+          <>
+            <BarsOutlined style={{ marginRight: 8 }} />
+            Recent Activity
+          </>
+        }
         hoverable
       >
         <List
           dataSource={recentActivities}
-          renderItem={(item) => (
+          renderItem={item => (
             <List.Item>
-              <List.Item.Meta
-                title={item.title}
-                description={item.description}
-              />
+              <List.Item.Meta title={item.title} description={item.description} />
               <Tag>{item.time}</Tag>
             </List.Item>
           )}
@@ -166,12 +162,9 @@ export const DashboardPage: React.FC = () => {
       </Card>
 
       {/* Technology Stack */}
-      <Card
-        title={<>Technology Stack</>}
-        hoverable
-      >
+      <Card title={<>Technology Stack</>} hoverable>
         <Row gutter={[16, 16]}>
-          {technologies.map((tech) => (
+          {technologies.map(tech => (
             <Col xs={12} sm={6} key={tech.name}>
               <Card size="small" style={{ textAlign: 'center' }}>
                 <Avatar

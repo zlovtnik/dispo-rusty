@@ -1,11 +1,16 @@
 import qs from 'qs';
 import { ResultAsync, err, errAsync, ok, okAsync } from 'neverthrow';
 import { z } from 'zod';
-import type { ZodSchema } from 'zod';
+import type { ZodType } from 'zod';
 import { getEnv } from '../config/env';
-import type { AuthResponse, LoginCredentials, User, Tenant } from '../types/auth';
+import type { AuthResponse, LoginCredentials, User, Tenant as AuthTenant } from '../types/auth';
 import type { ContactListResponse, Contact } from '../types/contact';
-import type { CreateTenantDTO, PaginatedTenantResponse, UpdateTenantDTO } from '../types/tenant';
+import type {
+  CreateTenantDTO,
+  PaginatedTenantResponse,
+  UpdateTenantDTO,
+  Tenant,
+} from '../types/tenant';
 import type { ApiResponse } from '../types/api';
 import { createErrorResponse, createSuccessResponse } from '../types/api';
 import type { AppError, AuthError, BusinessLogicError } from '../types/errors';
@@ -73,25 +78,26 @@ function pipe<T, A, B, C>(
   value: T,
   fn1: (input: T) => A,
   fn2: (input: A) => B,
-  fn3: (input: B) => C,
+  fn3: (input: B) => C
 ): C;
 function pipe<T, A, B, C, D>(
   value: T,
   fn1: (input: T) => A,
   fn2: (input: A) => B,
   fn3: (input: B) => C,
-  fn4: (input: C) => D,
+  fn4: (input: C) => D
 ): D;
-function pipe(value: unknown, ...fns: Array<(input: unknown) => unknown>): unknown {
+function pipe(value: unknown, ...fns: ((input: unknown) => unknown)[]): unknown {
   return fns.reduce((accumulator, fn) => fn(accumulator), value);
 }
 
 const mapHttpError = (response: Response, body: Record<string, unknown>): AppError => {
   const message = typeof body.message === 'string' ? body.message : response.statusText;
   const code = typeof body.code === 'string' ? body.code : undefined;
-  const details = typeof body.details === 'object' && body.details !== null
-    ? (body.details as Record<string, unknown>)
-    : undefined;
+  const details =
+    typeof body.details === 'object' && body.details !== null
+      ? (body.details as Record<string, unknown>)
+      : undefined;
 
   if (response.status === 401 || response.status === 403) {
     return createAuthError(message || 'Authentication error', details, {
@@ -126,24 +132,30 @@ const apiResultFromResponse = <T>(response: Response): ResultAsync<ApiResponse<T
 
   if (!contentType.includes('application/json')) {
     return errAsync(
-      createBusinessLogicError('Expected JSON response from server', { contentType }, {
-        code: 'INVALID_CONTENT_TYPE',
-        statusCode: response.status,
-      }),
+      createBusinessLogicError(
+        'Expected JSON response from server',
+        { contentType },
+        {
+          code: 'INVALID_CONTENT_TYPE',
+          statusCode: response.status,
+        }
+      )
     );
   }
 
   return ResultAsync.fromPromise(
-    response
-      .clone()
-      .json() as Promise<Record<string, unknown>>,
+    response.clone().json() as Promise<Record<string, unknown>>,
     (error: unknown) =>
-      createBusinessLogicError('Failed to parse response body', {
-        rawError: error instanceof Error ? { message: error.message } : undefined,
-      }, {
-        code: 'JSON_PARSE_ERROR',
-        statusCode: response.status,
-      }),
+      createBusinessLogicError(
+        'Failed to parse response body',
+        {
+          rawError: error instanceof Error ? { message: error.message } : undefined,
+        },
+        {
+          code: 'JSON_PARSE_ERROR',
+          statusCode: response.status,
+        }
+      )
   ).andThen(body => {
     const message = typeof body.message === 'string' ? body.message : undefined;
     const success = 'success' in body ? Boolean(body.success) : response.ok;
@@ -154,11 +166,15 @@ const apiResultFromResponse = <T>(response: Response): ResultAsync<ApiResponse<T
     }
 
     if (response.ok && !success) {
-      const error = createBusinessLogicError(message ?? 'Request failed', body.error && typeof body.error === 'object'
-        ? (body.error as Record<string, unknown>)
-        : undefined, {
-        statusCode: response.status,
-      });
+      const error = createBusinessLogicError(
+        message ?? 'Request failed',
+        body.error && typeof body.error === 'object'
+          ? (body.error as Record<string, unknown>)
+          : undefined,
+        {
+          statusCode: response.status,
+        }
+      );
       return okAsync(createErrorResponse(error, message));
     }
 
@@ -171,13 +187,13 @@ const retryWithBackoff = <T>(
   operation: () => ResultAsync<T, AppError>,
   config: RetryConfig,
   shouldRetry: (error: AppError, attempt: number) => boolean,
-  scheduleDelay: (attempt: number) => ResultAsync<void, AppError>,
+  scheduleDelay: (attempt: number) => ResultAsync<void, AppError>
 ): ResultAsync<T, AppError> => {
   const attemptOperation = (attempt: number): ResultAsync<T, AppError> =>
     operation().orElse(error =>
       shouldRetry(error, attempt)
         ? scheduleDelay(attempt).andThen(() => attemptOperation(attempt + 1))
-        : errAsync(error),
+        : errAsync(error)
     );
 
   return attemptOperation(1);
@@ -185,7 +201,7 @@ const retryWithBackoff = <T>(
 
 const handleSuccessResponse = <Raw, Parsed>(
   result: AsyncResult<ApiResponse<Raw>, AppError>,
-  schema: ZodSchema<Parsed>,
+  schema: ZodType<Parsed>
 ): AsyncResult<Parsed, AppError> =>
   result.andThen(response => {
     if (response.status === 'error') {
@@ -193,20 +209,20 @@ const handleSuccessResponse = <Raw, Parsed>(
     }
 
     return liftResult(validateAndDecode<Parsed>(schema, response.data)).mapErr(
-      validationError => validationError as AppError,
+      validationError => validationError as AppError
     );
   });
 
 const toAuthResponse = (payload: AuthResponseSchema): AuthResponse => {
   // Decode JWT to get user info
   const jwtResult = decodeJwtPayload(payload.access_token);
-  
+
   if (jwtResult.isErr()) {
     throw new Error('Invalid JWT token received from server');
   }
-  
+
   const jwtPayload = jwtResult.value;
-  
+
   // Create user object from JWT
   const user: User = {
     id: asUserId(jwtPayload.user),
@@ -217,7 +233,7 @@ const toAuthResponse = (payload: AuthResponseSchema): AuthResponse => {
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
-  
+
   // Default tenant settings
   const defaultSettings = {
     theme: 'light' as const,
@@ -231,7 +247,7 @@ const toAuthResponse = (payload: AuthResponseSchema): AuthResponse => {
       accentColor: '#000000',
     },
   };
-  
+
   // Default tenant subscription
   const defaultSubscription = {
     plan: 'basic' as const,
@@ -242,18 +258,18 @@ const toAuthResponse = (payload: AuthResponseSchema): AuthResponse => {
       storage: 0,
     },
   };
-  
-  // Create tenant object
-  const tenant: Tenant = {
+
+  // Create tenant object for auth (from auth.ts type)
+  const tenant: AuthTenant = {
     id: asTenantId(jwtPayload.tenant_id),
     name: jwtPayload.tenant_id,
     settings: defaultSettings,
     subscription: defaultSubscription,
   };
-  
+
   // Calculate expires in seconds
   const expiresIn = jwtPayload.exp - Math.floor(Date.now() / 1000);
-  
+
   return {
     success: true,
     token: payload.access_token,
@@ -266,7 +282,7 @@ const toAuthResponse = (payload: AuthResponseSchema): AuthResponse => {
 
 const transformApiResponse = <Raw, Domain>(
   result: AsyncResult<ApiResponse<Raw>, AppError>,
-  transform: (value: Raw) => Result<Domain, AppError>,
+  transform: (value: Raw) => Result<Domain, AppError>
 ): AsyncResult<ApiResponse<Domain>, AppError> =>
   result.andThen(response => {
     if (response.status === 'error') {
@@ -274,7 +290,7 @@ const transformApiResponse = <Raw, Domain>(
     }
 
     return liftResult(transform(response.data)).map(domainData =>
-      createSuccessResponse(domainData, response.message),
+      createSuccessResponse(domainData, response.message)
     );
   });
 
@@ -293,7 +309,7 @@ const toAuthError = (error: AppError): AuthError => {
       code: error.code,
       cause: error,
       statusCode: error.statusCode,
-    },
+    }
   );
 };
 
@@ -312,11 +328,11 @@ const toBusinessError = (error: AppError): BusinessLogicError => {
       code: error.code,
       cause: error,
       statusCode: error.statusCode,
-    },
+    }
   );
 };
 
-const emptyObjectSchema = z.object({}).passthrough();
+const emptyObjectSchema = z.object({}).loose();
 //// HTTP Client class with timeout, retry, and circuit breaker support
 class HttpClient implements IHttpClient {
   private readonly baseURL: string;
@@ -344,7 +360,12 @@ class HttpClient implements IHttpClient {
     if (!stored) return null;
     try {
       const data = JSON.parse(stored);
-      if (typeof data === 'object' && data !== null && 'token' in data && typeof data.token === 'string') {
+      if (
+        typeof data === 'object' &&
+        data !== null &&
+        'token' in data &&
+        typeof data.token === 'string'
+      ) {
         return data.token;
       }
     } catch {}
@@ -356,7 +377,12 @@ class HttpClient implements IHttpClient {
     if (!stored) return null;
     try {
       const data = JSON.parse(stored);
-      if (typeof data === 'object' && data !== null && 'id' in data && typeof data.id === 'string') {
+      if (
+        typeof data === 'object' &&
+        data !== null &&
+        'id' in data &&
+        typeof data.id === 'string'
+      ) {
         return data.id;
       }
     } catch {}
@@ -381,7 +407,7 @@ class HttpClient implements IHttpClient {
           createNetworkError('Service is temporarily unavailable', undefined, {
             code: 'CIRCUIT_BREAKER_OPEN',
             retryable: true,
-          }),
+          })
         );
       }
 
@@ -466,11 +492,13 @@ class HttpClient implements IHttpClient {
 
   private executeFetch(url: string, options: RequestInit): ResultAsync<Response, AppError> {
     const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), this.config.timeout);
+    const timeoutId = window.setTimeout(() => {
+      controller.abort();
+    }, this.config.timeout);
 
     return ResultAsync.fromPromise(
       fetch(url, { ...options, signal: controller.signal }),
-      (error: unknown) => this.createFetchError(error),
+      (error: unknown) => this.createFetchError(error)
     )
       .map(response => {
         clearTimeout(timeoutId);
@@ -484,7 +512,9 @@ class HttpClient implements IHttpClient {
 
   private createFetchError(error: unknown): AppError {
     const isAbortError = error instanceof DOMException && error.name === 'AbortError';
-    const message = isAbortError ? 'Request timed out' : 'Network error: Unable to reach the server';
+    const message = isAbortError
+      ? 'Request timed out'
+      : 'Network error: Unable to reach the server';
 
     return createNetworkError(message, undefined, {
       code: isAbortError ? 'TIMEOUT' : 'NETWORK_ERROR',
@@ -495,17 +525,18 @@ class HttpClient implements IHttpClient {
 
   private scheduleDelay(attempt: number): ResultAsync<void, AppError> {
     const delay = this.calculateBackoffDelay(attempt);
-    return ResultAsync.fromPromise(
-      this.sleep(delay),
-      () =>
-        createNetworkError('Failed to schedule retry delay', undefined, {
-          code: 'RETRY_DELAY_FAILURE',
-          retryable: true,
-        }),
+    return ResultAsync.fromPromise(this.sleep(delay), () =>
+      createNetworkError('Failed to schedule retry delay', undefined, {
+        code: 'RETRY_DELAY_FAILURE',
+        retryable: true,
+      })
     );
   }
 
-  private request<T>(endpoint: string, options: RequestInit = {}): AsyncResult<ApiResponse<T>, AppError> {
+  private request<T>(
+    endpoint: string,
+    options: RequestInit = {}
+  ): AsyncResult<ApiResponse<T>, AppError> {
     const circuitResult = this.evaluateCircuitBreaker();
     if (circuitResult.isErr()) {
       return errAsync(circuitResult.error);
@@ -521,7 +552,7 @@ class HttpClient implements IHttpClient {
       operation,
       this.config.retry,
       (error, attempt) => this.isRetryableError(error) && attempt < this.config.retry.maxAttempts,
-      attempt => this.scheduleDelay(attempt),
+      attempt => this.scheduleDelay(attempt)
     )
       .map(result => {
         this.updateCircuitBreakerWithResult(result);
@@ -579,15 +610,18 @@ export const authService = {
       .andThen(body =>
         handleSuccessResponse<AuthResponse, AuthResponseSchema>(
           apiClient.post<AuthResponse>('/auth/login', body),
-          authResponseSchema,
-        ),
+          authResponseSchema
+        )
       )
       .map(toAuthResponse)
       .mapErr(toAuthError);
   },
 
   logout(): AsyncResult<void, AuthError> {
-    return handleSuccessResponse(apiClient.post<Record<string, unknown>>('/auth/logout'), emptyObjectSchema)
+    return handleSuccessResponse(
+      apiClient.post<Record<string, unknown>>('/auth/logout'),
+      emptyObjectSchema
+    )
       .map(() => undefined)
       .mapErr(toAuthError);
   },
@@ -595,7 +629,7 @@ export const authService = {
   refreshToken(): AsyncResult<AuthResponse, AuthError> {
     return handleSuccessResponse<AuthResponse, AuthResponseSchema>(
       apiClient.post<AuthResponse>('/auth/refresh'),
-      authResponseSchema,
+      authResponseSchema
     )
       .map(toAuthResponse)
       .mapErr(toAuthError);
@@ -613,11 +647,11 @@ export const healthService = {
 };
 
 export interface TenantFilter {
-  filters: Array<{
+  filters: {
     field: string;
     operator: string;
     value: string;
-  }>;
+  }[];
   cursor?: number;
   page_size?: number;
 }
@@ -627,16 +661,23 @@ export const tenantService = {
     return apiClient.get<Tenant[]>('/admin/tenants');
   },
 
-  getAllWithPagination(params?: { offset?: number; limit?: number }): AsyncResult<ApiResponse<PaginatedTenantResponse>, AppError> {
+  getAllWithPagination(params?: {
+    offset?: number;
+    limit?: number;
+  }): AsyncResult<ApiResponse<PaginatedTenantResponse>, AppError> {
     const queryParams = new URLSearchParams();
     if (params?.offset !== undefined) queryParams.set('offset', params.offset.toString());
     if (params?.limit !== undefined) queryParams.set('limit', params.limit.toString());
 
     const query = queryParams.toString();
-    return apiClient.get<PaginatedTenantResponse>(query ? `/admin/tenants?${query}` : '/admin/tenants');
+    return apiClient.get<PaginatedTenantResponse>(
+      query ? `/admin/tenants?${query}` : '/admin/tenants'
+    );
   },
 
-  filter(params: TenantFilter): AsyncResult<ApiResponse<PaginatedTenantResponse | Tenant[]>, AppError> {
+  filter(
+    params: TenantFilter
+  ): AsyncResult<ApiResponse<PaginatedTenantResponse | Tenant[]>, AppError> {
     const queryObj: Record<string, unknown> = {
       filters: params.filters,
     };
@@ -649,7 +690,9 @@ export const tenantService = {
     }
 
     const queryString = qs.stringify(queryObj, { arrayFormat: 'indices' });
-    return apiClient.get<PaginatedTenantResponse | Tenant[]>(`/admin/tenants/filter?${queryString}`);
+    return apiClient.get<PaginatedTenantResponse | Tenant[]>(
+      `/admin/tenants/filter?${queryString}`
+    );
   },
 
   getById(id: string): AsyncResult<ApiResponse<Tenant>, AppError> {
@@ -670,7 +713,11 @@ export const tenantService = {
 };
 
 export const addressBookService = {
-  getAll(params?: { page?: number; limit?: number; search?: string }): AsyncResult<ApiResponse<ContactListResponse>, AppError> {
+  getAll(params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+  }): AsyncResult<ApiResponse<ContactListResponse>, AppError> {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.set('page', params.page.toString());
     if (params?.limit) queryParams.set('limit', params.limit.toString());
@@ -679,7 +726,7 @@ export const addressBookService = {
     const query = queryParams.toString();
     return transformApiResponse(
       apiClient.get<unknown>(query ? `/address-book?${query}` : '/address-book'),
-      contactListFromApiResponse,
+      contactListFromApiResponse
     );
   },
 
@@ -691,23 +738,23 @@ export const addressBookService = {
     address: string;
     phone: string;
   }): AsyncResult<ApiResponse<Contact>, AppError> {
-    return transformApiResponse(
-      apiClient.post<unknown>('/address-book', data),
-      mapContact.fromApi,
-    );
+    return transformApiResponse(apiClient.post<unknown>('/address-book', data), mapContact.fromApi);
   },
 
-  update(id: string, data: {
-    name: string;
-    email: string;
-    gender?: boolean;
-    age: number;
-    address: string;
-    phone: string;
-  }): AsyncResult<ApiResponse<Contact>, AppError> {
+  update(
+    id: string,
+    data: {
+      name: string;
+      email: string;
+      gender?: boolean;
+      age: number;
+      address: string;
+      phone: string;
+    }
+  ): AsyncResult<ApiResponse<Contact>, AppError> {
     return transformApiResponse(
       apiClient.put<unknown>(`/address-book/${id}`, data),
-      mapContact.fromApi,
+      mapContact.fromApi
     );
   },
 

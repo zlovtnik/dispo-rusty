@@ -80,55 +80,59 @@ export function useValidation<T, E = string>(
   const memoizedValidators = useMemo(() => validators, [validators]);
 
   // Validation function that runs all validators in sequence (railway pattern)
-  const validateValue = useCallback((value: T | undefined): ValidationResult<T, E> => {
-    // Handle undefined/null as a validation error with typed error
-    if (value === undefined || value === null) {
-      // Use provided requiredError or requiredErrorFactory for type safety
-      const undefinedError = requiredError ?? 
-        (requiredErrorFactory ? requiredErrorFactory() : 'Value is required' as unknown as E);
-      return {
-        isValid: false,
-        value: null,
-        error: undefinedError,
-        errors: [undefinedError],
-      };
-    }
-
-    const errors: E[] = [];
-    let currentValue: T = value;
-
-    // Run all validators in sequence
-    for (const validator of memoizedValidators) {
-      const result = validator(currentValue);
-      if (result.isErr()) {
-        errors.push(result.error);
-        // Break early if shortCircuit is enabled
-        if (shortCircuit) {
-          break;
-        }
-      } else {
-        // Update value if transformed by validator
-        currentValue = result.value;
+  const validateValue = useCallback(
+    (value: T | undefined): ValidationResult<T, E> => {
+      // Handle undefined/null as a validation error with typed error
+      if (value === undefined || value === null) {
+        // Use provided requiredError or requiredErrorFactory for type safety
+        const undefinedError =
+          requiredError ??
+          (requiredErrorFactory ? requiredErrorFactory() : ('Value is required' as unknown as E));
+        return {
+          isValid: false,
+          value: null,
+          error: undefinedError,
+          errors: [undefinedError],
+        };
       }
-    }
 
-    if (errors.length > 0) {
-      const combinedError = errorCombiner ? errorCombiner(errors) : errors[0];
+      const errors: E[] = [];
+      let currentValue: T = value;
+
+      // Run all validators in sequence
+      for (const validator of memoizedValidators) {
+        const result = validator(currentValue);
+        if (result.isErr()) {
+          errors.push(result.error);
+          // Break early if shortCircuit is enabled
+          if (shortCircuit) {
+            break;
+          }
+        } else {
+          // Update value if transformed by validator
+          currentValue = result.value;
+        }
+      }
+
+      if (errors.length > 0) {
+        const combinedError = errorCombiner ? errorCombiner(errors) : errors[0];
+        return {
+          isValid: false,
+          value: null,
+          error: combinedError ?? null, // Handle case where errorCombiner returns undefined
+          errors,
+        };
+      }
+
       return {
-        isValid: false,
-        value: null,
-        error: combinedError ?? null, // Handle case where errorCombiner returns undefined
-        errors,
+        isValid: true,
+        value: currentValue,
+        error: null,
+        errors: [],
       };
-    }
-
-    return {
-      isValid: true,
-      value: currentValue,
-      error: null,
-      errors: [],
-    };
-  }, [memoizedValidators, errorCombiner, shortCircuit, requiredError, requiredErrorFactory]);
+    },
+    [memoizedValidators, errorCombiner, shortCircuit, requiredError, requiredErrorFactory]
+  );
 
   // Initial validation result
   const initialResult = useMemo(() => {
@@ -149,27 +153,33 @@ export function useValidation<T, E = string>(
   const [validating, setValidating] = useState(false);
 
   // Validation function exposed to consumers
-  const validate = useCallback((newValue: T | undefined): ValidationResult<T, E> => {
-    setValidating(true);
-    try {
-      const validationResult = validateValue(newValue);
-      setResult(validationResult);
-      setValueState(newValue);
-      return validationResult;
-    } finally {
-      setValidating(false);
-    }
-  }, [validateValue]);
+  const validate = useCallback(
+    (newValue: T | undefined): ValidationResult<T, E> => {
+      setValidating(true);
+      try {
+        const validationResult = validateValue(newValue);
+        setResult(validationResult);
+        setValueState(newValue);
+        return validationResult;
+      } finally {
+        setValidating(false);
+      }
+    },
+    [validateValue]
+  );
 
   // Set value conditionally triggers validation when validateOnChange is true
   // Clearing a field (undefined/null) will run validation so consumers know required-field errors may appear immediately
-  const setValue = useCallback((newValue: T | undefined) => {
-    setValueState(newValue);
-    if (validateOnChange) {
-      const validationResult = validateValue(newValue);
-      setResult(validationResult);
-    }
-  }, [validateOnChange, validateValue]);
+  const setValue = useCallback(
+    (newValue: T | undefined) => {
+      setValueState(newValue);
+      if (validateOnChange) {
+        const validationResult = validateValue(newValue);
+        setResult(validationResult);
+      }
+    },
+    [validateOnChange, validateValue]
+  );
 
   // Reset validation state
   const reset = useCallback(() => {
@@ -205,11 +215,14 @@ export function useValidationStatus<T, E>(
   errors: E[];
   isValidating: boolean;
 } {
-  return useMemo(() => ({
-    isValid: validationState.result.isValid,
-    isInvalid: !validationState.result.isValid && validationState.result.errors.length > 0,
-    error: validationState.result.error,
-    errors: validationState.result.errors,
-    isValidating: validationState.validating,
-  }), [validationState.result, validationState.validating]);
+  return useMemo(
+    () => ({
+      isValid: validationState.result.isValid,
+      isInvalid: !validationState.result.isValid && validationState.result.errors.length > 0,
+      error: validationState.result.error,
+      errors: validationState.result.errors,
+      isValidating: validationState.validating,
+    }),
+    [validationState.result, validationState.validating]
+  );
 }

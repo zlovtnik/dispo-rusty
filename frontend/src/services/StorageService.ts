@@ -1,9 +1,9 @@
 /**
  * StorageService - Result-based localStorage abstraction
- * 
+ *
  * Provides type-safe storage operations with Result types for functional error handling.
  * Wraps all localStorage operations to handle errors gracefully without exceptions.
- * 
+ *
  * @example
  * ```typescript
  * const storage = new StorageService();
@@ -15,7 +15,7 @@
  * ```
  */
 
-import { Result, ok, err } from 'neverthrow';
+import { type Result, ok, err } from 'neverthrow';
 import type { StorageError } from '../types/errors';
 import { StorageErrors } from '../types/errors';
 
@@ -83,7 +83,7 @@ export class StorageService {
    */
   private initializeVersion(): void {
     if (!this.storage) return;
-    
+
     try {
       const version = this.storage.getItem(STORAGE_VERSION_KEY);
       if (!version) {
@@ -106,9 +106,9 @@ export class StorageService {
    */
   private migrate(from: number, to: number): void {
     console.log(`Migrating storage from version ${from} to ${to}`);
-    
+
     // TODO: Implement migration logic when STORAGE_VERSION is incremented
-    // 
+    //
     // When incrementing STORAGE_VERSION, you must:
     // 1. Add version-specific migration logic below (e.g., if (from === 1 && to === 2) { ... })
     // 2. Migrate/rename storage keys if the key enum changed
@@ -136,7 +136,7 @@ export class StorageService {
     //     this.storage.setItem('user', JSON.stringify(migrated));
     //   }
     // }
-    
+
     if (this.storage) {
       this.storage.setItem(STORAGE_VERSION_KEY, to.toString());
     }
@@ -155,7 +155,7 @@ export class StorageService {
       }
 
       const raw = this.storage!.getItem(key);
-      
+
       if (raw === null) {
         return err(StorageErrors.notFound(key));
       }
@@ -179,7 +179,7 @@ export class StorageService {
    * @returns Result containing the parsed value or a StorageError
    */
   getVersioned<T>(key: StorageKey | string): Result<T, StorageError> {
-    return this.get<VersionedData<T>>(key).andThen((versionedData) => {
+    return this.get<VersionedData<T>>(key).andThen(versionedData => {
       // Check version and return error on mismatch
       if (versionedData.version !== STORAGE_VERSION) {
         return err(StorageErrors.versionMismatch(key, STORAGE_VERSION, versionedData.version));
@@ -209,7 +209,8 @@ export class StorageService {
         if (stringifyError instanceof Error && stringifyError.name === 'QuotaExceededError') {
           return err(StorageErrors.quotaExceeded(key));
         }
-        const reason = stringifyError instanceof Error ? stringifyError.message : 'Unknown stringify error';
+        const reason =
+          stringifyError instanceof Error ? stringifyError.message : 'Unknown stringify error';
         return err(StorageErrors.stringifyError(key, reason));
       }
     } catch (error) {

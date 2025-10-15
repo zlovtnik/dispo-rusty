@@ -7,7 +7,7 @@ This directory contains all **pure business logic** for the application, followi
 ```
 domain/
 ├── auth.ts              # Authentication domain logic
-├── contacts.ts          # Contact management logic  
+├── contacts.ts          # Contact management logic
 ├── tenants.ts           # Tenant management logic
 ├── index.ts             # Public API exports
 └── rules/               # Business rules
@@ -19,6 +19,7 @@ domain/
 ## 🎯 Principles
 
 ### 1. Pure Functions Only
+
 All functions in this layer are **pure** - same input always produces same output, no side effects.
 
 ```typescript
@@ -26,7 +27,7 @@ All functions in this layer are **pure** - same input always produces same outpu
 function authenticateUser(
   credentials: LoginCredentials,
   authResponse: AuthResponse
-): Result<Session, AuthFlowError>
+): Result<Session, AuthFlowError>;
 
 // ❌ Impure - has side effects (API call, state mutation)
 async function authenticateUser(credentials: LoginCredentials) {
@@ -36,6 +37,7 @@ async function authenticateUser(credentials: LoginCredentials) {
 ```
 
 ### 2. Railway-Oriented Programming
+
 All operations return `Result<T, E>` for explicit error handling.
 
 ```typescript
@@ -45,20 +47,23 @@ function verifyToken(token: string): Result<TokenPayload, TokenError> {
   if (!token) {
     return err({ type: 'INVALID_FORMAT', reason: 'Token is empty' });
   }
-  
+
   const payload = decodeJWT(token);
   return ok(payload);
 }
 ```
 
 ### 3. Zero Dependencies
+
 This layer has **no dependencies** on:
+
 - React (no hooks, components, contexts)
 - API clients (no HTTP calls)
 - Storage (no localStorage, cookies)
 - UI frameworks (no Ant Design, CSS)
 
 ### 4. Type Safety
+
 All errors are **discriminated unions** for exhaustive pattern matching.
 
 ```typescript
@@ -69,9 +74,15 @@ type TokenError =
 
 // TypeScript ensures all cases are handled
 match(tokenError)
-  .with({ type: 'EXPIRED' }, (e) => {/* handle expired */})
-  .with({ type: 'INVALID_FORMAT' }, (e) => {/* handle invalid */})
-  .with({ type: 'MISSING_CLAIMS' }, (e) => {/* handle missing */})
+  .with({ type: 'EXPIRED' }, e => {
+    /* handle expired */
+  })
+  .with({ type: 'INVALID_FORMAT' }, e => {
+    /* handle invalid */
+  })
+  .with({ type: 'MISSING_CLAIMS' }, e => {
+    /* handle missing */
+  })
   .exhaustive(); // Compile error if any case missing
 ```
 
@@ -82,6 +93,7 @@ match(tokenError)
 Pure functions for authentication operations.
 
 **Key Functions:**
+
 - `authenticateUser()` - Transform API response to Session
 - `verifyToken()` - Validate and decode JWT
 - `refreshSession()` - Update session with new tokens
@@ -90,6 +102,7 @@ Pure functions for authentication operations.
 - `hasRole()` / `hasAnyRole()` / `hasAllRoles()` - Role checking
 
 **Example:**
+
 ```typescript
 import { authenticateUser, verifyToken } from '@/domain';
 
@@ -100,8 +113,8 @@ const apiResponse = await authService.login(credentials);
 const sessionResult = authenticateUser(credentials, apiResponse);
 
 sessionResult.match(
-  (session) => console.log('Logged in:', session.user.email),
-  (error) => console.error('Login failed:', error.type)
+  session => console.log('Logged in:', session.user.email),
+  error => console.error('Login failed:', error.type)
 );
 ```
 
@@ -110,6 +123,7 @@ sessionResult.match(
 Pure functions for contact CRUD operations.
 
 **Key Functions:**
+
 - `createContact()` - Create with validation and derived fields
 - `updateContact()` - Update with field validation
 - `mergeContacts()` - Merge two contacts (prefer-primary/prefer-secondary/combine)
@@ -118,6 +132,7 @@ Pure functions for contact CRUD operations.
 - `formatContactDisplay()` - Format for display
 
 **Example:**
+
 ```typescript
 import { createContact, mergeContacts } from '@/domain';
 
@@ -137,6 +152,7 @@ const merged = mergeContacts(primary, secondary, 'combine', userId);
 Pure functions for tenant operations and access control.
 
 **Key Functions:**
+
 - `validateTenantAccess()` - Check user can access tenant
 - `switchTenant()` - Validate tenant switch
 - `validateTenantSubscription()` - Check subscription status
@@ -148,6 +164,7 @@ Pure functions for tenant operations and access control.
 - `isApproachingLimit()` - Check if near limit
 
 **Example:**
+
 ```typescript
 import { validateTenantAccess, validateFeatureAccess } from '@/domain';
 
@@ -169,6 +186,7 @@ if (featureResult.isErr()) {
 ### Authentication Rules (`rules/authRules.ts`)
 
 **Password Validation:**
+
 ```typescript
 import { AuthRules } from '@/domain';
 
@@ -185,10 +203,11 @@ const label = AuthRules.getPasswordStrengthLabel(score); // 'weak' | 'fair' | 'g
 ```
 
 **Session Timeouts:**
+
 ```typescript
 const shouldTimeout = AuthRules.shouldTimeoutFromIdle(lastActivity, {
-  idleTimeout: 30,      // 30 minutes
-  absoluteTimeout: 8,   // 8 hours
+  idleTimeout: 30, // 30 minutes
+  absoluteTimeout: 8, // 8 hours
   warningBeforeTimeout: 5,
 });
 
@@ -199,6 +218,7 @@ const minutesLeft = AuthRules.getMinutesUntilTimeout(lastActivity);
 ### Contact Rules (`rules/contactRules.ts`)
 
 **Validation:**
+
 ```typescript
 import { ContactRules } from '@/domain';
 
@@ -206,14 +226,11 @@ const emailResult = ContactRules.validateEmailFormat(email);
 const phoneResult = ContactRules.validatePhoneFormat(phone);
 const ageResult = ContactRules.validateAgeRange(age, 0, 150);
 
-const emailUnique = ContactRules.validateEmailUniqueness(
-  email,
-  existingContacts,
-  excludeContactId
-);
+const emailUnique = ContactRules.validateEmailUniqueness(email, existingContacts, excludeContactId);
 ```
 
 **Quality Assessment:**
+
 ```typescript
 const completeness = ContactRules.calculateContactCompleteness(contact); // 0-100%
 const quality = ContactRules.getContactQualityScore(contact); // 0-100
@@ -221,6 +238,7 @@ const hasMinInfo = ContactRules.hasMinimumContactInfo(contact); // boolean
 ```
 
 **Data Sanitization:**
+
 ```typescript
 const sanitized = ContactRules.sanitizeContactData(contact);
 const displayName = ContactRules.formatContactName(contact, 'full');
@@ -229,6 +247,7 @@ const displayName = ContactRules.formatContactName(contact, 'full');
 ### Tenant Rules (`rules/tenantRules.ts`)
 
 **Subscription Limits:**
+
 ```typescript
 import { TenantRules } from '@/domain';
 
@@ -238,14 +257,11 @@ const limits = TenantRules.getPlanLimits('professional');
 const features = TenantRules.getAvailableFeatures('professional');
 // ['contacts', 'advanced_search', 'api_access', ...]
 
-const validation = TenantRules.validateSubscriptionLimit(
-  tenant,
-  'contacts',
-  currentCount
-);
+const validation = TenantRules.validateSubscriptionLimit(tenant, 'contacts', currentCount);
 ```
 
 **Usage Analytics:**
+
 ```typescript
 const percentage = TenantRules.calculateUsagePercentage(tenant, 'users', 20);
 const approaching = TenantRules.isApproachingLimit(tenant, 'users', 20, 80);
@@ -263,21 +279,27 @@ import { authenticateUser } from '@/domain';
 
 describe('authenticateUser', () => {
   test('creates session from valid auth response', () => {
-    const credentials = { /* ... */ };
-    const authResponse = { /* ... */ };
-    
+    const credentials = {
+      /* ... */
+    };
+    const authResponse = {
+      /* ... */
+    };
+
     const result = authenticateUser(credentials, authResponse);
-    
+
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap().user.email).toBe('user@example.com');
   });
 
   test('fails with missing tokens', () => {
-    const credentials = { /* ... */ };
-    const authResponse = { token: '', /* ... */ };
-    
+    const credentials = {
+      /* ... */
+    };
+    const authResponse = { token: '' /* ... */ };
+
     const result = authenticateUser(credentials, authResponse);
-    
+
     expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr().type).toBe('INVALID_CREDENTIALS');
   });
@@ -285,13 +307,14 @@ describe('authenticateUser', () => {
 ```
 
 **Property-Based Testing:**
+
 ```typescript
 import fc from 'fast-check';
 import { ContactRules } from '@/domain';
 
 test('email validation accepts all valid emails', () => {
   fc.assert(
-    fc.property(fc.emailAddress(), (email) => {
+    fc.property(fc.emailAddress(), email => {
       const result = ContactRules.validateEmailFormat(email);
       expect(result.isOk()).toBe(true);
     })
@@ -302,6 +325,7 @@ test('email validation accepts all valid emails', () => {
 ## 📚 Usage in Application
 
 ### In Service Layer
+
 ```typescript
 // services/authService.ts
 import { authenticateUser } from '@/domain';
@@ -309,28 +333,27 @@ import { authenticateUser } from '@/domain';
 export const authService = {
   async login(credentials: LoginCredentials) {
     const apiResult = await httpClient.post('/auth/login', credentials);
-    
-    return apiResult.andThen(authResponse =>
-      authenticateUser(credentials, authResponse)
-    );
+
+    return apiResult.andThen(authResponse => authenticateUser(credentials, authResponse));
   },
 };
 ```
 
 ### In Context
+
 ```typescript
 // contexts/AuthContext.tsx
 import { authenticateUser, validateSession } from '@/domain';
 
 const login = async (credentials: LoginCredentials) => {
   const sessionResult = await authService.login(credentials);
-  
+
   sessionResult.match(
-    (session) => {
+    session => {
       setSession(session);
       storageService.set('session', session);
     },
-    (error) => {
+    error => {
       setError(error);
     }
   );
@@ -338,16 +361,17 @@ const login = async (credentials: LoginCredentials) => {
 ```
 
 ### In Components
+
 ```typescript
 // components/ProtectedFeature.tsx
 import { validateTenantAccess, validateFeatureAccess } from '@/domain';
 
 function ProtectedFeature({ feature }) {
   const { session } = useAuth();
-  
+
   const accessResult = validateTenantAccess(session.user, session.tenant.id);
   const featureResult = validateFeatureAccess(session.tenant, feature);
-  
+
   return Result.combine([accessResult, featureResult]).match(
     () => <FeatureContent />,
     (error) => <AccessDenied error={error} />

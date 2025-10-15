@@ -49,7 +49,11 @@ const decodeJwtPayload = (token: string): JwtPayload | null => {
 };
 
 // Helper to attempt token refresh and validate/construct user and tenant objects
-const attemptTokenRefresh = async (storedUser: string, storedTenant: string, signal?: AbortSignal): Promise<{ user: User; tenant: Tenant; token: string } | null> => {
+const attemptTokenRefresh = async (
+  storedUser: string,
+  storedTenant: string,
+  signal?: AbortSignal
+): Promise<{ user: User; tenant: Tenant; token: string } | null> => {
   try {
     if (signal?.aborted) {
       console.log('Token refresh cancelled');
@@ -86,7 +90,9 @@ const attemptTokenRefresh = async (storedUser: string, storedTenant: string, sig
     }
 
     if (!newPayload.user?.trim() || !newPayload.tenant_id?.trim()) {
-      console.log('JWT payload validation failed: missing or invalid user/tenant_id in refreshed token');
+      console.log(
+        'JWT payload validation failed: missing or invalid user/tenant_id in refreshed token'
+      );
       return null;
     }
 
@@ -111,11 +117,18 @@ const attemptTokenRefresh = async (storedUser: string, storedTenant: string, sig
     if (!refreshedUser) {
       try {
         const parsedUser = JSON.parse(storedUser);
-        if (parsedUser && typeof parsedUser === 'object' &&
-            typeof parsedUser.id === 'string' && parsedUser.id.trim() !== '' &&
-            typeof parsedUser.email === 'string' && parsedUser.email.trim() !== '' &&
-            typeof parsedUser.username === 'string' && parsedUser.username.trim() !== '' &&
-            Array.isArray(parsedUser.roles) && parsedUser.roles.every((role: any) => typeof role === 'string')) {
+        if (
+          parsedUser &&
+          typeof parsedUser === 'object' &&
+          typeof parsedUser.id === 'string' &&
+          parsedUser.id.trim() !== '' &&
+          typeof parsedUser.email === 'string' &&
+          parsedUser.email.trim() !== '' &&
+          typeof parsedUser.username === 'string' &&
+          parsedUser.username.trim() !== '' &&
+          Array.isArray(parsedUser.roles) &&
+          parsedUser.roles.every((role: any) => typeof role === 'string')
+        ) {
           refreshedUser = {
             ...parsedUser,
             id: asUserId(newPayload.user),
@@ -131,10 +144,16 @@ const attemptTokenRefresh = async (storedUser: string, storedTenant: string, sig
     if (!refreshedTenant) {
       try {
         const parsedTenant = JSON.parse(storedTenant);
-        if (parsedTenant && typeof parsedTenant === 'object' &&
-            typeof parsedTenant.id === 'string' && parsedTenant.id.trim() !== '' &&
-            typeof parsedTenant.name === 'string' && parsedTenant.name.trim() !== '' &&
-            typeof parsedTenant.settings === 'object' && parsedTenant.settings !== null) {
+        if (
+          parsedTenant &&
+          typeof parsedTenant === 'object' &&
+          typeof parsedTenant.id === 'string' &&
+          parsedTenant.id.trim() !== '' &&
+          typeof parsedTenant.name === 'string' &&
+          parsedTenant.name.trim() !== '' &&
+          typeof parsedTenant.settings === 'object' &&
+          parsedTenant.settings !== null
+        ) {
           refreshedTenant = {
             ...parsedTenant,
             id: asTenantId(newPayload.tenant_id),
@@ -212,7 +231,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           // Check if token is expired
           const now = Math.floor(Date.now() / 1000);
           if (tokenPayload.exp && tokenPayload.exp < now) {
-            const result = await attemptTokenRefresh(storedUser, storedTenant, abortController.signal);
+            const result = await attemptTokenRefresh(
+              storedUser,
+              storedTenant,
+              abortController.signal
+            );
             if (result && !abortController.signal.aborted) {
               if (!abortController.signal.aborted) {
                 localStorage.setItem('auth_token', JSON.stringify({ token: result.token }));
@@ -236,7 +259,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             const parsedUser = JSON.parse(storedUser) as User;
             const parsedTenant = JSON.parse(storedTenant) as Tenant;
 
-            const isValidUser = parsedUser &&
+            const isValidUser =
+              parsedUser &&
               typeof parsedUser.id === 'string' &&
               parsedUser.id.trim() !== '' &&
               typeof parsedUser.email === 'string' &&
@@ -246,7 +270,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               Array.isArray(parsedUser.roles) &&
               parsedUser.roles.every(role => typeof role === 'string');
 
-            const isValidTenant = parsedTenant &&
+            const isValidTenant =
+              parsedTenant &&
               typeof parsedTenant.id === 'string' &&
               parsedTenant.id.trim() !== '' &&
               typeof parsedTenant.name === 'string' &&
@@ -358,7 +383,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       localStorage.setItem('user', JSON.stringify(user));
       localStorage.setItem('tenant', JSON.stringify(tenant));
-
     } catch (error: unknown) {
       // Clear any partial data
       localStorage.removeItem('auth_token');
@@ -430,7 +454,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       localStorage.setItem('auth_token', JSON.stringify({ token: newToken }));
       const payload = decodeJwtPayload(newToken);
-      if (!payload || !payload.user || !payload.tenant_id) {
+      if (!payload?.user || !payload.tenant_id) {
         throw new Error('Invalid token payload during refresh');
       }
 
@@ -477,11 +501,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     refreshToken,
   };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
 // Hook to use auth context

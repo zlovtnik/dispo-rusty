@@ -3,6 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { ConfirmationModal } from '@/components/ConfirmationModal';
 import type { Contact, ContactListResponse } from '@/types/contact';
 import { Gender } from '@/types/contact';
+import type { PersonDTO } from '@/types/person';
 import { addressBookService } from '@/services/api';
 import { genderConversion } from '@/transformers/gender';
 import {
@@ -20,12 +21,7 @@ import {
   Spin,
   Select,
 } from 'antd';
-import {
-  PlusOutlined,
-  EditOutlined,
-  DeleteOutlined,
-  SearchOutlined,
-} from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined } from '@ant-design/icons';
 import { isApiSuccess } from '@/types/api';
 import { asContactId, asTenantId, asUserId } from '@/types/ids';
 
@@ -62,114 +58,135 @@ export const AddressBookPage: React.FC = () => {
   // Helper function to transform backend Person to frontend Contact
   const generateFallbackContactId = () => `contact-${Math.random().toString(36).slice(2, 10)}`;
 
-  const personToContact = (person: any): Contact => {
-    const resolvedId = (() => {
-      if (typeof person?.id === 'string' && person.id.trim()) return asContactId(person.id.trim());
-      if (typeof person?.id === 'number') return asContactId(person.id.toString());
-      return asContactId(generateFallbackContactId());
-    })();
+  /**
+   * Transform backend PersonDTO to frontend Contact type
+   * @param person - Person data from backend API
+   * @returns Properly typed Contact object for frontend use
+   */
+  const personToContact = useCallback(
+    (person: PersonDTO): Contact => {
+      const resolvedId = (() => {
+        if (typeof person?.id === 'string' && person.id.trim())
+          return asContactId(person.id.trim());
+        if (typeof person?.id === 'number') return asContactId(person.id.toString());
+        return asContactId(generateFallbackContactId());
+      })();
 
-    const resolvedTenantId = (() => {
-      if (typeof person?.tenantId === 'string' && person.tenantId.trim()) return asTenantId(person.tenantId.trim());
-      if (typeof person?.tenant_id === 'string' && person.tenant_id.trim()) return asTenantId(person.tenant_id.trim());
-      if (tenant?.id) return tenant.id;
-      return asTenantId('tenant-fallback');
-    })();
+      const resolvedTenantId = (() => {
+        if (typeof person?.tenantId === 'string' && person.tenantId.trim())
+          return asTenantId(person.tenantId.trim());
+        if (typeof person?.tenant_id === 'string' && person.tenant_id.trim())
+          return asTenantId(person.tenant_id.trim());
+        if (tenant?.id) return tenant.id;
+        return asTenantId('tenant-fallback');
+      })();
 
-    const rawName = (() => {
-      if (typeof person?.name === 'string' && person.name.trim()) return person.name.trim();
-      if (typeof person?.fullName === 'string' && person.fullName.trim()) return person.fullName.trim();
-      const first = typeof person?.firstName === 'string' ? person.firstName : '';
-      const last = typeof person?.lastName === 'string' ? person.lastName : '';
-      return [first, last].filter(Boolean).join(' ').trim();
-    })();
+      const rawName = (() => {
+        if (typeof person?.name === 'string' && person.name.trim()) return person.name.trim();
+        if (typeof person?.fullName === 'string' && person.fullName.trim())
+          return person.fullName.trim();
+        const first = typeof person?.firstName === 'string' ? person.firstName : '';
+        const last = typeof person?.lastName === 'string' ? person.lastName : '';
+        return [first, last].filter(Boolean).join(' ').trim();
+      })();
 
-    const nameParts = rawName ? rawName.split(/\s+/) : [];
-    const firstName = nameParts[0] ?? '';
-    const lastName = nameParts.slice(1).join(' ');
+      const nameParts = rawName ? rawName.split(/\s+/) : [];
+      const firstName = nameParts[0] ?? '';
+      const lastName = nameParts.slice(1).join(' ');
 
-    const resolvedGender = (() => {
-      if (typeof person?.gender === 'string') {
-        return person.gender === Gender.female ? Gender.female : person.gender === Gender.male ? Gender.male : undefined;
-      }
-      if (typeof person?.gender === 'boolean') {
-        return genderConversion.fromBoolean(person.gender).unwrapOr(undefined);
-      }
-      return undefined;
-    })();
+      const resolvedGender = (() => {
+        if (typeof person?.gender === 'string') {
+          return person.gender === Gender.female
+            ? Gender.female
+            : person.gender === Gender.male
+              ? Gender.male
+              : undefined;
+        }
+        if (typeof person?.gender === 'boolean') {
+          return genderConversion.fromBoolean(person.gender).unwrapOr(undefined);
+        }
+        return undefined;
+      })();
 
-    const resolveDate = (value: unknown): Date => {
-      if (typeof value === 'string' || typeof value === 'number') {
-        const parsed = new Date(value);
-        if (!Number.isNaN(parsed.getTime())) return parsed;
-      }
-      if (value instanceof Date) return value;
-      return new Date();
-    };
+      const resolveDate = (value: unknown): Date => {
+        if (typeof value === 'string' || typeof value === 'number') {
+          const parsed = new Date(value);
+          if (!Number.isNaN(parsed.getTime())) return parsed;
+        }
+        if (value instanceof Date) return value;
+        return new Date();
+      };
 
-    const resolvedAddress = (() => {
-      if (typeof person?.address === 'object' && person.address !== null) {
-        const addressObj = person.address as Record<string, unknown>;
-        const street1 = typeof addressObj.street1 === 'string' && addressObj.street1.trim()
-          ? addressObj.street1.trim()
-          : typeof addressObj.address === 'string'
-            ? addressObj.address.trim()
-            : '';
+      const resolvedAddress = (() => {
+        if (typeof person?.address === 'object' && person.address !== null) {
+          const addressObj = person.address as Record<string, unknown>;
+          const street1 =
+            typeof addressObj.street1 === 'string' && addressObj.street1.trim()
+              ? addressObj.street1.trim()
+              : typeof addressObj.address === 'string'
+                ? addressObj.address.trim()
+                : '';
 
-        return {
-          street1,
-          street2: typeof addressObj.street2 === 'string' ? addressObj.street2 : undefined,
-          city: typeof addressObj.city === 'string' ? addressObj.city : '',
-          state: typeof addressObj.state === 'string' ? addressObj.state : '',
-          zipCode: typeof addressObj.zipCode === 'string' ? addressObj.zipCode : '',
-          country: typeof addressObj.country === 'string' ? addressObj.country : 'USA',
-        };
-      }
+          return {
+            street1,
+            street2: typeof addressObj.street2 === 'string' ? addressObj.street2 : undefined,
+            city: typeof addressObj.city === 'string' ? addressObj.city : '',
+            state: typeof addressObj.state === 'string' ? addressObj.state : '',
+            zipCode: typeof addressObj.zipCode === 'string' ? addressObj.zipCode : '',
+            country: typeof addressObj.country === 'string' ? addressObj.country : 'USA',
+          };
+        }
 
-      if (typeof person?.address === 'string') {
-        return {
-          street1: person.address,
-          street2: undefined,
-          city: '',
-          state: '',
-          zipCode: '',
-          country: 'USA',
-        };
-      }
+        if (typeof person?.address === 'string') {
+          return {
+            street1: person.address,
+            street2: undefined,
+            city: '',
+            state: '',
+            zipCode: '',
+            country: 'USA',
+          };
+        }
 
-      return undefined;
-    })();
+        return undefined;
+      })();
 
-    const createdBy = typeof person?.createdBy === 'string' && person.createdBy.trim()
-      ? asUserId(person.createdBy.trim())
-      : typeof person?.created_by === 'string' && person.created_by.trim()
-        ? asUserId(person.created_by.trim())
-        : asUserId('system');
+      const createdBy =
+        typeof person?.createdBy === 'string' && person.createdBy.trim()
+          ? asUserId(person.createdBy.trim())
+          : typeof person?.created_by === 'string' && person.created_by.trim()
+            ? asUserId(person.created_by.trim())
+            : asUserId('system');
 
-    const updatedBy = typeof person?.updatedBy === 'string' && person.updatedBy.trim()
-      ? asUserId(person.updatedBy.trim())
-      : typeof person?.updated_by === 'string' && person.updated_by.trim()
-        ? asUserId(person.updated_by.trim())
-        : createdBy;
+      const updatedBy =
+        typeof person?.updatedBy === 'string' && person.updatedBy.trim()
+          ? asUserId(person.updatedBy.trim())
+          : typeof person?.updated_by === 'string' && person.updated_by.trim()
+            ? asUserId(person.updated_by.trim())
+            : createdBy;
 
-    return {
-      id: resolvedId,
-      tenantId: resolvedTenantId,
-      firstName,
-      lastName,
-      fullName: rawName || [firstName, lastName].filter(Boolean).join(' '),
-      email: typeof person?.email === 'string' ? person.email : undefined,
-      phone: typeof person?.phone === 'string' ? person.phone : undefined,
-      gender: resolvedGender,
-      age: typeof person?.age === 'number' ? person.age : undefined,
-      address: resolvedAddress,
-      createdAt: resolveDate(person?.createdAt ?? person?.created_at),
-      updatedAt: resolveDate(person?.updatedAt ?? person?.updated_at ?? person?.createdAt ?? person?.created_at),
-      createdBy,
-      updatedBy,
-      isActive: typeof person?.isActive === 'boolean' ? person.isActive : true,
-    };
-  };
+      return {
+        id: resolvedId,
+        tenantId: resolvedTenantId,
+        firstName,
+        lastName,
+        fullName: rawName || [firstName, lastName].filter(Boolean).join(' '),
+        email: typeof person?.email === 'string' ? person.email : undefined,
+        phone: typeof person?.phone === 'string' ? person.phone : undefined,
+        gender: resolvedGender,
+        age: typeof person?.age === 'number' ? person.age : undefined,
+        address: resolvedAddress,
+        createdAt: resolveDate(person?.createdAt ?? person?.created_at),
+        updatedAt: resolveDate(
+          person?.updatedAt ?? person?.updated_at ?? person?.createdAt ?? person?.created_at
+        ),
+        createdBy,
+        updatedBy,
+        isActive: typeof person?.isActive === 'boolean' ? person.isActive : true,
+      };
+    },
+    [tenant]
+  );
 
   // Helper function to transform frontend Contact to backend PersonDTO
   const contactToPersonDTO = (formValues: AddressFormValues) => {
@@ -229,15 +246,18 @@ export const AddressBookPage: React.FC = () => {
       return;
     }
 
-    const data = apiResponse.data as ContactListResponse;
+    const data = apiResponse.data;
     const records = Array.isArray(data?.contacts) ? data.contacts : [];
     const normalizedContacts = records.map(personToContact);
     setContacts(normalizedContacts);
     setLoading(false);
-  }, [message, tenant]);
+  }, [message, tenant, personToContact]);
 
   useEffect(() => {
-    loadContacts();
+    const loadData = async () => {
+      await loadContacts();
+    };
+    loadData();
   }, [loadContacts]);
 
   // Filter contacts based on search term
@@ -275,13 +295,16 @@ export const AddressBookPage: React.FC = () => {
     const apiResponse = result.value;
 
     if (!isApiSuccess(apiResponse)) {
-      const errorMessage = apiResponse.error.message || 'An error occurred while saving the contact.';
+      const errorMessage =
+        apiResponse.error.message || 'An error occurred while saving the contact.';
       message.error(errorMessage);
       setIsSubmitting(false);
       return;
     }
 
-    const successMsg = apiResponse.message ?? (isUpdating ? 'Contact updated successfully!' : 'Contact created successfully!');
+    const successMsg =
+      apiResponse.message ??
+      (isUpdating ? 'Contact updated successfully!' : 'Contact created successfully!');
     message.success(successMsg);
 
     await loadContacts();
@@ -397,12 +420,14 @@ export const AddressBookPage: React.FC = () => {
     {
       title: 'Actions',
       key: 'actions',
-      render: (_: any, contact: Contact) => (
+      render: (_: unknown, contact: Contact) => (
         <Space size="middle">
           <Button
             type="link"
             icon={<EditOutlined />}
-            onClick={() => handleEdit(contact)}
+            onClick={() => {
+              handleEdit(contact);
+            }}
           >
             Edit
           </Button>
@@ -410,7 +435,9 @@ export const AddressBookPage: React.FC = () => {
             type="link"
             danger
             icon={<DeleteOutlined />}
-            onClick={() => handleDelete(contact.id)}
+            onClick={() => {
+              handleDelete(contact.id);
+            }}
           >
             Delete
           </Button>
@@ -424,14 +451,12 @@ export const AddressBookPage: React.FC = () => {
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <Typography.Title level={2} style={{ margin: 0 }}>Address Book</Typography.Title>
+          <Typography.Title level={2} style={{ margin: 0 }}>
+            Address Book
+          </Typography.Title>
           <Typography.Text type="secondary">Manage your contacts and addresses</Typography.Text>
         </div>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={handleNewContact}
-        >
+        <Button type="primary" icon={<PlusOutlined />} onClick={handleNewContact}>
           Add Contact
         </Button>
       </div>
@@ -443,7 +468,9 @@ export const AddressBookPage: React.FC = () => {
         placeholder="Search contacts..."
         prefix={<SearchOutlined />}
         value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
+        onChange={e => {
+          setSearchTerm(e.target.value);
+        }}
         style={{ maxWidth: 400 }}
       />
 
@@ -455,7 +482,9 @@ export const AddressBookPage: React.FC = () => {
           type="error"
           showIcon
           closable
-          onClose={() => setError(null)}
+          onClose={() => {
+            setError(null);
+          }}
         />
       )}
 
@@ -478,14 +507,19 @@ export const AddressBookPage: React.FC = () => {
               showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} contacts`,
             }}
             locale={{
-              emptyText: contacts.length === 0
-                ? <div style={{ textAlign: 'center', padding: '32px' }}>
+              emptyText:
+                contacts.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '32px' }}>
                     <Typography.Text>No contacts yet. Add your first contact!</Typography.Text>
                     <br />
                     <br />
-                    <Button type="primary" onClick={handleNewContact}>Add Contact</Button>
+                    <Button type="primary" onClick={handleNewContact}>
+                      Add Contact
+                    </Button>
                   </div>
-                : 'No contacts match your search.',
+                ) : (
+                  'No contacts match your search.'
+                ),
             }}
           />
         )}
@@ -495,7 +529,9 @@ export const AddressBookPage: React.FC = () => {
       <Modal
         title={editingContact ? 'Edit Contact' : 'Add New Contact'}
         open={isFormOpen}
-        onCancel={() => setIsFormOpen(false)}
+        onCancel={() => {
+          setIsFormOpen(false);
+        }}
         footer={null}
       >
         <Form
@@ -517,48 +553,91 @@ export const AddressBookPage: React.FC = () => {
             country: 'USA',
           }}
         >
-          <Form.Item name="firstName" label="First Name" rules={[{ required: true, message: 'Please enter first name' }]}>
+          <Form.Item
+            name="firstName"
+            label="First Name"
+            rules={[{ required: true, message: 'Please enter first name' }]}
+          >
             <Input />
           </Form.Item>
-          <Form.Item name="lastName" label="Last Name" rules={[{ required: true, message: 'Please enter last name' }]}>
+          <Form.Item
+            name="lastName"
+            label="Last Name"
+            rules={[{ required: true, message: 'Please enter last name' }]}
+          >
             <Input />
           </Form.Item>
-          <Form.Item name="email" label="Email" rules={[{ type: 'email', message: 'Please enter a valid email' }]}>
+          <Form.Item
+            name="email"
+            label="Email"
+            rules={[{ type: 'email', message: 'Please enter a valid email' }]}
+          >
             <Input />
           </Form.Item>
           <Form.Item name="phone" label="Phone">
             <Input />
           </Form.Item>
 
-          <Form.Item name="gender" label="Gender" rules={[{ required: true, message: 'Please select gender' }]}>
+          <Form.Item
+            name="gender"
+            label="Gender"
+            rules={[{ required: true, message: 'Please select gender' }]}
+          >
             <Select style={{ width: '100%' }}>
               <Select.Option value="male">Male</Select.Option>
               <Select.Option value="female">Female</Select.Option>
             </Select>
           </Form.Item>
 
-          <Form.Item name="age" label="Age" rules={[{ required: true, message: 'Please enter age' }, { type: 'number', min: 1, max: 120, message: 'Age must be between 1 and 120' }]}>
+          <Form.Item
+            name="age"
+            label="Age"
+            rules={[
+              { required: true, message: 'Please enter age' },
+              { type: 'number', min: 1, max: 120, message: 'Age must be between 1 and 120' },
+            ]}
+          >
             <Input type="number" min={1} max={120} />
           </Form.Item>
 
           <Divider>Address</Divider>
 
-          <Form.Item name="street1" label="Street Address" rules={[{ required: true, message: 'Please enter street address' }]}>
+          <Form.Item
+            name="street1"
+            label="Street Address"
+            rules={[{ required: true, message: 'Please enter street address' }]}
+          >
             <Input />
           </Form.Item>
           <Form.Item name="street2" label="Street Address 2">
             <Input />
           </Form.Item>
-          <Form.Item name="city" label="City" rules={[{ required: true, message: 'Please enter city' }]}>
+          <Form.Item
+            name="city"
+            label="City"
+            rules={[{ required: true, message: 'Please enter city' }]}
+          >
             <Input />
           </Form.Item>
-          <Form.Item name="state" label="State" rules={[{ required: true, message: 'Please enter state' }]}>
+          <Form.Item
+            name="state"
+            label="State"
+            rules={[{ required: true, message: 'Please enter state' }]}
+          >
             <Input />
           </Form.Item>
-          <Form.Item name="zipCode" label="ZIP Code" rules={[{ required: true, message: 'Please enter ZIP code' }]}>
+          <Form.Item
+            name="zipCode"
+            label="ZIP Code"
+            rules={[{ required: true, message: 'Please enter ZIP code' }]}
+          >
             <Input />
           </Form.Item>
-          <Form.Item name="country" label="Country" rules={[{ required: true, message: 'Please enter country' }]}>
+          <Form.Item
+            name="country"
+            label="Country"
+            rules={[{ required: true, message: 'Please enter country' }]}
+          >
             <Input />
           </Form.Item>
 
@@ -567,7 +646,13 @@ export const AddressBookPage: React.FC = () => {
               <Button type="primary" htmlType="submit" loading={isSubmitting}>
                 {editingContact ? 'Update Contact' : 'Add Contact'}
               </Button>
-              <Button onClick={() => setIsFormOpen(false)}>Cancel</Button>
+              <Button
+                onClick={() => {
+                  setIsFormOpen(false);
+                }}
+              >
+                Cancel
+              </Button>
             </Space>
           </Form.Item>
         </Form>

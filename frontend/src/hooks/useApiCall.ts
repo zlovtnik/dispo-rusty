@@ -34,11 +34,8 @@ export function useApiCall<
   TIn,
   EIn extends AppError = AppError,
   TOut = TIn,
-  EOut extends AppError = EIn
->(
-  apiFunction: () => AsyncResult<TIn, EIn>,
-  options: ApiCallOptions<TIn, EIn, TOut, EOut> = {}
-) {
+  EOut extends AppError = EIn,
+>(apiFunction: () => AsyncResult<TIn, EIn>, options: ApiCallOptions<TIn, EIn, TOut, EOut> = {}) {
   const {
     transformResult,
     transformError,
@@ -139,10 +136,9 @@ export function useApiCall<
       }
     }
 
-    const fallbackError = lastError ?? withRetryMetadata(
-      mapUnknownError(new Error('Request failed without details')),
-      maxRetries
-    );
+    const fallbackError =
+      lastError ??
+      withRetryMetadata(mapUnknownError(new Error('Request failed without details')), maxRetries);
 
     return err(fallbackError);
   };
@@ -164,6 +160,5 @@ export function useApiCall<
 export function createApiCallHook<TData, TError extends AppError = AppError>(
   baseApiFunction: () => AsyncResult<TData, TError>
 ) {
-  return (options?: ApiCallOptions<TData, TError>) =>
-    useApiCall(baseApiFunction, options);
+  return (options?: ApiCallOptions<TData, TError>) => useApiCall(baseApiFunction, options);
 }

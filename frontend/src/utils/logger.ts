@@ -148,7 +148,7 @@ class Logger {
 // Global error handler - with reentrancy guard to prevent infinite loops
 let isLoggingError = false;
 
-window.addEventListener('error', (event) => {
+window.addEventListener('error', event => {
   if (isLoggingError) return; // Prevent reentrancy
 
   isLoggingError = true;
@@ -172,7 +172,7 @@ window.addEventListener('error', (event) => {
   }
 });
 
-window.addEventListener('unhandledrejection', (event) => {
+window.addEventListener('unhandledrejection', event => {
   if (isLoggingError) return; // Prevent reentrancy
 
   isLoggingError = true;

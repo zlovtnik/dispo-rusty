@@ -1,22 +1,16 @@
 /**
  * Authentication Domain Logic
- * 
+ *
  * Pure functions for authentication operations using Railway-Oriented Programming.
  * All functions return Result<T, E> for explicit error handling.
- * 
+ *
  * This module extracts business logic from the AuthContext and service layer,
  * making it pure, testable, and composable.
  */
 
 import { ok, err } from 'neverthrow';
 import type { Result, AsyncResult } from '../types/fp';
-import type {
-  User,
-  Tenant,
-  LoginCredentials,
-  AuthResponse,
-  TokenPayload,
-} from '../types/auth';
+import type { User, Tenant, LoginCredentials, AuthResponse, TokenPayload } from '../types/auth';
 import type { AuthFlowError, ParseError } from '../types/errors';
 import { ParseErrors } from '../types/errors';
 
@@ -53,10 +47,10 @@ export type SessionError =
 
 /**
  * Authenticate a user with credentials
- * 
+ *
  * This is a pure function that transforms credentials and auth response
  * into a session. The actual API call should be done separately.
- * 
+ *
  * @param credentials - User login credentials
  * @param authResponse - Response from authentication API
  * @returns Result containing Session or AuthFlowError
@@ -107,10 +101,10 @@ export function authenticateUser(
 
 /**
  * Verify and decode a JWT token
- * 
+ *
  * This function validates token format and extracts payload.
  * Actual signature verification should be done server-side.
- * 
+ *
  * @param token - JWT token string
  * @returns Result containing TokenPayload or TokenError
  */
@@ -144,7 +138,7 @@ export function verifyToken(token: string): Result<TokenPayload, TokenError> {
     // Validate required claims
     const requiredClaims = ['sub', 'email', 'tenantId', 'iat', 'exp'];
     const missingClaims = requiredClaims.filter(claim => !(claim in payload));
-    
+
     if (missingClaims.length > 0) {
       return err({
         type: 'MISSING_CLAIMS',
@@ -173,7 +167,7 @@ export function verifyToken(token: string): Result<TokenPayload, TokenError> {
 
 /**
  * Check if a session is expired
- * 
+ *
  * @param session - Current session
  * @returns true if session is expired
  */
@@ -183,7 +177,7 @@ export function isSessionExpired(session: Session): boolean {
 
 /**
  * Check if a session needs refresh (within 5 minutes of expiration)
- * 
+ *
  * @param session - Current session
  * @returns true if session should be refreshed
  */
@@ -195,10 +189,10 @@ export function shouldRefreshSession(session: Session): boolean {
 
 /**
  * Refresh an existing session
- * 
+ *
  * This is a pure function that transforms old session and new auth response
  * into a refreshed session. The actual API call should be done separately.
- * 
+ *
  * @param oldSession - Current session
  * @param authResponse - Response from refresh token API
  * @returns Result containing new Session or SessionError
@@ -252,9 +246,9 @@ export function refreshSession(
 
 /**
  * Validate session integrity
- * 
+ *
  * Checks if session has all required fields and is not expired
- * 
+ *
  * @param session - Session to validate
  * @returns Result containing Session or SessionError
  */
@@ -268,12 +262,12 @@ export function validateSession(session: Session): Result<Session, SessionError>
   }
 
   // Validate user data
-  if (!session.user || !session.user.id) {
+  if (!session.user?.id) {
     return err({ type: 'USER_NOT_FOUND' });
   }
 
   // Validate tenant data
-  if (!session.tenant || !session.tenant.id) {
+  if (!session.tenant?.id) {
     return err({ type: 'TENANT_NOT_FOUND' });
   }
 
@@ -291,7 +285,7 @@ export function validateSession(session: Session): Result<Session, SessionError>
 
 /**
  * Extract tenant ID from token
- * 
+ *
  * @param token - JWT token
  * @returns Result containing tenant ID or TokenError
  */
@@ -301,7 +295,7 @@ export function extractTenantId(token: string): Result<string, TokenError> {
 
 /**
  * Extract user ID from token
- * 
+ *
  * @param token - JWT token
  * @returns Result containing user ID or TokenError
  */
@@ -311,7 +305,7 @@ export function extractUserId(token: string): Result<string, TokenError> {
 
 /**
  * Check if user has required role
- * 
+ *
  * @param session - Current session
  * @param requiredRole - Role to check for
  * @returns true if user has the role
@@ -322,7 +316,7 @@ export function hasRole(session: Session, requiredRole: string): boolean {
 
 /**
  * Check if user has any of the required roles
- * 
+ *
  * @param session - Current session
  * @param requiredRoles - Roles to check for
  * @returns true if user has at least one role
@@ -333,7 +327,7 @@ export function hasAnyRole(session: Session, requiredRoles: string[]): boolean {
 
 /**
  * Check if user has all required roles
- * 
+ *
  * @param session - Current session
  * @param requiredRoles - Roles to check for
  * @returns true if user has all roles

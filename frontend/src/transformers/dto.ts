@@ -19,34 +19,43 @@ const createTransformerError = (
   context: TransformerContext,
   message: string,
   details?: Record<string, unknown>,
-  cause?: unknown,
+  cause?: unknown
 ): AppError =>
-  createValidationError(message, { ...details, entity: context.entity, direction: context.direction }, {
-    code: 'TRANSFORMATION_ERROR',
-    cause,
-  });
+  createValidationError(
+    message,
+    { ...details, entity: context.entity, direction: context.direction },
+    {
+      code: 'TRANSFORMATION_ERROR',
+      cause,
+    }
+  );
 
-const wrapTransformation = <Value, Output>(
-  transform: (value: Value) => Result<Output, AppError>,
-  context: TransformerContext,
-): ((value: Value) => Result<Output, AppError>) =>
+const wrapTransformation =
+  <Value, Output>(
+    transform: (value: Value) => Result<Output, AppError>,
+    context: TransformerContext
+  ): ((value: Value) => Result<Output, AppError>) =>
   (value: Value) => {
     try {
       return transform(value);
     } catch (error) {
-      return err(createTransformerError(context, 'Unexpected transformation failure', { value }, error));
+      return err(
+        createTransformerError(context, 'Unexpected transformation failure', { value }, error)
+      );
     }
   };
 
 export const toApiDTO = <Domain, DTO>(
   transform: (value: Domain) => Result<DTO, AppError>,
-  entity: string,
-): ((value: Domain) => Result<DTO, AppError>) => wrapTransformation(transform, { entity, direction: 'toApi' });
+  entity: string
+): ((value: Domain) => Result<DTO, AppError>) =>
+  wrapTransformation(transform, { entity, direction: 'toApi' });
 
 export const fromApiDTO = <DTO, Domain>(
   transform: (value: DTO) => Result<Domain, AppError>,
-  entity: string,
-): ((value: DTO) => Result<Domain, AppError>) => wrapTransformation(transform, { entity, direction: 'fromApi' });
+  entity: string
+): ((value: DTO) => Result<Domain, AppError>) =>
+  wrapTransformation(transform, { entity, direction: 'fromApi' });
 
 const pickString = (source: Record<string, unknown>, keys: string[]): Option<string> => {
   for (const key of keys) {
@@ -111,9 +120,11 @@ const pickBoolean = (source: Record<string, unknown>, keys: string[]): Option<bo
   return none();
 };
 
-const optionValue = <T>(option: Option<T>): T | undefined => (isSome(option) ? option.value : undefined);
+const optionValue = <T>(option: Option<T>): T | undefined =>
+  isSome(option) ? option.value : undefined;
 
-const optionOrDefault = <T>(option: Option<T>, defaultValue: T): T => (isSome(option) ? option.value : defaultValue);
+const optionOrDefault = <T>(option: Option<T>, defaultValue: T): T =>
+  isSome(option) ? option.value : defaultValue;
 
 const buildAddress = (source: Record<string, unknown>): Option<Address> => {
   const addressValue = source.address ?? source.mailing_address ?? source.shipping_address;
@@ -147,12 +158,16 @@ const buildAddress = (source: Record<string, unknown>): Option<Address> => {
   }
 
   if (typeof addressValue === 'string') {
-    const segments = addressValue.split(',').map(part => part.trim()).filter(Boolean);
+    const segments = addressValue
+      .split(',')
+      .map(part => part.trim())
+      .filter(Boolean);
     if (segments.length === 0) {
       return none();
     }
 
-    const [street1Segment, street2Segment, citySegment, stateSegment, zipSegment, countrySegment] = segments;
+    const [street1Segment, street2Segment, citySegment, stateSegment, zipSegment, countrySegment] =
+      segments;
 
     return some({
       street1: street1Segment ?? '',
@@ -210,19 +225,37 @@ export interface ContactApiDTO {
 
 const contactFromApi = (input: unknown): Result<Contact, AppError> => {
   if (!input || typeof input !== 'object') {
-    return err(createTransformerError({ entity: 'Contact', direction: 'fromApi' }, 'Contact payload must be an object', { inputType: typeof input }));
+    return err(
+      createTransformerError(
+        { entity: 'Contact', direction: 'fromApi' },
+        'Contact payload must be an object',
+        { inputType: typeof input }
+      )
+    );
   }
 
   const source = input as Record<string, unknown>;
 
   const idValue = pickString(source, ['id', 'contact_id']);
   if (!isSome(idValue)) {
-    return err(createTransformerError({ entity: 'Contact', direction: 'fromApi' }, 'Contact identifier is missing', { source }));
+    return err(
+      createTransformerError(
+        { entity: 'Contact', direction: 'fromApi' },
+        'Contact identifier is missing',
+        { source }
+      )
+    );
   }
 
   const tenantIdValue = pickString(source, ['tenant_id', 'tenantId']);
   if (!isSome(tenantIdValue)) {
-    return err(createTransformerError({ entity: 'Contact', direction: 'fromApi' }, 'Contact tenant identifier is missing', { source }));
+    return err(
+      createTransformerError(
+        { entity: 'Contact', direction: 'fromApi' },
+        'Contact tenant identifier is missing',
+        { source }
+      )
+    );
   }
 
   const firstNameOption = pickString(source, ['first_name', 'firstName']);
@@ -240,25 +273,38 @@ const contactFromApi = (input: unknown): Result<Contact, AppError> => {
         .trim();
 
   if (!computedFullName) {
-    return err(createTransformerError({ entity: 'Contact', direction: 'fromApi' }, 'Contact name is required', { source }));
+    return err(
+      createTransformerError(
+        { entity: 'Contact', direction: 'fromApi' },
+        'Contact name is required',
+        { source }
+      )
+    );
   }
 
   const resolvedFirstName = isSome(firstNameOption)
     ? firstNameOption.value
-    : computedFullName.split(/\s+/)[0] ?? computedFullName;
+    : (computedFullName.split(/\s+/)[0] ?? computedFullName);
 
   const resolvedLastName = isSome(lastNameOption)
     ? lastNameOption.value
     : computedFullName.split(/\s+/).slice(1).join(' ');
 
-  const genderValue = source.gender ?? source.gender_value ?? source.genderBoolean ?? source.gender_bool;
-  const genderResult: Result<Option<Contact['gender']>, AppError> =
-    typeof genderValue === 'boolean'
-      ? booleanToGender(genderValue).map(value => some(value))
-      : parseOptionalGender(genderValue);
+  const genderValue =
+    source.gender ?? source.gender_value ?? source.genderBoolean ?? source.gender_bool;
+  const genderResult: Result<Option<Contact['gender']>, AppError> = typeof genderValue === 'boolean'
+    ? booleanToGender(genderValue).map(value => some(value))
+    : parseOptionalGender(genderValue);
 
   if (genderResult.isErr()) {
-    return err(createTransformerError({ entity: 'Contact', direction: 'fromApi' }, 'Invalid gender value received', { value: genderValue }, genderResult.error));
+    return err(
+      createTransformerError(
+        { entity: 'Contact', direction: 'fromApi' },
+        'Invalid gender value received',
+        { value: genderValue },
+        genderResult.error
+      )
+    );
   }
 
   const dateOfBirthValue = source.date_of_birth ?? source.dateOfBirth ?? source.dob;
@@ -294,7 +340,9 @@ const contactFromApi = (input: unknown): Result<Contact, AppError> => {
   const notesOption = pickString(source, ['notes']);
   const isActiveOption = pickBoolean(source, ['is_active', 'isActive']);
 
-  const createdById = isSome(createdByOption) ? asUserId(createdByOption.value) : asUserId('system');
+  const createdById = isSome(createdByOption)
+    ? asUserId(createdByOption.value)
+    : asUserId('system');
   const updatedById = isSome(updatedByOption) ? asUserId(updatedByOption.value) : createdById;
 
   const contact: Contact = {
@@ -316,7 +364,8 @@ const contactFromApi = (input: unknown): Result<Contact, AppError> => {
     company: optionValue(companyOption),
     jobTitle: optionValue(jobTitleOption),
     department: optionValue(departmentOption),
-    dateOfBirth: dateOfBirthResult.value.kind === 'some' ? dateOfBirthResult.value.value : undefined,
+    dateOfBirth:
+      dateOfBirthResult.value.kind === 'some' ? dateOfBirthResult.value.value : undefined,
     gender: genderResult.value.kind === 'some' ? genderResult.value.value : undefined,
     age: optionValue(ageOption),
     allergies: undefined,
@@ -340,7 +389,13 @@ const contactToApi = (contact: Contact): Result<ContactApiDTO, AppError> => {
   const name = contact.fullName?.trim() || `${contact.firstName} ${contact.lastName}`.trim();
 
   if (!name) {
-    return err(createTransformerError({ entity: 'Contact', direction: 'toApi' }, 'Contact name is required', { contact }));
+    return err(
+      createTransformerError(
+        { entity: 'Contact', direction: 'toApi' },
+        'Contact name is required',
+        { contact }
+      )
+    );
   }
 
   const genderOption = fromNullable(contact.gender);
@@ -349,12 +404,21 @@ const contactToApi = (contact: Contact): Result<ContactApiDTO, AppError> => {
     : ok(none());
 
   if (genderBooleanResult.isErr()) {
-    return err(createTransformerError({ entity: 'Contact', direction: 'toApi' }, 'Invalid gender provided for contact', { gender: contact.gender }, genderBooleanResult.error));
+    return err(
+      createTransformerError(
+        { entity: 'Contact', direction: 'toApi' },
+        'Invalid gender provided for contact',
+        { gender: contact.gender },
+        genderBooleanResult.error
+      )
+    );
   }
 
   const dateOfBirthOption = fromNullable(contact.dateOfBirth);
   const dateOfBirthResult: Result<Option<string>, AppError> = isSome(dateOfBirthOption)
-    ? toIsoString(dateOfBirthOption.value, { context: 'contact.dateOfBirth' }).map(value => some(value))
+    ? toIsoString(dateOfBirthOption.value, { context: 'contact.dateOfBirth' }).map(value =>
+        some(value)
+      )
     : ok(none());
 
   if (dateOfBirthResult.isErr()) {
@@ -366,7 +430,9 @@ const contactToApi = (contact: Contact): Result<ContactApiDTO, AppError> => {
     return err(createdAtResult.error);
   }
 
-  const updatedAtResult = toIsoString(contact.updatedAt ?? contact.createdAt, { context: 'contact.updatedAt' });
+  const updatedAtResult = toIsoString(contact.updatedAt ?? contact.createdAt, {
+    context: 'contact.updatedAt',
+  });
   if (updatedAtResult.isErr()) {
     return err(updatedAtResult.error);
   }
@@ -412,14 +478,16 @@ export interface ContactListApiDTO {
   readonly has_prev?: unknown;
 }
 
-export const contactListFromApiResponse = (input: unknown): Result<ContactListResponse, AppError> => {
+export const contactListFromApiResponse = (
+  input: unknown
+): Result<ContactListResponse, AppError> => {
   if (!input || typeof input !== 'object') {
     return err(
       createTransformerError(
         { entity: 'ContactList', direction: 'fromApi' },
         'Contact list payload must be an object',
-        { inputType: typeof input },
-      ),
+        { inputType: typeof input }
+      )
     );
   }
 
@@ -436,24 +504,26 @@ export const contactListFromApiResponse = (input: unknown): Result<ContactListRe
       createTransformerError(
         { entity: 'ContactList', direction: 'fromApi' },
         'Contact list payload is missing contacts collection',
-        { keys: Object.keys(sourceRecord) },
-      ),
+        { keys: Object.keys(sourceRecord) }
+      )
     );
   }
 
   const contactsResult = collection.reduce<Result<Contact[], AppError>>(
     (accumulator, item, index) =>
       accumulator.andThen(contacts =>
-        contactFromApi(item).map(contact => [...contacts, contact]).mapErr(error =>
-          createTransformerError(
-            { entity: 'ContactList', direction: 'fromApi' },
-            'Failed to transform contact item',
-            { index },
-            error,
-          ),
-        ),
+        contactFromApi(item)
+          .map(contact => [...contacts, contact])
+          .mapErr(error =>
+            createTransformerError(
+              { entity: 'ContactList', direction: 'fromApi' },
+              'Failed to transform contact item',
+              { index },
+              error
+            )
+          )
       ),
-    ok<Contact[]>([]),
+    ok<Contact[]>([])
   );
 
   if (contactsResult.isErr()) {
@@ -502,7 +572,13 @@ export interface UserApiDTO {
 
 const userFromApi = (input: unknown): Result<User, AppError> => {
   if (!input || typeof input !== 'object') {
-    return err(createTransformerError({ entity: 'User', direction: 'fromApi' }, 'User payload must be an object', { inputType: typeof input }));
+    return err(
+      createTransformerError(
+        { entity: 'User', direction: 'fromApi' },
+        'User payload must be an object',
+        { inputType: typeof input }
+      )
+    );
   }
 
   const source = input as Record<string, unknown>;
@@ -514,11 +590,23 @@ const userFromApi = (input: unknown): Result<User, AppError> => {
   const rolesValue = source.roles;
 
   if (!isSome(idValue) || !isSome(tenantIdValue) || !isSome(emailValue) || !isSome(usernameValue)) {
-    return err(createTransformerError({ entity: 'User', direction: 'fromApi' }, 'User payload is missing required fields', { source }));
+    return err(
+      createTransformerError(
+        { entity: 'User', direction: 'fromApi' },
+        'User payload is missing required fields',
+        { source }
+      )
+    );
   }
 
   if (!Array.isArray(rolesValue) || !rolesValue.every(role => typeof role === 'string')) {
-    return err(createTransformerError({ entity: 'User', direction: 'fromApi' }, 'Invalid roles array in user payload', { roles: rolesValue }));
+    return err(
+      createTransformerError(
+        { entity: 'User', direction: 'fromApi' },
+        'Invalid roles array in user payload',
+        { roles: rolesValue }
+      )
+    );
   }
 
   const createdAtOption = pickString(source, ['created_at', 'createdAt']);
@@ -537,7 +625,7 @@ const userFromApi = (input: unknown): Result<User, AppError> => {
     firstName: optionValue(firstNameOption),
     lastName: optionValue(lastNameOption),
     avatar: optionValue(avatarOption),
-    roles: rolesValue as string[],
+    roles: rolesValue,
     tenantId: asTenantId(tenantIdValue.value),
     createdAt,
     updatedAt,
@@ -548,7 +636,13 @@ const userFromApi = (input: unknown): Result<User, AppError> => {
 
 const userToApi = (user: User): Result<UserApiDTO, AppError> => {
   if (!user.id || !user.email || !user.username || !user.tenantId) {
-    return err(createTransformerError({ entity: 'User', direction: 'toApi' }, 'User is missing required fields', { user }));
+    return err(
+      createTransformerError(
+        { entity: 'User', direction: 'toApi' },
+        'User is missing required fields',
+        { user }
+      )
+    );
   }
 
   const dto: UserApiDTO = {
@@ -577,7 +671,13 @@ export interface TenantApiDTO {
 
 const tenantFromApi = (input: unknown): Result<TenantRecord, AppError> => {
   if (!input || typeof input !== 'object') {
-    return err(createTransformerError({ entity: 'Tenant', direction: 'fromApi' }, 'Tenant payload must be an object', { inputType: typeof input }));
+    return err(
+      createTransformerError(
+        { entity: 'Tenant', direction: 'fromApi' },
+        'Tenant payload must be an object',
+        { inputType: typeof input }
+      )
+    );
   }
 
   const source = input as Record<string, unknown>;
@@ -585,7 +685,13 @@ const tenantFromApi = (input: unknown): Result<TenantRecord, AppError> => {
   const nameValue = pickString(source, ['name']);
 
   if (!isSome(idValue) || !isSome(nameValue)) {
-    return err(createTransformerError({ entity: 'Tenant', direction: 'fromApi' }, 'Tenant payload is missing required fields', { source }));
+    return err(
+      createTransformerError(
+        { entity: 'Tenant', direction: 'fromApi' },
+        'Tenant payload is missing required fields',
+        { source }
+      )
+    );
   }
 
   const dbUrlOption = pickString(source, ['db_url', 'dbUrl']);
@@ -605,7 +711,13 @@ const tenantFromApi = (input: unknown): Result<TenantRecord, AppError> => {
 
 const tenantToApi = (tenant: TenantRecord): Result<TenantApiDTO, AppError> => {
   if (!tenant.id || !tenant.name) {
-    return err(createTransformerError({ entity: 'Tenant', direction: 'toApi' }, 'Tenant is missing required fields', { tenant }));
+    return err(
+      createTransformerError(
+        { entity: 'Tenant', direction: 'toApi' },
+        'Tenant is missing required fields',
+        { tenant }
+      )
+    );
   }
 
   const dto: TenantApiDTO = {
