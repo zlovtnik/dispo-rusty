@@ -1,16 +1,9 @@
 import React from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import {
-  Layout,
-  Typography,
-  Button,
-  Row,
-  Col,
-  Card,
-  Space,
-  Divider,
-} from 'antd';
+import { Layout, Typography } from 'antd';
+import { Button, Space, Divider } from 'antd';
+import { Row, Col, Card } from 'antd';
 import {
   SecurityScanOutlined,
   HomeOutlined,
@@ -48,19 +41,22 @@ export const HomePage: React.FC = () => {
       id: 1,
       icon: <SecurityScanOutlined style={{ fontSize: 32 }} />,
       title: 'Secure Authentication',
-      description: 'JWT-based login system with comprehensive security measures and multi-tenant support.',
+      description:
+        'JWT-based login system with comprehensive security measures and multi-tenant support.',
     },
     {
       id: 2,
       icon: <HomeOutlined style={{ fontSize: 32 }} />,
       title: 'Multi-Tenant Architecture',
-      description: 'Complete tenant isolation ensuring data security and privacy across different organizations.',
+      description:
+        'Complete tenant isolation ensuring data security and privacy across different organizations.',
     },
     {
       id: 3,
       icon: <ThunderboltOutlined style={{ fontSize: 32 }} />,
       title: 'High Performance',
-      description: 'Built with Bun runtime for exceptional speed and TypeScript for reliable development.',
+      description:
+        'Built with Bun runtime for exceptional speed and TypeScript for reliable development.',
     },
   ];
 
@@ -77,11 +73,13 @@ export const HomePage: React.FC = () => {
 
       <Layout.Content style={{ background: '#f7f4f0' }}>
         {/* Hero Section */}
-        <div style={{ padding: '64px 24px', textAlign: 'center', maxWidth: 1000, margin: '0 auto' }}>
+        <div
+          style={{ padding: '64px 24px', textAlign: 'center', maxWidth: 1000, margin: '0 auto' }}
+        >
           <Typography.Title level={1}>Welcome to the Natural Pharmacy System</Typography.Title>
           <Typography.Paragraph style={{ fontSize: 18, marginBottom: 32 }}>
-            A modern, secure multi-tenant platform for managing pharmaceutical data
-            with JWT authentication and comprehensive tenant isolation.
+            A modern, secure multi-tenant platform for managing pharmaceutical data with JWT
+            authentication and comprehensive tenant isolation.
           </Typography.Paragraph>
 
           <Space size="large">
@@ -91,9 +89,7 @@ export const HomePage: React.FC = () => {
               </Button>
             </Link>
             <Link to="/login">
-              <Button size="large">
-                Sign In
-              </Button>
+              <Button size="large">Sign In</Button>
             </Link>
           </Space>
         </div>
@@ -103,7 +99,7 @@ export const HomePage: React.FC = () => {
         {/* Features Section */}
         <div style={{ background: '#fff', padding: '64px 24px' }}>
           <Row gutter={[24, 24]}>
-            {features.map((feature) => (
+            {features.map(feature => (
               <Col xs={24} md={8} key={feature.id}>
                 <Card
                   style={{ textAlign: 'center', height: '100%' }}
@@ -117,7 +113,7 @@ export const HomePage: React.FC = () => {
                         display: 'flex',
                         justifyContent: 'center',
                         alignItems: 'center',
-                        margin: '0 0 24px 0'
+                        margin: '0 0 24px 0',
                       }}
                       aria-label={`${feature.title} icon`}
                     >
@@ -126,7 +122,11 @@ export const HomePage: React.FC = () => {
                   }
                 >
                   <Card.Meta
-                    title={<Typography.Title level={4} id={`feature-title-${feature.id}`}>{feature.title}</Typography.Title>}
+                    title={
+                      <Typography.Title level={4} id={`feature-title-${feature.id}`}>
+                        {feature.title}
+                      </Typography.Title>
+                    }
                     description={<Typography.Paragraph>{feature.description}</Typography.Paragraph>}
                   />
                 </Card>

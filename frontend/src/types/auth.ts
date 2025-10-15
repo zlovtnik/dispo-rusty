@@ -115,7 +115,9 @@ export interface AuthContextType extends Omit<AuthState, 'refreshToken'> {
   refreshAuthToken: () => Promise<string | null>;
   register: (data: RegisterData) => Promise<AuthResponse>;
   resetPassword: (email: string) => Promise<{ success: boolean; message: string }>;
-  confirmPasswordReset: (data: PasswordResetConfirm) => Promise<{ success: boolean; message: string }>;
+  confirmPasswordReset: (
+    data: PasswordResetConfirm
+  ) => Promise<{ success: boolean; message: string }>;
   hasPermission: (resource: string, action: string) => boolean;
   switchTenant: (tenantId: string) => Promise<void>;
 }

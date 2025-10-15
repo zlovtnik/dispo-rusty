@@ -1,13 +1,13 @@
 /**
  * Validation Utilities for Credentials
- * 
+ *
  * Pure functions for validating user input using Result types.
  * All validation functions return Result<T, ValidationError> for type-safe error handling.
- * 
+ *
  * @module validation
  */
 
-import { Result, ok, err } from 'neverthrow';
+import { type Result, ok, err } from 'neverthrow';
 import type { CredentialValidationError } from '../types/errors';
 import { ValidationErrors, formatCredentialValidationError } from '../types/errors';
 import type { TenantId } from '../types/ids';
@@ -60,15 +60,15 @@ export type ValidatedEmail = string & { readonly __brand: 'ValidatedEmail' };
 
 /**
  * Validate username
- * 
+ *
  * Rules:
  * - Cannot be empty
  * - Must be between 3-50 characters
  * - Can only contain alphanumeric characters, underscores, dots, and hyphens
- * 
+ *
  * @param username - The username to validate
  * @returns Result containing validated username or validation error
- * 
+ *
  * @example
  * ```typescript
  * const result = validateUsername('john_doe');
@@ -78,13 +78,20 @@ export type ValidatedEmail = string & { readonly __brand: 'ValidatedEmail' };
  * );
  * ```
  */
-export const validateUsername = (username: string): Result<ValidatedUsername, CredentialValidationError> => {
-  // Check if empty
-  if (!username || username.trim().length === 0) {
+export const validateUsername = (
+  username: string | null | undefined
+): Result<ValidatedUsername, CredentialValidationError> => {
+  if (username === undefined || username === null) {
     return err(ValidationErrors.emptyUsername());
   }
 
-  const trimmed = username.trim();
+  const trimmedInput = username.trim();
+
+  if (trimmedInput.length === 0) {
+    return err(ValidationErrors.emptyUsername());
+  }
+
+  const trimmed = trimmedInput;
 
   // Check minimum length
   if (trimmed.length < USERNAME_MIN_LENGTH) {
@@ -106,15 +113,15 @@ export const validateUsername = (username: string): Result<ValidatedUsername, Cr
 
 /**
  * Validate password
- * 
+ *
  * Rules:
  * - Cannot be empty
  * - Must be at least 8 characters
  * - Must contain at least one uppercase letter, one lowercase letter, and one number
- * 
+ *
  * @param password - The password to validate
  * @returns Result containing validated password or validation error
- * 
+ *
  * @example
  * ```typescript
  * const result = validatePassword('MyP@ssw0rd');
@@ -124,9 +131,14 @@ export const validateUsername = (username: string): Result<ValidatedUsername, Cr
  * );
  * ```
  */
-export const validatePassword = (password: string): Result<ValidatedPassword, CredentialValidationError> => {
-  // Check if empty
-  if (!password || password.length === 0) {
+export const validatePassword = (
+  password: string | null | undefined
+): Result<ValidatedPassword, CredentialValidationError> => {
+  if (password === undefined || password === null) {
+    return err(ValidationErrors.emptyPassword());
+  }
+
+  if (password.length === 0) {
     return err(ValidationErrors.emptyPassword());
   }
 
@@ -154,14 +166,14 @@ export const validatePassword = (password: string): Result<ValidatedPassword, Cr
 
 /**
  * Validate tenant ID
- * 
+ *
  * Rules:
  * - Cannot be empty
  * - Can only contain alphanumeric characters, underscores, and hyphens
- * 
+ *
  * @param tenantId - The tenant ID to validate
  * @returns Result containing validated tenant ID or validation error
- * 
+ *
  * @example
  * ```typescript
  * const result = validateTenantId('tenant1');
@@ -171,11 +183,13 @@ export const validatePassword = (password: string): Result<ValidatedPassword, Cr
  * );
  * ```
  */
-export const validateTenantId = (tenantId: string | TenantId): Result<TenantId, CredentialValidationError> => {
+export const validateTenantId = (
+  tenantId: string | TenantId
+): Result<TenantId, CredentialValidationError> => {
   const id = String(tenantId);
 
   // Check if empty
-  if (!id || id.trim().length === 0) {
+  if (id.trim().length === 0) {
     return err(ValidationErrors.emptyTenantId());
   }
 
@@ -191,13 +205,13 @@ export const validateTenantId = (tenantId: string | TenantId): Result<TenantId, 
 
 /**
  * Validate email address
- * 
+ *
  * Rules:
  * - Must match standard email format (RFC 5322 simplified)
- * 
+ *
  * @param email - The email address to validate
  * @returns Result containing validated email or validation error
- * 
+ *
  * @example
  * ```typescript
  * const result = validateEmail('user@example.com');
@@ -220,15 +234,15 @@ export const validateEmail = (email: string): Result<ValidatedEmail, CredentialV
 
 /**
  * Validate all login credentials at once
- * 
+ *
  * Uses railway-oriented programming to validate all fields and return
  * the first validation error encountered, or all validated values.
- * 
+ *
  * @param username - The username to validate
  * @param password - The password to validate
  * @param tenantId - The tenant ID to validate (optional)
  * @returns Result containing validated credentials or validation error
- * 
+ *
  * @example
  * ```typescript
  * const result = validateLoginCredentials('john_doe', 'MyP@ssw0rd', 'tenant1');
@@ -251,12 +265,12 @@ export const validateLoginCredentials = (
   CredentialValidationError
 > => {
   // Validate username first
-  return validateUsername(username).andThen((validatedUsername) =>
+  return validateUsername(username).andThen(validatedUsername =>
     // Then validate password
-    validatePassword(password).andThen((validatedPassword) => {
+    validatePassword(password).andThen(validatedPassword => {
       // If tenant ID provided, validate it too
       if (tenantId) {
-        return validateTenantId(tenantId).map((validatedTenantId) => ({
+        return validateTenantId(tenantId).map(validatedTenantId => ({
           username: validatedUsername,
           password: validatedPassword,
           tenantId: validatedTenantId,
@@ -274,11 +288,11 @@ export const validateLoginCredentials = (
 
 /**
  * Validate optional field (returns Ok(undefined) if empty, validates if present)
- * 
+ *
  * @param value - The optional value to validate
  * @param validator - The validation function to use
  * @returns Result containing validated value, undefined, or validation error
- * 
+ *
  * @example
  * ```typescript
  * const result = validateOptional(maybeEmail, validateEmail);
@@ -289,7 +303,11 @@ export const validateOptional = <T, E>(
   validator: (v: string) => Result<T, E>
 ): Result<T | undefined, E> => {
   // Explicit emptiness check: returns Ok(undefined) for null, undefined, or empty/whitespace-only strings
-  if (value === undefined || value === null || (typeof value === 'string' && value.trim().length === 0)) {
+  if (
+    value === undefined ||
+    value === null ||
+    (typeof value === 'string' && value.trim().length === 0)
+  ) {
     return ok(undefined);
   }
   return validator(value);

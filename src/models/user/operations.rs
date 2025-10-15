@@ -380,9 +380,7 @@ pub fn find_login_info_by_token(
     }
 
     if username_trimmed.is_empty() {
-        return Err(ServiceError::bad_request(
-            "Username cannot be empty",
-        ));
+        return Err(ServiceError::bad_request("Username cannot be empty"));
     }
 
     let user_result = users
@@ -572,10 +570,7 @@ pub fn delete_user_by_id(user_id: i32, conn: &mut Connection) -> QueryResult<usi
 /// println!("Logged in users: {}", total);
 /// ```
 pub fn count_logged_in_users(conn: &mut Connection) -> QueryResult<i64> {
-    users
-        .filter(login_session.ne(""))
-        .count()
-        .get_result(conn)
+    users.filter(login_session.ne("")).count().get_result(conn)
 }
 
 pub fn update_user_in_db(

@@ -54,8 +54,9 @@ export const LoginPage: React.FC = () => {
       align="center"
       style={{
         minHeight: '100vh',
-        background: 'linear-gradient(135deg, var(--color-natural-light) 0%, var(--color-healing-light) 100%)',
-        padding: '20px'
+        background:
+          'linear-gradient(135deg, var(--color-natural-light) 0%, var(--color-healing-light) 100%)',
+        padding: '20px',
       }}
     >
       <Card
@@ -63,18 +64,22 @@ export const LoginPage: React.FC = () => {
           width: 420,
           borderRadius: '16px',
           border: '2px solid var(--primary-200)',
-          background: 'linear-gradient(145deg, rgba(255,255,255,0.95) 0%, rgba(247,242,240,0.9) 100%)',
+          background:
+            'linear-gradient(145deg, rgba(255,255,255,0.95) 0%, rgba(247,242,240,0.9) 100%)',
           boxShadow: '0 20px 40px rgba(38, 70, 83, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.8)',
-          backdropFilter: 'blur(10px)'
+          backdropFilter: 'blur(10px)',
         }}
         title={
-          <Typography.Title level={2} style={{
-            color: 'var(--color-healing-dark)',
-            margin: 0,
-            textAlign: 'center',
-            fontSize: '2rem',
-            fontWeight: 700
-          }}>
+          <Typography.Title
+            level={2}
+            style={{
+              color: 'var(--color-healing-dark)',
+              margin: 0,
+              textAlign: 'center',
+              fontSize: '2rem',
+              fontWeight: 700,
+            }}
+          >
             Welcome Back
           </Typography.Title>
         }
@@ -82,11 +87,11 @@ export const LoginPage: React.FC = () => {
           header: {
             border: 'none',
             padding: '40px 30px 20px',
-            textAlign: 'center'
+            textAlign: 'center',
           },
           body: {
-            padding: '30px'
-          }
+            padding: '30px',
+          },
         }}
       >
         <Typography.Text
@@ -96,27 +101,23 @@ export const LoginPage: React.FC = () => {
             display: 'block',
             fontSize: '16px',
             marginBottom: '32px',
-            color: 'var(--primary-600)'
+            color: 'var(--primary-600)',
           }}
         >
           Access your multi-tenant application
         </Typography.Text>
 
-        <Form
-          form={form}
-          onFinish={onSubmit}
-          size="large"
-          layout="vertical"
-        >
+        <Form form={form} onFinish={onSubmit} size="large" layout="vertical">
           <Form.Item
-            label={<span style={{ color: 'var(--primary-700)', fontWeight: 600 }}>Username or Email</span>}
+            label={
+              <span style={{ color: 'var(--primary-700)', fontWeight: 600 }}>
+                Username or Email
+              </span>
+            }
             name="usernameOrEmail"
             rules={[{ required: true, message: 'Username or email is required' }]}
           >
-            <Input
-              placeholder="Enter your username or email"
-              className="login-input"
-            />
+            <Input placeholder="Enter your username or email" className="login-input" />
           </Form.Item>
 
           <Form.Item
@@ -124,10 +125,7 @@ export const LoginPage: React.FC = () => {
             name="password"
             rules={[{ required: true, message: 'Password is required' }]}
           >
-            <Input.Password
-              placeholder="Enter your password"
-              className="login-input"
-            />
+            <Input.Password placeholder="Enter your password" className="login-input" />
           </Form.Item>
 
           <Form.Item
@@ -135,22 +133,23 @@ export const LoginPage: React.FC = () => {
             name="tenantId"
             rules={[{ required: true, message: 'Tenant ID is required' }]}
           >
-            <Input
-              placeholder="Enter your tenant ID"
-              className="login-input"
-            />
+            <Input placeholder="Enter your tenant ID" className="login-input" />
           </Form.Item>
 
           <Form.Item>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: '16px'
-            }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '16px',
+              }}
+            >
               <Checkbox
                 checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
+                onChange={e => {
+                  setRememberMe(e.target.checked);
+                }}
                 style={{ color: 'var(--primary-600)' }}
               >
                 Remember me
@@ -164,11 +163,13 @@ export const LoginPage: React.FC = () => {
                 message={submitError}
                 type="error"
                 closable
-                onClose={() => setSubmitError(null)}
+                onClose={() => {
+                  setSubmitError(null);
+                }}
                 style={{
                   borderRadius: '8px',
                   border: '1px solid var(--danger-300)',
-                  backgroundColor: 'var(--danger-50)'
+                  backgroundColor: 'var(--danger-50)',
                 }}
               />
             </Form.Item>
@@ -197,7 +198,7 @@ export const LoginPage: React.FC = () => {
           maxWidth: '400px',
           color: 'var(--primary-500)',
           fontSize: '14px',
-          lineHeight: '1.5'
+          lineHeight: '1.5',
         }}
       >
         Use your account credentials and tenant ID to sign in to your secure workspace

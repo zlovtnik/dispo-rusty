@@ -1,6 +1,6 @@
 /**
  * Contact Business Rules
- * 
+ *
  * Pure business logic for contact management operations.
  * These rules define validation, field requirements, and business constraints.
  */
@@ -47,7 +47,7 @@ export type ContactValidationError =
 
 /**
  * Age calculation from date of birth
- * 
+ *
  * @param dateOfBirth - Date of birth
  * @returns Age in years
  */
@@ -56,23 +56,23 @@ export function calculateAgeFromDOB(dateOfBirth: Date): number {
   const birthDate = new Date(dateOfBirth);
   let age = today.getFullYear() - birthDate.getFullYear();
   const monthDiff = today.getMonth() - birthDate.getMonth();
-  
+
   if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
     age--;
   }
-  
+
   return age;
 }
 
 /**
  * Validate email format
- * 
+ *
  * @param email - Email address to validate
  * @returns Result containing void on success or error
  */
 export function validateEmailFormat(email: string): Result<void, ContactValidationError> {
   const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-  
+
   if (!emailRegex.test(email)) {
     return err({
       type: 'INVALID_FORMAT',
@@ -80,29 +80,29 @@ export function validateEmailFormat(email: string): Result<void, ContactValidati
       reason: 'Invalid email format',
     });
   }
-  
+
   return ok(undefined);
 }
 
 /**
  * Validate phone format
- * 
+ *
  * Accepts various formats:
  * - +1234567890
  * - (123) 456-7890
  * - 123-456-7890
  * - 123.456.7890
- * 
+ *
  * @param phone - Phone number to validate
  * @returns Result containing void on success or error
  */
 export function validatePhoneFormat(phone: string): Result<void, ContactValidationError> {
   // Remove all non-digit characters except leading +
   const cleaned = phone.replace(/[\s\-\(\)\.]/g, '');
-  
+
   // Should have 10-15 digits, optionally starting with +
   const phoneRegex = /^\+?[1-9]\d{9,14}$/;
-  
+
   if (!phoneRegex.test(cleaned)) {
     return err({
       type: 'INVALID_FORMAT',
@@ -110,13 +110,13 @@ export function validatePhoneFormat(phone: string): Result<void, ContactValidati
       reason: 'Invalid phone format. Should be 10-15 digits.',
     });
   }
-  
+
   return ok(undefined);
 }
 
 /**
  * Validate contact email uniqueness
- * 
+ *
  * @param email - Email to check
  * @param existingContacts - List of existing contacts
  * @param excludeContactId - Contact ID to exclude from check (for updates)
@@ -130,7 +130,7 @@ export function validateEmailUniqueness(
   const duplicate = existingContacts.find(
     c => c.email?.toLowerCase() === email.toLowerCase() && c.id !== excludeContactId
   );
-  
+
   if (duplicate) {
     return err({
       type: 'DUPLICATE_CONTACT',
@@ -138,13 +138,13 @@ export function validateEmailUniqueness(
       value: email,
     });
   }
-  
+
   return ok(undefined);
 }
 
 /**
  * Validate contact phone uniqueness
- * 
+ *
  * @param phone - Phone to check
  * @param existingContacts - List of existing contacts
  * @param excludeContactId - Contact ID to exclude from check (for updates)
@@ -158,11 +158,11 @@ export function validatePhoneUniqueness(
   // Normalize phone numbers for comparison
   const normalizePhone = (p: string) => p.replace(/[\s\-\(\)\.]/g, '');
   const normalizedPhone = normalizePhone(phone);
-  
+
   const duplicate = existingContacts.find(
     c => c.phone && normalizePhone(c.phone) === normalizedPhone && c.id !== excludeContactId
   );
-  
+
   if (duplicate) {
     return err({
       type: 'DUPLICATE_CONTACT',
@@ -170,13 +170,13 @@ export function validatePhoneUniqueness(
       value: phone,
     });
   }
-  
+
   return ok(undefined);
 }
 
 /**
  * Validate age is within acceptable range
- * 
+ *
  * @param age - Age to validate
  * @param min - Minimum age (default: 0)
  * @param max - Maximum age (default: 150)
@@ -184,8 +184,8 @@ export function validatePhoneUniqueness(
  */
 export function validateAgeRange(
   age: number,
-  min: number = 0,
-  max: number = 150
+  min = 0,
+  max = 150
 ): Result<void, ContactValidationError> {
   if (age < min || age > max) {
     return err({
@@ -195,13 +195,13 @@ export function validateAgeRange(
       max,
     });
   }
-  
+
   return ok(undefined);
 }
 
 /**
  * Get required fields based on tenant settings
- * 
+ *
  * @param tenantSettings - Tenant settings (optional)
  * @returns Contact field requirements
  */
@@ -215,7 +215,7 @@ export function getRequiredFieldsByTenant(
 
 /**
  * Validate required fields are present
- * 
+ *
  * @param contact - Contact to validate
  * @param requirements - Field requirements
  * @returns Result containing void on success or error with all missing fields
@@ -225,35 +225,35 @@ export function validateRequiredFields(
   requirements: ContactFieldRequirements = DEFAULT_CONTACT_REQUIREMENTS
 ): Result<void, ContactValidationError> {
   const missingFields: string[] = [];
-  
+
   if (requirements.firstName && !contact.firstName) {
     missingFields.push('firstName');
   }
-  
+
   if (requirements.lastName && !contact.lastName) {
     missingFields.push('lastName');
   }
-  
+
   if (requirements.email && !contact.email) {
     missingFields.push('email');
   }
-  
+
   if (requirements.phone && !contact.phone) {
     missingFields.push('phone');
   }
-  
+
   if (requirements.company && !contact.company) {
     missingFields.push('company');
   }
-  
+
   if (requirements.dateOfBirth && !contact.dateOfBirth) {
     missingFields.push('dateOfBirth');
   }
-  
+
   if (requirements.address && !contact.address) {
     missingFields.push('address');
   }
-  
+
   if (missingFields.length > 0) {
     // Return first missing field error (guaranteed to exist)
     const firstMissingField = missingFields[0];
@@ -266,15 +266,15 @@ export function validateRequiredFields(
       field: firstMissingField,
     });
   }
-  
+
   return ok(undefined);
 }
 
 /**
  * Check if contact has minimum required contact info
- * 
+ *
  * At least one of: email, phone, mobile
- * 
+ *
  * @param contact - Contact to check
  * @returns true if has minimum contact info
  */
@@ -284,7 +284,7 @@ export function hasMinimumContactInfo(contact: Partial<Contact>): boolean {
 
 /**
  * Calculate contact completeness percentage
- * 
+ *
  * @param contact - Contact to evaluate
  * @returns Completeness percentage (0-100)
  */
@@ -300,46 +300,47 @@ export function calculateContactCompleteness(contact: Partial<Contact>): number 
     'address',
     'dateOfBirth',
   ];
-  
+
   const filledFields = fields.filter(field => {
     const value = contact[field as keyof Contact];
     return value !== null && value !== undefined && value !== '';
   }).length;
-  
+
   return Math.round((filledFields / fields.length) * 100);
 }
 
 /**
  * Get contact quality score
- * 
+ *
  * Evaluates contact quality based on:
  * - Completeness
  * - Data validity
  * - Recent activity
- * 
+ *
  * @param contact - Contact to score
  * @returns Quality score (0-100)
  */
 export function getContactQualityScore(contact: Contact): number {
   let score = 0;
-  
+
   // Completeness (max 40 points)
   const completeness = calculateContactCompleteness(contact);
-  score += (completeness * 0.4);
-  
+  score += completeness * 0.4;
+
   // Valid email (20 points)
   if (contact.email && validateEmailFormat(contact.email).isOk()) {
     score += 20;
   }
-  
+
   // Valid phone (20 points)
   if (contact.phone && validatePhoneFormat(contact.phone).isOk()) {
     score += 20;
   }
-  
+
   // Recent activity (max 20 points)
   if (contact.updatedAt) {
-    const daysSinceUpdate = (Date.now() - new Date(contact.updatedAt).getTime()) / (1000 * 60 * 60 * 24);
+    const daysSinceUpdate =
+      (Date.now() - new Date(contact.updatedAt).getTime()) / (1000 * 60 * 60 * 24);
     if (daysSinceUpdate < 30) {
       score += 20;
     } else if (daysSinceUpdate < 90) {
@@ -348,15 +349,15 @@ export function getContactQualityScore(contact: Contact): number {
       score += 5;
     }
   }
-  
+
   return Math.min(100, Math.round(score));
 }
 
 /**
  * Sanitize contact data
- * 
+ *
  * Trims whitespace, normalizes formats, removes invalid data
- * 
+ *
  * @param contact - Contact to sanitize
  * @returns Sanitized contact
  */
@@ -376,7 +377,7 @@ export function sanitizeContactData<T extends Partial<Contact>>(contact: T): T {
 
 /**
  * Format contact name for display
- * 
+ *
  * @param contact - Contact
  * @param format - Name format ('full' | 'last-first' | 'first-only')
  * @returns Formatted name

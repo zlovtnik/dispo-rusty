@@ -92,7 +92,11 @@ impl PersonDTO {
             string_engine.validate_field(
                 &self.name,
                 "name",
-                vec![Custom::new(|val: &String| !val.trim().is_empty(), "REQUIRED", "{} is required")],
+                vec![Custom::new(
+                    Self::is_not_blank,
+                    "REQUIRED",
+                    "{} is required",
+                )],
             ),
             string_engine.validate_field(
                 &self.name,
@@ -105,7 +109,11 @@ impl PersonDTO {
             string_engine.validate_field(
                 &self.email,
                 "email",
-                vec![Custom::new(|val: &String| !val.trim().is_empty(), "REQUIRED", "{} is required")],
+                vec![Custom::new(
+                    Self::is_not_blank,
+                    "REQUIRED",
+                    "{} is required",
+                )],
             ),
             string_engine.validate_field(&self.email, "email", vec![Email]),
             string_engine.validate_field(
@@ -119,7 +127,11 @@ impl PersonDTO {
             string_engine.validate_field(
                 &self.phone,
                 "phone",
-                vec![Custom::new(|val: &String| !val.trim().is_empty(), "REQUIRED", "{} is required")],
+                vec![Custom::new(
+                    Self::is_not_blank,
+                    "REQUIRED",
+                    "{} is required",
+                )],
             ),
             string_engine.validate_field(
                 &self.phone,
@@ -132,7 +144,11 @@ impl PersonDTO {
             string_engine.validate_field(&self.phone, "phone", vec![Phone]),
             {
                 let rules: Vec<Box<dyn ValidationRule<String>>> = vec![
-                    Box::new(Custom::new(|val: &String| !val.trim().is_empty(), "REQUIRED", "{} is required")),
+                    Box::new(Custom::new(
+                        Self::is_not_blank,
+                        "REQUIRED",
+                        "{} is required",
+                    )),
                     Box::new(Length {
                         min: None,
                         max: Some(500),

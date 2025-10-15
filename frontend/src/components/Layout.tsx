@@ -127,7 +127,15 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   return (
     <AntLayout style={{ minHeight: '100vh' }}>
-      <AntLayout.Sider collapsible collapsed={collapsed} onCollapse={(value) => setCollapsed(value)} trigger={null} style={layoutStyles.sider}>
+      <AntLayout.Sider
+        collapsible
+        collapsed={collapsed}
+        onCollapse={value => {
+          setCollapsed(value);
+        }}
+        trigger={null}
+        style={layoutStyles.sider}
+      >
         <div style={layoutStyles.siderHeader}>
           <HeartOutlined style={{ fontSize: 32 }} />
           <div>{tenant?.name || 'Natural Pharmacy System'}</div>
@@ -137,46 +145,57 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           selectedKeys={[location.pathname]}
           mode="inline"
           items={menuItems}
-          onSelect={({ key }) => navigate(key)}
+          onSelect={({ key }) => {
+            navigate(key);
+          }}
         />
       </AntLayout.Sider>
 
       <AntLayout>
         <AntLayout.Header style={layoutStyles.header}>
-          <Button type="text" icon={<MenuOutlined />} onClick={() => setCollapsed(!collapsed)} style={{ fontSize: token.fontSizeLG, color: token.colorTextSecondary }} />
+          <Button
+            type="text"
+            icon={<MenuOutlined />}
+            onClick={() => {
+              setCollapsed(!collapsed);
+            }}
+            style={{ fontSize: token.fontSizeLG, color: token.colorTextSecondary }}
+          />
           <Breadcrumb items={generateBreadcrumbs(location.pathname)} />
           <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
             <div style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
               <Avatar style={{ backgroundColor: token.colorPrimary }}>
                 {(user?.firstName || user?.username || 'U').charAt(0).toUpperCase()}
               </Avatar>
-              <span style={{
-                marginLeft: 8,
-                display: screens.md ? 'inline' : 'none'
-              }}>
+              <span
+                style={{
+                  marginLeft: 8,
+                  display: screens.md ? 'inline' : 'none',
+                }}
+              >
                 {user?.firstName || user?.username}
               </span>
             </div>
           </Dropdown>
         </AntLayout.Header>
 
-        <AntLayout.Content style={layoutStyles.content}>
-          {children}
-        </AntLayout.Content>
+        <AntLayout.Content style={layoutStyles.content}>{children}</AntLayout.Content>
 
-        <AntLayout.Footer style={{
-          textAlign: 'center',
-          borderTop: `4px solid ${token.colorBorderSecondary}`,
-          padding: '20px 0',
-          background: token.colorFill,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          width: '100%',
-          margin: `0 -${token.paddingMD}`,
-          boxSizing: 'border-box'
-        }}>
+        <AntLayout.Footer
+          style={{
+            textAlign: 'center',
+            borderTop: `4px solid ${token.colorBorderSecondary}`,
+            padding: '20px 0',
+            background: token.colorFill,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '100%',
+            margin: `0 -${token.paddingMD}`,
+            boxSizing: 'border-box',
+          }}
+        >
           <div>© 2025 Natural Pharmacy System. Built with TypeScript, Bun, and React.</div>
           <div>Secure multi-tenant platform with JWT authentication</div>
         </AntLayout.Footer>

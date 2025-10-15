@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { ConfirmationModal } from '@/components/ConfirmationModal';
-import type { Tenant as TenantRecord, PaginatedTenantResponse } from '@/types/tenant';
+import type {
+  Tenant as TenantRecord,
+  PaginatedTenantResponse,
+  CreateTenantDTO,
+} from '@/types/tenant';
 import { isApiSuccess } from '@/types/api';
 import {
   Button,
@@ -44,16 +48,14 @@ export const TenantsPage: React.FC = () => {
   const [form] = Form.useForm();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [powerFilters, setPowerFilters] = useState<{ field: string; operator: string; value: string }[]>([
-    { field: 'name', operator: 'contains', value: '' }
-  ]);
+  const [powerFilters, setPowerFilters] = useState<
+    { field: string; operator: string; value: string }[]
+  >([{ field: 'name', operator: 'contains', value: '' }]);
   const [pagination, setPagination] = useState({
     current: 1,
     pageSize: 12,
     total: 0,
   });
-
-
 
   // Load tenants from API with pagination
   const loadTenants = async (params?: { offset?: number; limit?: number }) => {
@@ -77,9 +79,9 @@ export const TenantsPage: React.FC = () => {
         return;
       }
 
-  const data = apiResponse.data;
-  setTenants(data.data);
-  setPagination(prev => ({ ...prev, total: data.total }));
+      const data = apiResponse.data;
+      setTenants(data.data);
+      setPagination(prev => ({ ...prev, total: data.total }));
     } catch (error) {
       message.error(error instanceof Error ? error.message : 'Failed to load tenants');
       setTenants([]);
@@ -113,14 +115,20 @@ export const TenantsPage: React.FC = () => {
     showQuickJumper: false,
   };
 
-  // Handle form submission
-  const handleSubmit = async (values: any) => {
+  /**
+   * Handle form submission for creating or updating a tenant
+   * @param values - Form values from Ant Design Form
+   */
+  const handleSubmit = async (values: CreateTenantDTO) => {
     setIsSubmitting(true);
 
     try {
       if (editingTenant) {
         // Update existing tenant
-        const updateResult = await tenantService.update(editingTenant.id, { name: values.name, db_url: values.db_url });
+        const updateResult = await tenantService.update(editingTenant.id, {
+          name: values.name,
+          db_url: values.db_url,
+        });
         if (updateResult.isErr()) {
           throw new Error(updateResult.error.message);
         }
@@ -129,10 +137,17 @@ export const TenantsPage: React.FC = () => {
           throw new Error(updateResult.value.error.message);
         }
         // Refresh the current page
-        await loadTenants({ offset: (pagination.current - 1) * pagination.pageSize, limit: pagination.pageSize });
+        await loadTenants({
+          offset: (pagination.current - 1) * pagination.pageSize,
+          limit: pagination.pageSize,
+        });
       } else {
-        // Create new tenant
-        const createResult = await tenantService.create({ name: values.name, db_url: values.db_url });
+        // Create new tenant with cryptographically secure UUID
+        const createResult = await tenantService.create({
+          id: crypto.randomUUID(),
+          name: values.name,
+          db_url: values.db_url,
+        });
 
         if (createResult.isErr()) {
           throw new Error(createResult.error.message);
@@ -142,20 +157,26 @@ export const TenantsPage: React.FC = () => {
           throw new Error(createResult.value.error.message);
         }
         // Refresh the current page
-        await loadTenants({ offset: (pagination.current - 1) * pagination.pageSize, limit: pagination.pageSize });
+        await loadTenants({
+          offset: (pagination.current - 1) * pagination.pageSize,
+          limit: pagination.pageSize,
+        });
       }
 
       // Success message
-      const successMsg = editingTenant ? 'Tenant updated successfully!' : 'Tenant created successfully!';
+      const successMsg = editingTenant
+        ? 'Tenant updated successfully!'
+        : 'Tenant created successfully!';
       message.success(successMsg);
 
       // Reset form and close modal on success
       setEditingTenant(null);
       setIsFormOpen(false);
       form.resetFields();
-
     } catch (error) {
-      message.error(error instanceof Error ? error.message : 'An error occurred while saving the tenant.');
+      message.error(
+        error instanceof Error ? error.message : 'An error occurred while saving the tenant.'
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -189,7 +210,10 @@ export const TenantsPage: React.FC = () => {
           throw new Error(deleteResult.value.error.message);
         }
         // Update tenants state after successful API response
-        await loadTenants({ offset: (pagination.current - 1) * pagination.pageSize, limit: pagination.pageSize });
+        await loadTenants({
+          offset: (pagination.current - 1) * pagination.pageSize,
+          limit: pagination.pageSize,
+        });
         message.success('Tenant deleted successfully!');
       } catch (error) {
         message.error(error instanceof Error ? error.message : 'Failed to delete tenant');
@@ -239,7 +263,7 @@ export const TenantsPage: React.FC = () => {
 
       const response = await tenantService.filter({
         filters: validFilters,
-        page_size: pagination.pageSize // Use current page size for filtered results
+        page_size: pagination.pageSize, // Use current page size for filtered results
       });
 
       if (response.isErr()) {
@@ -255,13 +279,17 @@ export const TenantsPage: React.FC = () => {
       const data = apiResponse.data;
 
       if (Array.isArray(data)) {
-        const records = data as TenantRecord[];
-        setTenants(records);
-        setPagination(prev => ({ ...prev, current: 1, total: records.length }));
+        // Data is already TenantRecord[] from the API
+        setTenants(data);
+        setPagination(prev => ({ ...prev, current: 1, total: data.length }));
       } else {
-        const paginated = data as PaginatedTenantResponse;
+        const paginated = data;
         setTenants(paginated.data);
-        setPagination(prev => ({ ...prev, current: 1, total: paginated.total ?? paginated.data.length ?? 0 }));
+        setPagination(prev => ({
+          ...prev,
+          current: 1,
+          total: paginated.total ?? paginated.data.length ?? 0,
+        }));
       }
     } catch (error) {
       message.error('Failed to filter tenants');
@@ -294,7 +322,7 @@ export const TenantsPage: React.FC = () => {
       const displayUrl = url.replace(/:\/\/([^:]+):[^@]+@/, '://$1:***@');
       return displayUrl;
     } catch {
-      return "<invalid-db-url>";
+      return '<invalid-db-url>';
     }
   };
 
@@ -311,7 +339,7 @@ export const TenantsPage: React.FC = () => {
       title: 'Name',
       dataIndex: 'name',
       key: 'name',
-  sorter: (a: TenantRecord, b: TenantRecord) => a.name.localeCompare(b.name),
+      sorter: (a: TenantRecord, b: TenantRecord) => a.name.localeCompare(b.name),
     },
     {
       title: 'Database URL',
@@ -325,13 +353,12 @@ export const TenantsPage: React.FC = () => {
           style={{
             fontSize: '12px',
             color: 'var(--tertiary-600)',
-            fontFamily: 'monospace'
+            fontFamily: 'monospace',
           }}
         >
           {formatDbUrl(dbUrl).length > 30
             ? formatDbUrl(dbUrl).substring(0, 27) + '...'
-            : formatDbUrl(dbUrl)
-          }
+            : formatDbUrl(dbUrl)}
         </span>
       ),
     },
@@ -340,26 +367,30 @@ export const TenantsPage: React.FC = () => {
       dataIndex: 'created_at',
       key: 'created_at',
       render: (date: string) => formatDate(date),
-  sorter: (a: TenantRecord, b: TenantRecord) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+      sorter: (a: TenantRecord, b: TenantRecord) =>
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
     },
     {
       title: 'Updated',
       dataIndex: 'updated_at',
       key: 'updated_at',
       render: (date: string) => formatDate(date),
-  sorter: (a: TenantRecord, b: TenantRecord) => new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime(),
+      sorter: (a: TenantRecord, b: TenantRecord) =>
+        new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime(),
     },
     {
       title: 'Actions',
       key: 'actions',
       width: 100,
-  render: (_: any, tenant: TenantRecord) => (
+      render: (_: unknown, tenant: TenantRecord) => (
         <Space size="small">
           <Button
             type="text"
             size="small"
             icon={<EditOutlined />}
-            onClick={() => handleEdit(tenant)}
+            onClick={() => {
+              handleEdit(tenant);
+            }}
             style={{
               color: '#1890ff',
             }}
@@ -369,7 +400,9 @@ export const TenantsPage: React.FC = () => {
             danger
             size="small"
             icon={<DeleteOutlined />}
-            onClick={() => handleDelete(tenant.id)}
+            onClick={() => {
+              handleDelete(tenant.id);
+            }}
           />
         </Space>
       ),
@@ -381,14 +414,14 @@ export const TenantsPage: React.FC = () => {
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <Typography.Title level={2} style={{ margin: 0 }}>Tenants</Typography.Title>
-          <Typography.Text type="secondary">Manage tenant configurations and database connections</Typography.Text>
+          <Typography.Title level={2} style={{ margin: 0 }}>
+            Tenants
+          </Typography.Title>
+          <Typography.Text type="secondary">
+            Manage tenant configurations and database connections
+          </Typography.Text>
         </div>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={handleNewTenant}
-        >
+        <Button type="primary" icon={<PlusOutlined />} onClick={handleNewTenant}>
           Add Tenant
         </Button>
       </div>
@@ -396,18 +429,19 @@ export const TenantsPage: React.FC = () => {
       <Divider />
 
       {/* Search Filters */}
-      <Card
-        title="Search Filters"
-        size="small"
-        style={{ borderRadius: '8px', marginTop: '16px' }}
-      >
+      <Card title="Search Filters" size="small" style={{ borderRadius: '8px', marginTop: '16px' }}>
         <Space direction="vertical" size="middle" style={{ width: '100%' }}>
           {powerFilters.map((filter, index) => (
-            <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+            <div
+              key={index}
+              style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}
+            >
               <Select
                 style={{ width: 150 }}
                 value={filter.field}
-                onChange={(value) => updateFilter(index, 'field', value)}
+                onChange={value => {
+                  updateFilter(index, 'field', value);
+                }}
                 placeholder="Field"
               >
                 <Select.Option value="id">ID</Select.Option>
@@ -420,7 +454,9 @@ export const TenantsPage: React.FC = () => {
               <Select
                 style={{ width: 120 }}
                 value={filter.operator}
-                onChange={(value) => updateFilter(index, 'operator', value)}
+                onChange={value => {
+                  updateFilter(index, 'operator', value);
+                }}
                 placeholder="Operator"
               >
                 <Select.Option value="contains">Contains</Select.Option>
@@ -435,25 +471,25 @@ export const TenantsPage: React.FC = () => {
                 style={{ width: 200, flex: 1, minWidth: '150px' }}
                 placeholder="Value"
                 value={filter.value}
-                onChange={(e) => updateFilter(index, 'value', e.target.value)}
+                onChange={e => {
+                  updateFilter(index, 'value', e.target.value);
+                }}
               />
 
               <Button
                 type="text"
                 danger
                 icon={<MinusCircleOutlined />}
-                onClick={() => removeFilter(index)}
+                onClick={() => {
+                  removeFilter(index);
+                }}
                 disabled={powerFilters.length <= 1}
               >
                 Remove
               </Button>
 
               {index === powerFilters.length - 1 && (
-                <Button
-                  type="text"
-                  icon={<PlusCircleOutlined />}
-                  onClick={addFilter}
-                >
+                <Button type="text" icon={<PlusCircleOutlined />} onClick={addFilter}>
                   Add Filter
                 </Button>
               )}
@@ -466,14 +502,12 @@ export const TenantsPage: React.FC = () => {
             <Button type="primary" onClick={applyFilters}>
               Apply Filters
             </Button>
-            <Button onClick={clearFilters}>
-              Clear All
-            </Button>
+            <Button onClick={clearFilters}>Clear All</Button>
           </Space>
 
           <div style={{ fontSize: '14px', color: '#666' }}>
-            <Typography.Text strong>Note:</Typography.Text> For date fields, use ISO format (e.g., 2023-12-25T10:00:00.000Z).
-            Empty values are ignored in filtering.
+            <Typography.Text strong>Note:</Typography.Text> For date fields, use ISO format (e.g.,
+            2023-12-25T10:00:00.000Z). Empty values are ignored in filtering.
           </div>
         </Space>
       </Card>
@@ -488,21 +522,24 @@ export const TenantsPage: React.FC = () => {
           dataSource={tenants}
           rowKey="id"
           loading={loading}
-          rowClassName={(record, index) =>
-            index % 2 === 0 ? 'stripe-row' : ''
-          }
+          rowClassName={(record, index) => (index % 2 === 0 ? 'stripe-row' : '')}
           pagination={tablePagination}
           locale={{
-            emptyText: tenants.length === 0
-              ? <div style={{ textAlign: 'center', padding: '48px' }}>
+            emptyText:
+              tenants.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '48px' }}>
                   <Typography.Text style={{ fontSize: '16px', color: '#999' }}>
                     No tenants yet. Add your first tenant!
                   </Typography.Text>
                   <br />
                   <br />
-                  <Button type="primary" size="large" onClick={handleNewTenant}>Add Tenant</Button>
+                  <Button type="primary" size="large" onClick={handleNewTenant}>
+                    Add Tenant
+                  </Button>
                 </div>
-              : 'No tenants match your search.',
+              ) : (
+                'No tenants match your search.'
+              ),
           }}
           style={{
             border: '1px solid #e8e8e8',
@@ -516,7 +553,9 @@ export const TenantsPage: React.FC = () => {
       <Modal
         title={editingTenant ? 'Edit Tenant' : 'Add New Tenant'}
         open={isFormOpen}
-        onCancel={() => setIsFormOpen(false)}
+        onCancel={() => {
+          setIsFormOpen(false);
+        }}
         footer={null}
       >
         <Form
@@ -546,13 +585,16 @@ export const TenantsPage: React.FC = () => {
                   // Libpq connection string regex (simplified, supports key=value pairs)
                   const libpqRegex = /^[^&=]+=[^&]*(&[^&=]+=[^&]*)*$/;
                   // PostgreSQL URL regex (enhanced for multi-host, encoded, unix sockets, etc.)
-                  const urlRegex = /^postgres(?:ql)?:\/\/(?:[A-Za-z0-9._%+-]+(?::[A-Za-z0-9._%+-]+)?@)?(?:\[[^\]]+\]|[A-Za-z0-9.-]+(?:,[A-Za-z0-9.-]+)*(?::\d{1,5})*|\/[^/]+)?\/[A-Za-z0-9_\-]+(?:\?.*)?$/;
+                  const urlRegex =
+                    /^postgres(?:ql)?:\/\/(?:[A-Za-z0-9._%+-]+(?::[A-Za-z0-9._%+-]+)?@)?(?:\[[^\]]+\]|[A-Za-z0-9.-]+(?:,[A-Za-z0-9.-]+)*(?::\d{1,5})*|\/[^/]+)?\/[A-Za-z0-9_\-]+(?:\?.*)?$/;
                   if (libpqRegex.test(value) || urlRegex.test(value)) {
                     return Promise.resolve();
                   }
-                  return Promise.reject(new Error('Please enter a valid PostgreSQL URL or connection string'));
-                }
-              }
+                  return Promise.reject(
+                    new Error('Please enter a valid PostgreSQL URL or connection string')
+                  );
+                },
+              },
             ]}
           >
             <Input placeholder="postgresql://user:password@host:port/database or host=localhost port=5432 dbname=mydb" />
@@ -563,7 +605,13 @@ export const TenantsPage: React.FC = () => {
               <Button type="primary" htmlType="submit" loading={isSubmitting}>
                 {editingTenant ? 'Update Tenant' : 'Add Tenant'}
               </Button>
-              <Button onClick={() => setIsFormOpen(false)}>Cancel</Button>
+              <Button
+                onClick={() => {
+                  setIsFormOpen(false);
+                }}
+              >
+                Cancel
+              </Button>
             </Space>
           </Form.Item>
         </Form>

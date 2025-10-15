@@ -24,13 +24,13 @@ export interface BusinessLogicError extends BaseError {
   readonly type: 'business';
 }
 
-export type AppError =
-  | ValidationError
-  | NetworkError
-  | AuthError
-  | BusinessLogicError;
+export type AppError = ValidationError | NetworkError | AuthError | BusinessLogicError;
 
-export const createValidationError = (message: string, details?: Record<string, unknown>, options?: { code?: string; cause?: unknown; statusCode?: number }): ValidationError => ({
+export const createValidationError = (
+  message: string,
+  details?: Record<string, unknown>,
+  options?: { code?: string; cause?: unknown; statusCode?: number }
+): ValidationError => ({
   type: 'validation',
   message,
   details,
@@ -39,7 +39,11 @@ export const createValidationError = (message: string, details?: Record<string, 
   statusCode: options?.statusCode,
 });
 
-export const createNetworkError = (message: string, details?: Record<string, unknown>, options?: { code?: string; retryable?: boolean; cause?: unknown; statusCode?: number }): NetworkError => ({
+export const createNetworkError = (
+  message: string,
+  details?: Record<string, unknown>,
+  options?: { code?: string; retryable?: boolean; cause?: unknown; statusCode?: number }
+): NetworkError => ({
   type: 'network',
   message,
   details,
@@ -49,7 +53,11 @@ export const createNetworkError = (message: string, details?: Record<string, unk
   statusCode: options?.statusCode,
 });
 
-export const createAuthError = (message: string, details?: Record<string, unknown>, options?: { code?: string; cause?: unknown; statusCode?: number }): AuthError => ({
+export const createAuthError = (
+  message: string,
+  details?: Record<string, unknown>,
+  options?: { code?: string; cause?: unknown; statusCode?: number }
+): AuthError => ({
   type: 'auth',
   message,
   details,
@@ -58,7 +66,11 @@ export const createAuthError = (message: string, details?: Record<string, unknow
   statusCode: options?.statusCode,
 });
 
-export const createBusinessLogicError = (message: string, details?: Record<string, unknown>, options?: { code?: string; cause?: unknown; statusCode?: number }): BusinessLogicError => ({
+export const createBusinessLogicError = (
+  message: string,
+  details?: Record<string, unknown>,
+  options?: { code?: string; cause?: unknown; statusCode?: number }
+): BusinessLogicError => ({
   type: 'business',
   message,
   details,
@@ -135,10 +147,19 @@ export type AuthFlowError =
 export const StorageErrors = {
   notFound: (key: string): StorageError => ({ type: 'NOT_FOUND', key }),
   parseError: (key: string, reason: string): StorageError => ({ type: 'PARSE_ERROR', key, reason }),
-  stringifyError: (key: string, reason: string): StorageError => ({ type: 'STRINGIFY_ERROR', key, reason }),
+  stringifyError: (key: string, reason: string): StorageError => ({
+    type: 'STRINGIFY_ERROR',
+    key,
+    reason,
+  }),
   quotaExceeded: (key: string): StorageError => ({ type: 'QUOTA_EXCEEDED', key }),
   unavailable: (reason: string): StorageError => ({ type: 'STORAGE_UNAVAILABLE', reason }),
-  versionMismatch: (key: string, expected: number, got: number): StorageError => ({ type: 'VERSION_MISMATCH', key, expected, got }),
+  versionMismatch: (key: string, expected: number, got: number): StorageError => ({
+    type: 'VERSION_MISMATCH',
+    key,
+    expected,
+    got,
+  }),
 };
 
 export const ParseErrors = {
@@ -146,8 +167,14 @@ export const ParseErrors = {
   invalidJwtFormat: (token: string): ParseError => ({ type: 'INVALID_JWT_FORMAT', token }),
   missingJwtFields: (fields: string[]): ParseError => ({ type: 'MISSING_JWT_FIELDS', fields }),
   expiredToken: (exp: number, now: number): ParseError => ({ type: 'EXPIRED_TOKEN', exp, now }),
-  invalidUserStructure: (reason: string): ParseError => ({ type: 'INVALID_USER_STRUCTURE', reason }),
-  invalidTenantStructure: (reason: string): ParseError => ({ type: 'INVALID_TENANT_STRUCTURE', reason }),
+  invalidUserStructure: (reason: string): ParseError => ({
+    type: 'INVALID_USER_STRUCTURE',
+    reason,
+  }),
+  invalidTenantStructure: (reason: string): ParseError => ({
+    type: 'INVALID_TENANT_STRUCTURE',
+    reason,
+  }),
 };
 
 /**
@@ -169,29 +196,68 @@ export function isParseError(error: unknown): error is ParseError {
 
 export const ValidationErrors = {
   emptyUsername: (): CredentialValidationError => ({ type: 'EMPTY_USERNAME' }),
-  usernameTooShort: (min: number, actual: number): CredentialValidationError => ({ type: 'USERNAME_TOO_SHORT', min, actual }),
-  usernameTooLong: (max: number, actual: number): CredentialValidationError => ({ type: 'USERNAME_TOO_LONG', max, actual }),
-  invalidUsernameFormat: (pattern: string): CredentialValidationError => ({ type: 'INVALID_USERNAME_FORMAT', pattern }),
+  usernameTooShort: (min: number, actual: number): CredentialValidationError => ({
+    type: 'USERNAME_TOO_SHORT',
+    min,
+    actual,
+  }),
+  usernameTooLong: (max: number, actual: number): CredentialValidationError => ({
+    type: 'USERNAME_TOO_LONG',
+    max,
+    actual,
+  }),
+  invalidUsernameFormat: (pattern: string): CredentialValidationError => ({
+    type: 'INVALID_USERNAME_FORMAT',
+    pattern,
+  }),
   emptyPassword: (): CredentialValidationError => ({ type: 'EMPTY_PASSWORD' }),
-  passwordTooShort: (min: number, actual: number): CredentialValidationError => ({ type: 'PASSWORD_TOO_SHORT', min, actual }),
-  passwordTooWeak: (requirements: string[]): CredentialValidationError => ({ type: 'PASSWORD_TOO_WEAK', requirements }),
+  passwordTooShort: (min: number, actual: number): CredentialValidationError => ({
+    type: 'PASSWORD_TOO_SHORT',
+    min,
+    actual,
+  }),
+  passwordTooWeak: (requirements: string[]): CredentialValidationError => ({
+    type: 'PASSWORD_TOO_WEAK',
+    requirements,
+  }),
   emptyTenantId: (): CredentialValidationError => ({ type: 'EMPTY_TENANT_ID' }),
-  invalidTenantIdFormat: (pattern: string): CredentialValidationError => ({ type: 'INVALID_TENANT_ID_FORMAT', pattern }),
-  invalidEmailFormat: (email: string): CredentialValidationError => ({ type: 'INVALID_EMAIL_FORMAT', email }),
+  invalidTenantIdFormat: (pattern: string): CredentialValidationError => ({
+    type: 'INVALID_TENANT_ID_FORMAT',
+    pattern,
+  }),
+  invalidEmailFormat: (email: string): CredentialValidationError => ({
+    type: 'INVALID_EMAIL_FORMAT',
+    email,
+  }),
 };
 
 export const AuthFlowErrors = {
-  invalidCredentials: (message: string): AuthFlowError => ({ type: 'INVALID_CREDENTIALS', message }),
+  invalidCredentials: (message: string): AuthFlowError => ({
+    type: 'INVALID_CREDENTIALS',
+    message,
+  }),
   tokenExpired: (): AuthFlowError => ({ type: 'TOKEN_EXPIRED' }),
   tokenRefreshFailed: (reason: string): AuthFlowError => ({ type: 'TOKEN_REFRESH_FAILED', reason }),
-  networkError: (message: string, statusCode?: number): AuthFlowError => ({ type: 'NETWORK_ERROR', statusCode, message }),
+  networkError: (message: string, statusCode?: number): AuthFlowError => ({
+    type: 'NETWORK_ERROR',
+    statusCode,
+    message,
+  }),
   unauthorized: (message: string): AuthFlowError => ({ type: 'UNAUTHORIZED', message }),
   forbidden: (message: string): AuthFlowError => ({ type: 'FORBIDDEN', message }),
-  serverError: (statusCode: number, message: string): AuthFlowError => ({ type: 'SERVER_ERROR', statusCode, message }),
+  serverError: (statusCode: number, message: string): AuthFlowError => ({
+    type: 'SERVER_ERROR',
+    statusCode,
+    message,
+  }),
   logoutFailed: (reason: string): AuthFlowError => ({ type: 'LOGOUT_FAILED', reason }),
   initFailed: (reason: string): AuthFlowError => ({ type: 'INIT_FAILED', reason }),
   missingToken: (): AuthFlowError => ({ type: 'MISSING_TOKEN' }),
-  tenantMismatch: (expected: string, actual: string): AuthFlowError => ({ type: 'TENANT_MISMATCH', expected, actual }),
+  tenantMismatch: (expected: string, actual: string): AuthFlowError => ({
+    type: 'TENANT_MISMATCH',
+    expected,
+    actual,
+  }),
 };
 
 /**

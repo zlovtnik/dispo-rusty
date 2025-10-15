@@ -1,6 +1,6 @@
 /**
  * Environment Configuration and Validation Utility
- * 
+ *
  * This module provides type-safe access to environment variables and
  * validates that all required variables are present at runtime.
  */
@@ -12,6 +12,8 @@ interface EnvConfig {
   isDebug: boolean;
   isDevelopment: boolean;
   isProduction: boolean;
+  defaultCountry: string;
+  enablePwnedPasswordCheck: boolean;
 }
 
 class EnvironmentError extends Error {
@@ -26,15 +28,15 @@ class EnvironmentError extends Error {
  */
 function getRequiredEnv(key: string): string {
   const value = import.meta.env[key as keyof ImportMetaEnv];
-  
+
   if (!value || (typeof value === 'string' && value.trim() === '')) {
     throw new EnvironmentError(
       `Missing required environment variable: ${key}\n\n` +
-      `Please ensure ${key} is set in your .env file.\n` +
-      `See .env.example for reference.`
+        `Please ensure ${key} is set in your .env file.\n` +
+        `See .env.example for reference.`
     );
   }
-  
+
   return String(value);
 }
 
@@ -56,7 +58,7 @@ function validateUrl(url: string, varName: string): string {
   } catch {
     throw new EnvironmentError(
       `Invalid URL for ${varName}: ${url}\n\n` +
-      `Please provide a valid URL (e.g., http://localhost:8000/api)`
+        `Please provide a valid URL (e.g., http://localhost:8000/api)`
     );
   }
 }
@@ -70,6 +72,13 @@ export function getEnvConfig(): EnvConfig {
     const apiUrl = getRequiredEnv('VITE_API_URL');
     validateUrl(apiUrl, 'VITE_API_URL');
 
+    const defaultCountry = getOptionalEnv('VITE_DEFAULT_COUNTRY', '').trim();
+    const enablePwnedPasswordCheck =
+      getOptionalEnv(
+        'VITE_ENABLE_PWNED_PASSWORD_CHECK',
+        import.meta.env.MODE === 'production' ? 'true' : 'false'
+      ).toLowerCase() === 'true';
+
     return {
       apiUrl,
       appName: getOptionalEnv('VITE_APP_NAME', 'Actix Web REST API'),
@@ -77,6 +86,8 @@ export function getEnvConfig(): EnvConfig {
       isDebug: getOptionalEnv('VITE_DEBUG', 'false').toLowerCase() === 'true',
       isDevelopment: import.meta.env.MODE === 'development',
       isProduction: import.meta.env.MODE === 'production',
+      defaultCountry,
+      enablePwnedPasswordCheck,
     };
   } catch (error) {
     if (error instanceof EnvironmentError) {

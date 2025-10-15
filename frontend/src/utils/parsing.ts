@@ -1,13 +1,13 @@
 /**
  * JWT and Data Parsing Utilities
- * 
+ *
  * Pure functions for parsing and validating JWT tokens and stored data.
  * All functions return Result types for type-safe error handling.
- * 
+ *
  * @module parsing
  */
 
-import { Result, ok, err } from 'neverthrow';
+import { type Result, ok, err } from 'neverthrow';
 import type { ParseError } from '../types/errors';
 import { ParseErrors } from '../types/errors';
 import type { User, Tenant } from '../types/auth';
@@ -27,10 +27,10 @@ export interface JwtPayload {
 
 /**
  * Decode and validate JWT payload
- * 
+ *
  * @param token - The JWT token string
  * @returns Result containing decoded payload or ParseError
- * 
+ *
  * @example
  * ```typescript
  * const result = decodeJwtPayload(token);
@@ -52,7 +52,7 @@ export const decodeJwtPayload = (token: string): Result<JwtPayload, ParseError> 
     const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
     // Add padding if needed
     const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
-    
+
     // Use browser-native atob for base64 decoding
     let binaryString: string;
     try {
@@ -127,7 +127,7 @@ export const decodeJwtPayload = (token: string): Result<JwtPayload, ParseError> 
 
 /**
  * Check if JWT token is expired
- * 
+ *
  * @param payload - The decoded JWT payload
  * @param nowSeconds - Current time in seconds (defaults to now)
  * @returns Result containing void if valid, or ParseError if expired
@@ -137,7 +137,7 @@ export const checkTokenExpiry = (
   nowSeconds?: number
 ): Result<void, ParseError> => {
   const now = nowSeconds ?? Math.floor(Date.now() / 1000);
-  
+
   if (payload.exp < now) {
     return err(ParseErrors.expiredToken(payload.exp, now));
   }
@@ -147,10 +147,10 @@ export const checkTokenExpiry = (
 
 /**
  * Parse and validate stored User data
- * 
+ *
  * @param raw - Raw JSON string from storage
  * @returns Result containing parsed User or ParseError
- * 
+ *
  * @example
  * ```typescript
  * const result = parseStoredUser(storedData);
@@ -180,7 +180,7 @@ export const parseStoredUser = (raw: string): Result<User, ParseError> => {
     if (typeof obj.username !== 'string' || obj.username.trim() === '') {
       return err(ParseErrors.invalidUserStructure('Missing or invalid username'));
     }
-    if (!Array.isArray(obj.roles) || !obj.roles.every((role) => typeof role === 'string')) {
+    if (!Array.isArray(obj.roles) || !obj.roles.every(role => typeof role === 'string')) {
       return err(ParseErrors.invalidUserStructure('Missing or invalid roles array'));
     }
     if (typeof obj.tenantId !== 'string' || obj.tenantId.trim() === '') {
@@ -201,7 +201,7 @@ export const parseStoredUser = (raw: string): Result<User, ParseError> => {
       firstName: typeof obj.firstName === 'string' ? obj.firstName : undefined,
       lastName: typeof obj.lastName === 'string' ? obj.lastName : undefined,
       avatar: typeof obj.avatar === 'string' ? obj.avatar : undefined,
-      roles: obj.roles as string[],
+      roles: obj.roles,
       tenantId: asTenantId(obj.tenantId),
       createdAt: obj.createdAt,
       updatedAt: obj.updatedAt,
@@ -216,10 +216,10 @@ export const parseStoredUser = (raw: string): Result<User, ParseError> => {
 
 /**
  * Parse and validate stored Tenant data
- * 
+ *
  * @param raw - Raw JSON string from storage
  * @returns Result containing parsed Tenant or ParseError
- * 
+ *
  * @example
  * ```typescript
  * const result = parseStoredTenant(storedData);
@@ -272,9 +272,9 @@ export const parseStoredTenant = (raw: string): Result<Tenant, ParseError> => {
 
 /**
  * Update User with data from JWT payload
- * 
+ *
  * Ensures that user data matches the JWT token claims
- * 
+ *
  * @param user - The user object to update
  * @param payload - The JWT payload
  * @returns Updated user object
@@ -289,9 +289,9 @@ export const updateUserFromJwt = (user: User, payload: JwtPayload): User => {
 
 /**
  * Update Tenant with data from JWT payload
- * 
+ *
  * Ensures that tenant data matches the JWT token claims
- * 
+ *
  * @param tenant - The tenant object to update
  * @param payload - The JWT payload
  * @returns Updated tenant object
@@ -305,7 +305,7 @@ export const updateTenantFromJwt = (tenant: Tenant, payload: JwtPayload): Tenant
 
 /**
  * Verify that user and tenant match JWT payload
- * 
+ *
  * @param user - The user object
  * @param tenant - The tenant object
  * @param payload - The JWT payload

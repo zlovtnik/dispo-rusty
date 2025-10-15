@@ -1,11 +1,11 @@
 /**
  * Login Page - Functional Programming Implementation
- * 
+ *
  * Implements railway-oriented programming with Result types for:
  * - Form validation pipeline
  * - Error handling with pattern matching
  * - Type-safe state management
- * 
+ *
  * @module LoginPage
  */
 
@@ -16,7 +16,7 @@ import type { LoginCredentials } from '@/types/auth';
 import type { AuthFlowError } from '@/types/errors';
 import { asTenantId } from '@/types/ids';
 import { Card, Form, Input, Button, Checkbox, Typography, Alert, Flex } from 'antd';
-import { Result, ok, err } from 'neverthrow';
+import { type Result, ok, err } from 'neverthrow';
 import { match } from 'ts-pattern';
 import {
   validateUsername,
@@ -85,14 +85,18 @@ interface LoginResponse {
  * Form validation function
  * Validates all login form fields using Result types
  */
-const validateLoginForm: FormValidator<LoginFormData, ValidatedLoginData, CredentialValidationError> = (
+const validateLoginForm: FormValidator<
+  LoginFormData,
+  ValidatedLoginData,
+  CredentialValidationError
+> = (
   formData: LoginFormData
 ): Result<ValidatedLoginData, Record<string, CredentialValidationError>> => {
   // Accept either email or username; try email first, then fall back to username validation
   const usernameOrEmailResult = validateEmail(formData.usernameOrEmail).orElse(() =>
     validateUsername(formData.usernameOrEmail)
   );
-  
+
   const passwordResult = validatePassword(formData.password);
   const tenantIdResult = validateTenantId(formData.tenantId);
 
@@ -166,12 +170,12 @@ export const LoginPageFP: React.FC = () => {
   const location = useLocation();
   const locationState = isLocationState(location.state) ? location.state : null;
   const [form] = Form.useForm<LoginFormData>();
-  
+
   // Pipeline state management using discriminated union
-  const [pipelineState, setPipelineState] = useState<PipelineState<LoginResponse, CredentialValidationError>>(
-    PipelineStates.idle()
-  );
-  
+  const [pipelineState, setPipelineState] = useState<
+    PipelineState<LoginResponse, CredentialValidationError>
+  >(PipelineStates.idle());
+
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   // Get the intended destination
@@ -192,7 +196,8 @@ export const LoginPageFP: React.FC = () => {
       };
 
       // Await the login call and treat it as a Result
-      const loginResult: Result<void, AuthFlowError | CredentialValidationError> = await login(credentials);
+      const loginResult: Result<void, AuthFlowError | CredentialValidationError> =
+        await login(credentials);
 
       // Check if the result is Ok
       if (loginResult.isOk()) {
@@ -201,11 +206,14 @@ export const LoginPageFP: React.FC = () => {
           message: 'Login successful',
         });
       }
-      
+
       // Map the error to a PipelineError (isErr() case)
       const error = loginResult.error;
-      const statusCode = 'statusCode' in error ? (error as any).statusCode : undefined;
-      
+      const statusCode =
+        'statusCode' in error && typeof error.statusCode === 'number'
+          ? error.statusCode
+          : undefined;
+
       return err({
         type: 'SUBMISSION_ERROR',
         message: 'message' in error ? String(error.message || error) : 'Login failed',
@@ -249,22 +257,22 @@ export const LoginPageFP: React.FC = () => {
     // Pattern match on result - pipeline already returns Result, no need for try/catch
     result.match(
       // Success case
-      (response) => {
+      response => {
         setPipelineState(PipelineStates.success(response));
         navigate(from, { replace: true });
       },
       // Error case - use pattern matching for error handling
-      (error) => {
+      error => {
         setPipelineState(PipelineStates.error(error));
-        
+
         // Extract field-level errors for display
         if (error.type === 'VALIDATION_ERROR') {
           const errors = error.errors;
-          
+
           if (typeof errors === 'object' && !('type' in errors)) {
             // Multiple field errors
             const formattedErrors: Record<string, string> = {};
-            
+
             for (const [field, validationError] of Object.entries(errors)) {
               // Add runtime shape guard before casting
               if (
@@ -273,15 +281,13 @@ export const LoginPageFP: React.FC = () => {
                 'type' in validationError &&
                 typeof validationError.type === 'string'
               ) {
-                formattedErrors[field] = formatCredentialValidationError(
-                  validationError as CredentialValidationError
-                );
+                formattedErrors[field] = formatCredentialValidationError(validationError);
               } else {
                 // Fallback for unexpected shapes
                 formattedErrors[field] = 'Validation error occurred';
               }
             }
-            
+
             setFieldErrors(formattedErrors);
           }
         }
@@ -294,13 +300,15 @@ export const LoginPageFP: React.FC = () => {
    */
   const renderErrorAlert = () => {
     return match(pipelineState)
-      .with({ status: 'error' }, (state) => (
+      .with({ status: 'error' }, state => (
         <Form.Item>
           <Alert
             message={formatPipelineError(state.error, formatCredentialValidationError)}
             type="error"
             closable
-            onClose={() => setPipelineState(PipelineStates.idle())}
+            onClose={() => {
+              setPipelineState(PipelineStates.idle());
+            }}
             style={{
               borderRadius: '8px',
               border: '1px solid var(--danger-300)',
@@ -341,7 +349,8 @@ export const LoginPageFP: React.FC = () => {
       align="center"
       style={{
         minHeight: '100vh',
-        background: 'linear-gradient(135deg, var(--color-natural-light) 0%, var(--color-healing-light) 100%)',
+        background:
+          'linear-gradient(135deg, var(--color-natural-light) 0%, var(--color-healing-light) 100%)',
         padding: '20px',
       }}
     >
@@ -350,7 +359,8 @@ export const LoginPageFP: React.FC = () => {
           width: 420,
           borderRadius: '16px',
           border: '2px solid var(--primary-200)',
-          background: 'linear-gradient(145deg, rgba(255,255,255,0.95) 0%, rgba(247,242,240,0.9) 100%)',
+          background:
+            'linear-gradient(145deg, rgba(255,255,255,0.95) 0%, rgba(247,242,240,0.9) 100%)',
           boxShadow: '0 20px 40px rgba(38, 70, 83, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.8)',
           backdropFilter: 'blur(10px)',
         }}
@@ -392,14 +402,13 @@ export const LoginPageFP: React.FC = () => {
           Access your multi-tenant application
         </Typography.Text>
 
-        <Form
-          form={form}
-          onFinish={onSubmit}
-          size="large"
-          layout="vertical"
-        >
+        <Form form={form} onFinish={onSubmit} size="large" layout="vertical">
           <Form.Item
-            label={<span style={{ color: 'var(--primary-700)', fontWeight: 600 }}>Username or Email</span>}
+            label={
+              <span style={{ color: 'var(--primary-700)', fontWeight: 600 }}>
+                Username or Email
+              </span>
+            }
             name="usernameOrEmail"
             rules={[{ required: true, message: 'Username or email is required' }]}
             {...getFieldValidationProps('usernameOrEmail')}

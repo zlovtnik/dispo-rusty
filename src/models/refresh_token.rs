@@ -57,8 +57,7 @@ impl RefreshToken {
 
         diesel::insert_into(refresh_tokens::table)
             .values(&new_token)
-            .execute(conn)
-            .map(|_| token_val.clone())?;
+            .execute(conn)?;
 
         Ok(token_val)
     }

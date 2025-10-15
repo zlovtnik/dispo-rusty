@@ -64,9 +64,17 @@ export const EnvironmentErrorUI: React.FC<EnvironmentErrorUIProps> = ({ error })
               >
                 <h4 style={{ marginTop: 0 }}>Development Mode - Quick Fix:</h4>
                 <ol style={{ marginBottom: 0, paddingLeft: '20px' }}>
-                  <li>Check if <code>.env.development</code> file exists in <code>frontend/</code> directory</li>
-                  <li>Copy <code>.env.example</code> to <code>.env.development</code> if needed</li>
-                  <li>Ensure <code>VITE_API_URL</code> is set (e.g., <code>http://localhost:8000/api</code>)</li>
+                  <li>
+                    Check if <code>.env.development</code> file exists in <code>frontend/</code>{' '}
+                    directory
+                  </li>
+                  <li>
+                    Copy <code>.env.example</code> to <code>.env.development</code> if needed
+                  </li>
+                  <li>
+                    Ensure <code>VITE_API_URL</code> is set (e.g.,{' '}
+                    <code>http://localhost:8000/api</code>)
+                  </li>
                   <li>Restart the development server</li>
                 </ol>
               </div>

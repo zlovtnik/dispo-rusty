@@ -5,10 +5,11 @@ import { useAsync } from './useAsync';
 import { ok, err } from 'neverthrow';
 import type { AppError, NetworkError } from '../types/errors';
 import { createBusinessLogicError, createNetworkError } from '../types/errors';
+import type { z } from 'zod';
 
 /**
  * Module-level cache for useCachedFetch to persist across component lifecycles
- * 
+ *
  * Note: For production applications, consider using:
  * - React Query (TanStack Query) for more sophisticated caching
  * - SWR for stale-while-revalidate caching strategy
@@ -23,13 +24,20 @@ interface CacheEntry<T> {
 
 const CACHE_VERSION = 1;
 
-const globalFetchCache = new Map<string, CacheEntry<any>>();
+const globalFetchCache = new Map<string, CacheEntry<unknown>>();
 
-// Migrate old cache entries on module initialization
-for (const [key, entry] of globalFetchCache) {
-  if (entry.version === undefined || entry.version !== CACHE_VERSION) {
-    globalFetchCache.delete(key);
+// Module-scoped flag to ensure cache migration runs only once per session
+let cacheMigrated = false;
+
+// Migrate old cache entries on first module import (runs once per session)
+// This migration can be removed when all clients have upgraded past CACHE_VERSION
+if (!cacheMigrated) {
+  for (const [key, entry] of globalFetchCache) {
+    if (entry.version === undefined || entry.version !== CACHE_VERSION) {
+      globalFetchCache.delete(key);
+    }
   }
+  cacheMigrated = true;
 }
 
 /**
@@ -47,7 +55,9 @@ export interface FetchOptions extends RequestInit {
   /** Base URL to prepend to the endpoint */
   baseURL?: string;
   /** Transform response data before returning */
-  transformResponse?: (data: any) => any;
+  transformResponse?: <T>(data: unknown) => T;
+  /** Validate transformed response data (Zod schema) */
+  validateResponse?: z.ZodSchema;
   /** Transform error before returning */
   transformError?: (error: AppError) => AppError;
   /** When true, the request will only run when refetch is called */
@@ -73,12 +83,30 @@ export interface FetchState<T> {
 }
 
 /**
- * Hook for making HTTP requests with Result-based error handling
+ * Hook for making HTTP requests with Result-based error handling.
  *
- * Provides automatic error handling, retry logic, and transformation
- * using railway-oriented programming patterns.
+ * Provides automatic error handling, retry logic, and payload transformation using
+ * railway-oriented programming patterns.
+ *
+ * @template T The expected response data type
+ * @param url URL to fetch (pass `null` to pause requests)
+ * @param options Optional configuration including retries, timeout, and transformers
+ * @returns Fetch state with data, loading, error flags, and a refetch trigger
+ * @example
+ * ```typescript
+ * const { data, loading, error, refetch } = useFetch<ContactDTO[]>(
+ *   '/contacts',
+ *   { baseURL: apiBase }
+ * );
+ *
+ * useEffect(() => {
+ *   if (!loading && error) {
+ *     notification.error({ message: error.message });
+ *   }
+ * }, [loading, error]);
+ * ```
  */
-export function useFetch<T = any>(
+export function useFetch<T = unknown>(
   url: string | null,
   options: FetchOptions = {}
 ): FetchState<T> {
@@ -90,6 +118,7 @@ export function useFetch<T = any>(
     retryOnNetworkError = true,
     baseURL,
     transformResponse,
+    validateResponse,
     transformError,
     manual = false,
     ...fetchOptions
@@ -105,7 +134,7 @@ export function useFetch<T = any>(
       const fullUrl = baseURL ? `${baseURL}${url}` : url;
 
       for (let attempt = 0; attempt <= retries; attempt++) {
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+        let timeoutId: ReturnType<typeof setTimeout> | undefined;
         try {
           // Create AbortController for timeout and cancellation
           const controller = new AbortController();
@@ -123,7 +152,8 @@ export function useFetch<T = any>(
           clearTimeout(timeoutId);
 
           if (!response.ok) {
-            const isRetryable = retryOnNetworkError &&
+            const isRetryable =
+              retryOnNetworkError &&
               attempt < retries &&
               (response.status >= 500 || response.status === 408 || response.status === 429);
 
@@ -143,22 +173,34 @@ export function useFetch<T = any>(
 
           // Parse response
           const contentType = response.headers.get('content-type');
-          let data: any;
+          let data: unknown;
 
           if (contentType?.includes('application/json')) {
-            data = await response.json();
+            data = (await response.json()) as unknown;
           } else {
             data = await response.text();
           }
 
           // Transform response if needed
-          const transformedData = transformResponse ? transformResponse(data) : data;
+          const transformedData: T = transformResponse ? transformResponse<T>(data) : (data as T);
+
+          // Validate transformed data if schema provided
+          if (validateResponse) {
+            const validationResult = validateResponse.safeParse(transformedData);
+            if (!validationResult.success) {
+              return err(createBusinessLogicError(
+                `Response validation failed: ${validationResult.error.message}`,
+                { validationErrors: validationResult.error.issues }
+              ));
+            }
+          }
 
           return ok(transformedData);
-
         } catch (error) {
           const isAbort =
-            (typeof DOMException !== 'undefined' && error instanceof DOMException && error.name === 'AbortError') ||
+            (typeof DOMException !== 'undefined' &&
+              error instanceof DOMException &&
+              error.name === 'AbortError') ||
             (error instanceof Error && error.name === 'AbortError');
           const isTypeErr = error instanceof TypeError;
           const isNetworkError = isAbort || isTypeErr;
@@ -175,7 +217,7 @@ export function useFetch<T = any>(
             undefined,
             {
               retryable: isNetworkError && retryOnNetworkError,
-              cause: error instanceof Error ? error : undefined
+              cause: error instanceof Error ? error : undefined,
             }
           );
 
@@ -199,6 +241,7 @@ export function useFetch<T = any>(
     retryOnNetworkError,
     baseURL,
     transformResponse,
+    validateResponse,
     transformError,
     // Use JSON.stringify for complex fetchOptions to detect changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -221,7 +264,28 @@ export function useFetch<T = any>(
 }
 
 /**
- * Hook for optimistic updates with Result-based API
+ * Adds optimistic update helpers on top of `useFetch` for latency-sensitive flows.
+ *
+ * @template T Response data type
+ * @param url URL to fetch (pass `null` to disable)
+ * @param options Fetch options plus optimistic configuration
+ * @returns Fetch state extended with optimistic helpers
+ * @example
+ * ```typescript
+ * const fetchState = useOptimisticFetch<ContactDTO[]>('/contacts', {
+ *   baseURL: apiBase,
+ *   optimisticUpdate: current => ok([newContact, ...(current ?? [])]),
+ *   rollbackUpdate: (_optimistic, error) => err(error),
+ * });
+ *
+ * const handleCreate = async () => {
+ *   const optimistic = fetchState.applyOptimisticUpdate();
+ *   if (optimistic.isOk()) {
+ *     await createContact(optimistic.value[0]);
+ *     await fetchState.refetch();
+ *   }
+ * };
+ * ```
  */
 export function useOptimisticFetch<T>(
   url: string | null,
@@ -241,13 +305,44 @@ export function useOptimisticFetch<T>(
     initialData !== undefined ? ok(initialData) : null
   );
   const [isOptimistic, setIsOptimistic] = React.useState(false);
-  const lastStableResult = React.useRef<Result<T, AppError> | null>(
+  const [lastStableResult, setLastStableResult] = React.useState<Result<T, AppError> | null>(
     initialData !== undefined ? ok(initialData) : null
   );
 
+  const optimisticResultRef = React.useRef<Result<T, AppError> | null>(optimisticResult);
+  const lastStableResultRef = React.useRef<Result<T, AppError> | null>(lastStableResult);
+  const fetchResultRef = React.useRef<Result<T, AppError> | null>(fetchState.result ?? null);
+  const initialDataRef = React.useRef<T | undefined>(initialData);
+  const optimisticUpdateRef = React.useRef<typeof optimisticUpdate>(optimisticUpdate);
+  const isOptimisticRef = React.useRef<boolean>(isOptimistic);
+
+  React.useEffect(() => {
+    optimisticResultRef.current = optimisticResult;
+  }, [optimisticResult]);
+
+  React.useEffect(() => {
+    lastStableResultRef.current = lastStableResult;
+  }, [lastStableResult]);
+
+  React.useEffect(() => {
+    fetchResultRef.current = fetchState.result ?? null;
+  }, [fetchState.result]);
+
+  React.useEffect(() => {
+    initialDataRef.current = initialData;
+  }, [initialData]);
+
+  React.useEffect(() => {
+    optimisticUpdateRef.current = optimisticUpdate;
+  }, [optimisticUpdate]);
+
+  React.useEffect(() => {
+    isOptimisticRef.current = isOptimistic;
+  }, [isOptimistic]);
+
   React.useEffect(() => {
     if (fetchState.result?.isOk()) {
-      lastStableResult.current = fetchState.result;
+      setLastStableResult(fetchState.result);
       if (!isOptimistic) {
         setOptimisticResult(null);
       }
@@ -255,49 +350,55 @@ export function useOptimisticFetch<T>(
   }, [fetchState.result, isOptimistic]);
 
   const applyOptimisticUpdate = React.useCallback((): Result<T, AppError> => {
-    if (!optimisticUpdate) {
+    const updateFn = optimisticUpdateRef.current;
+    if (!updateFn) {
       return err(createBusinessLogicError('No optimistic update handler provided'));
     }
 
     // Derive baseResult: use optimistic result when isOptimistic is true, otherwise use fetch or stable result
-    const baseResult = (isOptimistic && optimisticResult) 
-      ? optimisticResult 
-      : (fetchState.result || lastStableResult.current);
-    
-    // Compute currentValue from baseResult if it's ok, falling back to initialData or null
-    const currentValue = baseResult?.isOk() ? baseResult.value : (initialData ?? null);
+    // Precedence: 1. if isOptimistic use optimisticResult, 2. otherwise prefer latest server fetchState.result, 3. fallback to lastStableResult
+    const baseResult =
+      (isOptimisticRef.current && optimisticResultRef.current
+        ? optimisticResultRef.current
+        : fetchResultRef.current) ?? lastStableResultRef.current;
 
-    const updateResult = optimisticUpdate(currentValue);
+    // Compute currentValue from baseResult if it's ok, falling back to initialData or null
+    const currentValue = baseResult?.isOk() ? baseResult.value : (initialDataRef.current ?? null);
+
+    const updateResult = updateFn(currentValue);
 
     // Always set the optimistic result
     setOptimisticResult(updateResult);
-    
+
     // Only set isOptimistic to true when update succeeds, leave unchanged on error
     if (updateResult.isOk()) {
       setIsOptimistic(true);
     }
 
     return updateResult;
-  }, [optimisticUpdate, isOptimistic, optimisticResult, fetchState.result, initialData]);
+  }, []);
 
-  const handleRollback = React.useCallback((error: AppError) => {
-    if (!optimisticResult?.isOk()) {
-      return;
-    }
+  const handleRollback = React.useCallback(
+    (error: AppError) => {
+      if (!optimisticResult?.isOk()) {
+        return;
+      }
 
-    let rollbackResult: Result<T, AppError>;
-    if (rollbackUpdate) {
-      rollbackResult = rollbackUpdate(optimisticResult.value, error);
-    } else {
-      rollbackResult = lastStableResult.current ?? err(error);
-    }
+      let rollbackResult: Result<T, AppError>;
+      if (rollbackUpdate) {
+        rollbackResult = rollbackUpdate(optimisticResult.value, error);
+      } else {
+        rollbackResult = lastStableResult ?? err(error);
+      }
 
-    setOptimisticResult(rollbackResult);
-    if (rollbackResult.isOk()) {
-      lastStableResult.current = rollbackResult;
-    }
-    setIsOptimistic(false);
-  }, [optimisticResult, rollbackUpdate]);
+      setOptimisticResult(rollbackResult);
+      if (rollbackResult.isOk()) {
+        setLastStableResult(rollbackResult);
+      }
+      setIsOptimistic(false);
+    },
+    [optimisticResult, rollbackUpdate, lastStableResult]
+  );
 
   React.useEffect(() => {
     if (!isOptimistic) {
@@ -319,13 +420,18 @@ export function useOptimisticFetch<T>(
     if (isOptimistic && optimisticResult) {
       return optimisticResult;
     }
-    return fetchState.result ?? optimisticResult ?? lastStableResult.current;
-  }, [isOptimistic, optimisticResult, fetchState.result]);
+    return fetchState.result ?? optimisticResult ?? lastStableResult;
+  }, [isOptimistic, optimisticResult, fetchState.result, lastStableResult]);
+
+  // Consolidate data/error derivation from a single source of truth
+  const result = activeResult ?? fetchState.result ?? null;
+  const data = result?.isOk() ? result.value : null;
+  const error = result?.isErr() ? result.error : (fetchState.error ?? null);
 
   return {
     ...fetchState,
-    data: activeResult?.isOk() ? activeResult.value : fetchState.data,
-    error: activeResult?.isErr() ? activeResult.error : fetchState.error,
+    data,
+    error,
     result: activeResult ?? fetchState.result,
     applyOptimisticUpdate,
     isOptimistic,
@@ -333,7 +439,24 @@ export function useOptimisticFetch<T>(
 }
 
 /**
- * Hook for cached fetch operations
+ * Provides caching semantics for fetch operations with stale-time awareness.
+ *
+ * @template T Response data type
+ * @param url URL to fetch (pass `null` to disable)
+ * @param options Fetch options plus cache configuration
+ * @returns Fetch state whose data is hydrated from cache when available
+ * @example
+ * ```typescript
+ * const tenants = useCachedFetch<PaginatedTenantResponse>('/tenants', {
+ *   baseURL: apiBase,
+ *   cacheKey: 'tenants:list',
+ *   cacheTime: CacheTTL.MEDIUM,
+ * });
+ *
+ * useEffect(() => {
+ *   tenants.refetch();
+ * }, [tenants.refetch]);
+ * ```
  */
 export function useCachedFetch<T>(
   url: string | null,
@@ -360,8 +483,8 @@ export function useCachedFetch<T>(
 
   const cachedEntry = globalFetchCache.get(cacheKey) as CacheEntry<T> | undefined;
   const now = Date.now();
-  const isCacheValid = cachedEntry && (now - cachedEntry.timestamp) < cacheTime;
-  const isCacheStale = cachedEntry && staleTime > 0 && (now - cachedEntry.timestamp) > staleTime;
+  const isCacheValid = cachedEntry && now - cachedEntry.timestamp < cacheTime;
+  const isCacheStale = cachedEntry && staleTime > 0 && now - cachedEntry.timestamp > staleTime;
   const shouldUseCache = isCacheValid && !isCacheStale;
 
   const fetchState = useFetch<T>(url, {
@@ -377,12 +500,12 @@ export function useCachedFetch<T>(
         isStale: false,
         version: CACHE_VERSION,
       });
-      setCacheVersion((version) => version + 1);
+      setCacheVersion(version => version + 1);
     }
   }, [fetchState.loading, fetchState.result, cacheKey]);
 
   const activeResult = shouldUseCache && cachedEntry ? cachedEntry.result : fetchState.result;
-  
+
   // Derive data: check activeResult first, then fetchState.result, then null
   let data: T | null = null;
   if (activeResult?.isOk()) {
@@ -390,7 +513,7 @@ export function useCachedFetch<T>(
   } else if (fetchState.result?.isOk()) {
     data = fetchState.result.value;
   }
-  
+
   // Derive error: check activeResult first, then fetchState.result, then fetchState.error
   let error: AppError | null = null;
   if (activeResult?.isErr()) {
@@ -400,13 +523,13 @@ export function useCachedFetch<T>(
   } else if (fetchState.error) {
     error = fetchState.error;
   }
-  
+
   const loading = fetchState.loading && (!shouldUseCache || isCacheStale);
 
   const refetch = useCallback((): AsyncResult<T, AppError> => {
     if (globalFetchCache.has(cacheKey)) {
       globalFetchCache.delete(cacheKey);
-      setCacheVersion((version) => version + 1);
+      setCacheVersion(version => version + 1);
     }
     return fetchState.refetch();
   }, [cacheKey, fetchState.refetch]);
@@ -417,12 +540,14 @@ export function useCachedFetch<T>(
         const entry = globalFetchCache.get(cacheKey);
         if (entry && isCacheStale) {
           globalFetchCache.set(cacheKey, { ...entry, isStale: true });
-          setCacheVersion((version) => version + 1);
+          setCacheVersion(version => version + 1);
           refetch();
         }
       };
       window.addEventListener('focus', handleFocus);
-      return () => window.removeEventListener('focus', handleFocus);
+      return () => {
+        window.removeEventListener('focus', handleFocus);
+      };
     }
   }, [refetchOnWindowFocus, cacheKey, isCacheStale, refetch]);
 

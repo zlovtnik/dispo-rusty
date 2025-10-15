@@ -1,9 +1,9 @@
 /**
  * Contact Management Domain Logic
- * 
+ *
  * Pure functions for contact management operations using Railway-Oriented Programming.
  * All functions return Result<T, E> for explicit error handling.
- * 
+ *
  * This module extracts business logic from the service layer,
  * making it pure, testable, and composable.
  */
@@ -40,7 +40,7 @@ export interface ContactCreateData {
   gender?: 'male' | 'female';
   notes?: string;
   tags?: string[];
-  customFields?: Record<string, any>;
+  customFields?: Record<string, unknown>;
 }
 
 /**
@@ -55,7 +55,7 @@ export type MergeStrategy = 'prefer-primary' | 'prefer-secondary' | 'combine';
 
 /**
  * Create a new contact with validation
- * 
+ *
  * @param data - Contact creation data
  * @param userId - ID of user creating the contact
  * @param tenantId - ID of the tenant
@@ -96,7 +96,7 @@ export function createContact(
       gender: data.gender,
       age,
       notes: data.notes,
-      tags: data.tags || [],
+      tags: data.tags ?? [],
       customFields: data.customFields,
       createdAt: now,
       updatedAt: now,
@@ -117,7 +117,7 @@ export function createContact(
 
 /**
  * Update an existing contact
- * 
+ *
  * @param existingContact - Current contact data
  * @param updateData - Fields to update
  * @param userId - ID of user updating the contact
@@ -135,17 +135,24 @@ export function updateContact(
   }
 
   try {
+    const normalizedFirstName = normalizeString(updateData.firstName);
+    const normalizedLastName = normalizeString(updateData.lastName);
+
+    const shouldUpdateFullName =
+      normalizedFirstName !== undefined || normalizedLastName !== undefined;
+
+    const nextFirstName = normalizedFirstName ?? existingContact.firstName;
+    const nextLastName = normalizedLastName ?? existingContact.lastName;
+
     // Create updated contact
     const updatedContact: Contact = {
       ...existingContact,
       ...updateData,
       // Recalculate derived fields
-      fullName: updateData.firstName || updateData.lastName
-        ? `${updateData.firstName || existingContact.firstName} ${updateData.lastName || existingContact.lastName}`.trim()
+      fullName: shouldUpdateFullName
+        ? `${nextFirstName} ${nextLastName}`.trim()
         : existingContact.fullName,
-      age: updateData.dateOfBirth
-        ? calculateAge(updateData.dateOfBirth)
-        : existingContact.age,
+      age: updateData.dateOfBirth ? calculateAge(updateData.dateOfBirth) : existingContact.age,
       // Update metadata
       updatedAt: new Date(),
       updatedBy: userId,
@@ -163,7 +170,7 @@ export function updateContact(
 
 /**
  * Merge two contacts into one
- * 
+ *
  * @param primary - Primary contact (base)
  * @param secondary - Secondary contact (to merge)
  * @param strategy - Merge strategy
@@ -200,15 +207,15 @@ export function mergeContacts(
         mergedContact = {
           ...primary,
           // Only take secondary fields that are missing in primary
-          email: primary.email || secondary.email,
-          phone: primary.phone || secondary.phone,
-          mobile: primary.mobile || secondary.mobile,
-          company: primary.company || secondary.company,
-          jobTitle: primary.jobTitle || secondary.jobTitle,
-          dateOfBirth: primary.dateOfBirth || secondary.dateOfBirth,
-          gender: primary.gender || secondary.gender,
+          email: pickPreferredString(primary.email, secondary.email),
+          phone: pickPreferredString(primary.phone, secondary.phone),
+          mobile: pickPreferredString(primary.mobile, secondary.mobile),
+          company: pickPreferredString(primary.company, secondary.company),
+          jobTitle: pickPreferredString(primary.jobTitle, secondary.jobTitle),
+          dateOfBirth: primary.dateOfBirth ?? secondary.dateOfBirth,
+          gender: primary.gender ?? secondary.gender,
           notes: combineNotes(primary.notes, secondary.notes, 'prefer-primary'),
-          tags: mergeArrays(primary.tags || [], secondary.tags || []),
+          tags: mergeArrays(primary.tags ?? [], secondary.tags ?? []),
           updatedAt: new Date(),
           updatedBy: userId,
         };
@@ -221,15 +228,15 @@ export function mergeContacts(
           tenantId: primary.tenantId,
           createdAt: primary.createdAt, // Keep original creation time
           createdBy: primary.createdBy,
-          email: secondary.email || primary.email,
-          phone: secondary.phone || primary.phone,
-          mobile: secondary.mobile || primary.mobile,
-          company: secondary.company || primary.company,
-          jobTitle: secondary.jobTitle || primary.jobTitle,
-          dateOfBirth: secondary.dateOfBirth || primary.dateOfBirth,
-          gender: secondary.gender || primary.gender,
+          email: pickPreferredString(secondary.email, primary.email),
+          phone: pickPreferredString(secondary.phone, primary.phone),
+          mobile: pickPreferredString(secondary.mobile, primary.mobile),
+          company: pickPreferredString(secondary.company, primary.company),
+          jobTitle: pickPreferredString(secondary.jobTitle, primary.jobTitle),
+          dateOfBirth: secondary.dateOfBirth ?? primary.dateOfBirth,
+          gender: secondary.gender ?? primary.gender,
           notes: combineNotes(secondary.notes, primary.notes, 'prefer-primary'),
-          tags: mergeArrays(secondary.tags || [], primary.tags || []),
+          tags: mergeArrays(secondary.tags ?? [], primary.tags ?? []),
           updatedAt: new Date(),
           updatedBy: userId,
         };
@@ -239,15 +246,15 @@ export function mergeContacts(
         mergedContact = {
           ...primary,
           // Combine all non-empty fields
-          email: primary.email || secondary.email,
-          phone: primary.phone || secondary.phone,
-          mobile: primary.mobile || secondary.mobile,
+          email: pickPreferredString(primary.email, secondary.email),
+          phone: pickPreferredString(primary.phone, secondary.phone),
+          mobile: pickPreferredString(primary.mobile, secondary.mobile),
           company: combineFields(primary.company, secondary.company),
           jobTitle: combineFields(primary.jobTitle, secondary.jobTitle),
-          dateOfBirth: primary.dateOfBirth || secondary.dateOfBirth,
-          gender: primary.gender || secondary.gender,
+          dateOfBirth: primary.dateOfBirth ?? secondary.dateOfBirth,
+          gender: primary.gender ?? secondary.gender,
           notes: combineNotes(primary.notes, secondary.notes, 'combine'),
-          tags: mergeArrays(primary.tags || [], secondary.tags || []),
+          tags: mergeArrays(primary.tags ?? [], secondary.tags ?? []),
           updatedAt: new Date(),
           updatedBy: userId,
         };
@@ -270,31 +277,29 @@ function validateContactData(data: ContactCreateData): Result<ContactCreateData,
   const errors: Record<string, string> = {};
 
   // Required fields
-  if (!data.firstName || data.firstName.trim().length === 0) {
+  if (!isNonEmptyString(data.firstName)) {
     errors.firstName = 'First name is required';
   }
 
-  if (!data.lastName || data.lastName.trim().length === 0) {
+  if (!isNonEmptyString(data.lastName)) {
     errors.lastName = 'Last name is required';
   }
 
   // Email validation
-  if (data.email) {
+  if (isNonEmptyString(data.email)) {
     const emailValidation = validateEmailFormat(data.email);
     if (emailValidation.isErr()) {
-      errors.email = 'reason' in emailValidation.error
-        ? emailValidation.error.reason
-        : 'Invalid email format';
+      errors.email =
+        'reason' in emailValidation.error ? emailValidation.error.reason : 'Invalid email format';
     }
   }
 
   // Phone validation
-  if (data.phone) {
+  if (isNonEmptyString(data.phone)) {
     const phoneValidation = validatePhoneFormat(data.phone);
     if (phoneValidation.isErr()) {
-      errors.phone = 'reason' in phoneValidation.error
-        ? phoneValidation.error.reason
-        : 'Invalid phone format';
+      errors.phone =
+        'reason' in phoneValidation.error ? phoneValidation.error.reason : 'Invalid phone format';
     }
   }
 
@@ -319,26 +324,26 @@ function validateContactData(data: ContactCreateData): Result<ContactCreateData,
 /**
  * Validate contact update data
  */
-function validateContactUpdateData(data: ContactUpdateData): Result<ContactUpdateData, ContactError> {
+function validateContactUpdateData(
+  data: ContactUpdateData
+): Result<ContactUpdateData, ContactError> {
   const errors: Record<string, string> = {};
 
   // Email validation
-  if (data.email !== undefined && data.email !== null) {
+  if (data.email !== undefined) {
     const emailValidation = validateEmailFormat(data.email);
     if (emailValidation.isErr()) {
-      errors.email = 'reason' in emailValidation.error
-        ? emailValidation.error.reason
-        : 'Invalid email format';
+      errors.email =
+        'reason' in emailValidation.error ? emailValidation.error.reason : 'Invalid email format';
     }
   }
 
   // Phone validation
-  if (data.phone !== undefined && data.phone !== null) {
+  if (data.phone !== undefined) {
     const phoneValidation = validatePhoneFormat(data.phone);
     if (phoneValidation.isErr()) {
-      errors.phone = 'reason' in phoneValidation.error
-        ? phoneValidation.error.reason
-        : 'Invalid phone format';
+      errors.phone =
+        'reason' in phoneValidation.error ? phoneValidation.error.reason : 'Invalid phone format';
     }
   }
 
@@ -368,38 +373,88 @@ function calculateAge(dateOfBirth: Date): number {
   const birthDate = new Date(dateOfBirth);
   let age = today.getFullYear() - birthDate.getFullYear();
   const monthDiff = today.getMonth() - birthDate.getMonth();
-  
+
   if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
     age--;
   }
-  
+
   return age;
+}
+
+function isNonEmptyString(value: string | null | undefined): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function normalizeString(value?: string | null): string | undefined {
+  return isNonEmptyString(value) ? value : undefined;
+}
+
+function pickPreferredString(
+  primary?: string | null,
+  secondary?: string | null
+): string | undefined {
+  const normalizedPrimary = normalizeString(primary);
+  if (normalizedPrimary !== undefined) {
+    return normalizedPrimary;
+  }
+
+  return normalizeString(secondary);
 }
 
 /**
  * Combine notes from two contacts
  */
-function combineNotes(notes1?: string, notes2?: string, strategy: 'prefer-primary' | 'combine' = 'combine'): string | undefined {
-  if (!notes1 && !notes2) return undefined;
-  if (!notes1) return notes2;
-  if (!notes2) return notes1;
-  
-  if (strategy === 'prefer-primary') {
-    return notes1;
+function combineNotes(
+  notes1?: string,
+  notes2?: string,
+  strategy: 'prefer-primary' | 'combine' = 'combine'
+): string | undefined {
+  const primaryNotes = normalizeString(notes1);
+  const secondaryNotes = normalizeString(notes2);
+
+  if (primaryNotes === undefined && secondaryNotes === undefined) {
+    return undefined;
   }
-  
-  return `${notes1}\n\n---\n\n${notes2}`;
+
+  if (primaryNotes === undefined) {
+    return secondaryNotes;
+  }
+
+  if (secondaryNotes === undefined) {
+    return primaryNotes;
+  }
+
+  if (strategy === 'prefer-primary') {
+    return primaryNotes;
+  }
+
+  return `${primaryNotes}\n\n---\n\n${secondaryNotes}`;
 }
 
 /**
  * Combine two optional string fields
  */
 function combineFields(field1?: string, field2?: string): string | undefined {
-  if (!field1 && !field2) return undefined;
-  if (!field1) return field2;
-  if (!field2) return field1;
-  if (field1 === field2) return field1;
-  return `${field1} / ${field2}`;
+  const first = normalizeString(field1);
+  const second = normalizeString(field2);
+
+  if (first === undefined && second === undefined) {
+    return undefined;
+  }
+
+  if (first === undefined) {
+    return second;
+  }
+
+  if (second === undefined) {
+    return first;
+  }
+
+  if (first === second) {
+    return first;
+  }
+
+  return `${first} / ${second}`;
 }
 
 /**
@@ -414,26 +469,33 @@ function mergeArrays<T>(arr1: T[], arr2: T[]): T[] {
  * In production, this would be generated by the backend
  */
 function generateContactId(): ContactId {
-  return `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` as ContactId;
+  const timestamp = Date.now().toString(36);
+  const randomSegment = Math.random().toString(36).slice(2, 11);
+  return `temp_${timestamp}_${randomSegment}` as ContactId;
 }
 
 /**
  * Check if contact has required email or phone
  */
 export function hasContactInfo(contact: Contact): boolean {
-  return !!(contact.email || contact.phone || contact.mobile);
+  const hasEmail = isNonEmptyString(contact.email);
+  const hasPhone = isNonEmptyString(contact.phone);
+  const hasMobile = isNonEmptyString(contact.mobile);
+
+  return hasEmail || hasPhone || hasMobile;
 }
 
 /**
  * Check if contact is complete (has all recommended fields)
  */
 export function isCompleteContact(contact: Contact): boolean {
-  return !!(
-    contact.firstName &&
-    contact.lastName &&
-    (contact.email || contact.phone) &&
-    contact.company
-  );
+  const hasFirstName = isNonEmptyString(contact.firstName);
+  const hasLastName = isNonEmptyString(contact.lastName);
+  const hasEmail = isNonEmptyString(contact.email);
+  const hasPhone = isNonEmptyString(contact.phone);
+  const hasCompany = isNonEmptyString(contact.company);
+
+  return hasFirstName && hasLastName && (hasEmail || hasPhone) && hasCompany;
 }
 
 /**
@@ -441,22 +503,27 @@ export function isCompleteContact(contact: Contact): boolean {
  */
 export function formatContactDisplay(contact: Contact): string {
   const parts: string[] = [contact.fullName];
-  
-  if (contact.jobTitle && contact.company) {
-    parts.push(`${contact.jobTitle} at ${contact.company}`);
-  } else if (contact.jobTitle) {
-    parts.push(contact.jobTitle);
-  } else if (contact.company) {
-    parts.push(contact.company);
+
+  const jobTitle = normalizeString(contact.jobTitle);
+  const company = normalizeString(contact.company);
+  const email = normalizeString(contact.email);
+  const phone = normalizeString(contact.phone);
+
+  if (jobTitle !== undefined && company !== undefined) {
+    parts.push(`${jobTitle} at ${company}`);
+  } else if (jobTitle !== undefined) {
+    parts.push(jobTitle);
+  } else if (company !== undefined) {
+    parts.push(company);
   }
-  
-  if (contact.email) {
-    parts.push(contact.email);
+
+  if (email !== undefined) {
+    parts.push(email);
   }
-  
-  if (contact.phone) {
-    parts.push(contact.phone);
+
+  if (phone !== undefined) {
+    parts.push(phone);
   }
-  
+
   return parts.join(' • ');
 }

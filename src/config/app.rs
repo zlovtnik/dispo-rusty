@@ -160,7 +160,24 @@ fn configure_address_book_routes(cfg: &mut web::ServiceConfig) {
 
 /// Registers the admin sub-scope using functional composition patterns.
 ///
-/// Uses RouteBuilder to functionally mount tenant administration endpoints.
+/// Uses RouteBuilder to functionally mount tenant administration endpoints under two distinct scopes:
+/// - `/tenant` - System-level monitoring and health checks (stats, health, status)
+/// - `/tenants` - RESTful CRUD operations for tenant resource management
+///
+/// # Route Structure
+///
+/// ```text
+/// /api/admin
+///   ├── /tenant          (System operations - read-only monitoring)
+///   │   ├── /stats       GET: System-wide tenant statistics
+///   │   ├── /health      GET: All tenant database health checks
+///   │   └── /status      GET: Tenant connection status map
+///   └── /tenants         (Resource CRUD - tenant lifecycle management)
+///       ├── /            GET: List all tenants (paginated)
+///       ├── /            POST: Create new tenant
+///       ├── /filter      GET: Filter tenants by criteria
+///       └── /{id}        GET/PUT/DELETE: Individual tenant operations
+/// ```
 ///
 /// # Examples
 ///
@@ -174,20 +191,29 @@ fn configure_address_book_routes(cfg: &mut web::ServiceConfig) {
 fn configure_admin_routes(cfg: &mut web::ServiceConfig) {
     RouteBuilder::new()
         .add_route(|cfg| {
+            // System-level monitoring endpoints: stats, health, status (read-only)
             cfg.service(web::scope("/tenant").configure(configure_tenant_admin_routes));
         })
         .add_route(|cfg| {
+            // RESTful CRUD endpoints: create, read, update, delete tenant resources
             cfg.service(web::scope("/tenants").configure(configure_tenant_crud_routes));
         })
         .build(cfg);
 }
 
-/// Register tenant administration endpoints using functional composition.
+/// Register tenant system-level monitoring endpoints using functional composition.
 ///
-/// The configured routes (relative to the scope) are:
-/// - GET `/stats` -> `tenant_controller::get_system_stats`
-/// - GET `/health` -> `tenant_controller::get_tenant_health`
-/// - GET `/status` -> `tenant_controller::get_tenant_status`
+/// These are **read-only system operations** for monitoring and health checks across all tenants.
+/// They provide aggregate statistics and health status but do not modify tenant data.
+///
+/// The configured routes (relative to `/admin/tenant`) are:
+/// - GET `/stats` -> `tenant_controller::get_system_stats` - System-wide tenant statistics
+/// - GET `/health` -> `tenant_controller::get_tenant_health` - Database health for all tenants
+/// - GET `/status` -> `tenant_controller::get_tenant_status` - Connection status map by tenant ID
+///
+/// # Distinction from CRUD Routes
+///
+/// This scope (`/admin/tenant`) is for **monitoring**, while `/admin/tenants` handles **CRUD operations**.
 ///
 /// # Examples
 ///
@@ -216,15 +242,22 @@ fn configure_tenant_admin_routes(cfg: &mut web::ServiceConfig) {
         .build(cfg);
 }
 
-/// Register tenant CRUD endpoints using functional composition.
+/// Register tenant resource CRUD endpoints using functional composition.
 ///
-/// The configured routes (relative to the scope) are:
-/// - GET `/` -> `tenant_controller::find_all` (list all tenants with pagination)
-/// - GET `/filter` -> `tenant_controller::filter` (filter tenants)
-/// - POST `/` -> `tenant_controller::create` (create a new tenant)
-/// - GET `/{id}` -> `tenant_controller::find_by_id` (get tenant by ID)
-/// - PUT `/{id}` -> `tenant_controller::update` (update tenant)
-/// - DELETE `/{id}` -> `tenant_controller::delete` (delete tenant)
+/// These are **RESTful CRUD operations** for tenant lifecycle management.
+/// They enable creating, reading, updating, and deleting tenant resources.
+///
+/// The configured routes (relative to `/admin/tenants`) are:
+/// - GET `/` -> `tenant_controller::find_all` - List all tenants with pagination
+/// - GET `/filter` -> `tenant_controller::filter` - Filter tenants by custom criteria
+/// - POST `/` -> `tenant_controller::create` - Create a new tenant
+/// - GET `/{id}` -> `tenant_controller::find_by_id` - Get specific tenant by ID
+/// - PUT `/{id}` -> `tenant_controller::update` - Update existing tenant
+/// - DELETE `/{id}` -> `tenant_controller::delete` - Delete tenant
+///
+/// # Distinction from System Monitoring Routes
+///
+/// This scope (`/admin/tenants`) is for **CRUD operations**, while `/admin/tenant` handles **monitoring**.
 ///
 /// # Examples
 ///
@@ -243,9 +276,7 @@ fn configure_tenant_crud_routes(cfg: &mut web::ServiceConfig) {
             );
         })
         .add_route(|cfg| {
-            cfg.service(
-                web::resource("/filter").route(web::get().to(tenant_controller::filter)),
-            );
+            cfg.service(web::resource("/filter").route(web::get().to(tenant_controller::filter)));
         })
         .add_route(|cfg| {
             cfg.service(

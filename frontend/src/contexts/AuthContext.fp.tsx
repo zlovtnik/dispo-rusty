@@ -1,22 +1,22 @@
 /**
  * AuthContext - Functional Programming Refactored Version
- * 
+ *
  * This context manages authentication state using Result types and railway-oriented programming.
  * All operations return Results for type-safe error handling without exceptions.
- * 
+ *
  * Key Features:
  * - Result-based error handling with neverthrow
  * - Railway-oriented programming for login flow
  * - Validation pipeline for credentials
  * - Type-safe storage operations
  * - JWT token parsing and validation
- * 
+ *
  * @module AuthContext
  */
 
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
-import { Result, ok, err } from 'neverthrow';
+import { type Result, ok, err } from 'neverthrow';
 import { authService } from '../services/api';
 import type { User, Tenant, LoginCredentials } from '../types/auth';
 import { asTenantId } from '../types/ids';
@@ -35,8 +35,18 @@ import {
   verifyDataMatchesToken,
   type JwtPayload,
 } from '../utils/parsing';
-import type { StorageError, ParseError, CredentialValidationError, AuthFlowError } from '../types/errors';
-import { AuthFlowErrors, formatAuthFlowError, formatCredentialValidationError, isParseError } from '../types/errors';
+import type {
+  StorageError,
+  ParseError,
+  CredentialValidationError,
+  AuthFlowError,
+} from '../types/errors';
+import {
+  AuthFlowErrors,
+  formatAuthFlowError,
+  formatCredentialValidationError,
+  isParseError,
+} from '../types/errors';
 
 /**
  * Authentication context type
@@ -47,7 +57,9 @@ export interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
-  login: (credentials: LoginCredentials) => Promise<Result<void, AuthFlowError | CredentialValidationError>>;
+  login: (
+    credentials: LoginCredentials
+  ) => Promise<Result<void, AuthFlowError | CredentialValidationError>>;
   logout: () => Promise<Result<void, AuthFlowError>>;
   refreshToken: () => Promise<Result<void, AuthFlowError>>;
   clearError: () => void;
@@ -80,14 +92,14 @@ interface AuthProviderProps {
 
 /**
  * Load authentication state from storage
- * 
+ *
  * Railway-oriented function that:
  * 1. Loads token from storage
  * 2. Decodes and validates JWT
  * 3. Checks expiration
  * 4. Loads and validates user/tenant data
  * 5. Verifies data matches token
- * 
+ *
  * @returns Result containing AuthState or error
  */
 const loadAuthFromStorage = (): Result<AuthState, StorageError | ParseError> => {
@@ -95,9 +107,9 @@ const loadAuthFromStorage = (): Result<AuthState, StorageError | ParseError> => 
     storageService
       .get<TokenData>(StorageKey.AUTH_TOKEN)
       // Decode and validate JWT
-      .andThen((tokenData) => {
+      .andThen(tokenData => {
         const token = tokenData.token;
-        return decodeJwtPayload(token).map((payload) => ({ token, payload }));
+        return decodeJwtPayload(token).map(payload => ({ token, payload }));
       })
       // Check token expiry
       .andThen(({ token, payload }) => {
@@ -107,15 +119,15 @@ const loadAuthFromStorage = (): Result<AuthState, StorageError | ParseError> => 
       .andThen(({ token, payload }) => {
         return storageService
           .get<string>(StorageKey.USER)
-          .andThen((userJson) => parseStoredUser(userJson))
-          .map((user) => ({ token, payload, user }));
+          .andThen(userJson => parseStoredUser(userJson))
+          .map(user => ({ token, payload, user }));
       })
       // Load and parse tenant data
       .andThen(({ token, payload, user }) => {
         return storageService
           .get<string>(StorageKey.TENANT)
-          .andThen((tenantJson) => parseStoredTenant(tenantJson))
-          .map((tenant) => ({ token, payload, user, tenant }));
+          .andThen(tenantJson => parseStoredTenant(tenantJson))
+          .map(tenant => ({ token, payload, user, tenant }));
       })
       // Verify data matches token
       .andThen(({ token, payload, user, tenant }) => {
@@ -130,7 +142,7 @@ const loadAuthFromStorage = (): Result<AuthState, StorageError | ParseError> => 
 
 /**
  * Attempt token refresh with stored data
- * 
+ *
  * @param storedUser - Stored user data
  * @param storedTenant - Stored tenant data
  * @returns Result containing refreshed AuthState or error
@@ -158,9 +170,7 @@ const attemptTokenRefresh = async (
 
   if (!refreshResponse.success || !refreshResponse.token) {
     return err(
-      AuthFlowErrors.tokenRefreshFailed(
-        refreshResponse.message || 'No token received from server'
-      )
+      AuthFlowErrors.tokenRefreshFailed(refreshResponse.message || 'No token received from server')
     );
   }
 
@@ -168,14 +178,14 @@ const attemptTokenRefresh = async (
 
   // Decode new token
   return decodeJwtPayload(newToken)
-    .mapErr((parseErr) => AuthFlowErrors.tokenRefreshFailed(`Invalid token format: ${parseErr.type}`))
-    .andThen((payload) => {
+    .mapErr(parseErr => AuthFlowErrors.tokenRefreshFailed(`Invalid token format: ${parseErr.type}`))
+    .andThen(payload => {
       // Get user from response or parse from storage
       let userResult: Result<User, ParseError>;
       if (refreshResponse.user !== null && refreshResponse.user !== undefined) {
         userResult = ok(updateUserFromJwt(refreshResponse.user, payload));
       } else {
-        userResult = parseStoredUser(storedUser).map((user) => updateUserFromJwt(user, payload));
+        userResult = parseStoredUser(storedUser).map(user => updateUserFromJwt(user, payload));
       }
 
       // Get tenant from response or parse from storage
@@ -183,19 +193,21 @@ const attemptTokenRefresh = async (
       if (refreshResponse.tenant !== null && refreshResponse.tenant !== undefined) {
         tenantResult = ok(updateTenantFromJwt(refreshResponse.tenant, payload));
       } else {
-        tenantResult = parseStoredTenant(storedTenant).map((tenant) => updateTenantFromJwt(tenant, payload));
+        tenantResult = parseStoredTenant(storedTenant).map(tenant =>
+          updateTenantFromJwt(tenant, payload)
+        );
       }
 
       // Combine results
       return userResult
-        .andThen((user) =>
-          tenantResult.map((tenant) => ({
+        .andThen(user =>
+          tenantResult.map(tenant => ({
             user,
             tenant,
             token: newToken,
           }))
         )
-        .mapErr((parseErr) =>
+        .mapErr(parseErr =>
           AuthFlowErrors.tokenRefreshFailed(`Data validation failed: ${parseErr.type}`)
         );
     });
@@ -203,7 +215,7 @@ const attemptTokenRefresh = async (
 
 /**
  * Save authentication state to storage
- * 
+ *
  * @param user - User data
  * @param tenant - Tenant data
  * @param token - JWT token
@@ -223,7 +235,10 @@ const saveAuthToStorage = (
 /**
  * AuthProvider component
  */
-export const AuthProvider: React.FC<AuthProviderProps> = ({ children, defaultTenantId = asTenantId('tenant1') }) => {
+export const AuthProvider: React.FC<AuthProviderProps> = ({
+  children,
+  defaultTenantId = asTenantId('tenant1'),
+}) => {
   const [user, setUser] = useState<User | null>(null);
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -270,7 +285,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, defaultTen
                 const authState = refreshResult.value;
 
                 // Save refreshed data
-                const saveResult = saveAuthToStorage(authState.user, authState.tenant, authState.token);
+                const saveResult = saveAuthToStorage(
+                  authState.user,
+                  authState.tenant,
+                  authState.token
+                );
                 if (saveResult.isErr()) {
                   console.error('Failed to save refreshed auth data:', saveResult.error);
                 }
@@ -315,7 +334,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, defaultTen
 
   /**
    * Login with credentials
-   * 
+   *
    * Uses railway-oriented programming:
    * 1. Validate credentials
    * 2. Call login API
@@ -358,19 +377,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, defaultTen
 
     if (loginResult.isErr()) {
       const apiError = loginResult.error;
-      
+
       // Map error types appropriately based on status code and error type
       let authError: AuthFlowError;
-      
+
       if (apiError.statusCode === 401) {
-        authError = AuthFlowErrors.unauthorized(
-          apiError.message || 'Invalid username or password'
-        );
+        authError = AuthFlowErrors.unauthorized(apiError.message || 'Invalid username or password');
       } else if (apiError.statusCode === 403) {
-        authError = AuthFlowErrors.forbidden(
-          apiError.message || 'Access denied'
-        );
-      } else if (apiError.statusCode === 408 || apiError.statusCode === 504 || !apiError.statusCode) {
+        authError = AuthFlowErrors.forbidden(apiError.message || 'Access denied');
+      } else if (
+        apiError.statusCode === 408 ||
+        apiError.statusCode === 504 ||
+        !apiError.statusCode
+      ) {
         // Network errors or timeouts (no status code often indicates network failure)
         authError = AuthFlowErrors.networkError(
           apiError.message || 'Network connection failed',
@@ -394,7 +413,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, defaultTen
           apiError.message || 'Login failed'
         );
       }
-      
+
       setError(formatAuthFlowError(authError));
       setIsLoading(false);
       return err(authError);
@@ -520,11 +539,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, defaultTen
       const authState = refreshResult.value;
 
       // Save refreshed data
-      const saveResult = saveAuthToStorage(
-        authState.user,
-        authState.tenant,
-        authState.token
-      );
+      const saveResult = saveAuthToStorage(authState.user, authState.tenant, authState.token);
 
       if (saveResult.isErr()) {
         return err(AuthFlowErrors.tokenRefreshFailed('Failed to save refreshed data'));
@@ -567,7 +582,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, defaultTen
 
 /**
  * Hook to use auth context
- * 
+ *
  * @throws Error if used outside AuthProvider
  */
 export const useAuth = (): AuthContextType => {

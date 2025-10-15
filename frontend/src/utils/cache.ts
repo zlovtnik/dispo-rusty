@@ -1,13 +1,13 @@
 /**
  * Result-based cache layer for data fetching
- * 
+ *
  * Provides a simple in-memory cache with TTL (time-to-live) support
  * and Result-based API for FP consistency.
- * 
+ *
  * @module utils/cache
  */
 
-import { Result, ok, err } from 'neverthrow';
+import { type Result, ok, err } from 'neverthrow';
 import type { AppError } from '@/types/errors';
 import { createBusinessLogicError } from '@/types/errors';
 
@@ -33,14 +33,14 @@ export interface CacheStats {
 
 /**
  * Result-based cache implementation
- * 
+ *
  * Usage:
  * ```typescript
  * const cache = new ResultCache();
- * 
+ *
  * // Set value with 5 minute TTL
  * cache.set('user-123', userData, 5 * 60 * 1000);
- * 
+ *
  * // Get value
  * const result = cache.get<User>('user-123');
  * result.match(
@@ -58,7 +58,7 @@ export class ResultCache {
 
   /**
    * Get value from cache
-   * 
+   *
    * @param key - Cache key
    * @param maxAge - Maximum age in milliseconds (overrides entry TTL)
    * @param typeTag - Optional type identifier for runtime type checking
@@ -75,11 +75,13 @@ export class ResultCache {
     // Validate type tag if provided
     if (typeTag && entry.typeTag && entry.typeTag !== typeTag) {
       this.stats.misses++;
-      return err(createBusinessLogicError(
-        `Type mismatch: expected ${typeTag}, got ${entry.typeTag}`,
-        undefined,
-        { code: 'CACHE_TYPE_MISMATCH' }
-      ));
+      return err(
+        createBusinessLogicError(
+          `Type mismatch: expected ${typeTag}, got ${entry.typeTag}`,
+          undefined,
+          { code: 'CACHE_TYPE_MISMATCH' }
+        )
+      );
     }
 
     const now = Date.now();
@@ -97,14 +99,19 @@ export class ResultCache {
 
   /**
    * Set value in cache with TTL
-   * 
+   *
    * @param key - Cache key
    * @param data - Data to cache
    * @param ttl - Time to live in milliseconds (default: 5 minutes)
    * @param typeTag - Optional type identifier for runtime type safety
    * @returns Result indicating success or failure
    */
-  set<T>(key: string, data: T, ttl: number = 5 * 60 * 1000, typeTag?: string): Result<void, AppError> {
+  set<T>(
+    key: string,
+    data: T,
+    ttl: number = 5 * 60 * 1000,
+    typeTag?: string
+  ): Result<void, AppError> {
     try {
       const now = Date.now();
       this.cache.set(key, {
@@ -115,17 +122,19 @@ export class ResultCache {
       });
       return ok(undefined);
     } catch (error) {
-      return err(createBusinessLogicError(
-        'Failed to set cache',
-        { error: error instanceof Error ? error.message : String(error) },
-        { code: 'CACHE_SET_ERROR' }
-      ));
+      return err(
+        createBusinessLogicError(
+          'Failed to set cache',
+          { error: error instanceof Error ? error.message : String(error) },
+          { code: 'CACHE_SET_ERROR' }
+        )
+      );
     }
   }
 
   /**
    * Check if key exists and is not expired
-   * 
+   *
    * @param key - Cache key
    * @returns true if key exists and is valid
    */
@@ -144,7 +153,7 @@ export class ResultCache {
 
   /**
    * Invalidate (delete) cache entry
-   * 
+   *
    * @param key - Cache key to invalidate
    * @returns Result indicating success
    */
@@ -155,7 +164,7 @@ export class ResultCache {
 
   /**
    * Invalidate all cache entries matching a pattern
-   * 
+   *
    * @param pattern - RegExp pattern to match keys
    * @returns Result with count of invalidated entries
    */
@@ -170,17 +179,19 @@ export class ResultCache {
       }
       return ok(count);
     } catch (error) {
-      return err(createBusinessLogicError(
-        'Failed to invalidate pattern',
-        { error: error instanceof Error ? error.message : String(error) },
-        { code: 'CACHE_INVALIDATE_ERROR' }
-      ));
+      return err(
+        createBusinessLogicError(
+          'Failed to invalidate pattern',
+          { error: error instanceof Error ? error.message : String(error) },
+          { code: 'CACHE_INVALIDATE_ERROR' }
+        )
+      );
     }
   }
 
   /**
    * Clear entire cache
-   * 
+   *
    * @returns Result indicating success
    */
   clear(): Result<void, AppError> {
@@ -192,7 +203,7 @@ export class ResultCache {
 
   /**
    * Get cache statistics
-   * 
+   *
    * @returns Cache stats with hit rate
    */
   getStats(): CacheStats {
@@ -217,7 +228,7 @@ export class ResultCache {
 
   /**
    * Clean up expired entries
-   * 
+   *
    * @returns Result with count of removed entries
    */
   cleanup(): Result<number, AppError> {
@@ -234,25 +245,27 @@ export class ResultCache {
 
       return ok(count);
     } catch (error) {
-      return err(createBusinessLogicError(
-        'Failed to cleanup cache',
-        { error: error instanceof Error ? error.message : String(error) },
-        { code: 'CACHE_CLEANUP_ERROR' }
-      ));
+      return err(
+        createBusinessLogicError(
+          'Failed to cleanup cache',
+          { error: error instanceof Error ? error.message : String(error) },
+          { code: 'CACHE_CLEANUP_ERROR' }
+        )
+      );
     }
   }
 }
 
 /**
  * Global cache instance
- * 
+ *
  * Usage:
  * ```typescript
  * import { resultCache } from '@/utils/cache';
- * 
+ *
  * // Set cache
  * resultCache.set('key', data, 5000);
- * 
+ *
  * // Get cache
  * const result = resultCache.get<Type>('key');
  * ```
@@ -275,23 +288,23 @@ export const CacheKeys = {
  * Default TTL values (in milliseconds)
  */
 export const CacheTTL = {
-  SHORT: 1 * 60 * 1000,      // 1 minute
-  MEDIUM: 5 * 60 * 1000,     // 5 minutes
-  LONG: 15 * 60 * 1000,      // 15 minutes
-  HOUR: 60 * 60 * 1000,      // 1 hour
-  DAY: 24 * 60 * 60 * 1000,  // 1 day
+  SHORT: 1 * 60 * 1000, // 1 minute
+  MEDIUM: 5 * 60 * 1000, // 5 minutes
+  LONG: 15 * 60 * 1000, // 15 minutes
+  HOUR: 60 * 60 * 1000, // 1 hour
+  DAY: 24 * 60 * 60 * 1000, // 1 day
 } as const;
 
 /**
  * Cache decorator for functions
- * 
+ *
  * Wraps a function to cache its results based on arguments.
- * 
+ *
  * @param fn - Function to cache
  * @param keyFn - Function to generate cache key from arguments
  * @param ttl - Time to live in milliseconds
  * @returns Cached version of function
- * 
+ *
  * @example
  * ```typescript
  * const cachedFetchUser = withCache(
@@ -299,7 +312,7 @@ export const CacheTTL = {
  *   (id) => CacheKeys.user(id),
  *   CacheTTL.MEDIUM
  * );
- * 
+ *
  * const result = await cachedFetchUser('user-123');
  * ```
  */
@@ -310,7 +323,7 @@ export function withCache<TArgs extends unknown[], TResult>(
 ): (...args: TArgs) => Promise<Result<TResult, AppError>> {
   return async (...args: TArgs) => {
     const key = keyFn(...args);
-    
+
     // Try cache first
     const cached = resultCache.get<TResult>(key);
     if (cached.isOk()) {
@@ -331,15 +344,15 @@ export function withCache<TArgs extends unknown[], TResult>(
 
 /**
  * Invalidate all cache entries for a specific entity type
- * 
+ *
  * @param entityType - Entity type prefix (e.g., 'user', 'contact')
  * @returns Result with count of invalidated entries or error
- * 
+ *
  * @example
  * ```typescript
  * // Invalidate all user caches
  * invalidateEntity('user');
- * 
+ *
  * // Invalidate all contact caches
  * invalidateEntity('contact');
  * ```
@@ -353,20 +366,20 @@ export function invalidateEntity(entityType: string): Result<number, AppError> {
 
 /**
  * Auto-cleanup scheduler
- * 
+ *
  * Automatically cleans up expired entries at specified interval.
- * 
+ *
  * @param intervalMs - Cleanup interval in milliseconds (default: 5 minutes)
  * @param onError - Optional callback invoked when cleanup fails
  * @returns Function to stop auto-cleanup
- * 
+ *
  * @example
  * ```typescript
  * // Start auto-cleanup with error handling
  * const stopCleanup = startAutoCleanup(60000, (error) => {
  *   logErrorToService(error); // Custom error handling
  * });
- * 
+ *
  * // Later...
  * stopCleanup();
  * ```
@@ -381,7 +394,7 @@ export function startAutoCleanup(
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error('Cache cleanup failed:', errorMessage);
-      
+
       // Invoke optional error callback
       if (onError) {
         onError(error);
@@ -389,5 +402,7 @@ export function startAutoCleanup(
     }
   }, intervalMs);
 
-  return () => clearInterval(intervalId);
+  return () => {
+    clearInterval(intervalId);
+  };
 }

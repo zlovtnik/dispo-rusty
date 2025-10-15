@@ -1,6 +1,6 @@
 /**
  * Tenant Business Rules
- * 
+ *
  * Pure business logic for tenant management operations.
  * These rules define subscription limits, feature access, and tenant validation.
  */
@@ -29,12 +29,7 @@ export const PLAN_LIMITS: Record<'basic' | 'professional' | 'enterprise', PlanLi
     contacts: 1000,
     storage: 1024, // 1 GB
     apiCallsPerMonth: 10000,
-    features: [
-      'contacts',
-      'basic_search',
-      'export_csv',
-      'email_notifications',
-    ],
+    features: ['contacts', 'basic_search', 'export_csv', 'email_notifications'],
   },
   professional: {
     users: 25,
@@ -99,7 +94,7 @@ export type SubscriptionValidationError =
 
 /**
  * Validate subscription limits
- * 
+ *
  * @param tenant - Tenant to validate
  * @param limitType - Type of limit to check
  * @param currentUsage - Current usage count
@@ -112,12 +107,12 @@ export function validateSubscriptionLimit(
 ): Result<void, SubscriptionValidationError> {
   const planLimits = PLAN_LIMITS[tenant.subscription.plan];
   const limit = planLimits[limitType];
-  
+
   // -1 means unlimited
   if (limit === -1) {
     return ok(undefined);
   }
-  
+
   if (currentUsage >= limit) {
     return err({
       type: 'LIMIT_EXCEEDED',
@@ -126,13 +121,13 @@ export function validateSubscriptionLimit(
       current: currentUsage,
     });
   }
-  
+
   return ok(undefined);
 }
 
 /**
  * Validate feature access for tenant
- * 
+ *
  * @param tenant - Tenant to validate
  * @param feature - Feature to check
  * @returns Result containing void on success or error
@@ -142,7 +137,7 @@ export function validateFeatureAccess(
   feature: string
 ): Result<void, SubscriptionValidationError> {
   const planLimits = PLAN_LIMITS[tenant.subscription.plan];
-  
+
   if (!planLimits.features.includes(feature)) {
     return err({
       type: 'FEATURE_NOT_AVAILABLE',
@@ -150,13 +145,13 @@ export function validateFeatureAccess(
       plan: tenant.subscription.plan,
     });
   }
-  
+
   return ok(undefined);
 }
 
 /**
  * Validate subscription status
- * 
+ *
  * @param subscription - Subscription to validate
  * @returns Result containing void on success or error
  */
@@ -167,7 +162,7 @@ export function validateSubscriptionStatus(
   if (subscription.status === 'cancelled') {
     return err({ type: 'SUBSCRIPTION_CANCELLED' });
   }
-  
+
   // Check if expired
   if (subscription.status === 'expired') {
     return err({
@@ -175,7 +170,7 @@ export function validateSubscriptionStatus(
       expiredAt: subscription.expiresAt || new Date(),
     });
   }
-  
+
   // Check trial expiration
   if (subscription.status === 'trial' && subscription.expiresAt) {
     const now = new Date();
@@ -186,13 +181,13 @@ export function validateSubscriptionStatus(
       });
     }
   }
-  
+
   return ok(undefined);
 }
 
 /**
  * Get available features for a subscription plan
- * 
+ *
  * @param plan - Subscription plan
  * @returns Array of available feature names
  */
@@ -202,7 +197,7 @@ export function getAvailableFeatures(plan: 'basic' | 'professional' | 'enterpris
 
 /**
  * Get plan limits for a subscription plan
- * 
+ *
  * @param plan - Subscription plan
  * @returns Plan limits
  */
@@ -212,7 +207,7 @@ export function getPlanLimits(plan: 'basic' | 'professional' | 'enterprise'): Pl
 
 /**
  * Check if plan has unlimited limit for a resource
- * 
+ *
  * @param plan - Subscription plan
  * @param limitType - Type of limit to check
  * @returns true if unlimited
@@ -226,7 +221,7 @@ export function hasUnlimitedLimit(
 
 /**
  * Calculate usage percentage for a limit
- * 
+ *
  * @param tenant - Tenant
  * @param limitType - Type of limit
  * @param currentUsage - Current usage count
@@ -239,22 +234,22 @@ export function calculateUsagePercentage(
 ): number {
   const planLimits = PLAN_LIMITS[tenant.subscription.plan];
   const limit = planLimits[limitType];
-  
+
   // -1 means unlimited
   if (limit === -1) {
     return -1;
   }
-  
+
   if (limit === 0) {
     return currentUsage > 0 ? 100 : 0;
   }
-  
+
   return Math.min(100, Math.round((currentUsage / limit) * 100));
 }
 
 /**
  * Check if approaching usage limit
- * 
+ *
  * @param tenant - Tenant
  * @param limitType - Type of limit
  * @param currentUsage - Current usage count
@@ -265,21 +260,21 @@ export function isApproachingLimit(
   tenant: Tenant,
   limitType: 'users' | 'contacts' | 'storage',
   currentUsage: number,
-  threshold: number = 80
+  threshold = 80
 ): boolean {
   const percentage = calculateUsagePercentage(tenant, limitType, currentUsage);
-  
+
   // -1 means unlimited
   if (percentage === -1) {
     return false;
   }
-  
+
   return percentage >= threshold;
 }
 
 /**
  * Get days remaining in subscription
- * 
+ *
  * @param subscription - Subscription
  * @returns Days remaining, or null if no expiration
  */
@@ -287,18 +282,18 @@ export function getDaysRemaining(subscription: TenantSubscription): number | nul
   if (!subscription.expiresAt) {
     return null;
   }
-  
+
   const now = new Date();
   const expiresAt = new Date(subscription.expiresAt);
   const diffTime = expiresAt.getTime() - now.getTime();
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  
+
   return Math.max(0, diffDays);
 }
 
 /**
  * Check if subscription is in trial period
- * 
+ *
  * @param subscription - Subscription
  * @returns true if in trial
  */
@@ -308,7 +303,7 @@ export function isTrial(subscription: TenantSubscription): boolean {
 
 /**
  * Check if subscription is active
- * 
+ *
  * @param subscription - Subscription
  * @returns true if active or trial
  */
@@ -318,29 +313,29 @@ export function isActive(subscription: TenantSubscription): boolean {
 
 /**
  * Check if should show renewal warning
- * 
+ *
  * @param subscription - Subscription
  * @param warningDays - Days before expiration to show warning (default: 7)
  * @returns true if should show warning
  */
 export function shouldShowRenewalWarning(
   subscription: TenantSubscription,
-  warningDays: number = 7
+  warningDays = 7
 ): boolean {
   const daysRemaining = getDaysRemaining(subscription);
-  
+
   if (daysRemaining === null) {
     return false;
   }
-  
+
   return daysRemaining <= warningDays && daysRemaining > 0;
 }
 
 /**
  * Calculate upgrade benefit score
- * 
+ *
  * Scores how beneficial an upgrade would be based on current usage
- * 
+ *
  * @param tenant - Current tenant
  * @param targetPlan - Target plan to upgrade to
  * @param currentUsage - Current usage metrics
@@ -357,36 +352,34 @@ export function calculateUpgradeBenefitScore(
 ): number {
   const currentLimits = PLAN_LIMITS[tenant.subscription.plan];
   const targetLimits = PLAN_LIMITS[targetPlan];
-  
+
   let score = 0;
-  
+
   // Check if approaching limits
   const usersPercentage = calculateUsagePercentage(tenant, 'users', currentUsage.users);
   const contactsPercentage = calculateUsagePercentage(tenant, 'contacts', currentUsage.contacts);
   const storagePercentage = calculateUsagePercentage(tenant, 'storage', currentUsage.storage);
-  
+
   // Add points for each limit that's being approached
   if (usersPercentage >= 80) score += 30;
   else if (usersPercentage >= 60) score += 15;
-  
+
   if (contactsPercentage >= 80) score += 30;
   else if (contactsPercentage >= 60) score += 15;
-  
+
   if (storagePercentage >= 80) score += 20;
   else if (storagePercentage >= 60) score += 10;
-  
+
   // Add points for new features
-  const newFeatures = targetLimits.features.filter(
-    f => !currentLimits.features.includes(f)
-  );
+  const newFeatures = targetLimits.features.filter(f => !currentLimits.features.includes(f));
   score += Math.min(20, newFeatures.length * 2);
-  
+
   return Math.min(100, score);
 }
 
 /**
  * Get recommended plan based on usage
- * 
+ *
  * @param currentUsage - Current usage metrics
  * @returns Recommended plan
  */
@@ -402,7 +395,8 @@ export function getRecommendedPlan(currentUsage: {
     (proLimits.users !== -1 && currentUsage.users > proLimits.users) ||
     (proLimits.contacts !== -1 && currentUsage.contacts > proLimits.contacts) ||
     (proLimits.storage !== -1 && currentUsage.storage > proLimits.storage) ||
-    (proLimits.apiCallsPerMonth !== -1 && currentUsage.apiCallsPerMonth > proLimits.apiCallsPerMonth)
+    (proLimits.apiCallsPerMonth !== -1 &&
+      currentUsage.apiCallsPerMonth > proLimits.apiCallsPerMonth)
   ) {
     return 'enterprise';
   }
@@ -413,7 +407,8 @@ export function getRecommendedPlan(currentUsage: {
     (basicLimits.users !== -1 && currentUsage.users > basicLimits.users) ||
     (basicLimits.contacts !== -1 && currentUsage.contacts > basicLimits.contacts) ||
     (basicLimits.storage !== -1 && currentUsage.storage > basicLimits.storage) ||
-    (basicLimits.apiCallsPerMonth !== -1 && currentUsage.apiCallsPerMonth > basicLimits.apiCallsPerMonth)
+    (basicLimits.apiCallsPerMonth !== -1 &&
+      currentUsage.apiCallsPerMonth > basicLimits.apiCallsPerMonth)
   ) {
     return 'professional';
   }

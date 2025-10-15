@@ -303,7 +303,7 @@ impl Tenant {
         tenants.filter(name.eq(name_)).first::<Tenant>(conn)
     }
 
-    /// Validates a TenantDTO's id and name against application rules.
+    /// Validates a TenantDTO's fields against application rules.
     ///
     /// - `id` must not be empty and must contain only alphanumeric characters, dashes, or underscores.
     /// - `name` must not be empty.
@@ -363,7 +363,13 @@ impl Tenant {
         } else {
             Err(result::Error::DatabaseError(
                 result::DatabaseErrorKind::Unknown,
-                Box::new(errors.into_iter().map(|e| e.message).collect::<Vec<_>>().join("; ")),
+                Box::new(
+                    errors
+                        .into_iter()
+                        .map(|e| e.message)
+                        .collect::<Vec<_>>()
+                        .join("; "),
+                ),
             ))
         }
     }

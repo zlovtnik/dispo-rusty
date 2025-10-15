@@ -1,3 +1,7 @@
 [test]
 # Test runner configuration
+# Enable DOM environment with happy-dom for React component testing
+preload = ["./loadenv.ts", "./happydom.ts", "./src/test-utils/setup.ts"]
+
+# Code coverage configuration
 coverage = true

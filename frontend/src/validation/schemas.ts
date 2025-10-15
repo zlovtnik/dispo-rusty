@@ -13,13 +13,37 @@ const parseDate = (value: string | Date): Date => {
 
 const dateSchema = z
   .union([nonEmptyString, z.date()])
-  .transform((value: string | Date): Date => parseDate(value));
+  .transform((value: string | Date): Date => {
+    // If string, parse it and handle invalid dates
+    if (typeof value === 'string') {
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) {
+        // Return Invalid Date to fail refine check
+        return new Date(NaN);
+      }
+      return date;
+    }
+    return value;
+  })
+  .refine((date) => !Number.isNaN(date.getTime()), 'Invalid date format');
 
 const optionalDateSchema = z
   .union([nonEmptyString, z.date()])
   .optional()
-  .transform((value: string | Date | undefined): Date | undefined =>
-    value === undefined ? undefined : parseDate(value),
+  .transform((value: string | Date | undefined): Date | undefined => {
+    if (value === undefined) return undefined;
+    if (typeof value === 'string') {
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) {
+        return new Date(NaN);
+      }
+      return date;
+    }
+    return value;
+  })
+  .refine(
+    (date) => date === undefined || !Number.isNaN(date.getTime()),
+    'Invalid date format'
   );
 
 const tenantBrandingSchema = z.object({
@@ -49,7 +73,7 @@ const tenantSubscriptionSchema = z.object({
   expiresAt: z
     .union([z.string(), z.date()])
     .optional()
-  .transform((value: string | Date | undefined): Date | undefined => {
+    .transform((value: string | Date | undefined): Date | undefined => {
       if (value === undefined) {
         return undefined;
       }
@@ -63,7 +87,10 @@ const tenantSubscriptionSchema = z.object({
 });
 
 export const authTenantSchema = z.object({
-  id: z.string().min(1).transform((value: string) => asTenantId(value)),
+  id: z
+    .string()
+    .min(1)
+    .transform((value: string) => asTenantId(value)),
   name: z.string().min(1),
   domain: z.string().optional(),
   logo: z.string().optional(),
@@ -72,14 +99,20 @@ export const authTenantSchema = z.object({
 });
 
 export const userSchema = z.object({
-  id: z.string().min(1).transform((value: string) => asUserId(value)),
+  id: z
+    .string()
+    .min(1)
+    .transform((value: string) => asUserId(value)),
   email: z.string().email(),
   username: z.string().min(1),
   firstName: z.string().optional(),
   lastName: z.string().optional(),
   avatar: z.string().optional(),
   roles: z.array(z.string()).nonempty(),
-  tenantId: z.string().min(1).transform((value: string) => asTenantId(value)),
+  tenantId: z
+    .string()
+    .min(1)
+    .transform((value: string) => asTenantId(value)),
   createdAt: z.string().min(1),
   updatedAt: z.string().min(1),
 });
@@ -105,8 +138,14 @@ const emergencyContactSchema = z.object({
 
 export const contactSchema = z
   .object({
-    id: z.string().min(1).transform((value: string) => asContactId(value)),
-    tenantId: z.string().min(1).transform((value: string) => asTenantId(value)),
+    id: z
+      .string()
+      .min(1)
+      .transform((value: string) => asContactId(value)),
+    tenantId: z
+      .string()
+      .min(1)
+      .transform((value: string) => asTenantId(value)),
     firstName: z.string().min(1),
     lastName: z.string().min(1),
     fullName: z.string().min(1),
@@ -135,11 +174,17 @@ export const contactSchema = z
     customFields: z.record(z.string(), z.unknown()).optional(),
     createdAt: dateSchema,
     updatedAt: dateSchema,
-    createdBy: z.string().min(1).transform((value: string) => asUserId(value)),
-    updatedBy: z.string().min(1).transform((value: string) => asUserId(value)),
+    createdBy: z
+      .string()
+      .min(1)
+      .transform((value: string) => asUserId(value)),
+    updatedBy: z
+      .string()
+      .min(1)
+      .transform((value: string) => asUserId(value)),
     isActive: z.boolean(),
   })
-  .passthrough();
+  .loose();
 
 export const contactListResponseSchema = z.object({
   contacts: z.array(contactSchema),

@@ -45,14 +45,34 @@ const mapTokenErrorToAuthFlowError = (error: TokenError): AuthFlowError => {
 };
 
 /**
- * Enhanced auth hook that exposes Result-based methods for railway-oriented programming
+ * Exposes authentication helpers that wrap the context API in `Result`-returning utilities.
  *
- * Wraps the existing useAuth context hook and provides Result-based API
- * for better error handling and composition.
+ * The hook keeps the original context state intact while providing railway-oriented helpers
+ * (e.g., `requireRole`, `requireTenantAccess`) that can be composed without throwing.
+ *
+ * @returns Auth state plus Result-based helpers for validating auth, roles, and tenant access
+ * @example
+ * ```typescript
+ * const {
+ *   isAuthenticated,
+ *   requireRole,
+ *   requireTenantAccess,
+ *   getTenantResult,
+ * } = useAuth();
+ *
+ * const guardResult = requireRole('admin').andThen(() =>
+ *   requireTenantAccess(currentTenantId)
+ * );
+ *
+ * if (guardResult.isErr()) {
+ *   message.error(guardResult.error.message);
+ * }
+ * ```
  */
 export function useAuth() {
   const auth = useAuthContext();
 
+  // Wrap imperative context operations in a memoized Result-based API for composability
   const resultApi = useMemo(() => {
     const requireAuthResult = (): Result<boolean, AuthFlowError> => {
       if (auth.isAuthenticated) {
@@ -80,42 +100,40 @@ export function useAuth() {
 
     const getTokenResult = (): Result<string, AuthFlowError> =>
       getAuthToken()
-        .map((stored) => stored.token)
+        .map(stored => stored.token)
         .mapErr(mapStorageErrorToAuthFlowError);
 
     const getTenantIdFromToken = (): Result<string, AuthFlowError> =>
-      getTokenResult().andThen((token) =>
+      getTokenResult().andThen(token =>
         extractTenantId(token).mapErr(mapTokenErrorToAuthFlowError)
       );
 
     const getUserIdFromToken = (): Result<string, AuthFlowError> =>
-      getTokenResult().andThen((token) =>
-        extractUserId(token).mapErr(mapTokenErrorToAuthFlowError)
-      );
+      getTokenResult().andThen(token => extractUserId(token).mapErr(mapTokenErrorToAuthFlowError));
 
     const requireRole = (role: string): Result<void, AuthFlowError> =>
-      getUserResult().andThen((user) =>
+      getUserResult().andThen(user =>
         user.roles.includes(role)
           ? ok(undefined)
           : err(AuthFlowErrors.forbidden(`Missing required role: ${role}`))
       );
 
     const requireAnyRole = (roles: string[]): Result<void, AuthFlowError> =>
-      getUserResult().andThen((user) =>
-        roles.some((role) => user.roles.includes(role))
+      getUserResult().andThen(user =>
+        roles.some(role => user.roles.includes(role))
           ? ok(undefined)
           : err(AuthFlowErrors.forbidden(`User lacks required roles: ${roles.join(', ')}`))
       );
 
     const requireAllRoles = (roles: string[]): Result<void, AuthFlowError> =>
-      getUserResult().andThen((user) =>
-        roles.every((role) => user.roles.includes(role))
+      getUserResult().andThen(user =>
+        roles.every(role => user.roles.includes(role))
           ? ok(undefined)
           : err(AuthFlowErrors.forbidden(`User must have roles: ${roles.join(', ')}`))
       );
 
     const requireTenantAccess = (tenantId: TenantId): Result<void, AuthFlowError | AccessError> =>
-      getUserResult().andThen((user) => validateTenantAccess(user, tenantId));
+      getUserResult().andThen(user => validateTenantAccess(user, tenantId));
 
     return {
       login: (credentials: LoginCredentials) => auth.login(credentials),
