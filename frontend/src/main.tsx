@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { ConfigProvider, App as AntdApp } from 'antd';
 import { App } from './App';
+import { preloadCommonPasswords } from './domain/rules/authRules';
 import './styles/index.css';
 import 'antd/dist/reset.css';
 
@@ -69,6 +70,11 @@ if (!rootElement) {
   throw new Error('Root element not found');
 }
 const root = ReactDOM.createRoot(rootElement);
+
+// Preload common passwords for synchronous access
+preloadCommonPasswords().catch(error => {
+  console.warn('Failed to preload common passwords:', error);
+});
 
 root.render(
   <React.StrictMode>

@@ -8,6 +8,9 @@
 import type { Result } from 'neverthrow';
 import { ok, err } from 'neverthrow';
 
+import { getEnv } from '@/config/env';
+import { getCommonPasswords } from '@/utils/commonPasswordsLoader';
+
 /**
  * Password strength requirements
  */
@@ -44,7 +47,7 @@ export type PasswordValidationError =
   | { type: 'MISSING_LOWERCASE' }
   | { type: 'MISSING_NUMBERS' }
   | { type: 'MISSING_SPECIAL_CHARS'; required: number }
-  | { type: 'COMMON_PASSWORD' }
+  | { type: 'COMMON_PASSWORD'; source: 'REMOTE' | 'LOCAL'; occurrences?: number }
   | { type: 'CONTAINS_USERNAME' };
 
 /**
@@ -68,6 +71,333 @@ export const DEFAULT_SESSION_TIMEOUT: SessionTimeoutConfig = {
   warningBeforeTimeout: 5, // warn 5 minutes before timeout
 };
 
+type FetchImplementation = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+
+interface PasswordBreachCheckOutcome {
+  compromised: boolean;
+  occurrences?: number;
+  source: 'REMOTE' | 'LOCAL';
+  warning?: string;
+}
+
+export interface PasswordBreachCheckConfig {
+  enabled: boolean;
+  endpoint: string;
+  cacheTtlMs: number;
+  requestTimeoutMs: number;
+  maxRetries: number;
+  initialBackoffMs: number;
+  maxBackoffMs: number;
+  backoffFactor: number;
+  rateLimitIntervalMs: number;
+  userAgent: string;
+  fetchImplementation?: FetchImplementation;
+}
+
+const createDefaultPasswordBreachCheckConfig = (): PasswordBreachCheckConfig => {
+  const env = getEnv();
+  return {
+    enabled: env.enablePwnedPasswordCheck,
+    endpoint: 'https://api.pwnedpasswords.com/range',
+    cacheTtlMs: 5 * 60 * 1000,
+    requestTimeoutMs: 5000,
+    maxRetries: 2,
+    initialBackoffMs: 500,
+    maxBackoffMs: 4000,
+    backoffFactor: 2,
+    rateLimitIntervalMs: 1500,
+    userAgent: `${env.appName}/password-breach-check`,
+  };
+};
+
+/**
+ * Get the common passwords list
+ * Loads from external source with fallback to built-in list
+ */
+let commonPasswordsCache: ReadonlyArray<string> | null = null;
+let commonPasswordsPromise: Promise<ReadonlyArray<string>> | null = null;
+
+async function getCommonPasswordsList(): Promise<ReadonlyArray<string>> {
+  if (commonPasswordsCache) {
+    return commonPasswordsCache;
+  }
+
+  if (commonPasswordsPromise) {
+    return commonPasswordsPromise;
+  }
+
+  commonPasswordsPromise = getCommonPasswords();
+  commonPasswordsCache = await commonPasswordsPromise;
+  commonPasswordsPromise = null;
+
+  return commonPasswordsCache;
+}
+
+/**
+ * Preload common passwords for synchronous access
+ * Call this during app initialization
+ */
+export async function preloadCommonPasswords(): Promise<void> {
+  await getCommonPasswordsList();
+}
+
+/**
+ * Check if password is in common passwords list (synchronous, requires preload)
+ */
+export function isCommonPassword(password: string): boolean {
+  if (!commonPasswordsCache) {
+    // Fallback to minimal list if not preloaded
+    const fallbackPasswords = ['123456', 'password', 'qwerty', '111111', 'abc123'];
+    return fallbackPasswords.includes(password.toLowerCase());
+  }
+  return commonPasswordsCache.includes(password.toLowerCase());
+}
+
+class PwnedPasswordChecker {
+  private readonly options: PasswordBreachCheckConfig;
+
+  private readonly cache = new Map<string, { expiresAt: number; suffixes: Map<string, number> }>();
+
+  private readonly pending = new Map<string, Promise<Map<string, number>>>();
+
+  private lastRequestTimestamp = 0;
+
+  constructor(options: PasswordBreachCheckConfig) {
+    this.options = options;
+  }
+
+  private async isPasswordLocallyCompromised(password: string): Promise<boolean> {
+    try {
+      const commonPasswords = await getCommonPasswordsList();
+      return commonPasswords.includes(password.toLowerCase());
+    } catch (error) {
+      // Fallback to a minimal hardcoded list if loading fails
+      const fallbackPasswords = ['123456', 'password', 'qwerty', '111111', 'abc123'];
+      return fallbackPasswords.includes(password.toLowerCase());
+    }
+  }
+
+  async isCompromised(password: string): Promise<PasswordBreachCheckOutcome> {
+    const localCompromised = await this.isPasswordLocallyCompromised(password);
+
+    if (!this.options.enabled) {
+      return {
+        compromised: localCompromised,
+        source: localCompromised ? 'LOCAL' : 'REMOTE',
+        warning: 'Remote breach checking disabled by configuration.',
+      };
+    }
+
+    try {
+      const hash = await sha1Hex(password);
+      const prefix = hash.slice(0, 5);
+      const suffix = hash.slice(5);
+      const suffixes = await this.fetchPrefix(prefix);
+      const occurrences = suffixes.get(suffix);
+
+      if (occurrences !== undefined) {
+        return {
+          compromised: true,
+          occurrences,
+          source: 'REMOTE',
+        };
+      }
+
+      if (localCompromised) {
+        return {
+          compromised: true,
+          source: 'LOCAL',
+        };
+      }
+
+      return {
+        compromised: false,
+        source: 'REMOTE',
+      };
+    } catch (error) {
+      const warning =
+        error instanceof Error
+          ? error.message
+          : 'Unknown error when querying Have I Been Pwned API';
+      console.warn('[AuthRules] Falling back to local password breach list:', warning);
+
+      return {
+        compromised: localCompromised,
+        source: 'LOCAL',
+        warning,
+      };
+    }
+  }
+
+  private async fetchPrefix(prefix: string): Promise<Map<string, number>> {
+    const now = Date.now();
+    const cached = this.cache.get(prefix);
+
+    if (cached && cached.expiresAt > now) {
+      return cached.suffixes;
+    }
+
+    const inFlight = this.pending.get(prefix);
+    if (inFlight) {
+      return inFlight;
+    }
+
+    const requestPromise = this.requestWithRetry(prefix)
+      .then(result => {
+        this.cache.set(prefix, {
+          suffixes: result,
+          expiresAt: Date.now() + this.options.cacheTtlMs,
+        });
+        return result;
+      })
+      .finally(() => {
+        this.pending.delete(prefix);
+      });
+
+    this.pending.set(prefix, requestPromise);
+    return requestPromise;
+  }
+
+  private async requestWithRetry(prefix: string): Promise<Map<string, number>> {
+    let attempt = 0;
+    let backoffDelay = this.options.initialBackoffMs;
+    let lastError: unknown;
+
+    while (attempt <= this.options.maxRetries) {
+      try {
+        await this.applyRateLimit();
+        return await this.performRequest(prefix);
+      } catch (error) {
+        lastError = error;
+        attempt += 1;
+        if (attempt > this.options.maxRetries) {
+          break;
+        }
+        await this.delay(Math.min(backoffDelay, this.options.maxBackoffMs));
+        backoffDelay = Math.min(
+          backoffDelay * this.options.backoffFactor,
+          this.options.maxBackoffMs
+        );
+      }
+    }
+
+    throw lastError instanceof Error ? lastError : new Error(String(lastError));
+  }
+
+  private async performRequest(prefix: string): Promise<Map<string, number>> {
+    const controller = typeof AbortController === 'undefined' ? undefined : new AbortController();
+    const timeoutId =
+      controller && this.options.requestTimeoutMs > 0
+        ? setTimeout(() => {
+            controller.abort();
+          }, this.options.requestTimeoutMs)
+        : undefined;
+
+    try {
+      const response = await this.fetchImpl(`${this.options.endpoint}/${prefix}`, {
+        method: 'GET',
+        headers: {
+          'Add-Padding': 'true',
+          'User-Agent': this.options.userAgent,
+        },
+        signal: controller?.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(`HIBP responded with status ${response.status}`);
+      }
+
+      const body = await response.text();
+      const parsed = this.parseRangeResponse(body);
+      this.lastRequestTimestamp = Date.now();
+      return parsed;
+    } finally {
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId);
+      }
+    }
+  }
+
+  private parseRangeResponse(payload: string): Map<string, number> {
+    const suffixes = new Map<string, number>();
+
+    payload.split(/\r?\n/).forEach(line => {
+      const [suffix, count] = line.trim().split(':');
+      if (!suffix || !count) return;
+      const normalisedSuffix = suffix.trim().toUpperCase();
+      const occurrences = Number.parseInt(count.trim(), 10);
+      if (!Number.isNaN(occurrences)) {
+        suffixes.set(normalisedSuffix, occurrences);
+      }
+    });
+
+    return suffixes;
+  }
+
+  private async applyRateLimit(): Promise<void> {
+    if (this.lastRequestTimestamp === 0) {
+      return;
+    }
+
+    const elapsed = Date.now() - this.lastRequestTimestamp;
+    if (elapsed < this.options.rateLimitIntervalMs) {
+      await this.delay(this.options.rateLimitIntervalMs - elapsed);
+    }
+  }
+
+  private async delay(durationMs: number): Promise<void> {
+    await new Promise(resolve => setTimeout(resolve, durationMs));
+  }
+
+  private get fetchImpl(): FetchImplementation {
+    return this.options.fetchImplementation ?? fetch;
+  }
+}
+
+let cachedDefaultPwnedPasswordChecker: PwnedPasswordChecker | null = null;
+
+const getDefaultPwnedPasswordChecker = (): PwnedPasswordChecker => {
+  if (!cachedDefaultPwnedPasswordChecker) {
+    cachedDefaultPwnedPasswordChecker = new PwnedPasswordChecker(
+      createDefaultPasswordBreachCheckConfig()
+    );
+  }
+
+  return cachedDefaultPwnedPasswordChecker;
+};
+
+const getPasswordBreachChecker = (
+  override: Partial<PasswordBreachCheckConfig>
+): PwnedPasswordChecker => {
+  if (!override || Object.keys(override).length === 0) {
+    return getDefaultPwnedPasswordChecker();
+  }
+
+  return new PwnedPasswordChecker({
+    ...createDefaultPasswordBreachCheckConfig(),
+    ...override,
+  });
+};
+
+async function sha1Hex(value: string): Promise<string> {
+  const subtle = await getSubtleCrypto();
+  const data = new TextEncoder().encode(value);
+  const digest = await subtle.digest('SHA-1', data);
+  const bytes = Array.from(new Uint8Array(digest));
+  return bytes
+    .map(byte => byte.toString(16).padStart(2, '0'))
+    .join('')
+    .toUpperCase();
+}
+
+async function getSubtleCrypto(): Promise<SubtleCrypto> {
+  if (typeof globalThis !== 'undefined' && globalThis.crypto?.subtle) {
+    return globalThis.crypto.subtle;
+  }
+
+  throw new Error('SubtleCrypto API is not available in this environment.');
+}
+
 /**
  * Validate password against strength requirements
  *
@@ -76,11 +406,12 @@ export const DEFAULT_SESSION_TIMEOUT: SessionTimeoutConfig = {
  * @param username - Username to check against (optional)
  * @returns Result containing void on success or PasswordValidationError
  */
-export function validatePasswordStrength(
+export async function validatePasswordStrength(
   password: string,
   requirements: PasswordRequirements = DEFAULT_PASSWORD_REQUIREMENTS,
-  username?: string
-): Result<void, PasswordValidationError> {
+  username?: string,
+  breachConfig: Partial<PasswordBreachCheckConfig> = {}
+): Promise<Result<void, PasswordValidationError>> {
   // Check length
   if (password.length < requirements.minLength) {
     return err({
@@ -131,11 +462,19 @@ export function validatePasswordStrength(
     return err({ type: 'CONTAINS_USERNAME' });
   }
 
-  // Check against common passwords
-  if (isCommonPassword(password)) {
+  const checker = getPasswordBreachChecker(breachConfig);
+  const breachResult = await checker.isCompromised(password);
+
+  if (breachResult.compromised) {
     return err({
       type: 'COMMON_PASSWORD',
+      source: breachResult.source,
+      occurrences: breachResult.occurrences,
     });
+  }
+
+  if (breachResult.warning) {
+    console.warn('[AuthRules] Password breach check warning:', breachResult.warning);
   }
 
   return ok(undefined);
@@ -208,52 +547,6 @@ export function getMinutesUntilTimeout(
 }
 
 /**
- * Check if password is in common passwords list
- *
- * **PRODUCTION WARNING**: This is a minimal dev-only list with only 25 entries.
- * Replace before release with one of:
- * - Have I Been Pwned API (https://haveibeenpwned.com/API/v3#PwnedPasswords)
- * - Loading a comprehensive password list (e.g., 10 million passwords)
- * - Using a Bloom filter for efficient checking
- *
- * TODO: Replace this implementation before production release
- *
- * @param password - Password to check
- * @returns true if password is common
- */
-function isCommonPassword(password: string): boolean {
-  const commonPasswords = [
-    'password',
-    'password123',
-    '123456',
-    '12345678',
-    'qwerty',
-    'abc123',
-    'monkey',
-    '1234567',
-    'letmein',
-    'trustno1',
-    'dragon',
-    'baseball',
-    'iloveyou',
-    'master',
-    'sunshine',
-    'ashley',
-    'bailey',
-    'passw0rd',
-    'shadow',
-    '123123',
-    '654321',
-    'superman',
-    'qazwsx',
-    'michael',
-    'football',
-  ];
-
-  return commonPasswords.includes(password.toLowerCase());
-}
-
-/**
  * Calculate password strength score (0-100)
  *
  * @param password - Password to score
@@ -314,4 +607,8 @@ export const DEFAULT_MFA_RULES: MfaRules = {
   required: false,
   methods: ['totp', 'email'],
   gracePeriodDays: 7,
+};
+
+export const __resetPasswordBreachCheckerForTests = (): void => {
+  cachedDefaultPwnedPasswordChecker = null;
 };

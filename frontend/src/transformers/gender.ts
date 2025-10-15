@@ -3,10 +3,10 @@ import type { Result, Option } from '../types/fp';
 import { fromNullable, isSome, none, some } from '../types/fp';
 import type { AppError } from '../types/errors';
 import { createValidationError } from '../types/errors';
-import { Gender } from '../types/contact';
+import { Gender } from '../types/person';
 
 const normalizeGenderValue = (value: unknown): Gender | null => {
-  if (value === Gender.male || value === Gender.female) {
+  if (value === Gender.male || value === Gender.female || value === Gender.other) {
     return value;
   }
 
@@ -21,6 +21,14 @@ const normalizeGenderValue = (value: unknown): Gender | null => {
     }
     if (normalized === 'female' || normalized === 'f') {
       return Gender.female;
+    }
+    if (
+      normalized === 'other' ||
+      normalized === 'non-binary' ||
+      normalized === 'nonbinary' ||
+      normalized === 'nb'
+    ) {
+      return Gender.other;
     }
   }
 

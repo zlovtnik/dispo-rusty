@@ -206,13 +206,33 @@ function formReducer<T extends Record<string, unknown>>(
 }
 
 /**
- * Railway-oriented form validation hook
+ * Railway-oriented form validation hook.
  *
- * Provides comprehensive form validation using railway-oriented programming patterns.
- * Validates fields individually and as a complete form with error accumulation.
+ * Provides comprehensive form validation using Result-based validators. The hook tracks field
+ * dirtiness, touch state, and aggregates validation errors so submit handlers can reason about
+ * both per-field and global validity.
  *
- * @param config - Form validation configuration
- * @returns Form validation state and actions
+ * @template T Shape of the form values
+ * @param config Form validation configuration object
+ * @returns Form validation state and action helpers
+ * @example
+ * ```typescript
+ * const form = useFormValidation<LoginFormValues>({
+ *   initialValues: { email: '', password: '' },
+ *   validators: {
+ *     email: [validateEmail],
+ *     password: [validatePassword],
+ *   },
+ *   mode: 'onSubmit',
+ * });
+ *
+ * const onSubmit = () => {
+ *   const validation = form.actions.validateForm();
+ *   if (validation.isValid) {
+ *     authService.login(validation.values as LoginFormValues);
+ *   }
+ * };
+ * ```
  */
 export function useFormValidation<T extends Record<string, unknown>>(
   config: FormValidationConfig<T>

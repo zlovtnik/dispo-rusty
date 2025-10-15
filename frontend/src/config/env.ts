@@ -12,6 +12,8 @@ interface EnvConfig {
   isDebug: boolean;
   isDevelopment: boolean;
   isProduction: boolean;
+  defaultCountry: string;
+  enablePwnedPasswordCheck: boolean;
 }
 
 class EnvironmentError extends Error {
@@ -70,6 +72,13 @@ export function getEnvConfig(): EnvConfig {
     const apiUrl = getRequiredEnv('VITE_API_URL');
     validateUrl(apiUrl, 'VITE_API_URL');
 
+    const rawDefaultCountry = getOptionalEnv('VITE_DEFAULT_COUNTRY', '');
+    const defaultCountry = typeof rawDefaultCountry === 'string' ? rawDefaultCountry.trim() : '';
+    const passwordCheckDefault = import.meta.env.MODE === 'production' ? 'true' : 'false';
+    const enablePwnedPasswordCheck =
+      getOptionalEnv('VITE_ENABLE_PWNED_PASSWORD_CHECK', passwordCheckDefault).toLowerCase() ===
+      'true';
+
     return {
       apiUrl,
       appName: getOptionalEnv('VITE_APP_NAME', 'Actix Web REST API'),
@@ -77,6 +86,8 @@ export function getEnvConfig(): EnvConfig {
       isDebug: getOptionalEnv('VITE_DEBUG', 'false').toLowerCase() === 'true',
       isDevelopment: import.meta.env.MODE === 'development',
       isProduction: import.meta.env.MODE === 'production',
+      defaultCountry,
+      enablePwnedPasswordCheck,
     };
   } catch (error) {
     if (error instanceof EnvironmentError) {

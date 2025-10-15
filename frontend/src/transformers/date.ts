@@ -65,7 +65,10 @@ export const parseDate = (
   value: unknown,
   options: DateParseOptions = {}
 ): Result<Date, AppError> => {
-  if ((value === '' || value === undefined || value === null) && options.allowEmptyString) {
+  if (
+    (value === '' || value === undefined || value === null) &&
+    options.allowEmptyString !== true
+  ) {
     return err(
       createDateError(
         'Date value is empty',
@@ -199,7 +202,7 @@ export const createDatePipeline =
         ? convertToTimezone(parsed, options.timeZone, options.locale ?? 'en-US').map(zoned => ({
             isoString: zoned.isoString,
             parts: zoned.parts,
-            timeZone: options.timeZone,
+            timeZone: zoned.timeZone,
             locale: zoned.locale,
           }))
         : toIsoString(parsed, { context: options.context }).map(isoString => ({

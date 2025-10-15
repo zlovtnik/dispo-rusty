@@ -4,6 +4,7 @@ import { fromNullable, isSome, none, some } from '../types/fp';
 import type { AppError } from '../types/errors';
 import { createValidationError } from '../types/errors';
 import type { Contact, Address, ContactListResponse } from '../types/contact';
+import type { Gender } from '../types/person';
 import type { User, Tenant as AuthTenant } from '../types/auth';
 import type { Tenant as TenantRecord } from '../types/tenant';
 import { asContactId, asTenantId, asUserId } from '../types/ids';
@@ -212,7 +213,7 @@ export interface ContactApiDTO {
   readonly email?: string | null;
   readonly phone?: string | null;
   readonly mobile?: string | null;
-  readonly gender?: boolean | string | null;
+  readonly gender?: Gender | boolean | string | null;
   readonly age?: number | null;
   readonly address?: string | Record<string, unknown> | null;
   readonly date_of_birth?: string | Date | null;

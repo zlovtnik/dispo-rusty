@@ -79,7 +79,7 @@ export const userSchema = z.object({
     .string()
     .min(1)
     .transform((value: string) => asUserId(value)),
-  email: z.email(),
+  email: z.string().email(),
   username: z.string().min(1),
   firstName: z.string().optional(),
   lastName: z.string().optional(),
@@ -109,7 +109,7 @@ const emergencyContactSchema = z.object({
   name: z.string().min(1),
   relationship: z.string().min(1),
   phone: z.string().min(1),
-  email: z.email().optional(),
+  email: z.string().email().optional(),
 });
 
 export const contactSchema = z
@@ -128,7 +128,7 @@ export const contactSchema = z
     preferredName: z.string().optional(),
     title: z.string().optional(),
     suffix: z.string().optional(),
-    email: z.email().optional(),
+    email: z.string().email().optional(),
     phone: z.string().optional(),
     mobile: z.string().optional(),
     fax: z.string().optional(),
@@ -213,14 +213,14 @@ export const loginRequestSchema = z.object({
 
 export const createTenantSchema = z.object({
   name: z.string().min(1),
-  db_url: z.url(),
+  db_url: z.string().url(),
 });
 
 export const updateTenantSchema = createTenantSchema.partial();
 
 export const contactMutationSchema = z.object({
   name: z.string().min(1),
-  email: z.email(),
+  email: z.string().email(),
   gender: z.boolean(),
   age: z.number().int().nonnegative(),
   address: z.string().min(1),

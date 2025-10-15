@@ -79,14 +79,19 @@ export type ValidatedEmail = string & { readonly __brand: 'ValidatedEmail' };
  * ```
  */
 export const validateUsername = (
-  username: string
+  username: string | null | undefined
 ): Result<ValidatedUsername, CredentialValidationError> => {
-  // Check if empty
-  if (username?.trim().length === 0) {
+  if (username === undefined || username === null) {
     return err(ValidationErrors.emptyUsername());
   }
 
-  const trimmed = username.trim();
+  const trimmedInput = username.trim();
+
+  if (trimmedInput.length === 0) {
+    return err(ValidationErrors.emptyUsername());
+  }
+
+  const trimmed = trimmedInput;
 
   // Check minimum length
   if (trimmed.length < USERNAME_MIN_LENGTH) {
@@ -127,10 +132,13 @@ export const validateUsername = (
  * ```
  */
 export const validatePassword = (
-  password: string
+  password: string | null | undefined
 ): Result<ValidatedPassword, CredentialValidationError> => {
-  // Check if empty
-  if (password?.length === 0) {
+  if (password === undefined || password === null) {
+    return err(ValidationErrors.emptyPassword());
+  }
+
+  if (password.length === 0) {
     return err(ValidationErrors.emptyPassword());
   }
 
@@ -181,7 +189,7 @@ export const validateTenantId = (
   const id = String(tenantId);
 
   // Check if empty
-  if (id?.trim().length === 0) {
+  if (id.trim().length === 0) {
     return err(ValidationErrors.emptyTenantId());
   }
 

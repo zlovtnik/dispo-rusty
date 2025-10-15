@@ -93,7 +93,7 @@ impl PersonDTO {
                 &self.name,
                 "name",
                 vec![Custom::new(
-                    |val: &String| !val.trim().is_empty(),
+                    Self::is_not_blank,
                     "REQUIRED",
                     "{} is required",
                 )],
@@ -110,7 +110,7 @@ impl PersonDTO {
                 &self.email,
                 "email",
                 vec![Custom::new(
-                    |val: &String| !val.trim().is_empty(),
+                    Self::is_not_blank,
                     "REQUIRED",
                     "{} is required",
                 )],
@@ -128,7 +128,7 @@ impl PersonDTO {
                 &self.phone,
                 "phone",
                 vec![Custom::new(
-                    |val: &String| !val.trim().is_empty(),
+                    Self::is_not_blank,
                     "REQUIRED",
                     "{} is required",
                 )],
@@ -145,7 +145,7 @@ impl PersonDTO {
             {
                 let rules: Vec<Box<dyn ValidationRule<String>>> = vec![
                     Box::new(Custom::new(
-                        |val: &String| !val.trim().is_empty(),
+                        Self::is_not_blank,
                         "REQUIRED",
                         "{} is required",
                     )),

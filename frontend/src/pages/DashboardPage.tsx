@@ -162,7 +162,7 @@ export const DashboardPage: React.FC = () => {
       </Card>
 
       {/* Technology Stack */}
-      <Card title={<>Technology Stack</>} hoverable>
+      <Card title="Technology Stack" hoverable>
         <Row gutter={[16, 16]}>
           {technologies.map(tech => (
             <Col xs={12} sm={6} key={tech.name}>

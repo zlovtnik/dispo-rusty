@@ -1,5 +1,7 @@
 // Contact/Address Book Types with Enhanced Fields
 import type { ContactId, TenantId, UserId } from './ids';
+import type { Gender as PersonGenderType } from './person';
+import { Gender as PersonGender } from './person';
 
 export interface Contact {
   id: ContactId;
@@ -26,7 +28,7 @@ export interface Contact {
   department?: string;
   // Health Information (Pharmacy Context)
   dateOfBirth?: Date;
-  gender?: 'male' | 'female';
+  gender?: PersonGenderType;
   age?: number;
   allergies?: string[];
   medications?: string[];
@@ -35,7 +37,7 @@ export interface Contact {
   // Additional Information
   notes?: string;
   tags?: string[];
-  customFields?: Record<string, any>;
+  customFields?: Record<string, unknown>;
   // Metadata
   createdAt: Date;
   updatedAt: Date;
@@ -122,7 +124,7 @@ export interface ContactListResponse {
 
 // Contact CRUD Types
 export interface CreateContactRequest extends Omit<ContactFormData, 'customFields'> {
-  customFields?: Record<string, any>;
+  customFields?: Record<string, unknown>;
 }
 
 export interface UpdateContactRequest extends Partial<CreateContactRequest> {
@@ -194,8 +196,5 @@ export interface ContactTagStats {
   contactCount: number;
 }
 
-// Gender enum for type safety
-export enum Gender {
-  male = 'male',
-  female = 'female',
-}
+export const Gender = PersonGender;
+export type Gender = PersonGenderType;

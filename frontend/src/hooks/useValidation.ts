@@ -39,15 +39,31 @@ export interface ValidationState<T, E> {
 }
 
 /**
- * Custom hook for managing validation with Result types
+ * Custom hook for managing validation with Result types.
  *
- * Provides synchronous validation using railway-oriented programming patterns.
- * Validates values and returns Result<T, E> for type-safe error handling.
+ * Provides synchronous validation using railway-oriented programming patterns. Validates values
+ * and returns `Result<T, E>` for type-safe error handling.
  *
- * @param initialValue - Initial value to validate
- * @param validators - Array of validation functions (railway pattern)
- * @param options - Configuration options
- * @returns ValidationState containing validation result and control functions
+ * @param initialValue Initial value to validate
+ * @param validators Array of validation functions (railway pattern)
+ * @param options Optional configuration flags
+ * @returns Validation state containing validation result and control functions
+ * @example
+ * ```typescript
+ * const emailValidation = useValidation<string, ValidationError>(
+ *   '',
+ *   [validateEmail],
+ *   { validateOnMount: true }
+ * );
+ *
+ * const onChange = (value: string) => {
+ *   emailValidation.setValue(value);
+ * };
+ *
+ * if (emailValidation.result.isValid) {
+ *   console.log('Email ready', emailValidation.result.value);
+ * }
+ * ```
  */
 export function useValidation<T, E = string>(
   initialValue?: T,
@@ -119,7 +135,7 @@ export function useValidation<T, E = string>(
         return {
           isValid: false,
           value: null,
-          error: combinedError ?? null, // Handle case where errorCombiner returns undefined
+          error: combinedError ?? errors[0]!, // Ensure error is always populated when validation fails
           errors,
         };
       }
@@ -204,7 +220,17 @@ export function useValidation<T, E = string>(
 }
 
 /**
- * Helper hook for simple boolean validation state
+ * Helper hook for deriving boolean validation flags from `useValidation` state.
+ *
+ * @param validationState Validation state returned by `useValidation`
+ * @returns Boolean flags and errors to simplify UI rendering
+ * @example
+ * ```typescript
+ * const validation = useValidation(...);
+ * const status = useValidationStatus(validation);
+ *
+ * return status.isInvalid ? <Error>{status.error?.message}</Error> : null;
+ * ```
  */
 export function useValidationStatus<T, E>(
   validationState: ValidationState<T, E>

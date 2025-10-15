@@ -10,6 +10,7 @@ interface ImportMetaEnv {
   readonly VITE_APP_NAME?: string;
   readonly VITE_JWT_STORAGE_KEY?: string;
   readonly VITE_DEBUG?: string;
+  readonly VITE_DEFAULT_COUNTRY?: string;
   readonly MODE: 'development' | 'production' | 'test';
   readonly PROD: boolean;
   readonly DEV: boolean;

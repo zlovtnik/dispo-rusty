@@ -3,9 +3,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { ConfirmationModal } from '@/components/ConfirmationModal';
 import type { Contact, ContactListResponse } from '@/types/contact';
 import { Gender } from '@/types/contact';
-import type { PersonDTO } from '@/types/person';
+import { normalizePersonDTO, type PersonDTO } from '@/types/person';
 import { addressBookService } from '@/services/api';
-import { genderConversion } from '@/transformers/gender';
+import { getEnv } from '@/config/env';
 import {
   Button,
   Input,
@@ -40,6 +40,99 @@ interface AddressFormValues {
   country: string;
 }
 
+const DEFAULT_COUNTRY = (() => {
+  const value = getEnv().defaultCountry;
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : '';
+})();
+
+/**
+ * Resolve the contact identifier from a backend person payload.
+ */
+export const resolveContactId = (
+  person: PersonDTO,
+  fallback: () => Contact['id']
+): Contact['id'] => {
+  const normalized = normalizePersonDTO(person);
+
+  if (typeof normalized.id === 'string' && normalized.id.trim()) {
+    return asContactId(normalized.id.trim());
+  }
+
+  if (typeof normalized.id === 'number') {
+    return asContactId(normalized.id.toString());
+  }
+
+  return fallback();
+};
+
+/**
+ * Parse the most complete name representation available from the person payload.
+ */
+export const parseContactName = (
+  person: PersonDTO
+): { rawName: string; firstName: string; lastName: string } => {
+  const normalized = normalizePersonDTO(person);
+
+  const computedFullName =
+    normalized.fullName ??
+    [normalized.firstName, normalized.lastName]
+      .filter((segment): segment is string => Boolean(segment?.trim()))
+      .join(' ')
+      .trim();
+
+  const rawName = computedFullName;
+  const nameParts = rawName ? rawName.split(/\s+/) : [];
+  const firstName = normalized.firstName ?? nameParts[0] ?? '';
+  const lastName = normalized.lastName ?? nameParts.slice(1).join(' ');
+
+  return { rawName, firstName, lastName };
+};
+
+/**
+ * Resolve gender from multiple potential backend encodings.
+ */
+export const resolveContactGender = (person: PersonDTO): Gender | undefined => {
+  const normalized = normalizePersonDTO(person);
+
+  if (normalized.gender === null || normalized.gender === undefined) {
+    return undefined;
+  }
+
+  if (
+    normalized.gender === Gender.male ||
+    normalized.gender === Gender.female ||
+    normalized.gender === Gender.other
+  ) {
+    return normalized.gender;
+  }
+
+  return undefined;
+};
+
+/**
+ * Normalise address information into the Contact schema.
+ */
+export const normalizeContactAddress = (
+  person: PersonDTO,
+  defaultCountry: string
+): Contact['address'] | undefined => {
+  const normalized = normalizePersonDTO(person);
+  const address = normalized.address;
+
+  if (!address) {
+    return undefined;
+  }
+
+  return {
+    street1: address.street1 ?? '',
+    street2: address.street2,
+    city: address.city ?? '',
+    state: address.state ?? '',
+    zipCode: address.zipCode ?? '',
+    country: address.country ?? defaultCountry,
+  };
+};
+
 export const AddressBookPage: React.FC = () => {
   const { tenant } = useAuth();
   const { message } = App.useApp();
@@ -65,105 +158,29 @@ export const AddressBookPage: React.FC = () => {
    */
   const personToContact = useCallback(
     (person: PersonDTO): Contact => {
-      const resolvedId = (() => {
-        if (typeof person?.id === 'string' && person.id.trim())
-          return asContactId(person.id.trim());
-        if (typeof person?.id === 'number') return asContactId(person.id.toString());
-        return asContactId(generateFallbackContactId());
-      })();
+      const normalized = normalizePersonDTO(person);
+
+      const resolvedId = resolveContactId(normalized, () =>
+        asContactId(generateFallbackContactId())
+      );
 
       const resolvedTenantId = (() => {
-        if (typeof person?.tenantId === 'string' && person.tenantId.trim())
-          return asTenantId(person.tenantId.trim());
-        if (typeof person?.tenant_id === 'string' && person.tenant_id.trim())
-          return asTenantId(person.tenant_id.trim());
+        if (typeof normalized.tenantId === 'string' && normalized.tenantId.trim()) {
+          return asTenantId(normalized.tenantId.trim());
+        }
         if (tenant?.id) return tenant.id;
         return asTenantId('tenant-fallback');
       })();
 
-      const rawName = (() => {
-        if (typeof person?.name === 'string' && person.name.trim()) return person.name.trim();
-        if (typeof person?.fullName === 'string' && person.fullName.trim())
-          return person.fullName.trim();
-        const first = typeof person?.firstName === 'string' ? person.firstName : '';
-        const last = typeof person?.lastName === 'string' ? person.lastName : '';
-        return [first, last].filter(Boolean).join(' ').trim();
-      })();
+      const { rawName, firstName, lastName } = parseContactName(normalized);
 
-      const nameParts = rawName ? rawName.split(/\s+/) : [];
-      const firstName = nameParts[0] ?? '';
-      const lastName = nameParts.slice(1).join(' ');
+      const resolvedGender = resolveContactGender(normalized);
 
-      const resolvedGender = (() => {
-        if (typeof person?.gender === 'string') {
-          return person.gender === Gender.female
-            ? Gender.female
-            : person.gender === Gender.male
-              ? Gender.male
-              : undefined;
-        }
-        if (typeof person?.gender === 'boolean') {
-          return genderConversion.fromBoolean(person.gender).unwrapOr(undefined);
-        }
-        return undefined;
-      })();
+      const resolvedAddress = normalizeContactAddress(normalized, DEFAULT_COUNTRY);
 
-      const resolveDate = (value: unknown): Date => {
-        if (typeof value === 'string' || typeof value === 'number') {
-          const parsed = new Date(value);
-          if (!Number.isNaN(parsed.getTime())) return parsed;
-        }
-        if (value instanceof Date) return value;
-        return new Date();
-      };
+      const createdBy = normalized.createdBy ? asUserId(normalized.createdBy) : asUserId('system');
 
-      const resolvedAddress = (() => {
-        if (typeof person?.address === 'object' && person.address !== null) {
-          const addressObj = person.address as Record<string, unknown>;
-          const street1 =
-            typeof addressObj.street1 === 'string' && addressObj.street1.trim()
-              ? addressObj.street1.trim()
-              : typeof addressObj.address === 'string'
-                ? addressObj.address.trim()
-                : '';
-
-          return {
-            street1,
-            street2: typeof addressObj.street2 === 'string' ? addressObj.street2 : undefined,
-            city: typeof addressObj.city === 'string' ? addressObj.city : '',
-            state: typeof addressObj.state === 'string' ? addressObj.state : '',
-            zipCode: typeof addressObj.zipCode === 'string' ? addressObj.zipCode : '',
-            country: typeof addressObj.country === 'string' ? addressObj.country : 'USA',
-          };
-        }
-
-        if (typeof person?.address === 'string') {
-          return {
-            street1: person.address,
-            street2: undefined,
-            city: '',
-            state: '',
-            zipCode: '',
-            country: 'USA',
-          };
-        }
-
-        return undefined;
-      })();
-
-      const createdBy =
-        typeof person?.createdBy === 'string' && person.createdBy.trim()
-          ? asUserId(person.createdBy.trim())
-          : typeof person?.created_by === 'string' && person.created_by.trim()
-            ? asUserId(person.created_by.trim())
-            : asUserId('system');
-
-      const updatedBy =
-        typeof person?.updatedBy === 'string' && person.updatedBy.trim()
-          ? asUserId(person.updatedBy.trim())
-          : typeof person?.updated_by === 'string' && person.updated_by.trim()
-            ? asUserId(person.updated_by.trim())
-            : createdBy;
+      const updatedBy = normalized.updatedBy ? asUserId(normalized.updatedBy) : createdBy;
 
       return {
         id: resolvedId,
@@ -171,18 +188,16 @@ export const AddressBookPage: React.FC = () => {
         firstName,
         lastName,
         fullName: rawName || [firstName, lastName].filter(Boolean).join(' '),
-        email: typeof person?.email === 'string' ? person.email : undefined,
-        phone: typeof person?.phone === 'string' ? person.phone : undefined,
+        email: normalized.email,
+        phone: normalized.phone,
         gender: resolvedGender,
-        age: typeof person?.age === 'number' ? person.age : undefined,
+        age: normalized.age,
         address: resolvedAddress,
-        createdAt: resolveDate(person?.createdAt ?? person?.created_at),
-        updatedAt: resolveDate(
-          person?.updatedAt ?? person?.updated_at ?? person?.createdAt ?? person?.created_at
-        ),
+        createdAt: normalized.createdAt ?? new Date(),
+        updatedAt: normalized.updatedAt ?? normalized.createdAt ?? new Date(),
         createdBy,
         updatedBy,
-        isActive: typeof person?.isActive === 'boolean' ? person.isActive : true,
+        isActive: normalized.isActive ?? true,
       };
     },
     [tenant]
@@ -207,11 +222,7 @@ export const AddressBookPage: React.FC = () => {
       address: addressSegments.join(', ') || formValues.street1,
       phone: formValues.phone ?? '',
       email: formValues.email ?? '',
-      // Only include gender when conversion succeeds to avoid misclassification
-      ...(() => {
-        const resolvedGender = genderConversion.toBoolean(formValues.gender).unwrapOr(undefined);
-        return resolvedGender !== undefined ? { gender: resolvedGender } : {};
-      })(),
+      gender: formValues.gender,
       age: typeof formValues.age === 'number' ? formValues.age : 25,
     };
   };
@@ -550,7 +561,7 @@ export const AddressBookPage: React.FC = () => {
             city: '',
             state: '',
             zipCode: '',
-            country: 'USA',
+            country: DEFAULT_COUNTRY,
           }}
         >
           <Form.Item

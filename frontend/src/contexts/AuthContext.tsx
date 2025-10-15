@@ -183,6 +183,9 @@ const attemptTokenRefresh = async (
 // Context
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Export the context for testing purposes
+export { AuthContext };
+
 // Provider props
 interface AuthProviderProps {
   children: ReactNode;

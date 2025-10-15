@@ -5,6 +5,7 @@ import { useAsync } from './useAsync';
 import { ok, err } from 'neverthrow';
 import type { AppError, NetworkError } from '../types/errors';
 import { createBusinessLogicError, createNetworkError } from '../types/errors';
+import type { z } from 'zod';
 
 /**
  * Module-level cache for useCachedFetch to persist across component lifecycles
@@ -25,11 +26,18 @@ const CACHE_VERSION = 1;
 
 const globalFetchCache = new Map<string, CacheEntry<unknown>>();
 
-// Migrate old cache entries on module initialization
-for (const [key, entry] of globalFetchCache) {
-  if (entry.version === undefined || entry.version !== CACHE_VERSION) {
-    globalFetchCache.delete(key);
+// Module-scoped flag to ensure cache migration runs only once per session
+let cacheMigrated = false;
+
+// Migrate old cache entries on first module import (runs once per session)
+// This migration can be removed when all clients have upgraded past CACHE_VERSION
+if (!cacheMigrated) {
+  for (const [key, entry] of globalFetchCache) {
+    if (entry.version === undefined || entry.version !== CACHE_VERSION) {
+      globalFetchCache.delete(key);
+    }
   }
+  cacheMigrated = true;
 }
 
 /**
@@ -48,6 +56,8 @@ export interface FetchOptions extends RequestInit {
   baseURL?: string;
   /** Transform response data before returning */
   transformResponse?: <T>(data: unknown) => T;
+  /** Validate transformed response data (Zod schema) */
+  validateResponse?: z.ZodSchema;
   /** Transform error before returning */
   transformError?: (error: AppError) => AppError;
   /** When true, the request will only run when refetch is called */
@@ -73,15 +83,28 @@ export interface FetchState<T> {
 }
 
 /**
- * Hook for making HTTP requests with Result-based error handling
+ * Hook for making HTTP requests with Result-based error handling.
  *
- * Provides automatic error handling, retry logic, and transformation
- * using railway-oriented programming patterns.
+ * Provides automatic error handling, retry logic, and payload transformation using
+ * railway-oriented programming patterns.
  *
- * @template T - The expected response data type
- * @param url - The URL to fetch from (null to skip fetch)
- * @param options - Configuration options for the fetch operation
- * @returns FetchState object with data, loading, error states and refetch function
+ * @template T The expected response data type
+ * @param url URL to fetch (pass `null` to pause requests)
+ * @param options Optional configuration including retries, timeout, and transformers
+ * @returns Fetch state with data, loading, error flags, and a refetch trigger
+ * @example
+ * ```typescript
+ * const { data, loading, error, refetch } = useFetch<ContactDTO[]>(
+ *   '/contacts',
+ *   { baseURL: apiBase }
+ * );
+ *
+ * useEffect(() => {
+ *   if (!loading && error) {
+ *     notification.error({ message: error.message });
+ *   }
+ * }, [loading, error]);
+ * ```
  */
 export function useFetch<T = unknown>(
   url: string | null,
@@ -95,6 +118,7 @@ export function useFetch<T = unknown>(
     retryOnNetworkError = true,
     baseURL,
     transformResponse,
+    validateResponse,
     transformError,
     manual = false,
     ...fetchOptions
@@ -160,6 +184,17 @@ export function useFetch<T = unknown>(
           // Transform response if needed
           const transformedData: T = transformResponse ? transformResponse<T>(data) : (data as T);
 
+          // Validate transformed data if schema provided
+          if (validateResponse) {
+            const validationResult = validateResponse.safeParse(transformedData);
+            if (!validationResult.success) {
+              return err(createBusinessLogicError(
+                `Response validation failed: ${validationResult.error.message}`,
+                { validationErrors: validationResult.error.issues }
+              ));
+            }
+          }
+
           return ok(transformedData);
         } catch (error) {
           const isAbort =
@@ -206,6 +241,7 @@ export function useFetch<T = unknown>(
     retryOnNetworkError,
     baseURL,
     transformResponse,
+    validateResponse,
     transformError,
     // Use JSON.stringify for complex fetchOptions to detect changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -228,7 +264,28 @@ export function useFetch<T = unknown>(
 }
 
 /**
- * Hook for optimistic updates with Result-based API
+ * Adds optimistic update helpers on top of `useFetch` for latency-sensitive flows.
+ *
+ * @template T Response data type
+ * @param url URL to fetch (pass `null` to disable)
+ * @param options Fetch options plus optimistic configuration
+ * @returns Fetch state extended with optimistic helpers
+ * @example
+ * ```typescript
+ * const fetchState = useOptimisticFetch<ContactDTO[]>('/contacts', {
+ *   baseURL: apiBase,
+ *   optimisticUpdate: current => ok([newContact, ...(current ?? [])]),
+ *   rollbackUpdate: (_optimistic, error) => err(error),
+ * });
+ *
+ * const handleCreate = async () => {
+ *   const optimistic = fetchState.applyOptimisticUpdate();
+ *   if (optimistic.isOk()) {
+ *     await createContact(optimistic.value[0]);
+ *     await fetchState.refetch();
+ *   }
+ * };
+ * ```
  */
 export function useOptimisticFetch<T>(
   url: string | null,
@@ -252,6 +309,37 @@ export function useOptimisticFetch<T>(
     initialData !== undefined ? ok(initialData) : null
   );
 
+  const optimisticResultRef = React.useRef<Result<T, AppError> | null>(optimisticResult);
+  const lastStableResultRef = React.useRef<Result<T, AppError> | null>(lastStableResult);
+  const fetchResultRef = React.useRef<Result<T, AppError> | null>(fetchState.result ?? null);
+  const initialDataRef = React.useRef<T | undefined>(initialData);
+  const optimisticUpdateRef = React.useRef<typeof optimisticUpdate>(optimisticUpdate);
+  const isOptimisticRef = React.useRef<boolean>(isOptimistic);
+
+  React.useEffect(() => {
+    optimisticResultRef.current = optimisticResult;
+  }, [optimisticResult]);
+
+  React.useEffect(() => {
+    lastStableResultRef.current = lastStableResult;
+  }, [lastStableResult]);
+
+  React.useEffect(() => {
+    fetchResultRef.current = fetchState.result ?? null;
+  }, [fetchState.result]);
+
+  React.useEffect(() => {
+    initialDataRef.current = initialData;
+  }, [initialData]);
+
+  React.useEffect(() => {
+    optimisticUpdateRef.current = optimisticUpdate;
+  }, [optimisticUpdate]);
+
+  React.useEffect(() => {
+    isOptimisticRef.current = isOptimistic;
+  }, [isOptimistic]);
+
   React.useEffect(() => {
     if (fetchState.result?.isOk()) {
       setLastStableResult(fetchState.result);
@@ -262,18 +350,22 @@ export function useOptimisticFetch<T>(
   }, [fetchState.result, isOptimistic]);
 
   const applyOptimisticUpdate = React.useCallback((): Result<T, AppError> => {
-    if (!optimisticUpdate) {
+    const updateFn = optimisticUpdateRef.current;
+    if (!updateFn) {
       return err(createBusinessLogicError('No optimistic update handler provided'));
     }
 
     // Derive baseResult: use optimistic result when isOptimistic is true, otherwise use fetch or stable result
+    // Precedence: 1. if isOptimistic use optimisticResult, 2. otherwise prefer latest server fetchState.result, 3. fallback to lastStableResult
     const baseResult =
-      isOptimistic && optimisticResult ? optimisticResult : fetchState.result || lastStableResult;
+      (isOptimisticRef.current && optimisticResultRef.current
+        ? optimisticResultRef.current
+        : fetchResultRef.current) ?? lastStableResultRef.current;
 
     // Compute currentValue from baseResult if it's ok, falling back to initialData or null
-    const currentValue = baseResult?.isOk() ? baseResult.value : (initialData ?? null);
+    const currentValue = baseResult?.isOk() ? baseResult.value : (initialDataRef.current ?? null);
 
-    const updateResult = optimisticUpdate(currentValue);
+    const updateResult = updateFn(currentValue);
 
     // Always set the optimistic result
     setOptimisticResult(updateResult);
@@ -284,14 +376,7 @@ export function useOptimisticFetch<T>(
     }
 
     return updateResult;
-  }, [
-    optimisticUpdate,
-    isOptimistic,
-    optimisticResult,
-    fetchState.result,
-    initialData,
-    lastStableResult,
-  ]);
+  }, []);
 
   const handleRollback = React.useCallback(
     (error: AppError) => {
@@ -338,10 +423,15 @@ export function useOptimisticFetch<T>(
     return fetchState.result ?? optimisticResult ?? lastStableResult;
   }, [isOptimistic, optimisticResult, fetchState.result, lastStableResult]);
 
+  // Consolidate data/error derivation from a single source of truth
+  const result = activeResult ?? fetchState.result ?? null;
+  const data = result?.isOk() ? result.value : null;
+  const error = result?.isErr() ? result.error : (fetchState.error ?? null);
+
   return {
     ...fetchState,
-    data: activeResult?.isOk() ? activeResult.value : fetchState.data,
-    error: activeResult?.isErr() ? activeResult.error : fetchState.error,
+    data,
+    error,
     result: activeResult ?? fetchState.result,
     applyOptimisticUpdate,
     isOptimistic,
@@ -349,7 +439,24 @@ export function useOptimisticFetch<T>(
 }
 
 /**
- * Hook for cached fetch operations
+ * Provides caching semantics for fetch operations with stale-time awareness.
+ *
+ * @template T Response data type
+ * @param url URL to fetch (pass `null` to disable)
+ * @param options Fetch options plus cache configuration
+ * @returns Fetch state whose data is hydrated from cache when available
+ * @example
+ * ```typescript
+ * const tenants = useCachedFetch<PaginatedTenantResponse>('/tenants', {
+ *   baseURL: apiBase,
+ *   cacheKey: 'tenants:list',
+ *   cacheTime: CacheTTL.MEDIUM,
+ * });
+ *
+ * useEffect(() => {
+ *   tenants.refetch();
+ * }, [tenants.refetch]);
+ * ```
  */
 export function useCachedFetch<T>(
   url: string | null,

@@ -25,10 +25,35 @@ export interface ApiCallOptions<TIn, EIn, TOut = TIn, EOut = EIn> {
 }
 
 /**
- * Enhanced API call hook with automatic error handling and Result composition
+ * Executes an async API request with retry support and Result composition semantics.
  *
- * Provides automatic error handling, retry logic, and Result transformation
- * using railway-oriented programming patterns.
+ * The hook keeps transport concerns (retry metadata, transient error mapping) outside of
+ * the component tree, letting callers focus on handling `Result` values. Automatic retry
+ * metadata is attached to errors so the UI can present actionable feedback.
+ *
+ * @template TIn The raw data type returned by the API function
+ * @template EIn The error type returned by the API function
+ * @template TOut The transformed success type exposed to consumers
+ * @template EOut The transformed error type exposed to consumers
+ * @param apiFunction Async function that returns a `ResultAsync`
+ * @param options Optional configuration for transforming results and handling retries
+ * @returns Async state containing loading status, latest `Result`, and an `execute` trigger
+ * @example
+ * ```typescript
+ * const fetchContacts = useCallback(
+ *   () => addressBookService.list(),
+ *   []
+ * );
+ *
+ * const { loading, result, execute } = useApiCall(fetchContacts, {
+ *   onError: error => notification.error({ message: error.message }),
+ *   onSuccess: data => console.log('Loaded', data),
+ * });
+ *
+ * useEffect(() => {
+ *   execute();
+ * }, [execute]);
+ * ```
  */
 export function useApiCall<
   TIn,
@@ -74,6 +99,7 @@ export function useApiCall<
         return error as EOut;
       }
 
+      // Normalize unexpected failures into a network error so consumers can rely on typed errors
       const base = createNetworkError(
         error instanceof Error ? error.message : 'Unexpected request failure',
         undefined,
@@ -155,7 +181,24 @@ export function useApiCall<
 }
 
 /**
- * Factory function for creating typed API call hooks
+ * Creates a typed wrapper hook that pre-binds an API function and forwards optional options.
+ *
+ * @template TData Success payload type
+ * @template TError Error type emitted by the API function
+ * @param baseApiFunction Async function to execute when the generated hook runs
+ * @returns Hook that can be used directly inside components while still accepting options
+ * @example
+ * ```typescript
+ * const useFetchTenants = createApiCallHook(tenantService.list);
+ *
+ * export const TenantsPage: React.FC = () => {
+ *   const { loading, result, execute } = useFetchTenants();
+ *   useEffect(() => {
+ *     execute();
+ *   }, [execute]);
+ *   // ...
+ * };
+ * ```
  */
 export function createApiCallHook<TData, TError extends AppError = AppError>(
   baseApiFunction: () => AsyncResult<TData, TError>
