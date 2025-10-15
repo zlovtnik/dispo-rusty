@@ -176,16 +176,11 @@ export const apiErrorSchema = z.object({
   statusCode: z.number().optional(),
 });
 
+// Schema for the inner data returned by auth endpoints
 export const authResponseSchema = z.object({
-  message: z.string(),
-  data: z.object({
-    access_token: z.string().min(1),
-    refresh_token: z.string().min(1),
-    token_type: z.string().min(1),
-  }),
-  metadata: z.object({
-    tenant_id: z.string().min(1),
-  }),
+  access_token: z.string().min(1),
+  refresh_token: z.string().min(1),
+  token_type: z.string().min(1),
 });
 
 export const loginRequestSchema = z.object({
