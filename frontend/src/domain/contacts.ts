@@ -1,29 +1,29 @@
 /**
  * Contact Management Domain Logic
- * 
+ *
  * Pure functions for contact management operations using Railway-Oriented Programming.
  * All functions return Result<T, E> for explicit error handling.
- * 
+ *
  * This module extracts business logic from the service layer,
  * making it pure, testable, and composable.
  */
 
-import { ok, err } from 'neverthrow';
-import type { Result } from '../types/fp';
-import type { Contact } from '../types/contact';
-import type { ContactId, UserId, TenantId } from '../types/ids';
-import { validateEmailFormat, validatePhoneFormat } from './rules/contactRules';
+import { ok, err } from "neverthrow";
+import type { Result } from "../types/fp";
+import type { Contact } from "../types/contact";
+import type { ContactId, UserId, TenantId } from "../types/ids";
+import { validateEmailFormat, validatePhoneFormat } from "./rules/contactRules";
 
 /**
  * Contact-specific errors
  */
 export type ContactError =
-  | { type: 'INVALID_DATA'; field: string; reason: string }
-  | { type: 'DUPLICATE_CONTACT'; field: string; value: string }
-  | { type: 'NOT_FOUND'; contactId: ContactId }
-  | { type: 'MERGE_CONFLICT'; reason: string }
-  | { type: 'VALIDATION_FAILED'; errors: Record<string, string> }
-  | { type: 'UNAUTHORIZED'; message: string };
+  | { type: "INVALID_DATA"; field: string; reason: string }
+  | { type: "DUPLICATE_CONTACT"; field: string; value: string }
+  | { type: "NOT_FOUND"; contactId: ContactId }
+  | { type: "MERGE_CONFLICT"; reason: string }
+  | { type: "VALIDATION_FAILED"; errors: Record<string, string> }
+  | { type: "UNAUTHORIZED"; message: string };
 
 /**
  * Contact creation data (input DTO)
@@ -37,7 +37,7 @@ export interface ContactCreateData {
   company?: string;
   jobTitle?: string;
   dateOfBirth?: Date;
-  gender?: 'male' | 'female';
+  gender?: "male" | "female";
   notes?: string;
   tags?: string[];
   customFields?: Record<string, any>;
@@ -51,11 +51,11 @@ export type ContactUpdateData = Partial<ContactCreateData>;
 /**
  * Merge strategy for combining contacts
  */
-export type MergeStrategy = 'prefer-primary' | 'prefer-secondary' | 'combine';
+export type MergeStrategy = "prefer-primary" | "prefer-secondary" | "combine";
 
 /**
  * Create a new contact with validation
- * 
+ *
  * @param data - Contact creation data
  * @param userId - ID of user creating the contact
  * @param tenantId - ID of the tenant
@@ -108,16 +108,17 @@ export function createContact(
     return ok(contact);
   } catch (error) {
     return err({
-      type: 'INVALID_DATA',
-      field: 'unknown',
-      reason: error instanceof Error ? error.message : 'Failed to create contact',
+      type: "INVALID_DATA",
+      field: "unknown",
+      reason:
+        error instanceof Error ? error.message : "Failed to create contact",
     });
   }
 }
 
 /**
  * Update an existing contact
- * 
+ *
  * @param existingContact - Current contact data
  * @param updateData - Fields to update
  * @param userId - ID of user updating the contact
@@ -140,9 +141,12 @@ export function updateContact(
       ...existingContact,
       ...updateData,
       // Recalculate derived fields
-      fullName: updateData.firstName || updateData.lastName
-        ? `${updateData.firstName || existingContact.firstName} ${updateData.lastName || existingContact.lastName}`.trim()
-        : existingContact.fullName,
+      fullName:
+        updateData.firstName || updateData.lastName
+          ? `${updateData.firstName || existingContact.firstName} ${
+              updateData.lastName || existingContact.lastName
+            }`.trim()
+          : existingContact.fullName,
       age: updateData.dateOfBirth
         ? calculateAge(updateData.dateOfBirth)
         : existingContact.age,
@@ -154,16 +158,17 @@ export function updateContact(
     return ok(updatedContact);
   } catch (error) {
     return err({
-      type: 'INVALID_DATA',
-      field: 'unknown',
-      reason: error instanceof Error ? error.message : 'Failed to update contact',
+      type: "INVALID_DATA",
+      field: "unknown",
+      reason:
+        error instanceof Error ? error.message : "Failed to update contact",
     });
   }
 }
 
 /**
  * Merge two contacts into one
- * 
+ *
  * @param primary - Primary contact (base)
  * @param secondary - Secondary contact (to merge)
  * @param strategy - Merge strategy
@@ -179,16 +184,16 @@ export function mergeContacts(
   // Validate contacts are from same tenant
   if (primary.tenantId !== secondary.tenantId) {
     return err({
-      type: 'MERGE_CONFLICT',
-      reason: 'Cannot merge contacts from different tenants',
+      type: "MERGE_CONFLICT",
+      reason: "Cannot merge contacts from different tenants",
     });
   }
 
   // Validate contacts are different
   if (primary.id === secondary.id) {
     return err({
-      type: 'MERGE_CONFLICT',
-      reason: 'Cannot merge contact with itself',
+      type: "MERGE_CONFLICT",
+      reason: "Cannot merge contact with itself",
     });
   }
 
@@ -196,7 +201,7 @@ export function mergeContacts(
     let mergedContact: Contact;
 
     switch (strategy) {
-      case 'prefer-primary':
+      case "prefer-primary":
         mergedContact = {
           ...primary,
           // Only take secondary fields that are missing in primary
@@ -207,14 +212,14 @@ export function mergeContacts(
           jobTitle: primary.jobTitle || secondary.jobTitle,
           dateOfBirth: primary.dateOfBirth || secondary.dateOfBirth,
           gender: primary.gender || secondary.gender,
-          notes: combineNotes(primary.notes, secondary.notes, 'prefer-primary'),
+          notes: combineNotes(primary.notes, secondary.notes, "prefer-primary"),
           tags: mergeArrays(primary.tags || [], secondary.tags || []),
           updatedAt: new Date(),
           updatedBy: userId,
         };
         break;
 
-      case 'prefer-secondary':
+      case "prefer-secondary":
         mergedContact = {
           ...secondary,
           id: primary.id, // Keep primary ID
@@ -228,14 +233,14 @@ export function mergeContacts(
           jobTitle: secondary.jobTitle || primary.jobTitle,
           dateOfBirth: secondary.dateOfBirth || primary.dateOfBirth,
           gender: secondary.gender || primary.gender,
-          notes: combineNotes(secondary.notes, primary.notes, 'prefer-primary'),
+          notes: combineNotes(secondary.notes, primary.notes, "prefer-primary"),
           tags: mergeArrays(secondary.tags || [], primary.tags || []),
           updatedAt: new Date(),
           updatedBy: userId,
         };
         break;
 
-      case 'combine':
+      case "combine":
         mergedContact = {
           ...primary,
           // Combine all non-empty fields
@@ -246,7 +251,7 @@ export function mergeContacts(
           jobTitle: combineFields(primary.jobTitle, secondary.jobTitle),
           dateOfBirth: primary.dateOfBirth || secondary.dateOfBirth,
           gender: primary.gender || secondary.gender,
-          notes: combineNotes(primary.notes, secondary.notes, 'combine'),
+          notes: combineNotes(primary.notes, secondary.notes, "combine"),
           tags: mergeArrays(primary.tags || [], secondary.tags || []),
           updatedAt: new Date(),
           updatedBy: userId,
@@ -257,8 +262,9 @@ export function mergeContacts(
     return ok(mergedContact);
   } catch (error) {
     return err({
-      type: 'MERGE_CONFLICT',
-      reason: error instanceof Error ? error.message : 'Failed to merge contacts',
+      type: "MERGE_CONFLICT",
+      reason:
+        error instanceof Error ? error.message : "Failed to merge contacts",
     });
   }
 }
@@ -266,25 +272,28 @@ export function mergeContacts(
 /**
  * Validate contact creation data
  */
-function validateContactData(data: ContactCreateData): Result<ContactCreateData, ContactError> {
+function validateContactData(
+  data: ContactCreateData
+): Result<ContactCreateData, ContactError> {
   const errors: Record<string, string> = {};
 
   // Required fields
   if (!data.firstName || data.firstName.trim().length === 0) {
-    errors.firstName = 'First name is required';
+    errors.firstName = "First name is required";
   }
 
   if (!data.lastName || data.lastName.trim().length === 0) {
-    errors.lastName = 'Last name is required';
+    errors.lastName = "Last name is required";
   }
 
   // Email validation
   if (data.email) {
     const emailValidation = validateEmailFormat(data.email);
     if (emailValidation.isErr()) {
-      errors.email = 'reason' in emailValidation.error
-        ? emailValidation.error.reason
-        : 'Invalid email format';
+      errors.email =
+        "reason" in emailValidation.error
+          ? emailValidation.error.reason
+          : "Invalid email format";
     }
   }
 
@@ -292,9 +301,10 @@ function validateContactData(data: ContactCreateData): Result<ContactCreateData,
   if (data.phone) {
     const phoneValidation = validatePhoneFormat(data.phone);
     if (phoneValidation.isErr()) {
-      errors.phone = 'reason' in phoneValidation.error
-        ? phoneValidation.error.reason
-        : 'Invalid phone format';
+      errors.phone =
+        "reason" in phoneValidation.error
+          ? phoneValidation.error.reason
+          : "Invalid phone format";
     }
   }
 
@@ -302,13 +312,13 @@ function validateContactData(data: ContactCreateData): Result<ContactCreateData,
   if (data.dateOfBirth) {
     const age = calculateAge(data.dateOfBirth);
     if (age < 0 || age > 150) {
-      errors.dateOfBirth = 'Invalid date of birth';
+      errors.dateOfBirth = "Invalid date of birth";
     }
   }
 
   if (Object.keys(errors).length > 0) {
     return err({
-      type: 'VALIDATION_FAILED',
+      type: "VALIDATION_FAILED",
       errors,
     });
   }
@@ -319,16 +329,19 @@ function validateContactData(data: ContactCreateData): Result<ContactCreateData,
 /**
  * Validate contact update data
  */
-function validateContactUpdateData(data: ContactUpdateData): Result<ContactUpdateData, ContactError> {
+function validateContactUpdateData(
+  data: ContactUpdateData
+): Result<ContactUpdateData, ContactError> {
   const errors: Record<string, string> = {};
 
   // Email validation
   if (data.email !== undefined && data.email !== null) {
     const emailValidation = validateEmailFormat(data.email);
     if (emailValidation.isErr()) {
-      errors.email = 'reason' in emailValidation.error
-        ? emailValidation.error.reason
-        : 'Invalid email format';
+      errors.email =
+        "reason" in emailValidation.error
+          ? emailValidation.error.reason
+          : "Invalid email format";
     }
   }
 
@@ -336,9 +349,10 @@ function validateContactUpdateData(data: ContactUpdateData): Result<ContactUpdat
   if (data.phone !== undefined && data.phone !== null) {
     const phoneValidation = validatePhoneFormat(data.phone);
     if (phoneValidation.isErr()) {
-      errors.phone = 'reason' in phoneValidation.error
-        ? phoneValidation.error.reason
-        : 'Invalid phone format';
+      errors.phone =
+        "reason" in phoneValidation.error
+          ? phoneValidation.error.reason
+          : "Invalid phone format";
     }
   }
 
@@ -346,13 +360,13 @@ function validateContactUpdateData(data: ContactUpdateData): Result<ContactUpdat
   if (data.dateOfBirth) {
     const age = calculateAge(data.dateOfBirth);
     if (age < 0 || age > 150) {
-      errors.dateOfBirth = 'Invalid date of birth';
+      errors.dateOfBirth = "Invalid date of birth";
     }
   }
 
   if (Object.keys(errors).length > 0) {
     return err({
-      type: 'VALIDATION_FAILED',
+      type: "VALIDATION_FAILED",
       errors,
     });
   }
@@ -368,26 +382,33 @@ function calculateAge(dateOfBirth: Date): number {
   const birthDate = new Date(dateOfBirth);
   let age = today.getFullYear() - birthDate.getFullYear();
   const monthDiff = today.getMonth() - birthDate.getMonth();
-  
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+
+  if (
+    monthDiff < 0 ||
+    (monthDiff === 0 && today.getDate() < birthDate.getDate())
+  ) {
     age--;
   }
-  
+
   return age;
 }
 
 /**
  * Combine notes from two contacts
  */
-function combineNotes(notes1?: string, notes2?: string, strategy: 'prefer-primary' | 'combine' = 'combine'): string | undefined {
+function combineNotes(
+  notes1?: string,
+  notes2?: string,
+  strategy: "prefer-primary" | "combine" = "combine"
+): string | undefined {
   if (!notes1 && !notes2) return undefined;
   if (!notes1) return notes2;
   if (!notes2) return notes1;
-  
-  if (strategy === 'prefer-primary') {
+
+  if (strategy === "prefer-primary") {
     return notes1;
   }
-  
+
   return `${notes1}\n\n---\n\n${notes2}`;
 }
 
@@ -414,7 +435,9 @@ function mergeArrays<T>(arr1: T[], arr2: T[]): T[] {
  * In production, this would be generated by the backend
  */
 function generateContactId(): ContactId {
-  return `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` as ContactId;
+  return `temp_${Date.now()}_${Math.random()
+    .toString(36)
+    .substr(2, 9)}` as ContactId;
 }
 
 /**
@@ -441,7 +464,7 @@ export function isCompleteContact(contact: Contact): boolean {
  */
 export function formatContactDisplay(contact: Contact): string {
   const parts: string[] = [contact.fullName];
-  
+
   if (contact.jobTitle && contact.company) {
     parts.push(`${contact.jobTitle} at ${contact.company}`);
   } else if (contact.jobTitle) {
@@ -449,14 +472,14 @@ export function formatContactDisplay(contact: Contact): string {
   } else if (contact.company) {
     parts.push(contact.company);
   }
-  
+
   if (contact.email) {
     parts.push(contact.email);
   }
-  
+
   if (contact.phone) {
     parts.push(contact.phone);
   }
-  
-  return parts.join(' • ');
+
+  return parts.join(" • ");
 }

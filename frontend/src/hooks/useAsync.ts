@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import type { DependencyList } from 'react';
-import { err, ok, ResultAsync, errAsync } from 'neverthrow';
-import type { Result, AsyncResult } from '../types/fp';
+import { useState, useEffect, useRef, useCallback } from "react";
+import type { DependencyList } from "react";
+import { err, ok, ResultAsync, errAsync } from "neverthrow";
+import type { Result, AsyncResult } from "../types/fp";
 
 /**
  * Represents the state of an async operation using railway-oriented programming
@@ -49,37 +49,39 @@ export function useAsync<T, E>(
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<Result<T, E> | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
-  
+
   // Track asyncFn reference to warn about non-memoized functions in development
   const asyncFnRef = useRef(asyncFn);
-  
+
   useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
+    if (process.env.NODE_ENV === "development") {
       if (asyncFnRef.current !== asyncFn) {
         console.warn(
-          'useAsync: asyncFn reference changed. This can cause infinite re-renders. ' +
-          'Please wrap asyncFn in useCallback to maintain a stable reference.'
+          "useAsync: asyncFn reference changed. This can cause infinite re-renders. " +
+            "Please wrap asyncFn in useCallback to maintain a stable reference."
         );
       }
     }
     asyncFnRef.current = asyncFn;
   }, [asyncFn]);
 
-  const toAsyncResult = useCallback((value: AsyncResult<T, E> | Promise<Result<T, E>>): AsyncResult<T, E> => {
-    if (value instanceof ResultAsync) {
-      return value;
-    }
+  const toAsyncResult = useCallback(
+    (value: AsyncResult<T, E> | Promise<Result<T, E>>): AsyncResult<T, E> => {
+      if (value instanceof ResultAsync) {
+        return value;
+      }
 
-    const promise = Promise.resolve(value)
-      .then(resolved => {
+      const promise = Promise.resolve(value).then((resolved) => {
         if (resolved.isOk()) {
           return resolved.value;
         }
         throw resolved.error;
       });
 
-    return ResultAsync.fromPromise(promise, (error: unknown) => error as E);
-  }, []);
+      return ResultAsync.fromPromise(promise, (error: unknown) => error as E);
+    },
+    []
+  );
 
   const execute = useCallback((): AsyncResult<T, E> => {
     if (abortControllerRef.current) {
@@ -103,14 +105,20 @@ export function useAsync<T, E>(
         .match({
           ok: () => undefined,
           err: (error: E) => {
-            if (abortControllerRef.current === controller && !controller.signal.aborted) {
+            if (
+              abortControllerRef.current === controller &&
+              !controller.signal.aborted
+            ) {
               setResult(err(error));
             }
             return error;
           },
         })
         .finally(() => {
-          if (abortControllerRef.current === controller && !controller.signal.aborted) {
+          if (
+            abortControllerRef.current === controller &&
+            !controller.signal.aborted
+          ) {
             setLoading(false);
           }
         });
@@ -121,20 +129,29 @@ export function useAsync<T, E>(
     asyncResult
       .match({
         ok: (value: T) => {
-          if (abortControllerRef.current === controller && !controller.signal.aborted) {
+          if (
+            abortControllerRef.current === controller &&
+            !controller.signal.aborted
+          ) {
             setResult(ok(value));
           }
           return value;
         },
         err: (error: E) => {
-          if (abortControllerRef.current === controller && !controller.signal.aborted) {
+          if (
+            abortControllerRef.current === controller &&
+            !controller.signal.aborted
+          ) {
             setResult(err(error));
           }
           return error;
         },
       })
       .finally(() => {
-        if (abortControllerRef.current === controller && !controller.signal.aborted) {
+        if (
+          abortControllerRef.current === controller &&
+          !controller.signal.aborted
+        ) {
           setLoading(false);
         }
       });
@@ -165,7 +182,7 @@ export function useAsync<T, E>(
     if (deps.length > 0) {
       execute();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [execute, ...deps]);
 
   return {

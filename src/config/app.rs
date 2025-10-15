@@ -276,9 +276,7 @@ fn configure_tenant_crud_routes(cfg: &mut web::ServiceConfig) {
             );
         })
         .add_route(|cfg| {
-            cfg.service(
-                web::resource("/filter").route(web::get().to(tenant_controller::filter)),
-            );
+            cfg.service(web::resource("/filter").route(web::get().to(tenant_controller::filter)));
         })
         .add_route(|cfg| {
             cfg.service(

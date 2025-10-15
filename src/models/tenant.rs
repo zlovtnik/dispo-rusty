@@ -363,7 +363,13 @@ impl Tenant {
         } else {
             Err(result::Error::DatabaseError(
                 result::DatabaseErrorKind::Unknown,
-                Box::new(errors.into_iter().map(|e| e.message).collect::<Vec<_>>().join("; ")),
+                Box::new(
+                    errors
+                        .into_iter()
+                        .map(|e| e.message)
+                        .collect::<Vec<_>>()
+                        .join("; "),
+                ),
             ))
         }
     }
