@@ -23,14 +23,18 @@ JWT Token → Middleware extracts tenant_id → TenantPoolManager routes to tena
 - **`src/services/`**: Business logic layer, extracts pool via `web::Data<Pool>`
 - **`src/models/`**: Diesel ORM models with `Queryable`, `Insertable`, `AsChangeset` traits
 - **`src/schema.rs`**: Auto-generated Diesel schema (run `diesel migration run` after DB changes)
+- **`src/functional/`**: Functional programming patterns (iterator-based pagination, validation engines, query builders)
+- **`src/pagination.rs`**: Iterator-based pagination utilities with bounded memory usage
 
 ### Frontend (React/TypeScript/Bun)
-- **Runtime**: Use Bun for all package management and script execution (see `frontend/.cursor/rules/`)
+- **Runtime**: Use Bun for all package management and script execution
 - **`frontend/src/contexts/AuthContext.tsx`**: JWT decoding, token refresh, tenant context management
-- **`frontend/src/services/api.ts`**: API client with automatic tenant header injection (`x-tenant-id`)
+- **`frontend/src/services/api.ts`**: API client with automatic tenant header injection (`x-tenant-id`), Result types, Zod validation, retry logic
 - **Build Tool**: Vite 5+ with HMR (NOT webpack/CRA)
 - **UI Library**: Ant Design 5.27.4+ (NOT Material-UI or custom components)
 - **Forms**: React Hook Form 7.x with Ant Design integration
+- **Testing**: Bun test runner with MSW (Mock Service Worker) for API mocking
+- **Types**: Comprehensive TypeScript types with Zod schemas for validation
 
 ## Development Workflows
 
@@ -94,18 +98,30 @@ let pool = req.extensions().get::<Pool>().cloned()
 
 **Authentication Bypass**: Routes in `IGNORE_ROUTES` skip auth middleware (e.g., `/api/auth/login`, `/api/ping`).
 
+**Functional Patterns**: Use functional programming utilities from `src/functional/` for:
+- Iterator-based pagination (`src/functional/pagination.rs`)
+- Validation engines (`src/functional/validation_engine.rs`)
+- Query composition (`src/functional/query_builder.rs`)
+- Pure functions with railway-oriented error handling
+
 ### Frontend Patterns
 
 **API Calls**: Always use service layer (`frontend/src/services/api.ts`), never direct `fetch`:
 ```typescript
-const response = await authService.login(credentials);  // Handles tenant headers automatically
+const result = await addressBookService.getContacts();
+result.match(
+  (response) => console.log('Contacts:', response.data.contacts),
+  (error) => console.error('Failed:', error.message)
+);
 ```
 
 **JWT Handling**: `AuthContext` decodes JWTs client-side to extract `tenant_id` and `user`. Token refresh is automatic.
 
-**Type Safety**: All API responses use `ApiResponseWrapper<T>` interface. Define types in `frontend/src/types/`.
+**Type Safety**: All API responses use `ApiResponse<T>` interface with Result types. Validate with Zod schemas.
 
 **Bun-Specific**: Bun auto-loads `.env` files - do NOT use `dotenv` package.
+
+**Testing**: Use MSW for API mocking in tests, Bun test runner for execution.
 
 ## Integration Points
 
@@ -134,6 +150,9 @@ Diesel migrations in `migrations/` directory. **CRITICAL**: Run migrations befor
 ### Redis Usage
 Used for session management and health monitoring. Connection initialized in `src/config/cache.rs`.
 
+### Pagination
+Backend uses iterator-based pagination with `Pagination` struct. Frontend receives paginated responses with metadata.
+
 ## Testing
 
 ### Backend Tests
@@ -150,9 +169,14 @@ See `src/api/address_book_controller.rs::tests` for examples with JWT auth.
 cd frontend
 bun test                # Run all tests
 bun test --watch        # Watch mode
+bun test --coverage     # Generate coverage
 ```
 
-Use Bun's built-in test runner (Jest-compatible), NOT Jest or Vitest directly.
+Use Bun's built-in test runner with:
+- MSW for API mocking
+- Component tests in `src/components/__tests__/`
+- Integration tests in `src/__tests__/integration/`
+- Unit tests alongside components
 
 ## Common Pitfalls
 
@@ -163,7 +187,8 @@ Use Bun's built-in test runner (Jest-compatible), NOT Jest or Vitest directly.
 5. **Bun vs Node**: Frontend uses Bun runtime - commands like `node` will fail, use `bun` instead
 6. **Pool Unwrap**: Avoid `.unwrap()` on pool connections in production - use proper error handling
 7. **Migration Rollback**: Always test `down.sql` works before deploying migrations
-8. **Frontend Mock Data**: Address book currently uses mock data - backend integration pending (Phase 2)
+8. **Functional Patterns**: Use railway-oriented programming with `Result` types, avoid exceptions
+9. **MSW Setup**: Reset MSW between tests to prevent state pollution
 
 ## Key Files Reference
 
@@ -173,14 +198,31 @@ Use Bun's built-in test runner (Jest-compatible), NOT Jest or Vitest directly.
 - **API routing**: `src/config/app.rs::config_services`
 - **Error types**: `src/error.rs::ServiceError`
 - **Frontend types**: `frontend/src/types/auth.ts`, `frontend/src/types/contact.ts`
+- **Functional patterns**: `src/functional/` directory
+- **Pagination**: `src/pagination.rs`, `src/functional/pagination.rs`
+- **Testing utils**: `frontend/src/test-utils/`
 
 ## Current Development Phase
 
-**Phase 1 Complete**: Full architecture in place with mock data in frontend.
+**Phase 2 (In Progress)**: Backend Integration & Quality Assurance (75% Complete)
 
-**Phase 2 (In Progress)**: Connect frontend API service layer to real backend endpoints. Remove mock data, implement proper error boundaries, add comprehensive tests.
+**Completed:**
+- Full multi-tenant architecture with database isolation
+- JWT authentication system
+- Functional programming patterns implementation
+- Iterator-based pagination
+- Frontend API integration (real backend calls, not mock data)
+- Comprehensive testing with Bun + MSW
+- Error boundaries and proper error handling
 
-When implementing Phase 2 features, prioritize:
-1. Replacing mock services in `frontend/src/services/api.ts` with real API calls
-2. Adding proper error handling for API failures
-3. Updating service layer to handle backend response structures
+**Remaining:**
+- Complete API endpoint coverage
+- Performance optimization
+- Production deployment preparation
+- Advanced testing scenarios
+
+When implementing features, prioritize:
+1. Railway-oriented error handling with Result types
+2. Functional composition patterns
+3. Comprehensive test coverage
+4. Type safety with Zod validation

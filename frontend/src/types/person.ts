@@ -49,6 +49,14 @@ export interface CreatePersonDTO {
   phone?: string;
   gender?: Gender;
   age?: number;
+  /**
+   * Address handling note: This field accepts a string representation for API compatibility.
+   * Backend may store addresses as a single string or convert structured address objects.
+   * The PersonDTO normalizes this to a structured PersonAddressDTO for frontend use.
+   * If your backend API expects a structured address object instead, update this to:
+   * address?: PersonAddressDTO;
+   * and adjust transformations accordingly.
+   */
   address?: string;
   tenant_id: string;
 }
@@ -60,6 +68,10 @@ export interface UpdatePersonDTO {
   phone?: string;
   gender?: Gender;
   age?: number;
+  /**
+   * Address handling note: This field accepts a string representation for API compatibility.
+   * See CreatePersonDTO.address for details about API contract verification.
+   */
   address?: string;
 }
 
@@ -120,9 +132,8 @@ const normalizeGender = (value: unknown): Gender | null | undefined => {
     return null;
   }
 
-  if (typeof value === 'boolean') {
-    return value ? Gender.male : Gender.female;
-  }
+  // Note: boolean values are not normalized - they're invalid input types.
+  // If your backend sends boolean gender values, validate them server-side.
 
   if (typeof value === 'string') {
     const normalized = value.trim().toLowerCase();
@@ -142,6 +153,10 @@ const normalizeGender = (value: unknown): Gender | null | undefined => {
       return Gender.other;
     }
 
+    // Intentional fallback: Unrecognized gender strings default to 'other'
+    // rather than being rejected. This allows frontend to gracefully handle
+    // new gender values introduced by the backend without breaking.
+    // If stricter validation is needed, use a schema validator at the service boundary.
     return Gender.other;
   }
 

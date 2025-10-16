@@ -96,6 +96,30 @@ let mockContacts: ContactApiDTO[] = createMockContacts();
 let mockTenants: BackendTenant[] = createMockTenants();
 
 /**
+ * Helper to assert request headers for tenant-scoped operations
+ * Returns tenant ID if valid, throws error if headers are missing
+ */
+function getTenantIdFromHeaders(request: Request): string {
+  const tenantId = request.headers.get('x-tenant-id');
+  if (!tenantId) {
+    throw new Error('Missing required x-tenant-id header');
+  }
+  return tenantId;
+}
+
+/**
+ * Helper to assert Authorization header
+ * Returns the token value if present, throws error if missing
+ */
+function getAuthorizationFromHeaders(request: Request): string {
+  const auth = request.headers.get('authorization');
+  if (!auth) {
+    throw new Error('Missing required Authorization header');
+  }
+  return auth;
+}
+
+/**
  * API Request Handlers
  */
 export function getHandlers() {
@@ -147,7 +171,18 @@ export function getHandlers() {
   /**
    * POST /auth/logout - Logout endpoint
    */
-  http.post(`${API_BASE_URL}/auth/logout`, () => {
+  http.post(`${API_BASE_URL}/auth/logout`, ({ request }) => {
+    // Validate required headers for authenticated operation
+    try {
+      getAuthorizationFromHeaders(request);
+      getTenantIdFromHeaders(request);
+    } catch (e) {
+      return HttpResponse.json(
+        { message: (e as Error).message, data: null },
+        { status: 401 }
+      );
+    }
+
     return HttpResponse.json(
       {
         message: 'Logout successful',
@@ -160,7 +195,17 @@ export function getHandlers() {
   /**
    * POST /auth/refresh - Refresh token endpoint
    */
-  http.post(`${API_BASE_URL}/auth/refresh`, () => {
+  http.post(`${API_BASE_URL}/auth/refresh`, ({ request }) => {
+    // Validate required headers for authenticated operation
+    try {
+      getAuthorizationFromHeaders(request);
+    } catch (e) {
+      return HttpResponse.json(
+        { message: (e as Error).message, data: null },
+        { status: 401 }
+      );
+    }
+
     // Create a valid mock JWT token for refresh
     const mockJwt = createMockAuthJwt('refreshed-user', 'tenant1');
 
@@ -183,6 +228,16 @@ export function getHandlers() {
    * GET /admin/tenants - Get all tenants (with or without pagination support)
    */
   http.get(`${API_BASE_URL}/admin/tenants`, ({ request }) => {
+    // Validate required headers for authenticated operation
+    try {
+      getAuthorizationFromHeaders(request);
+    } catch (e) {
+      return HttpResponse.json(
+        { message: (e as Error).message, data: null },
+        { status: 401 }
+      );
+    }
+
     const url = new URL(request.url);
     const offset = url.searchParams.get('offset');
     const limit = url.searchParams.get('limit');

@@ -8,6 +8,12 @@
 
 import '@testing-library/jest-dom';
 import { expect } from 'bun:test';
+// Import matchers as a module (ESM-compatible)
+import * as jestDomMatchers from '@testing-library/jest-dom/matchers';
+
+// Extend expect with jest-dom matchers for Bun
+// This is needed because Bun doesn't automatically extend expect like Jest does
+expect.extend(jestDomMatchers as any);
 
 // Ensure environment variables are available in import.meta.env
 // Bun loads .env automatically, but we need to explicitly set import.meta.env for tests
@@ -24,11 +30,6 @@ if (!import.meta.env.DEV) {
 if (!import.meta.env.PROD) {
   (import.meta.env as Record<string, boolean>).PROD = (process.env.NODE_ENV || 'test') === 'production';
 }
-
-// Extend expect with jest-dom matchers for Bun
-// This is needed because Bun doesn't automatically extend expect like Jest does
-const jestDom = require('@testing-library/jest-dom/matchers');
-expect.extend(jestDom);
 
 // Type augmentation for Bun's expect to include jest-dom matchers
 declare module 'bun:test' {
@@ -132,21 +133,25 @@ const sessionStorageMock = (() => {
   };
 })();
 
-// Assign mocks to global
-Object.defineProperty(global, 'localStorage', {
-  value: localStorageMock,
-  writable: true,
-  configurable: true,
-});
+// Assign mocks to global (guard against re-defining if already present)
+if (typeof (globalThis as any).localStorage === 'undefined') {
+  Object.defineProperty(globalThis, 'localStorage', {
+    value: localStorageMock,
+    writable: true,
+    configurable: true,
+  });
+}
 
-Object.defineProperty(global, 'sessionStorage', {
-  value: sessionStorageMock,
-  writable: true,
-  configurable: true,
-});
+if (typeof (globalThis as any).sessionStorage === 'undefined') {
+  Object.defineProperty(globalThis, 'sessionStorage', {
+    value: sessionStorageMock,
+    writable: true,
+    configurable: true,
+  });
+}
 
-// Mock matchMedia for responsive components
-if (typeof window !== 'undefined') {
+// Mock matchMedia for responsive components (guard against overwriting existing implementation)
+if (typeof window !== 'undefined' && typeof window.matchMedia !== 'function') {
   Object.defineProperty(window, 'matchMedia', {
     writable: true,
     value: (query: string) => ({

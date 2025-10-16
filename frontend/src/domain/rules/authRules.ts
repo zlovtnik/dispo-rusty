@@ -127,8 +127,11 @@ async function getCommonPasswordsList(): Promise<ReadonlyArray<string>> {
   }
 
   commonPasswordsPromise = getCommonPasswords();
-  commonPasswordsCache = await commonPasswordsPromise;
-  commonPasswordsPromise = null;
+  try {
+    commonPasswordsCache = await commonPasswordsPromise;
+  } finally {
+    commonPasswordsPromise = null;
+  }
 
   return commonPasswordsCache;
 }
@@ -263,6 +266,9 @@ class PwnedPasswordChecker {
     let backoffDelay = this.options.initialBackoffMs;
     let lastError: unknown;
 
+    // Loop continues while attempt <= maxRetries, resulting in (maxRetries + 1) total attempts.
+    // For example, if maxRetries=3, attempts are: 0, 1, 2, 3 (4 total attempts)
+    // This is intentional: maxRetries controls additional retries beyond the first attempt.
     while (attempt <= this.options.maxRetries) {
       try {
         await this.applyRateLimit();
@@ -294,12 +300,19 @@ class PwnedPasswordChecker {
         : undefined;
 
     try {
+      // Build headers conditionally - only include User-Agent in non-browser environments
+      const headers: Record<string, string> = {
+        'Add-Padding': 'true',
+      };
+      
+      // Only add User-Agent when in non-browser environment (e.g., Node.js, server)
+      if (typeof window === 'undefined' && typeof navigator === 'undefined') {
+        headers['User-Agent'] = this.options.userAgent;
+      }
+
       const response = await this.fetchImpl(`${this.options.endpoint}/${prefix}`, {
         method: 'GET',
-        headers: {
-          'Add-Padding': 'true',
-          'User-Agent': this.options.userAgent,
-        },
+        headers,
         signal: controller?.signal,
       });
 

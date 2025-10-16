@@ -7,6 +7,15 @@
  * We need to ensure it's available for tests that need VITE_API_URL.
  */
 
-// Make sure critical env vars are available
-console.log('[loadenv] VITE_API_URL from process.env:', process.env.VITE_API_URL);
-console.log('[loadenv] import.meta.env.VITE_API_URL:', import.meta.env.VITE_API_URL);
+// Ensure critical env vars are synced between process.env and import.meta.env
+if (typeof process !== 'undefined') {
+  const processValue = process.env.VITE_API_URL;
+  const metaEnvValue = (import.meta.env as Record<string, unknown>).VITE_API_URL;
+
+  // If one is defined but not the other, copy it over
+  if (processValue !== undefined && metaEnvValue === undefined) {
+    (import.meta.env as Record<string, unknown>).VITE_API_URL = processValue;
+  } else if (metaEnvValue !== undefined && processValue === undefined) {
+    process.env.VITE_API_URL = String(metaEnvValue);
+  }
+}

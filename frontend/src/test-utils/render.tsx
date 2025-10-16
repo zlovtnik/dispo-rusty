@@ -9,7 +9,7 @@ import React, { type ReactElement } from 'react';
 import { render, type RenderOptions } from '@testing-library/react';
 import { BrowserRouter, MemoryRouter } from 'react-router-dom';
 import { App as AntApp } from 'antd';
-import type { User, Tenant } from '../types/auth';
+import type { User, LoginCredentials, Tenant } from '../types/auth';
 import { asTenantId, asUserId } from '../types/ids';
 import { AuthContext, type AuthContextType } from '../contexts/AuthContext';
 
@@ -34,6 +34,7 @@ export const mockUser: User = {
 export const mockTenant: Tenant = {
   id: asTenantId('tenant-1'),
   name: 'Test Tenant',
+  domain: 'test.example.com',
   settings: {
     theme: 'light' as const,
     language: 'en',
@@ -65,7 +66,7 @@ export interface MockAuthContextValue {
   user: User | null;
   tenant: Tenant | null;
   loading: boolean;
-  login: (credentials: unknown) => Promise<void>;
+  login: (credentials: LoginCredentials) => Promise<void>;
   logout: () => Promise<void>;
   refreshToken: () => Promise<void>;
 }
@@ -230,7 +231,7 @@ export function renderWithoutAuth(ui: ReactElement, options?: CustomRenderOption
  * @param ms - Milliseconds to wait
  * @returns Promise that resolves after the specified time
  */
-export const waitFor = (ms: number): Promise<void> =>
+export const sleep = (ms: number): Promise<void> =>
   new Promise(resolve => setTimeout(resolve, ms));
 
 /**

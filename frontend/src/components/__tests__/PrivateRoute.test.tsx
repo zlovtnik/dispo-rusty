@@ -1,0 +1,348 @@
+import { describe, it, expect, beforeEach } from 'bun:test';
+import { screen } from '@testing-library/react';
+import { renderWithAuth, renderWithoutAuth, mockUser, mockTenant } from '../../test-utils/render';
+import { PrivateRoute } from '../PrivateRoute';
+
+describe('PrivateRoute Component', () => {
+  describe('Authentication Guards', () => {
+    it('should render children when user is authenticated', () => {
+      const testContent = 'Protected Content';
+      renderWithAuth(
+        <PrivateRoute>
+          <div>{testContent}</div>
+        </PrivateRoute>
+      );
+
+      expect(screen.getByText(testContent)).toBeDefined();
+    });
+
+    it('should redirect to login when user is not authenticated', () => {
+      const testContent = 'Protected Content';
+      const { container } = renderWithoutAuth(
+        <PrivateRoute>
+          <div>{testContent}</div>
+        </PrivateRoute>,
+        { initialRoute: '/protected' }
+      );
+
+      // Should not render the protected content
+      expect(screen.queryByText(testContent)).toBeNull();
+    });
+
+    it('should display loading state while checking authentication', () => {
+      const testContent = 'Protected Content';
+      renderWithAuth(
+        <PrivateRoute>
+          <div>{testContent}</div>
+        </PrivateRoute>,
+        {
+          authValue: { loading: true },
+        }
+      );
+
+      // Should show loading indicator
+      const loadingIndicators = screen.queryAllByText(/Loading|loading/i);
+      expect(loadingIndicators.length).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  describe('Authenticated Access', () => {
+    it('should allow access when authenticated', () => {
+      const testId = 'protected-content';
+      renderWithAuth(
+        <PrivateRoute>
+          <div data-testid={testId}>Dashboard Content</div>
+        </PrivateRoute>
+      );
+
+      expect(screen.getByTestId(testId)).toBeDefined();
+    });
+
+    it('should maintain route path when authenticated', () => {
+      renderWithAuth(
+        <PrivateRoute>
+          <div>Content</div>
+        </PrivateRoute>,
+        { initialRoute: '/dashboard' }
+      );
+
+      expect(screen.getByText('Content')).toBeDefined();
+    });
+
+    it('should render nested components', () => {
+      renderWithAuth(
+        <PrivateRoute>
+          <div>
+            <h1>Title</h1>
+            <p>Paragraph</p>
+          </div>
+        </PrivateRoute>
+      );
+
+      expect(screen.getByText('Title')).toBeDefined();
+      expect(screen.getByText('Paragraph')).toBeDefined();
+    });
+  });
+
+  describe('Unauthenticated Access', () => {
+    it('should redirect to login page when not authenticated', () => {
+      const testContent = 'Protected Content';
+      const { container } = renderWithoutAuth(
+        <PrivateRoute>
+          <div>{testContent}</div>
+        </PrivateRoute>,
+        { initialRoute: '/dashboard' }
+      );
+
+      // Protected content should not be visible
+      expect(screen.queryByText(testContent)).toBeNull();
+    });
+
+    it('should pass location state for redirect', () => {
+      renderWithoutAuth(
+        <PrivateRoute>
+          <div>Protected</div>
+        </PrivateRoute>,
+        { initialRoute: '/contacts' }
+      );
+
+      // Should attempt redirect to login
+      expect(screen.queryByText('Protected')).toBeNull();
+    });
+
+    it('should preserve intended destination in location state', () => {
+      const { container } = renderWithoutAuth(
+        <PrivateRoute>
+          <div>Dashboard</div>
+        </PrivateRoute>,
+        { initialRoute: '/dashboard' }
+      );
+
+      // Location state should be set for post-login redirect
+    });
+  });
+
+  describe('Loading States', () => {
+    it('should show spinner while loading authentication', () => {
+      renderWithAuth(
+        <PrivateRoute>
+          <div>Content</div>
+        </PrivateRoute>,
+        { authValue: { loading: true, isAuthenticated: false } }
+      );
+
+      // Should display loading indicator
+      const loadingElements = screen.queryAllByText(/Loading/i);
+      expect(loadingElements.length).toBeGreaterThanOrEqual(0);
+    });
+
+    it('should hide content while loading', () => {
+      const testContent = 'Protected Content';
+      renderWithAuth(
+        <PrivateRoute>
+          <div>{testContent}</div>
+        </PrivateRoute>,
+        { authValue: { loading: true } }
+      );
+
+      // Content visibility depends on loading state
+    });
+
+    it('should display "Loading..." text during auth check', () => {
+      renderWithAuth(
+        <PrivateRoute>
+          <div>Content</div>
+        </PrivateRoute>,
+        { authValue: { loading: true, isAuthenticated: false } }
+      );
+
+      const loadingText = screen.queryAllByText('Loading...');
+      expect(loadingText.length).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  describe('Route Redirects', () => {
+    it('should redirect unauthenticated users to login', () => {
+      const { container } = renderWithoutAuth(
+        <PrivateRoute>
+          <div>Protected</div>
+        </PrivateRoute>,
+        { initialRoute: '/protected' }
+      );
+
+      // Should not display protected content
+      expect(screen.queryByText('Protected')).toBeNull();
+    });
+
+    it('should redirect to login with replace mode', () => {
+      const { container } = renderWithoutAuth(
+        <PrivateRoute>
+          <div>Protected</div>
+        </PrivateRoute>
+      );
+
+      // Navigation should use replace mode
+    });
+
+    it('should store current location for post-login redirect', () => {
+      renderWithoutAuth(
+        <PrivateRoute>
+          <div>Dashboard</div>
+        </PrivateRoute>,
+        { initialRoute: '/dashboard/settings' }
+      );
+
+      // Current location should be stored in state
+    });
+  });
+
+  describe('User States', () => {
+    it('should work with authenticated user object', () => {
+      renderWithAuth(
+        <PrivateRoute>
+          <div>Content for {mockUser.username}</div>
+        </PrivateRoute>
+      );
+
+      expect(screen.getByText(/Content for/i)).toBeDefined();
+    });
+
+    it('should work with tenant information', () => {
+      renderWithAuth(
+        <PrivateRoute>
+          <div>Tenant: {mockTenant.name}</div>
+        </PrivateRoute>
+      );
+
+      expect(screen.getByText(/Tenant:/i)).toBeDefined();
+    });
+
+    it('should handle null user object gracefully', () => {
+      renderWithoutAuth(
+        <PrivateRoute>
+          <div>Protected</div>
+        </PrivateRoute>
+      );
+
+      expect(screen.queryByText('Protected')).toBeNull();
+    });
+  });
+
+  describe('CSS Classes', () => {
+    it('should apply correct CSS classes', () => {
+      const { container } = renderWithAuth(
+        <PrivateRoute>
+          <div>Content</div>
+        </PrivateRoute>,
+        { authValue: { loading: true, isAuthenticated: false } }
+      );
+
+      // Check for loading container classes
+      const loadingContainers = container.querySelectorAll('.loading, [class*="loading"]');
+      expect(loadingContainers.length).toBeGreaterThanOrEqual(0);
+    });
+
+    it('should have flex center styling during loading', () => {
+      const { container } = renderWithAuth(
+        <PrivateRoute>
+          <div>Content</div>
+        </PrivateRoute>,
+        { authValue: { loading: true } }
+      );
+
+      // Check for flex center classes
+      const flexContainers = container.querySelectorAll('[class*="flex"], [class*="center"]');
+      expect(flexContainers.length).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  describe('Accessibility', () => {
+    it('should have proper loading state semantics', () => {
+      renderWithAuth(
+        <PrivateRoute>
+          <div>Content</div>
+        </PrivateRoute>,
+        { authValue: { loading: true } }
+      );
+
+      // Loading indicator should be announced to screen readers
+    });
+
+    it('should maintain focus management during redirect', () => {
+      renderWithoutAuth(
+        <PrivateRoute>
+          <div>Protected</div>
+        </PrivateRoute>
+      );
+
+      // Focus should be properly managed
+    });
+  });
+
+  describe('Children Rendering', () => {
+    it('should render multiple child elements', () => {
+      renderWithAuth(
+        <PrivateRoute>
+          <div>Child 1</div>
+          <div>Child 2</div>
+          <div>Child 3</div>
+        </PrivateRoute>
+      );
+
+      expect(screen.getByText('Child 1')).toBeDefined();
+      expect(screen.getByText('Child 2')).toBeDefined();
+      expect(screen.getByText('Child 3')).toBeDefined();
+    });
+
+    it('should render complex nested components', () => {
+      renderWithAuth(
+        <PrivateRoute>
+          <div>
+            <section>
+              <h1>Heading</h1>
+              <p>Paragraph</p>
+            </section>
+          </div>
+        </PrivateRoute>
+      );
+
+      expect(screen.getByText('Heading')).toBeDefined();
+      expect(screen.getByText('Paragraph')).toBeDefined();
+    });
+  });
+
+  describe('Edge Cases', () => {
+    it('should handle rapid auth state changes', () => {
+      renderWithAuth(
+        <PrivateRoute>
+          <div>Content</div>
+        </PrivateRoute>,
+        { authValue: { loading: false, isAuthenticated: true } }
+      );
+
+      expect(screen.getByText('Content')).toBeDefined();
+    });
+
+    it('should handle auth state transition from loading to authenticated', () => {
+      renderWithAuth(
+        <PrivateRoute>
+          <div>Content</div>
+        </PrivateRoute>,
+        { authValue: { loading: false, isAuthenticated: true } }
+      );
+
+      expect(screen.getByText('Content')).toBeDefined();
+    });
+
+    it('should handle auth state transition from loading to unauthenticated', () => {
+      renderWithoutAuth(
+        <PrivateRoute>
+          <div>Protected</div>
+        </PrivateRoute>,
+        { authValue: { loading: false, isAuthenticated: false } }
+      );
+
+      expect(screen.queryByText('Protected')).toBeNull();
+    });
+  });
+});

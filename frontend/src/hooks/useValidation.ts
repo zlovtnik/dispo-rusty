@@ -117,16 +117,24 @@ export function useValidation<T, E = string>(
 
       // Run all validators in sequence
       for (const validator of memoizedValidators) {
-        const result = validator(currentValue);
-        if (result.isErr()) {
-          errors.push(result.error);
-          // Break early if shortCircuit is enabled
+        try {
+          const result = validator(currentValue);
+          if (result.isErr()) {
+            errors.push(result.error);
+            // Break early if shortCircuit is enabled
+            if (shortCircuit) {
+              break;
+            }
+          } else {
+            // Update value if transformed by validator
+            currentValue = result.value;
+          }
+        } catch (e) {
+          // Convert thrown errors to validation errors
+          errors.push((e as E));
           if (shortCircuit) {
             break;
           }
-        } else {
-          // Update value if transformed by validator
-          currentValue = result.value;
         }
       }
 
@@ -175,7 +183,12 @@ export function useValidation<T, E = string>(
       try {
         const validationResult = validateValue(newValue);
         setResult(validationResult);
-        setValueState(newValue);
+        // Keep state value in sync with transformed value (if validators normalize input)
+        // Store the transformed value from validators, or the original if no transformation
+        const next = validationResult.isValid && validationResult.value !== null
+          ? (validationResult.value as T)
+          : newValue;
+        setValueState(next);
         return validationResult;
       } finally {
         setValidating(false);
@@ -188,10 +201,16 @@ export function useValidation<T, E = string>(
   // Clearing a field (undefined/null) will run validation so consumers know required-field errors may appear immediately
   const setValue = useCallback(
     (newValue: T | undefined) => {
-      setValueState(newValue);
       if (validateOnChange) {
         const validationResult = validateValue(newValue);
         setResult(validationResult);
+        // Keep state value in sync with transformed value (if validators normalize input)
+        const next = validationResult.isValid && validationResult.value !== null
+          ? (validationResult.value as T)
+          : newValue;
+        setValueState(next);
+      } else {
+        setValueState(newValue);
       }
     },
     [validateOnChange, validateValue]

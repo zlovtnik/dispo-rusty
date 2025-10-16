@@ -750,7 +750,7 @@ export const authService = {
     const validation = validateAndDecode<LoginRequestSchema>(loginRequestSchema, {
       usernameOrEmail: credentials.usernameOrEmail,
       password: credentials.password,
-      tenantId: String(credentials.tenantId),
+      tenantId: credentials.tenantId,
       rememberMe: credentials.rememberMe,
     });
 

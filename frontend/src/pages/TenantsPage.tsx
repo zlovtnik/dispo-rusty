@@ -37,6 +37,11 @@ import {
 } from '@ant-design/icons';
 import { tenantService } from '@/services/api';
 
+/**
+ * Form values for tenant creation (excluding id which is auto-generated)
+ */
+type TenantFormValues = Omit<CreateTenantDTO, 'id'>;
+
 export const TenantsPage: React.FC = () => {
   const { user } = useAuth();
   const [tenants, setTenants] = useState<TenantRecord[]>([]);
@@ -45,7 +50,7 @@ export const TenantsPage: React.FC = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingTenant, setEditingTenant] = useState<TenantRecord | null>(null);
   const [deleteTenantId, setDeleteTenantId] = useState<TenantRecord['id'] | null>(null);
-  const [form] = Form.useForm();
+  const [form] = Form.useForm<TenantFormValues>();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loading, setLoading] = useState(false);
   const [powerFilters, setPowerFilters] = useState<
@@ -117,9 +122,9 @@ export const TenantsPage: React.FC = () => {
 
   /**
    * Handle form submission for creating or updating a tenant
-   * @param values - Form values from Ant Design Form
+   * @param values - Form values from Ant Design Form (without id)
    */
-  const handleSubmit = async (values: CreateTenantDTO) => {
+  const handleSubmit = async (values: TenantFormValues) => {
     setIsSubmitting(true);
 
     try {

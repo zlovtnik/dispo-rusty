@@ -175,8 +175,8 @@ describe('parsing utilities', () => {
       expect(result.isErr()).toBe(true);
     });
 
-    it('should reject tenant with invalid ID format', () => {
-      const invalidTenant = { id: 'invalid-id', name: 'Test Tenant' };
+    it('should reject tenant missing settings and subscription', () => {
+      const invalidTenant = { id: asTenantId('tenant-1'), name: 'Test Tenant' }; // missing settings and subscription
       const json = JSON.stringify(invalidTenant);
       const result = parseStoredTenant(json);
       expect(result.isErr()).toBe(true);

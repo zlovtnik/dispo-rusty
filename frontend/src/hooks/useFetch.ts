@@ -26,24 +26,16 @@ const CACHE_VERSION = 1;
 
 const globalFetchCache = new Map<string, CacheEntry<unknown>>();
 
-// Module-scoped flag to ensure cache migration runs only once per session
-let cacheMigrated = false;
-
-// Migrate old cache entries on first module import (runs once per session)
-// This migration can be removed when all clients have upgraded past CACHE_VERSION
-if (!cacheMigrated) {
-  for (const [key, entry] of globalFetchCache) {
-    if (entry.version === undefined || entry.version !== CACHE_VERSION) {
-      globalFetchCache.delete(key);
-    }
-  }
-  cacheMigrated = true;
-}
+/**
+ * Note: In-memory cache has no persistence layer (localStorage/IndexedDB).
+ * Cache is cleared on module reload. Versioning exists for future migration
+ * if persisted storage is added later.
+ */
 
 /**
  * Configuration options for fetch operations
  */
-export interface FetchOptions extends RequestInit {
+export interface FetchOptions<T = unknown> extends RequestInit {
   /** Timeout in milliseconds */
   timeout?: number;
   /** Number of retries on failure */
@@ -55,9 +47,9 @@ export interface FetchOptions extends RequestInit {
   /** Base URL to prepend to the endpoint */
   baseURL?: string;
   /** Transform response data before returning */
-  transformResponse?: <T>(data: unknown) => T;
-  /** Validate transformed response data (Zod schema) */
-  validateResponse?: z.ZodSchema;
+  transformResponse?: (data: unknown) => T;
+  /** Validate transformed response data (Zod schema) - must match response type T */
+  validateResponse?: z.ZodSchema<T>;
   /** Transform error before returning */
   transformError?: (error: AppError) => AppError;
   /** When true, the request will only run when refetch is called */
@@ -108,7 +100,7 @@ export interface FetchState<T> {
  */
 export function useFetch<T = unknown>(
   url: string | null,
-  options: FetchOptions = {}
+  options: FetchOptions<T> = {}
 ): FetchState<T> {
   // Destructure options for stable dependencies
   const {
@@ -182,7 +174,7 @@ export function useFetch<T = unknown>(
           }
 
           // Transform response if needed
-          const transformedData: T = transformResponse ? transformResponse<T>(data) : (data as T);
+          const transformedData: T = transformResponse ? transformResponse(data) : (data as T);
 
           // Validate transformed data if schema provided
           if (validateResponse) {
@@ -190,7 +182,12 @@ export function useFetch<T = unknown>(
             if (!validationResult.success) {
               return err(createBusinessLogicError(
                 `Response validation failed: ${validationResult.error.message}`,
-                { validationErrors: validationResult.error.issues }
+                { 
+                  validationErrors: validationResult.error.issues,
+                  // Include non-sensitive request context for troubleshooting
+                  url: url ?? 'unknown',
+                  responseType: typeof transformedData,
+                }
               ));
             }
           }
@@ -289,7 +286,7 @@ export function useFetch<T = unknown>(
  */
 export function useOptimisticFetch<T>(
   url: string | null,
-  options: FetchOptions & {
+  options: FetchOptions<T> & {
     /** Initial data to show while loading */
     initialData?: T;
     /** Function to update data optimistically before the request */
@@ -298,8 +295,8 @@ export function useOptimisticFetch<T>(
     rollbackUpdate?: (optimisticData: T, error: AppError) => Result<T, AppError>;
   } = {}
 ) {
-  const fetchState = useFetch<T>(url, options);
-  const { initialData, optimisticUpdate, rollbackUpdate } = options;
+  const { initialData, optimisticUpdate, rollbackUpdate, ...fetchOptions } = options;
+  const fetchState = useFetch<T>(url, fetchOptions as FetchOptions<T>);
 
   const [optimisticResult, setOptimisticResult] = React.useState<Result<T, AppError> | null>(
     initialData !== undefined ? ok(initialData) : null
@@ -460,8 +457,8 @@ export function useOptimisticFetch<T>(
  */
 export function useCachedFetch<T>(
   url: string | null,
-  options: FetchOptions & {
-    /** Cache key */
+  options: FetchOptions<T> & {
+    /** Cache key - required when url is null to avoid collisions across consumers */
     cacheKey?: string;
     /** Cache duration in milliseconds */
     cacheTime?: number;
@@ -472,12 +469,20 @@ export function useCachedFetch<T>(
   } = {}
 ) {
   const {
-    cacheKey = url || '',
+    cacheKey: providedCacheKey,
     cacheTime = 5 * 60 * 1000, // 5 minutes
     refetchOnWindowFocus = false,
     staleTime = 0,
     ...fetchOptions
   } = options;
+
+  // Require explicit cacheKey when url is null to prevent accidental collisions
+  const cacheKey = providedCacheKey ?? url;
+  if (!cacheKey) {
+    throw new Error(
+      'useCachedFetch requires either a url or an explicit cacheKey to prevent cache collisions'
+    );
+  }
 
   const [cacheVersion, setCacheVersion] = React.useState(0);
 
@@ -488,7 +493,7 @@ export function useCachedFetch<T>(
   const shouldUseCache = isCacheValid && !isCacheStale;
 
   const fetchState = useFetch<T>(url, {
-    ...fetchOptions,
+    ...(fetchOptions as FetchOptions<T>),
     manual: shouldUseCache && !isCacheStale,
   });
 

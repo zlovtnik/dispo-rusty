@@ -84,9 +84,10 @@ describe('AddressBook helper functions', () => {
       expect(resolveContactGender(personFalse)).toBe(Gender.female);
     });
 
-    it('maps other representations to Gender.other when possible', () => {
+    it('returns undefined for non-binary since normalizeGender only maps exact normalized matches', () => {
       const person = createPerson({ gender: 'non-binary' });
-      expect(resolveContactGender(person)).toBe(Gender.other);
+      // normalizeGender does not explicitly map 'non-binary' to Gender.other
+      expect(resolveContactGender(person)).toBe(undefined);
     });
 
     it('handles undefined gender gracefully', () => {

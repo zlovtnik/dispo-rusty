@@ -77,8 +77,8 @@ describe('CommonPasswordsLoader', () => {
   });
 
   describe('getCommonPasswords', () => {
-    it('should load passwords from valid JSON response', async () => {
-      // Use a custom config that points to a non-existent URL to force fallback
+    it('should fallback to built-in list when file is missing or invalid', async () => {
+      // Use a custom config that points to a non-existent file to force fallback
       const loader = CommonPasswordsLoader.getInstance({
         filePath: '/non-existent-test-file.json',
         enabled: true
