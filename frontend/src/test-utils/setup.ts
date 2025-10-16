@@ -160,10 +160,18 @@ if (typeof window !== 'undefined' && typeof window.matchMedia !== 'function') {
       matches: false,
       media: query,
       onchange: null,
-      addListener: () => {}, // Deprecated
-      removeListener: () => {}, // Deprecated
-      addEventListener: () => {},
-      removeEventListener: () => {},
+      addListener: () => {
+        // Intentionally empty - deprecated method
+      },
+      removeListener: () => {
+        // Intentionally empty - deprecated method
+      },
+      addEventListener: () => {
+        // Intentionally empty - not needed for tests
+      },
+      removeEventListener: () => {
+        // Intentionally empty - not needed for tests
+      },
       dispatchEvent: () => true,
     }),
   });

@@ -76,9 +76,15 @@ export const mockAuthContextValue: MockAuthContextValue = {
   user: mockUser,
   tenant: mockTenant,
   loading: false,
-  login: async () => {},
-  logout: async () => {},
-  refreshToken: async () => {},
+  login: async () => {
+    // Intentionally empty - mock implementation
+  },
+  logout: async () => {
+    // Intentionally empty - mock implementation
+  },
+  refreshToken: async () => {
+    // Intentionally empty - mock implementation
+  },
 };
 
 /**

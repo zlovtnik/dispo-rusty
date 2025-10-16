@@ -22,7 +22,9 @@ describe('ErrorBoundary Component', () => {
   beforeEach(() => {
     // Mock console.error to suppress error logs during testing
     mock.module('console', () => ({
-      error: mock(() => {}),
+      error: mock(() => {
+        // Intentionally empty - test mock
+      }),
     }));
   });
 
@@ -144,7 +146,9 @@ describe('ErrorBoundary Component', () => {
 
   describe('Error Handling', () => {
     it('should call onError callback when error is caught', () => {
-      const onErrorMock = mock(() => {});
+      const onErrorMock = mock(() => {
+        // Intentionally empty - test mock
+      });
 
       renderWithProviders(
         <ErrorBoundary onError={onErrorMock}>
@@ -157,7 +161,9 @@ describe('ErrorBoundary Component', () => {
     });
 
     it('should provide error info to callback', () => {
-      const onErrorMock = mock(() => {});
+      const onErrorMock = mock(() => {
+        // Intentionally empty - test mock
+      });
 
       renderWithProviders(
         <ErrorBoundary onError={onErrorMock}>
@@ -169,7 +175,9 @@ describe('ErrorBoundary Component', () => {
     });
 
     it('should continue rendering if onError callback is provided', () => {
-      const onErrorMock = mock(() => {});
+      const onErrorMock = mock(() => {
+        // Intentionally empty - test mock
+      });
 
       renderWithProviders(
         <ErrorBoundary onError={onErrorMock}>
@@ -295,7 +303,9 @@ describe('ErrorBoundary Component', () => {
     });
 
     it('should accept onError callback prop', () => {
-      const callback = mock(() => {});
+      const callback = mock(() => {
+        // Intentionally empty - test mock
+      });
       renderWithProviders(
         <ErrorBoundary onError={callback}>
           <RenderErrorComponent errorMessage="Error" />
@@ -306,7 +316,9 @@ describe('ErrorBoundary Component', () => {
     });
 
     it('should handle all valid props', () => {
-      const onError = mock(() => {});
+      const onError = mock(() => {
+        // Intentionally empty - test mock
+      });
       renderWithProviders(
         <ErrorBoundary onError={onError} fallback={<div>Fallback</div>}>
           <div>Content</div>

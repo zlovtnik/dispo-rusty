@@ -11,8 +11,12 @@ describe('ConfirmationModal Component', () => {
         <ConfirmationModal
           isOpen={true}
           message="Confirm this action?"
-          onConfirm={() => {}}
-          onCancel={() => {}}
+          onConfirm={() => {
+            // Intentionally empty - test mock
+          }}
+          onCancel={() => {
+            // Intentionally empty - test mock
+          }}
         />
       );
 
@@ -24,8 +28,12 @@ describe('ConfirmationModal Component', () => {
         <ConfirmationModal
           isOpen={false}
           message="Confirm this action?"
-          onConfirm={() => {}}
-          onCancel={() => {}}
+          onConfirm={() => {
+            // Intentionally empty - test mock
+          }}
+          onCancel={() => {
+            // Intentionally empty - test mock
+          }}
         />
       );
 
@@ -40,8 +48,12 @@ describe('ConfirmationModal Component', () => {
           isOpen={true}
           title="Custom Title"
           message="Message"
-          onConfirm={() => {}}
-          onCancel={() => {}}
+          onConfirm={() => {
+            // Intentionally empty - test mock
+          }}
+          onCancel={() => {
+            // Intentionally empty - test mock
+          }}
         />
       );
 
@@ -53,8 +65,12 @@ describe('ConfirmationModal Component', () => {
         <ConfirmationModal
           isOpen={true}
           message="Message"
-          onConfirm={() => {}}
-          onCancel={() => {}}
+          onConfirm={() => {
+            // Intentionally empty - test mock
+          }}
+          onCancel={() => {
+            // Intentionally empty - test mock
+          }}
         />
       );
 
@@ -67,8 +83,12 @@ describe('ConfirmationModal Component', () => {
         <ConfirmationModal
           isOpen={true}
           message={message}
-          onConfirm={() => {}}
-          onCancel={() => {}}
+          onConfirm={() => {
+            // Intentionally empty - test mock
+          }}
+          onCancel={() => {
+            // Intentionally empty - test mock
+          }}
         />
       );
 
@@ -82,8 +102,12 @@ describe('ConfirmationModal Component', () => {
         <ConfirmationModal
           isOpen={true}
           message="Confirm?"
-          onConfirm={() => {}}
-          onCancel={() => {}}
+          onConfirm={() => {
+            // Intentionally empty - test mock
+          }}
+          onCancel={() => {
+            // Intentionally empty - test mock
+          }}
         />
       );
 
@@ -95,8 +119,12 @@ describe('ConfirmationModal Component', () => {
         <ConfirmationModal
           isOpen={true}
           message="Confirm?"
-          onConfirm={() => {}}
-          onCancel={() => {}}
+          onConfirm={() => {
+            // Intentionally empty - test mock
+          }}
+          onCancel={() => {
+            // Intentionally empty - test mock
+          }}
         />
       );
 
@@ -109,8 +137,12 @@ describe('ConfirmationModal Component', () => {
           isOpen={true}
           message="Delete?"
           confirmText="Delete Anyway"
-          onConfirm={() => {}}
-          onCancel={() => {}}
+          onConfirm={() => {
+            // Intentionally empty - test mock
+          }}
+          onCancel={() => {
+            // Intentionally empty - test mock
+          }}
         />
       );
 
@@ -123,8 +155,12 @@ describe('ConfirmationModal Component', () => {
           isOpen={true}
           message="Delete?"
           cancelText="Keep It"
-          onConfirm={() => {}}
-          onCancel={() => {}}
+          onConfirm={() => {
+            // Intentionally empty - test mock
+          }}
+          onCancel={() => {
+            // Intentionally empty - test mock
+          }}
         />
       );
 
@@ -136,8 +172,12 @@ describe('ConfirmationModal Component', () => {
         <ConfirmationModal
           isOpen={true}
           message="Confirm?"
-          onConfirm={() => {}}
-          onCancel={() => {}}
+          onConfirm={() => {
+            // Intentionally empty - test mock
+          }}
+          onCancel={() => {
+            // Intentionally empty - test mock
+          }}
         />
       );
 
@@ -149,7 +189,9 @@ describe('ConfirmationModal Component', () => {
   describe('Callbacks', () => {
     it('should call onConfirm when confirm button is clicked', async () => {
       const user = userEvent.setup();
-      const onConfirm = mock(() => {});
+      const onConfirm = mock(() => {
+        // Intentionally empty - test mock
+      });
 
       renderWithProviders(
         <ConfirmationModal
@@ -157,7 +199,9 @@ describe('ConfirmationModal Component', () => {
           message="Confirm?"
           confirmText="Yes"
           onConfirm={onConfirm}
-          onCancel={() => {}}
+          onCancel={() => {
+            // Intentionally empty - test mock
+          }}
         />
       );
 
@@ -169,14 +213,18 @@ describe('ConfirmationModal Component', () => {
 
     it('should call onCancel when cancel button is clicked', async () => {
       const user = userEvent.setup();
-      const onCancel = mock(() => {});
+      const onCancel = mock(() => {
+        // Intentionally empty - test mock
+      });
 
       renderWithProviders(
         <ConfirmationModal
           isOpen={true}
           message="Confirm?"
           cancelText="No"
-          onConfirm={() => {}}
+          onConfirm={() => {
+            // Intentionally empty - test mock
+          }}
           onCancel={onCancel}
         />
       );
@@ -189,13 +237,17 @@ describe('ConfirmationModal Component', () => {
 
     it('should call onCancel when modal backdrop is clicked', async () => {
       const user = userEvent.setup();
-      const onCancel = mock(() => {});
+      const onCancel = mock(() => {
+        // Intentionally empty - test mock
+      });
 
       const { container } = renderWithProviders(
         <ConfirmationModal
           isOpen={true}
           message="Confirm?"
-          onConfirm={() => {}}
+          onConfirm={() => {
+            // Intentionally empty - test mock
+          }}
           onCancel={onCancel}
         />
       );
@@ -213,7 +265,9 @@ describe('ConfirmationModal Component', () => {
 
     it('should not call callbacks multiple times for single click', async () => {
       const user = userEvent.setup();
-      const onConfirm = mock(() => {});
+      const onConfirm = mock(() => {
+        // Intentionally empty - test mock
+      });
 
       renderWithProviders(
         <ConfirmationModal
@@ -221,7 +275,9 @@ describe('ConfirmationModal Component', () => {
           message="Confirm?"
           confirmText="Yes"
           onConfirm={onConfirm}
-          onCancel={() => {}}
+          onCancel={() => {
+            // Intentionally empty - test mock
+          }}
         />
       );
 
@@ -239,8 +295,12 @@ describe('ConfirmationModal Component', () => {
         <ConfirmationModal
           isOpen={true}
           message="Confirm?"
-          onConfirm={() => {}}
-          onCancel={() => {}}
+          onConfirm={() => {
+            // Intentionally empty - test mock
+          }}
+          onCancel={() => {
+            // Intentionally empty - test mock
+          }}
         />
       );
 
@@ -258,8 +318,12 @@ describe('ConfirmationModal Component', () => {
         <ConfirmationModal
           isOpen={true}
           message="Confirm?"
-          onConfirm={() => {}}
-          onCancel={() => {}}
+          onConfirm={() => {
+            // Intentionally empty - test mock
+          }}
+          onCancel={() => {
+            // Intentionally empty - test mock
+          }}
         />
       );
 
@@ -274,8 +338,12 @@ describe('ConfirmationModal Component', () => {
         <ConfirmationModal
           isOpen={true}
           message="Confirm?"
-          onConfirm={() => {}}
-          onCancel={() => {}}
+          onConfirm={() => {
+            // Intentionally empty - test mock
+          }}
+          onCancel={() => {
+            // Intentionally empty - test mock
+          }}
         />
       );
 
@@ -287,8 +355,12 @@ describe('ConfirmationModal Component', () => {
         <ConfirmationModal
           isOpen={false}
           message="Confirm?"
-          onConfirm={() => {}}
-          onCancel={() => {}}
+          onConfirm={() => {
+            // Intentionally empty - test mock
+          }}
+          onCancel={() => {
+            // Intentionally empty - test mock
+          }}
         />
       );
 
@@ -309,8 +381,12 @@ describe('ConfirmationModal Component', () => {
         <ConfirmationModal
           isOpen={true}
           message={longMessage}
-          onConfirm={() => {}}
-          onCancel={() => {}}
+          onConfirm={() => {
+            // Intentionally empty - test mock
+          }}
+          onCancel={() => {
+            // Intentionally empty - test mock
+          }}
         />
       );
 
@@ -325,8 +401,12 @@ Line 3`;
         <ConfirmationModal
           isOpen={true}
           message={message}
-          onConfirm={() => {}}
-          onCancel={() => {}}
+          onConfirm={() => {
+            // Intentionally empty - test mock
+          }}
+          onCancel={() => {
+            // Intentionally empty - test mock
+          }}
         />
       );
 
@@ -339,8 +419,12 @@ Line 3`;
         <ConfirmationModal
           isOpen={true}
           message={message}
-          onConfirm={() => {}}
-          onCancel={() => {}}
+          onConfirm={() => {
+            // Intentionally empty - test mock
+          }}
+          onCancel={() => {
+            // Intentionally empty - test mock
+          }}
         />
       );
 
@@ -353,8 +437,12 @@ Line 3`;
         <ConfirmationModal
           isOpen={true}
           message={message}
-          onConfirm={() => {}}
-          onCancel={() => {}}
+          onConfirm={() => {
+            // Intentionally empty - test mock
+          }}
+          onCancel={() => {
+            // Intentionally empty - test mock
+          }}
         />
       );
 
@@ -371,8 +459,12 @@ Line 3`;
           message="Delete this item?"
           confirmText="Delete"
           cancelText="Cancel"
-          onConfirm={() => {}}
-          onCancel={() => {}}
+          onConfirm={() => {
+            // Intentionally empty - test mock
+          }}
+          onCancel={() => {
+            // Intentionally empty - test mock
+          }}
         />
       );
 
@@ -387,8 +479,12 @@ Line 3`;
           message="Do you want to continue?"
           confirmText="Yes"
           cancelText="No"
-          onConfirm={() => {}}
-          onCancel={() => {}}
+          onConfirm={() => {
+            // Intentionally empty - test mock
+          }}
+          onCancel={() => {
+            // Intentionally empty - test mock
+          }}
         />
       );
 
@@ -403,8 +499,12 @@ Line 3`;
           message="Confirm action"
           confirmText="OK"
           cancelText="Cancel"
-          onConfirm={() => {}}
-          onCancel={() => {}}
+          onConfirm={() => {
+            // Intentionally empty - test mock
+          }}
+          onCancel={() => {
+            // Intentionally empty - test mock
+          }}
         />
       );
 
@@ -420,8 +520,12 @@ Line 3`;
           isOpen={true}
           title="Confirm Action"
           message="Message"
-          onConfirm={() => {}}
-          onCancel={() => {}}
+          onConfirm={() => {
+            // Intentionally empty - test mock
+          }}
+          onCancel={() => {
+            // Intentionally empty - test mock
+          }}
         />
       );
 
@@ -434,8 +538,12 @@ Line 3`;
         <ConfirmationModal
           isOpen={true}
           message="Confirm?"
-          onConfirm={() => {}}
-          onCancel={() => {}}
+          onConfirm={() => {
+            // Intentionally empty - test mock
+          }}
+          onCancel={() => {
+            // Intentionally empty - test mock
+          }}
         />
       );
 
@@ -445,7 +553,9 @@ Line 3`;
 
     it('should be keyboard accessible', async () => {
       const user = userEvent.setup();
-      const onConfirm = mock(() => {});
+      const onConfirm = mock(() => {
+        // Intentionally empty - test mock
+      });
 
       renderWithProviders(
         <ConfirmationModal
@@ -453,7 +563,9 @@ Line 3`;
           message="Confirm?"
           confirmText="Yes"
           onConfirm={onConfirm}
-          onCancel={() => {}}
+          onCancel={() => {
+            // Intentionally empty - test mock
+          }}
         />
       );
 
@@ -466,7 +578,9 @@ Line 3`;
 
     it('should handle Enter key on confirm', async () => {
       const user = userEvent.setup();
-      const onConfirm = mock(() => {});
+      const onConfirm = mock(() => {
+        // Intentionally empty - test mock
+      });
 
       renderWithProviders(
         <ConfirmationModal
@@ -474,7 +588,9 @@ Line 3`;
           message="Confirm?"
           confirmText="Yes"
           onConfirm={onConfirm}
-          onCancel={() => {}}
+          onCancel={() => {
+            // Intentionally empty - test mock
+          }}
         />
       );
 
@@ -484,13 +600,17 @@ Line 3`;
 
     it('should handle Escape key for cancel', async () => {
       const user = userEvent.setup();
-      const onCancel = mock(() => {});
+      const onCancel = mock(() => {
+        // Intentionally empty - test mock
+      });
 
       renderWithProviders(
         <ConfirmationModal
           isOpen={true}
           message="Confirm?"
-          onConfirm={() => {}}
+          onConfirm={() => {
+            // Intentionally empty - test mock
+          }}
           onCancel={onCancel}
         />
       );
@@ -506,8 +626,12 @@ Line 3`;
         <ConfirmationModal
           isOpen={true}
           message="Confirm?"
-          onConfirm={() => {}}
-          onCancel={() => {}}
+          onConfirm={() => {
+            // Intentionally empty - test mock
+          }}
+          onCancel={() => {
+            // Intentionally empty - test mock
+          }}
         />
       );
 
@@ -515,8 +639,12 @@ Line 3`;
         <ConfirmationModal
           isOpen={false}
           message="Confirm?"
-          onConfirm={() => {}}
-          onCancel={() => {}}
+          onConfirm={() => {
+            // Intentionally empty - test mock
+          }}
+          onCancel={() => {
+            // Intentionally empty - test mock
+          }}
         />
       );
 
@@ -524,8 +652,12 @@ Line 3`;
         <ConfirmationModal
           isOpen={true}
           message="Confirm?"
-          onConfirm={() => {}}
-          onCancel={() => {}}
+          onConfirm={() => {
+            // Intentionally empty - test mock
+          }}
+          onCancel={() => {
+            // Intentionally empty - test mock
+          }}
         />
       );
 
@@ -534,8 +666,12 @@ Line 3`;
 
     it('should handle callback changes', async () => {
       const user = userEvent.setup();
-      const oldCallback = mock(() => {});
-      const newCallback = mock(() => {});
+      const oldCallback = mock(() => {
+        // Intentionally empty - test mock
+      });
+      const newCallback = mock(() => {
+        // Intentionally empty - test mock
+      });
 
       const { rerender } = renderWithProviders(
         <ConfirmationModal
@@ -543,7 +679,9 @@ Line 3`;
           message="Confirm?"
           confirmText="Yes"
           onConfirm={oldCallback}
-          onCancel={() => {}}
+          onCancel={() => {
+            // Intentionally empty - test mock
+          }}
         />
       );
 
@@ -553,7 +691,9 @@ Line 3`;
           message="Confirm?"
           confirmText="Yes"
           onConfirm={newCallback}
-          onCancel={() => {}}
+          onCancel={() => {
+            // Intentionally empty - test mock
+          }}
         />
       );
 
@@ -566,7 +706,16 @@ Line 3`;
 
     it('should handle empty string message', () => {
       renderWithProviders(
-        <ConfirmationModal isOpen={true} message="" onConfirm={() => {}} onCancel={() => {}} />
+        <ConfirmationModal
+          isOpen={true}
+          message=""
+          onConfirm={() => {
+            // Intentionally empty - test mock
+          }}
+          onCancel={() => {
+            // Intentionally empty - test mock
+          }}
+        />
       );
 
       // Modal should still render with buttons

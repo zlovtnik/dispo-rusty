@@ -466,9 +466,15 @@ describe('Multi-Tenant Data Isolation', () => {
         user: mockUser,
         tenant: mockTenant,
         loading: false,
-        login: async () => {},
-        logout: async () => {},
-        refreshToken: async () => {},
+        login: async () => {
+          // Intentionally empty - mock for testing
+        },
+        logout: async () => {
+          // Intentionally empty - mock for testing
+        },
+        refreshToken: async () => {
+          // Intentionally empty - mock for testing
+        },
       },
     });
 
@@ -503,9 +509,15 @@ describe('Multi-Tenant Data Isolation', () => {
         user: mockUser,
         tenant: tenant2,
         loading: false,
-        login: async () => {},
-        logout: async () => {},
-        refreshToken: async () => {},
+        login: async () => {
+          // Intentionally empty - mock for testing
+        },
+        logout: async () => {
+          // Intentionally empty - mock for testing
+        },
+        refreshToken: async () => {
+          // Intentionally empty - mock for testing
+        },
       },
     });
 

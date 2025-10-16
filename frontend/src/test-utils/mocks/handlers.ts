@@ -22,9 +22,7 @@ function getApiBaseUrl(): string {
   // In tests, prioritize process.env which Bun loads from .env files
   // Fall back to import.meta.env for browser/build time
   const apiUrl =
-    process.env.VITE_API_URL ||
-    (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) ||
-    'http://localhost:8000/api';
+    process.env.VITE_API_URL || import.meta.env?.VITE_API_URL || 'http://localhost:8000/api';
 
   if (!apiUrl) {
     throw new Error('Missing required environment variable: VITE_API_URL');
@@ -292,7 +290,7 @@ export function getHandlers() {
             if (!(filterGroups as any)[index]) {
               (filterGroups as any)[index] = {};
             }
-            // @ts-ignore - Dynamic property access
+            // @ts-expect-error - Dynamic property access
             (filterGroups as any)[index][field] = value;
           }
         });

@@ -385,7 +385,7 @@ export interface ContactInboundApiDTO {
   readonly phone?: string | null;
   readonly mobile?: string | null;
   /** Flexible gender input: accepts Gender enum, boolean (true=male), or string representations */
-  readonly gender?: Gender | boolean | string | null;
+  readonly gender?: boolean | string | null;
   readonly age?: number | null;
   readonly address?: string | Record<string, unknown> | null;
   readonly date_of_birth?: string | Date | null;

@@ -388,9 +388,15 @@ describe('Authentication Flow: Multi-Tenant Switching', () => {
         user: mockUser,
         tenant: tenant1,
         loading: false,
-        login: async () => {},
-        logout: async () => {},
-        refreshToken: async () => {},
+        login: async () => {
+          // Intentionally empty - mock for testing
+        },
+        logout: async () => {
+          // Intentionally empty - mock for testing
+        },
+        refreshToken: async () => {
+          // Intentionally empty - mock for testing
+        },
       },
     });
 
@@ -408,9 +414,15 @@ describe('Authentication Flow: Multi-Tenant Switching', () => {
         user: { ...mockUser, tenantId: tenant2.id },
         tenant: tenant2,
         loading: false,
-        login: async () => {},
-        logout: async () => {},
-        refreshToken: async () => {},
+        login: async () => {
+          // Intentionally empty - mock for testing
+        },
+        logout: async () => {
+          // Intentionally empty - mock for testing
+        },
+        refreshToken: async () => {
+          // Intentionally empty - mock for testing
+        },
       },
     });
 
@@ -448,16 +460,22 @@ describe('Authentication Flow: Multi-Tenant Switching', () => {
     );
 
     // Start with tenant 1
-    const { rerender } = renderWithProviders(<App />, {
+    const { user } = renderWithProviders(<DashboardPage />, {
       initialRoute: '/dashboard',
       authValue: {
         isAuthenticated: true,
         user: mockUser,
         tenant: tenant1,
         loading: false,
-        login: async () => {},
-        logout: async () => {},
-        refreshToken: async () => {},
+        login: async () => {
+          // Intentionally empty - mock for testing
+        },
+        logout: async () => {
+          // Intentionally empty - mock for testing
+        },
+        refreshToken: async () => {
+          // Intentionally empty - mock for testing
+        },
       },
     });
 
@@ -471,16 +489,22 @@ describe('Authentication Flow: Multi-Tenant Switching', () => {
     apiCalls.length = 0;
 
     // Switch to tenant 2 by re-rendering
-    renderWithProviders(<App />, {
+    renderWithProviders(<DashboardPage />, {
       initialRoute: '/dashboard',
       authValue: {
         isAuthenticated: true,
         user: { ...mockUser, tenantId: tenant2.id },
         tenant: tenant2,
         loading: false,
-        login: async () => {},
-        logout: async () => {},
-        refreshToken: async () => {},
+        login: async () => {
+          // Intentionally empty - mock for testing
+        },
+        logout: async () => {
+          // Intentionally empty - mock for testing
+        },
+        refreshToken: async () => {
+          // Intentionally empty - mock for testing
+        },
       },
     });
 
@@ -510,9 +534,15 @@ describe('Authentication Flow: Multi-Tenant Switching', () => {
         user: mockUser,
         tenant: tenant1,
         loading: false,
-        login: async () => {},
-        logout: async () => {},
-        refreshToken: async () => {},
+        login: async () => {
+          // Intentionally empty - mock for testing
+        },
+        logout: async () => {
+          // Intentionally empty - mock for testing
+        },
+        refreshToken: async () => {
+          // Intentionally empty - mock for testing
+        },
       },
     });
 
@@ -530,9 +560,15 @@ describe('Authentication Flow: Multi-Tenant Switching', () => {
         user: mockUser,
         tenant: invalidTenant,
         loading: false,
-        login: async () => {},
-        logout: async () => {},
-        refreshToken: async () => {},
+        login: async () => {
+          // Intentionally empty - mock for testing
+        },
+        logout: async () => {
+          // Intentionally empty - mock for testing
+        },
+        refreshToken: async () => {
+          // Intentionally empty - mock for testing
+        },
       },
     });
 

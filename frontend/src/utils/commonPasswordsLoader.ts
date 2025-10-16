@@ -6,7 +6,10 @@
  */
 
 import type { CommonPasswordsConfig } from '@/config/commonPasswords';
-import { COMMON_PASSWORDS_FALLBACK } from '@/config/commonPasswords';
+import {
+  COMMON_PASSWORDS_FALLBACK,
+  DEFAULT_COMMON_PASSWORDS_CONFIG,
+} from '@/config/commonPasswords';
 import { getEnv } from '@/config/env';
 import { testLogger } from '@/test-utils/logger';
 
@@ -62,7 +65,6 @@ export class CommonPasswordsLoader {
    */
   static getInstance(config?: Partial<CommonPasswordsConfig>): CommonPasswordsLoader {
     if (!CommonPasswordsLoader.instance) {
-      const { DEFAULT_COMMON_PASSWORDS_CONFIG } = require('@/config/commonPasswords');
       const finalConfig = {
         ...DEFAULT_COMMON_PASSWORDS_CONFIG,
         ...config,
