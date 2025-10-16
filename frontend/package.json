@@ -63,6 +63,7 @@
   },
   "dependencies": {
     "@ant-design/icons": "^6.1.0",
+    "@hookform/resolvers": "^5.2.2",
     "antd": "^5.27.4",
     "fp-ts": "^2.16.11",
     "neverthrow": "^8.2.0",
