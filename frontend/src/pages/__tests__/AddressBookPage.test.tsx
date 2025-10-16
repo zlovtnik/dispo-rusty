@@ -99,10 +99,7 @@ const server = setupServer(
     const body = (await request.json()) as Partial<Contact>;
     const contact = mockContacts.find(c => c.id === id);
     if (!contact) {
-      return HttpResponse.json(
-        { success: false, message: 'Contact not found' },
-        { status: 404 }
-      );
+      return HttpResponse.json({ success: false, message: 'Contact not found' }, { status: 404 });
     }
     const updated = { ...contact, ...body };
     return HttpResponse.json({
@@ -116,10 +113,7 @@ const server = setupServer(
     const { id } = params;
     const contact = mockContacts.find(c => c.id === id);
     if (!contact) {
-      return HttpResponse.json(
-        { success: false, message: 'Contact not found' },
-        { status: 404 }
-      );
+      return HttpResponse.json({ success: false, message: 'Contact not found' }, { status: 404 });
     }
     return HttpResponse.json({
       success: true,
@@ -226,7 +220,7 @@ describe('AddressBookPage Component', () => {
         expect(screen.queryByText('John Doe')).toBeDefined();
       });
 
-      const searchInput = screen.queryByPlaceholderText(/search/i) as HTMLInputElement;
+      const searchInput = screen.queryByPlaceholderText(/search/i)!;
       if (searchInput) {
         await user.type(searchInput, 'Jane');
         await user.clear(searchInput);
@@ -409,10 +403,7 @@ describe('AddressBookPage Component', () => {
     it('should provide retry option on error', async () => {
       server.use(
         http.get('/api/contacts', () => {
-          return HttpResponse.json(
-            { success: false, message: 'Failed to load' },
-            { status: 500 }
-          );
+          return HttpResponse.json({ success: false, message: 'Failed to load' }, { status: 500 });
         })
       );
 

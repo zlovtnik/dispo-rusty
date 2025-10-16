@@ -25,10 +25,12 @@ if (!import.meta.env.MODE) {
   (import.meta.env as Record<string, string>).MODE = process.env.NODE_ENV || 'test';
 }
 if (!import.meta.env.DEV) {
-  (import.meta.env as Record<string, boolean>).DEV = (process.env.NODE_ENV || 'test') !== 'production';
+  (import.meta.env as Record<string, boolean>).DEV =
+    (process.env.NODE_ENV || 'test') !== 'production';
 }
 if (!import.meta.env.PROD) {
-  (import.meta.env as Record<string, boolean>).PROD = (process.env.NODE_ENV || 'test') === 'production';
+  (import.meta.env as Record<string, boolean>).PROD =
+    (process.env.NODE_ENV || 'test') === 'production';
 }
 
 // Type augmentation for Bun's expect to include jest-dom matchers

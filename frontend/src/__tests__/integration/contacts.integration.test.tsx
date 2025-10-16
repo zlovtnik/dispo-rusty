@@ -199,8 +199,8 @@ describe('Contact CRUD Flow: Edit Contact', () => {
       await userEvent.click(editBtn);
 
       // Verify form is populated with existing data
-      const firstNameInput = screen.queryByLabelText(/first.*name/i) as HTMLInputElement;
-      const lastNameInput = screen.queryByLabelText(/last.*name/i) as HTMLInputElement;
+      const firstNameInput = screen.queryByLabelText(/first.*name/i)!;
+      const lastNameInput = screen.queryByLabelText(/last.*name/i)!;
 
       if (firstNameInput && lastNameInput) {
         expect(firstNameInput.value).toBe('John');
@@ -547,9 +547,9 @@ describe('Form Validation with Backend Errors', () => {
       await userEvent.click(createBtn);
 
       // Fill form with data that will trigger validation errors
-      const firstNameInput = screen.getByLabelText(/first name/i) as HTMLInputElement;
-      const emailInput = screen.getByLabelText(/email/i) as HTMLInputElement;
-      const phoneInput = screen.getByLabelText(/phone/i) as HTMLInputElement;
+      const firstNameInput = screen.getByLabelText(/first name/i);
+      const emailInput = screen.getByLabelText(/email/i);
+      const phoneInput = screen.getByLabelText(/phone/i);
 
       await userEvent.type(firstNameInput, 'Test');
       await userEvent.type(emailInput, 'duplicate@example.com');
@@ -569,11 +569,7 @@ describe('Form Validation with Backend Errors', () => {
   });
 
   test('Network errors are handled gracefully', async () => {
-    server.use(
-      http.post(`${API_URL}/contacts`, () =>
-        HttpResponse.error()
-      )
-    );
+    server.use(http.post(`${API_URL}/contacts`, () => HttpResponse.error()));
 
     renderWithAuth(<AddressBookPage />);
 
@@ -581,7 +577,7 @@ describe('Form Validation with Backend Errors', () => {
     if (createBtn) {
       await userEvent.click(createBtn);
 
-      const firstNameInput = screen.getByLabelText(/first name/i) as HTMLInputElement;
+      const firstNameInput = screen.getByLabelText(/first name/i);
       await userEvent.type(firstNameInput, 'Test');
 
       const submitBtn = screen.queryByRole('button', { name: /save|submit/i });

@@ -25,7 +25,7 @@ const dateSchema = z
     }
     return value;
   })
-  .refine((date) => !Number.isNaN(date.getTime()), 'Invalid date format');
+  .refine(date => !Number.isNaN(date.getTime()), 'Invalid date format');
 
 const optionalDateSchema = z
   .union([nonEmptyString, z.date()])
@@ -41,10 +41,7 @@ const optionalDateSchema = z
     }
     return value;
   })
-  .refine(
-    (date) => date === undefined || !Number.isNaN(date.getTime()),
-    'Invalid date format'
-  );
+  .refine(date => date === undefined || !Number.isNaN(date.getTime()), 'Invalid date format');
 
 const tenantBrandingSchema = z.object({
   primaryColor: z.string().min(1),
@@ -267,90 +264,92 @@ export const loginSchema = z.object({
   rememberMe: z.boolean().optional(),
 });
 
-export const contactFormSchema = z.object({
-  firstName: z
-    .string()
-    .min(1, 'First name is required')
-    .max(50, 'First name must be less than 50 characters'),
-  lastName: z
-    .string()
-    .min(1, 'Last name is required')
-    .max(50, 'Last name must be less than 50 characters'),
-  email: z
-    .string()
-    .email('Please enter a valid email address')
-    .optional()
-    .or(z.literal('')),
-  phone: z
-    .string()
-    .regex(/^\+?[1-9]\d{0,14}$/, 'Please enter a valid phone number')
-    .optional()
-    .or(z.literal('')),
-  gender: z.enum(['male', 'female', 'other'], {
-    required_error: 'Please select a gender',
-  }),
-  age: z
-    .number({
-      required_error: 'Age is required',
-      invalid_type_error: 'Age must be a number',
-    })
-    .min(1, 'Age must be at least 1')
-    .max(120, 'Age must be at most 120'),
-  street1: z.string().min(1, 'Street address is required'),
-  street2: z.string().optional().or(z.literal('')),
-  city: z.string().min(1, 'City is required'),
-  state: z.string().min(1, 'State is required'),
-  zipCode: z.string().min(1, 'ZIP code is required'),
-  country: z.string().min(1, 'Country is required'),
-}).refine(
-  (data) => {
-    // Cross-field validation: email or phone must be provided
-    if (!data.email && !data.phone) {
-      return false;
+export const contactFormSchema = z
+  .object({
+    firstName: z
+      .string()
+      .min(1, 'First name is required')
+      .max(50, 'First name must be less than 50 characters'),
+    lastName: z
+      .string()
+      .min(1, 'Last name is required')
+      .max(50, 'Last name must be less than 50 characters'),
+    email: z.string().email('Please enter a valid email address').optional().or(z.literal('')),
+    phone: z
+      .string()
+      .regex(/^\+?[1-9]\d{0,14}$/, 'Please enter a valid phone number')
+      .optional()
+      .or(z.literal('')),
+    gender: z.enum(['male', 'female', 'other'], {
+      required_error: 'Please select a gender',
+    }),
+    age: z
+      .number({
+        required_error: 'Age is required',
+        invalid_type_error: 'Age must be a number',
+      })
+      .min(1, 'Age must be at least 1')
+      .max(120, 'Age must be at most 120'),
+    street1: z.string().min(1, 'Street address is required'),
+    street2: z.string().optional().or(z.literal('')),
+    city: z.string().min(1, 'City is required'),
+    state: z.string().min(1, 'State is required'),
+    zipCode: z.string().min(1, 'ZIP code is required'),
+    country: z.string().min(1, 'Country is required'),
+  })
+  .refine(
+    data => {
+      // Cross-field validation: email or phone must be provided
+      if (!data.email && !data.phone) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message: 'Either email or phone number is required',
+      path: ['email'], // Attach error to email field
     }
-    return true;
-  },
-  {
-    message: 'Either email or phone number is required',
-    path: ['email'], // Attach error to email field
-  }
-);
+  );
 
-export const tenantFormSchema = z.object({
-  name: z
-    .string()
-    .min(1, 'Tenant name is required')
-    .min(3, 'Tenant name must be at least 3 characters')
-    .max(100, 'Tenant name must be less than 100 characters')
-    .regex(/^[a-zA-Z0-9\s\-_'.,()]+$/, 'Tenant name contains invalid characters'),
-  db_url: z
-    .string()
-    .min(1, 'Database URL is required')
-    .refine(
-      (value) => {
+export const tenantFormSchema = z
+  .object({
+    name: z
+      .string()
+      .min(1, 'Tenant name is required')
+      .min(3, 'Tenant name must be at least 3 characters')
+      .max(100, 'Tenant name must be less than 100 characters')
+      .regex(/^[a-zA-Z0-9\s\-_'.,()]+$/, 'Tenant name contains invalid characters'),
+    db_url: z
+      .string()
+      .min(1, 'Database URL is required')
+      .refine(value => {
         // PostgreSQL URL validation
         const urlRegex =
           /^postgres(?:ql)?:\/\/(?:[A-Za-z0-9._%+-]+(?::[A-Za-z0-9._%+-]+)?@)?(?:\[[^\]]+\]|[A-Za-z0-9.-]+(?:,[A-Za-z0-9.-]+)*(?::\d{1,5})?|\/[^/]+)?\/[A-Za-z0-9_\-]+(?:\?.*)?$/;
         // Libpq connection string regex
         const libpqRegex = /^[^&=]+=[^&]*(&[^&=]+=[^&]*)*$/;
         return urlRegex.test(value) || libpqRegex.test(value);
-      },
-      'Please enter a valid PostgreSQL URL or connection string'
-    ),
-}).refine(
-  (data) => {
-    // Ensure tenant name doesn't contain potentially harmful database connection strings
-    const name = data.name.toLowerCase();
-    if (name.includes('postgres://') || name.includes('postgresql://') || name.includes('host=') || name.includes('port=')) {
-      return false;
+      }, 'Please enter a valid PostgreSQL URL or connection string'),
+  })
+  .refine(
+    data => {
+      // Ensure tenant name doesn't contain potentially harmful database connection strings
+      const name = data.name.toLowerCase();
+      if (
+        name.includes('postgres://') ||
+        name.includes('postgresql://') ||
+        name.includes('host=') ||
+        name.includes('port=')
+      ) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message: 'Tenant name cannot contain database connection strings',
+      path: ['name'],
     }
-    return true;
-  },
-  {
-    message: 'Tenant name cannot contain database connection strings',
-    path: ['name'],
-  }
-);
+  );
 
 export const searchFormSchema = z.object({
   searchTerm: z

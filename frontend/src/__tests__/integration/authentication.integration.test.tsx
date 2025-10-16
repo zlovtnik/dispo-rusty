@@ -12,7 +12,15 @@
  */
 
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { renderWithProviders, renderWithoutAuth, mockUser, mockTenant, screen, waitFor, userEvent } from '../../test-utils';
+import {
+  renderWithProviders,
+  renderWithoutAuth,
+  mockUser,
+  mockTenant,
+  screen,
+  waitFor,
+  userEvent,
+} from '../../test-utils';
 import type { MockAuthContextValue } from '../../test-utils/render';
 import { server, resetMSW } from '../../test-utils/mocks/server';
 import { http, HttpResponse } from 'msw';
@@ -25,7 +33,7 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
 /**
  * Authentication Flow: Login → Token Storage → Protected Route
- * 
+ *
  * Scenario: User logs in and should be able to access protected routes
  * The token should be stored and reused for authenticated requests
  */
@@ -51,8 +59,8 @@ describe('Authentication Flow: Login → Token Storage → Protected Route', () 
     expect(screen.queryByText(/login/i)).toBeDefined();
 
     // 2. Fill in login form
-    const usernameInput = screen.getByLabelText(/email|username/i) as HTMLInputElement;
-    const passwordInput = screen.getByLabelText(/password/i) as HTMLInputElement;
+    const usernameInput = screen.getByLabelText(/email|username/i);
+    const passwordInput = screen.getByLabelText(/password/i);
     const loginButton = screen.getByRole('button', { name: /login|sign in/i });
 
     // Enter credentials
@@ -80,7 +88,7 @@ describe('Authentication Flow: Login → Token Storage → Protected Route', () 
     const contactsLink = screen.queryByText(/contacts|address book/i);
     if (contactsLink) {
       await userEvent.click(contactsLink);
-      
+
       // Wait for contacts to load (API call should be made with token)
       await waitFor(() => {
         expect(screen.queryByText(/contact/i)).toBeDefined();
@@ -123,8 +131,8 @@ describe('Authentication Flow: Login → Token Storage → Protected Route', () 
     renderWithoutAuth(<App />, { initialRoute: '/login' });
 
     // Fill form with invalid credentials
-    const usernameInput = screen.getByLabelText(/email|username/i) as HTMLInputElement;
-    const passwordInput = screen.getByLabelText(/password/i) as HTMLInputElement;
+    const usernameInput = screen.getByLabelText(/email|username/i);
+    const passwordInput = screen.getByLabelText(/password/i);
     const loginButton = screen.getByRole('button', { name: /login|sign in/i });
 
     await userEvent.type(usernameInput, 'invalid@example.com');
@@ -165,11 +173,11 @@ describe('Authentication Flow: Login → Token Storage → Protected Route', () 
 
     // Wait for API call
     await waitFor(() => {
-      expect(capturedHeaders['authorization']).toBeDefined();
+      expect(capturedHeaders.authorization).toBeDefined();
     });
 
     // Verify Authorization header format
-    expect(capturedHeaders['authorization']).toMatch(/^Bearer /);
+    expect(capturedHeaders.authorization).toMatch(/^Bearer /);
   });
 });
 
@@ -196,10 +204,7 @@ describe('Authentication Flow: Token Refresh & Session Management', () => {
     // Setup expired token response
     server.use(
       http.get(`${API_URL}/contacts`, () => {
-        return HttpResponse.json(
-          { success: false, message: 'Token expired' },
-          { status: 401 }
-        );
+        return HttpResponse.json({ success: false, message: 'Token expired' }, { status: 401 });
       }),
       http.post(`${API_URL}/auth/refresh`, () => {
         refreshAttempted = true;
@@ -231,10 +236,7 @@ describe('Authentication Flow: Token Refresh & Session Management', () => {
     // Setup token refresh to fail
     server.use(
       http.post(`${API_URL}/auth/refresh`, () => {
-        return HttpResponse.json(
-          { success: false, message: 'Session expired' },
-          { status: 401 }
-        );
+        return HttpResponse.json({ success: false, message: 'Session expired' }, { status: 401 });
       })
     );
 
@@ -247,8 +249,7 @@ describe('Authentication Flow: Token Refresh & Session Management', () => {
     // Wait for redirect to login
     await waitFor(() => {
       const isLoggedOut =
-        screen.queryByText(/login/i) !== undefined ||
-        screen.queryByText(/sign in/i) !== undefined;
+        screen.queryByText(/login/i) !== undefined || screen.queryByText(/sign in/i) !== undefined;
       // Note: Actual redirect depends on implementation
     });
 
@@ -338,7 +339,7 @@ describe('Authentication Flow: Multi-Tenant Switching', () => {
       expect(capturedTenantHeader !== null).toBe(true);
     });
 
-    // Verify tenant header sent - should match tenant ID  
+    // Verify tenant header sent - should match tenant ID
     const expectedTenantId = String(tenant1.id);
     expect(capturedTenantHeader === expectedTenantId).toBe(true);
   });
@@ -423,7 +424,7 @@ describe('Authentication Flow: Multi-Tenant Switching', () => {
   });
 
   test('API calls reflect tenant switch immediately', async () => {
-    const apiCalls: Array<{ tenantId: string; endpoint: string }> = [];
+    const apiCalls: { tenantId: string; endpoint: string }[] = [];
 
     server.use(
       http.get(`${API_URL}/contacts`, ({ request }) => {

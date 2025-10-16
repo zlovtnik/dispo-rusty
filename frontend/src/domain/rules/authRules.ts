@@ -114,10 +114,10 @@ const createDefaultPasswordBreachCheckConfig = (): PasswordBreachCheckConfig => 
  * Get the common passwords list
  * Loads from external source with fallback to built-in list
  */
-let commonPasswordsCache: ReadonlyArray<string> | null = null;
-let commonPasswordsPromise: Promise<ReadonlyArray<string>> | null = null;
+let commonPasswordsCache: readonly string[] | null = null;
+let commonPasswordsPromise: Promise<readonly string[]> | null = null;
 
-async function getCommonPasswordsList(): Promise<ReadonlyArray<string>> {
+async function getCommonPasswordsList(): Promise<readonly string[]> {
   if (commonPasswordsCache) {
     return commonPasswordsCache;
   }
@@ -304,7 +304,7 @@ class PwnedPasswordChecker {
       const headers: Record<string, string> = {
         'Add-Padding': 'true',
       };
-      
+
       // Only add User-Agent when in non-browser environment (e.g., Node.js, server)
       if (typeof window === 'undefined' && typeof navigator === 'undefined') {
         headers['User-Agent'] = this.options.userAgent;

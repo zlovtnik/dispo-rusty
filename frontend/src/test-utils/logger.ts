@@ -66,7 +66,10 @@ function shouldLog(level: LogLevel): boolean {
     return false;
   }
 
-  const enabledLevels = debugLogs.toLowerCase().split(',').map(s => s.trim());
+  const enabledLevels = debugLogs
+    .toLowerCase()
+    .split(',')
+    .map(s => s.trim());
 
   return enabledLevels.includes('all') || enabledLevels.includes(level);
 }

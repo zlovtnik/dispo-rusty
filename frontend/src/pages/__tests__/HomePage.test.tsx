@@ -10,7 +10,9 @@ describe('HomePage Component', () => {
       renderWithoutAuth(<HomePage />);
 
       // Should display feature cards
-      const features = screen.queryAllByText(/Secure Authentication|Multi-Tenant|High Performance/i);
+      const features = screen.queryAllByText(
+        /Secure Authentication|Multi-Tenant|High Performance/i
+      );
       expect(features.length).toBeGreaterThan(0);
     });
 
@@ -84,7 +86,11 @@ describe('HomePage Component', () => {
       renderWithoutAuth(<HomePage />);
 
       const buttons = screen.queryAllByRole('button');
-      const loginButton = buttons.find(b => b.textContent?.toLowerCase().includes('login') || b.textContent?.toLowerCase().includes('sign'));
+      const loginButton = buttons.find(
+        b =>
+          b.textContent?.toLowerCase().includes('login') ||
+          b.textContent?.toLowerCase().includes('sign')
+      );
       expect(loginButton || buttons.length).toBeGreaterThan(0);
     });
 

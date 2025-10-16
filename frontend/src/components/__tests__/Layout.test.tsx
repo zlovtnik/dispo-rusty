@@ -118,7 +118,7 @@ describe('Layout Component', () => {
       if (mockUser.firstName) {
         const userElements = screen.queryAllByText(mockUser.firstName);
         expect(userElements.length).toBeGreaterThan(0);
-        
+
         if (userElements.length > 0 && userElements[0]) {
           await user.click(userElements[0]);
           // Dropdown should be triggered
@@ -174,14 +174,15 @@ describe('Layout Component', () => {
         // Find the menu toggle button (typically has aria-expanded or menu-related class)
         const toggleButton = buttons.find(btn => {
           const ariaExpanded = btn.getAttribute('aria-expanded');
-          const isMenuButton = btn.getAttribute('aria-label')?.includes('menu') || btn.className.includes('trigger');
+          const isMenuButton =
+            btn.getAttribute('aria-label')?.includes('menu') || btn.className.includes('trigger');
           return ariaExpanded !== null || isMenuButton;
         });
 
         if (toggleButton) {
           // Record initial state
           const initialState = toggleButton.getAttribute('aria-expanded');
-          
+
           // Click to toggle
           await user.click(toggleButton);
 
@@ -223,7 +224,7 @@ describe('Layout Component', () => {
       // Check for Ant Design layout structure
       const antLayout = container.querySelector('[class*="ant-layout"]');
       const antMenu = container.querySelector('[class*="ant-menu"]');
-      
+
       expect(antLayout).toBeDefined();
       // Menu should be present
       expect(antMenu).toBeDefined();
@@ -239,7 +240,7 @@ describe('Layout Component', () => {
       // Verify header, content sections
       const layoutHeader = container.querySelector('[class*="ant-layout-header"]');
       const layoutContent = container.querySelector('[class*="ant-layout-content"]');
-      
+
       expect(layoutHeader || layoutContent).toBeDefined();
     });
   });

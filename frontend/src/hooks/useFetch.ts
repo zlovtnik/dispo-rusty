@@ -180,15 +180,17 @@ export function useFetch<T = unknown>(
           if (validateResponse) {
             const validationResult = validateResponse.safeParse(transformedData);
             if (!validationResult.success) {
-              return err(createBusinessLogicError(
-                `Response validation failed: ${validationResult.error.message}`,
-                { 
-                  validationErrors: validationResult.error.issues,
-                  // Include non-sensitive request context for troubleshooting
-                  url: url ?? 'unknown',
-                  responseType: typeof transformedData,
-                }
-              ));
+              return err(
+                createBusinessLogicError(
+                  `Response validation failed: ${validationResult.error.message}`,
+                  {
+                    validationErrors: validationResult.error.issues,
+                    // Include non-sensitive request context for troubleshooting
+                    url: url ?? 'unknown',
+                    responseType: typeof transformedData,
+                  }
+                )
+              );
             }
           }
 

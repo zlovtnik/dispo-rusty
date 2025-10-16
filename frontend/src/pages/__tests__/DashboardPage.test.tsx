@@ -224,7 +224,7 @@ describe('DashboardPage Component', () => {
 
       const headings = screen.getAllByRole('heading');
       expect(headings.length).toBeGreaterThan(0);
-      
+
       // Verify headings have content
       headings.forEach(heading => {
         expect(heading.textContent?.trim().length).toBeGreaterThan(0);
@@ -237,7 +237,7 @@ describe('DashboardPage Component', () => {
       // Verify key text content is present
       const welcomeText = screen.getByText(/Welcome/i);
       const tenantText = screen.getByText(mockTenant.name);
-      
+
       expect(welcomeText.textContent?.length).toBeGreaterThan(5);
       expect(tenantText.textContent?.length).toBeGreaterThan(0);
     });
@@ -301,11 +301,15 @@ describe('DashboardPage Component', () => {
       expect(container).toBeDefined();
 
       // Verify long name is truncated or wrapped (check computed style or class)
-      const computedStyle = window.getComputedStyle(container as HTMLElement);
-      const hasOverflow = computedStyle.overflow === 'hidden' || computedStyle.textOverflow === 'ellipsis';
-      const hasWordWrap = computedStyle.wordWrap === 'break-word' || computedStyle.wordBreak === 'break-word';
-      
-      expect(hasOverflow || hasWordWrap || container?.classList.toString().includes('truncate')).toBeDefined();
+      const computedStyle = window.getComputedStyle(container!);
+      const hasOverflow =
+        computedStyle.overflow === 'hidden' || computedStyle.textOverflow === 'ellipsis';
+      const hasWordWrap =
+        computedStyle.wordWrap === 'break-word' || computedStyle.wordBreak === 'break-word';
+
+      expect(
+        hasOverflow || hasWordWrap || container?.classList.toString().includes('truncate')
+      ).toBeDefined();
     });
   });
 

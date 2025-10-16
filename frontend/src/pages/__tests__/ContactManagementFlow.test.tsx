@@ -29,7 +29,13 @@ const tenantContacts: Record<string, Contact[]> = {
       phone: '555-0100',
       mobile: '555-0100',
       gender: 'male',
-      address: { street1: '123 Main St', city: 'Springfield', state: 'IL', zipCode: '62701', country: 'USA' },
+      address: {
+        street1: '123 Main St',
+        city: 'Springfield',
+        state: 'IL',
+        zipCode: '62701',
+        country: 'USA',
+      },
       createdAt: new Date(),
       updatedAt: new Date(),
       createdBy: asUserId('user1'),
@@ -48,7 +54,13 @@ const tenantContacts: Record<string, Contact[]> = {
       phone: '555-0200',
       mobile: '555-0200',
       gender: 'female',
-      address: { street1: '789 Pine Rd', city: 'Metropolis', state: 'NY', zipCode: '10001', country: 'USA' },
+      address: {
+        street1: '789 Pine Rd',
+        city: 'Metropolis',
+        state: 'NY',
+        zipCode: '10001',
+        country: 'USA',
+      },
       createdAt: new Date(),
       updatedAt: new Date(),
       createdBy: asUserId('user2'),
@@ -77,15 +89,18 @@ const server = setupServer(
       data: {
         token: jwt,
         user: { ...mockUser, tenantId: asTenantId(tenantId) },
-        tenant: { ...mockTenant, id: asTenantId(tenantId) }
-      }
+        tenant: { ...mockTenant, id: asTenantId(tenantId) },
+      },
     });
   }),
 
   // Refresh token
   http.post('/api/auth/refresh', async () => {
     if (!refreshTokenValid) {
-      return HttpResponse.json({ success: false, message: 'Refresh token expired' }, { status: 401 });
+      return HttpResponse.json(
+        { success: false, message: 'Refresh token expired' },
+        { status: 401 }
+      );
     }
     const jwt = createMockAuthJwt('test', 'tenant1');
     currentToken = jwt;
@@ -95,8 +110,8 @@ const server = setupServer(
       data: {
         token: jwt,
         user: mockUser,
-        tenant: mockTenant
-      }
+        tenant: mockTenant,
+      },
     });
   }),
 
@@ -113,9 +128,12 @@ const server = setupServer(
     const body = await request.json();
     // simulate server-side validation error
     if (!body.firstName) {
-      return HttpResponse.json({ success: false, message: 'First name required', errors: { firstName: 'required' } }, { status: 400 });
+      return HttpResponse.json(
+        { success: false, message: 'First name required', errors: { firstName: 'required' } },
+        { status: 400 }
+      );
     }
-    const arr = tenantContacts[tenantId] ||= [];
+    const arr = (tenantContacts[tenantId] ||= []);
     const newContact: Contact = {
       id: asContactId(String(arr.length + 1)),
       tenantId: asTenantId(tenantId),
@@ -144,7 +162,8 @@ const server = setupServer(
     const arr = tenantContacts[tenantId] || [];
     const body = await request.json();
     const idx = arr.findIndex(c => c.id === id);
-    if (idx === -1) return HttpResponse.json({ success: false, message: 'Not found' }, { status: 404 });
+    if (idx === -1)
+      return HttpResponse.json({ success: false, message: 'Not found' }, { status: 404 });
     arr[idx] = { ...arr[idx], ...body, updatedAt: new Date() } as Contact;
     return HttpResponse.json({ success: true, message: 'Contact updated', data: arr[idx] });
   }),
@@ -154,14 +173,22 @@ const server = setupServer(
     const tenantId = headers.get('x-tenant-id') || 'tenant1';
     const arr = tenantContacts[tenantId] || [];
     const idx = arr.findIndex(c => c.id === params.id);
-    if (idx === -1) return HttpResponse.json({ success: false, message: 'Not found' }, { status: 404 });
+    if (idx === -1)
+      return HttpResponse.json({ success: false, message: 'Not found' }, { status: 404 });
     arr.splice(idx, 1);
     return HttpResponse.json({ success: true, message: 'Contact deleted' });
   }),
 
   // Tenants list
   http.get('/api/tenants', () => {
-    return HttpResponse.json({ success: true, message: 'Tenants', data: [{ id: 'tenant1', name: 'Tenant One' }, { id: 'tenant2', name: 'Tenant Two' }] });
+    return HttpResponse.json({
+      success: true,
+      message: 'Tenants',
+      data: [
+        { id: 'tenant1', name: 'Tenant One' },
+        { id: 'tenant2', name: 'Tenant Two' },
+      ],
+    });
   })
 );
 
@@ -170,7 +197,10 @@ describe('Contact Management Flow - Integration', () => {
     localStorage.clear();
     server.listen();
   });
-  afterEach(() => { server.resetHandlers(); server.close(); });
+  afterEach(() => {
+    server.resetHandlers();
+    server.close();
+  });
 
   it('full auth flow + contact CRUD + tenant switching + validation and refresh', async () => {
     const user = userEvent.setup();
@@ -273,8 +303,8 @@ describe('Contact Management Flow - Integration', () => {
     // After switching, render AddressBookPage with tenant2 context
     renderWithAuth(<AddressBookPage />, {
       authValue: {
-        tenant: { ...mockTenant, id: asTenantId('tenant2') }
-      }
+        tenant: { ...mockTenant, id: asTenantId('tenant2') },
+      },
     });
 
     await waitFor(() => {

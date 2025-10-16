@@ -64,7 +64,9 @@ describe('ErrorBoundary Component', () => {
         </ErrorBoundary>
       );
 
-      expect(screen.queryByText(fallbackContent) || screen.queryByText(/error|Error/i)).toBeDefined();
+      expect(
+        screen.queryByText(fallbackContent) || screen.queryByText(/error|Error/i)
+      ).toBeDefined();
     });
 
     it('should not catch errors in event handlers', () => {
@@ -72,7 +74,11 @@ describe('ErrorBoundary Component', () => {
       renderWithProviders(
         <ErrorBoundary>
           <div>
-            <button onClick={() => { throw new Error('Event error'); }}>
+            <button
+              onClick={() => {
+                throw new Error('Event error');
+              }}
+            >
               Click Me
             </button>
           </div>
@@ -283,7 +289,9 @@ describe('ErrorBoundary Component', () => {
         </ErrorBoundary>
       );
 
-      expect(screen.queryByText('Custom Error Fallback') || screen.queryByText(/error|Error/i)).toBeDefined();
+      expect(
+        screen.queryByText('Custom Error Fallback') || screen.queryByText(/error|Error/i)
+      ).toBeDefined();
     });
 
     it('should accept onError callback prop', () => {
@@ -300,10 +308,7 @@ describe('ErrorBoundary Component', () => {
     it('should handle all valid props', () => {
       const onError = mock(() => {});
       renderWithProviders(
-        <ErrorBoundary
-          onError={onError}
-          fallback={<div>Fallback</div>}
-        >
+        <ErrorBoundary onError={onError} fallback={<div>Fallback</div>}>
           <div>Content</div>
         </ErrorBoundary>
       );

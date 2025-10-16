@@ -163,7 +163,14 @@ export const LoginPage: React.FC = () => {
 
         <form onSubmit={handleSubmit(onSubmit)} style={{ width: '100%' }}>
           <div style={{ marginBottom: '24px' }}>
-            <label style={{ color: 'var(--primary-700)', fontWeight: 600, display: 'block', marginBottom: '8px' }}>
+            <label
+              style={{
+                color: 'var(--primary-700)',
+                fontWeight: 600,
+                display: 'block',
+                marginBottom: '8px',
+              }}
+            >
               Username or Email
             </label>
             <Input
@@ -177,7 +184,14 @@ export const LoginPage: React.FC = () => {
           </div>
 
           <div style={{ marginBottom: '24px' }}>
-            <label style={{ color: 'var(--primary-700)', fontWeight: 600, display: 'block', marginBottom: '8px' }}>
+            <label
+              style={{
+                color: 'var(--primary-700)',
+                fontWeight: 600,
+                display: 'block',
+                marginBottom: '8px',
+              }}
+            >
               Password
             </label>
             <Input.Password
@@ -185,14 +199,21 @@ export const LoginPage: React.FC = () => {
               placeholder="Enter your password"
               size="large"
               status={getFieldStatus('password')}
-              iconRender={(visible) => (visible ? <EyeTwoTone /> : <EyeInvisibleOutlined />)}
+              iconRender={visible => (visible ? <EyeTwoTone /> : <EyeInvisibleOutlined />)}
               onBlur={() => trigger('password')}
             />
             {renderFieldHelp('password')}
           </div>
 
           <div style={{ marginBottom: '24px' }}>
-            <label style={{ color: 'var(--primary-700)', fontWeight: 600, display: 'block', marginBottom: '8px' }}>
+            <label
+              style={{
+                color: 'var(--primary-700)',
+                fontWeight: 600,
+                display: 'block',
+                marginBottom: '8px',
+              }}
+            >
               Tenant ID
             </label>
             <Input

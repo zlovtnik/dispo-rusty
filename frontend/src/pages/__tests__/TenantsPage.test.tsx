@@ -127,10 +127,7 @@ const server = setupServer(
     const tenant = mockTenants.find(t => t.id === id);
 
     if (!tenant) {
-      return HttpResponse.json(
-        { success: false, message: 'Tenant not found' },
-        { status: 404 }
-      );
+      return HttpResponse.json({ success: false, message: 'Tenant not found' }, { status: 404 });
     }
 
     const updated = { ...tenant, ...body };
@@ -146,10 +143,7 @@ const server = setupServer(
     const tenant = mockTenants.find(t => t.id === id);
 
     if (!tenant) {
-      return HttpResponse.json(
-        { success: false, message: 'Tenant not found' },
-        { status: 404 }
-      );
+      return HttpResponse.json({ success: false, message: 'Tenant not found' }, { status: 404 });
     }
 
     return HttpResponse.json({
@@ -257,7 +251,7 @@ describe('TenantsPage Component', () => {
         expect(screen.queryByText('Acme Corporation')).toBeDefined();
       });
 
-      const searchInput = screen.queryByPlaceholderText(/search/i) as HTMLInputElement;
+      const searchInput = screen.queryByPlaceholderText(/search/i)!;
       if (searchInput) {
         await user.type(searchInput, 'Global');
         await user.clear(searchInput);
@@ -445,10 +439,7 @@ describe('TenantsPage Component', () => {
     it('should provide retry option on error', async () => {
       server.use(
         http.get('/api/admin/tenants', () => {
-          return HttpResponse.json(
-            { success: false, message: 'Failed to load' },
-            { status: 500 }
-          );
+          return HttpResponse.json({ success: false, message: 'Failed to load' }, { status: 500 });
         })
       );
 

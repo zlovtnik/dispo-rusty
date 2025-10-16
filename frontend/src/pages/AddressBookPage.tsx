@@ -47,7 +47,8 @@ function getDefaultCountry(): string {
   if (cachedDefaultCountry === null) {
     try {
       const value = getEnv().defaultCountry;
-      cachedDefaultCountry = typeof value === 'string' && value.trim().length > 0 ? value.trim() : '';
+      cachedDefaultCountry =
+        typeof value === 'string' && value.trim().length > 0 ? value.trim() : '';
     } catch {
       // Fallback if environment not available during tests
       cachedDefaultCountry = '';

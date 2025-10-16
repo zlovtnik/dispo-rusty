@@ -24,8 +24,8 @@ beforeEach(() => {
           description: 'Test passwords',
           lastUpdated: '2025-01-01',
           source: 'test',
-          passwords: ['test1', 'test2', 'test3']
-        })
+          passwords: ['test1', 'test2', 'test3'],
+        }),
       };
     }
     // For any other URLs, use the original fetch
@@ -81,7 +81,7 @@ describe('CommonPasswordsLoader', () => {
       // Use a custom config that points to a non-existent file to force fallback
       const loader = CommonPasswordsLoader.getInstance({
         filePath: '/non-existent-test-file.json',
-        enabled: true
+        enabled: true,
       });
       const passwords = await loader.getCommonPasswords();
 
@@ -92,7 +92,7 @@ describe('CommonPasswordsLoader', () => {
     it('should return cached passwords on subsequent calls', async () => {
       const loader = CommonPasswordsLoader.getInstance({
         filePath: '/non-existent-test-file.json',
-        enabled: true
+        enabled: true,
       });
 
       // First call
@@ -112,7 +112,9 @@ describe('CommonPasswordsLoader', () => {
     });
 
     it('should fallback to built-in list when fetch fails', async () => {
-      mockFetch = async () => { throw new Error('Network error'); };
+      mockFetch = async () => {
+        throw new Error('Network error');
+      };
       global.fetch = mockFetch;
 
       const loader = CommonPasswordsLoader.getInstance();
@@ -126,7 +128,7 @@ describe('CommonPasswordsLoader', () => {
         ok: true,
         status: 200,
         statusText: 'OK',
-        json: async () => ({ invalid: 'response' })
+        json: async () => ({ invalid: 'response' }),
       });
       global.fetch = mockFetch;
 
@@ -137,20 +139,20 @@ describe('CommonPasswordsLoader', () => {
     });
 
     it('should enforce maxCacheEntries limit when loading', () => {
-    // Create a test by directly checking the truncation logic
-    // The implementation already has the limit, this test verifies configuration works
-    const loader = CommonPasswordsLoader.getInstance({
-      filePath: '/config/common-passwords.json',
-      enabled: true,
-      maxCacheEntries: 50
+      // Create a test by directly checking the truncation logic
+      // The implementation already has the limit, this test verifies configuration works
+      const loader = CommonPasswordsLoader.getInstance({
+        filePath: '/config/common-passwords.json',
+        enabled: true,
+        maxCacheEntries: 50,
+      });
+
+      // Verify the configuration is accepted without errors
+      expect(() => {
+        // Getting cache status should work with configured limits
+        loader.getCacheStatus();
+      }).not.toThrow();
     });
-    
-    // Verify the configuration is accepted without errors
-    expect(() => {
-      // Getting cache status should work with configured limits
-      loader.getCacheStatus();
-    }).not.toThrow();
-  });
   });
 
   describe('getCacheStatus', () => {

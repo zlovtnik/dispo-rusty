@@ -4,7 +4,12 @@ import { Form, Input, InputNumber, Select, Checkbox } from 'antd';
 import type { InputNumberProps, SelectProps } from 'antd';
 import type { Rule } from 'antd/es/form';
 import type { FormItemProps } from 'antd/es/form/FormItem';
-import { EyeInvisibleOutlined, EyeTwoTone, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
+import {
+  EyeInvisibleOutlined,
+  EyeTwoTone,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+} from '@ant-design/icons';
 
 interface BaseFormFieldProps {
   name: string;
@@ -38,7 +43,7 @@ interface NumberFormFieldProps extends BaseFormFieldProps {
 
 interface SelectFormFieldProps extends BaseFormFieldProps {
   type: 'select';
-  options: Array<{ value: string | number; label: string; disabled?: boolean }>;
+  options: { value: string | number; label: string; disabled?: boolean }[];
   selectProps?: Partial<SelectProps>;
 }
 
@@ -47,7 +52,11 @@ interface CheckboxFormFieldProps extends BaseFormFieldProps {
   children?: React.ReactNode;
 }
 
-type FormFieldProps = TextFormFieldProps | NumberFormFieldProps | SelectFormFieldProps | CheckboxFormFieldProps;
+type FormFieldProps =
+  | TextFormFieldProps
+  | NumberFormFieldProps
+  | SelectFormFieldProps
+  | CheckboxFormFieldProps;
 
 /**
  * Reusable form field component with React Hook Form integration and validation states
@@ -81,22 +90,26 @@ export const FormField = memo<FormFieldProps>(
     const hasValue = currentValue !== undefined && currentValue !== '' && currentValue !== null;
 
     // Determine validation status
-    const status = validateStatus || (() => {
-      if (fieldError && (isTouched || isSubmitted)) {
-        return 'error';
-      }
-      if (isFieldValid) {
-        return 'success';
-      }
-      return undefined;
-    })();
+    const status =
+      validateStatus ||
+      (() => {
+        if (fieldError && (isTouched || isSubmitted)) {
+          return 'error';
+        }
+        if (isFieldValid) {
+          return 'success';
+        }
+        return undefined;
+      })();
 
     const formItemProps: FormItemProps = {
       name,
       label,
       required,
       rules,
-      help: (typeof fieldError?.message === 'string' ? fieldError.message : fieldError?.message) || help,
+      help:
+        (typeof fieldError?.message === 'string' ? fieldError.message : fieldError?.message) ||
+        help,
       extra,
       tooltip,
       validateStatus: status,
@@ -118,7 +131,8 @@ export const FormField = memo<FormFieldProps>(
 
     // Add error icon for invalid fields
     if (status === 'error' && fieldError) {
-      const errorMessage = typeof fieldError.message === 'string' ? fieldError.message : 'Invalid input';
+      const errorMessage =
+        typeof fieldError.message === 'string' ? fieldError.message : 'Invalid input';
       formItemProps.help = (
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <CloseCircleOutlined style={{ color: 'var(--color-danger)' }} />
@@ -138,7 +152,11 @@ export const FormField = memo<FormFieldProps>(
               disabled={disabled}
               maxLength={props.maxLength}
               type={props.type === 'email' ? 'email' : 'text'}
-              suffix={status === 'success' ? <CheckCircleOutlined style={{ color: 'var(--color-success)' }} /> : null}
+              suffix={
+                status === 'success' ? (
+                  <CheckCircleOutlined style={{ color: 'var(--color-success)' }} />
+                ) : null
+              }
             />
           );
 
@@ -148,8 +166,12 @@ export const FormField = memo<FormFieldProps>(
               {...register(name)}
               placeholder={placeholder}
               disabled={disabled}
-              iconRender={(visible) => (visible ? <EyeTwoTone /> : <EyeInvisibleOutlined />)}
-              suffix={status === 'success' ? <CheckCircleOutlined style={{ color: 'var(--color-success)' }} /> : null}
+              iconRender={visible => (visible ? <EyeTwoTone /> : <EyeInvisibleOutlined />)}
+              suffix={
+                status === 'success' ? (
+                  <CheckCircleOutlined style={{ color: 'var(--color-success)' }} />
+                ) : null
+              }
             />
           );
 
@@ -162,7 +184,11 @@ export const FormField = memo<FormFieldProps>(
               maxLength={props.maxLength}
               showCount={props.showCount}
               rows={props.rows || 4}
-              suffix={status === 'success' ? <CheckCircleOutlined style={{ color: 'var(--color-success)' }} /> : null}
+              suffix={
+                status === 'success' ? (
+                  <CheckCircleOutlined style={{ color: 'var(--color-success)' }} />
+                ) : null
+              }
             />
           );
 
@@ -198,23 +224,13 @@ export const FormField = memo<FormFieldProps>(
 
         case 'checkbox':
           return (
-            <Checkbox
-              {...register(name)}
-              disabled={disabled}
-              style={{ marginLeft: 0 }}
-            >
+            <Checkbox {...register(name)} disabled={disabled} style={{ marginLeft: 0 }}>
               {(props as CheckboxFormFieldProps).children}
             </Checkbox>
           );
 
         default:
-          return (
-            <Input
-              {...register(name)}
-              placeholder={placeholder}
-              disabled={disabled}
-            />
-          );
+          return <Input {...register(name)} placeholder={placeholder} disabled={disabled} />;
       }
     };
 

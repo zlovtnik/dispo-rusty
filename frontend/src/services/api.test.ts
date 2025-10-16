@@ -152,7 +152,7 @@ describe('authService', () => {
         const error = result.error;
         expect(error.type).toBe('auth');
         // Timeout errors are converted to auth errors but preserve the original code
-        const details = error.details as Record<string, unknown> | undefined;
+        const details = error.details;
         expect(details?.originalType === 'network' || error.code === 'TIMEOUT').toBe(true);
       }
     }, 40000); // Extended timeout for this test
@@ -675,7 +675,7 @@ describe('addressBookService', () => {
       },
     ];
 
-    genderTestCases.forEach((testCase) => {
+    genderTestCases.forEach(testCase => {
       test(`should handle ${testCase.label} round-trip through boolean conversion`, async () => {
         const newContact = {
           name: testCase.name,

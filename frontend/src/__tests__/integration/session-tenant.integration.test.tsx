@@ -8,7 +8,15 @@
  */
 
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { renderWithProviders, renderWithAuth, mockUser, mockTenant, screen, waitFor, userEvent } from '../../test-utils';
+import {
+  renderWithProviders,
+  renderWithAuth,
+  mockUser,
+  mockTenant,
+  screen,
+  waitFor,
+  userEvent,
+} from '../../test-utils';
 import { server, resetMSW } from '../../test-utils/mocks/server';
 import { http, HttpResponse } from 'msw';
 import { App } from '../../App';
@@ -18,24 +26,28 @@ import { TenantsPage } from '../../pages/TenantsPage';
 // Create mock JWT tokens for testing
 function createExpiredToken(): string {
   const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
-  const payload = btoa(JSON.stringify({
-    sub: 'test-user',
-    tenant_id: 'tenant-1',
-    exp: Math.floor(Date.now() / 1000) - 3600, // Expired 1 hour ago
-    iat: Math.floor(Date.now() / 1000) - 7200,
-  }));
+  const payload = btoa(
+    JSON.stringify({
+      sub: 'test-user',
+      tenant_id: 'tenant-1',
+      exp: Math.floor(Date.now() / 1000) - 3600, // Expired 1 hour ago
+      iat: Math.floor(Date.now() / 1000) - 7200,
+    })
+  );
   const signature = 'mock-signature';
   return `${header}.${payload}.${signature}`;
 }
 
 function createValidToken(): string {
   const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
-  const payload = btoa(JSON.stringify({
-    sub: 'test-user',
-    tenant_id: 'tenant-1',
-    exp: Math.floor(Date.now() / 1000) + 3600, // Valid for 1 hour
-    iat: Math.floor(Date.now() / 1000),
-  }));
+  const payload = btoa(
+    JSON.stringify({
+      sub: 'test-user',
+      tenant_id: 'tenant-1',
+      exp: Math.floor(Date.now() / 1000) + 3600, // Valid for 1 hour
+      iat: Math.floor(Date.now() / 1000),
+    })
+  );
   const signature = 'mock-signature';
   return `${header}.${payload}.${signature}`;
 }
@@ -70,10 +82,7 @@ describe('Session Expiration & Token Refresh Flow', () => {
         apiCallCount++;
         // First call returns 401 (expired token)
         if (apiCallCount === 1) {
-          return HttpResponse.json(
-            { message: 'Token expired' },
-            { status: 401 }
-          );
+          return HttpResponse.json({ message: 'Token expired' }, { status: 401 });
         }
         // Subsequent calls succeed (after refresh)
         return HttpResponse.json({
@@ -125,10 +134,7 @@ describe('Session Expiration & Token Refresh Flow', () => {
 
     server.use(
       http.get(`${API_URL}/dashboard`, () =>
-        HttpResponse.json(
-          { message: 'Token expired' },
-          { status: 401 }
-        )
+        HttpResponse.json({ message: 'Token expired' }, { status: 401 })
       ),
       http.post(`${API_URL}/auth/refresh`, () => {
         refreshCalled = true;
@@ -211,16 +217,10 @@ describe('Session Expiration & Token Refresh Flow', () => {
 
     server.use(
       http.get(`${API_URL}/dashboard`, () =>
-        HttpResponse.json(
-          { message: 'Invalid token' },
-          { status: 401 }
-        )
+        HttpResponse.json({ message: 'Invalid token' }, { status: 401 })
       ),
       http.post(`${API_URL}/auth/refresh`, () =>
-        HttpResponse.json(
-          { success: false, message: 'Invalid refresh token' },
-          { status: 401 }
-        )
+        HttpResponse.json({ success: false, message: 'Invalid refresh token' }, { status: 401 })
       )
     );
 
@@ -255,10 +255,7 @@ describe('Session Expiration & Token Refresh Flow', () => {
         const authHeader = request.headers.get('authorization');
         // Check that token is being sent
         if (!authHeader?.startsWith('Bearer ')) {
-          return HttpResponse.json(
-            { message: 'Unauthorized' },
-            { status: 401 }
-          );
+          return HttpResponse.json({ message: 'Unauthorized' }, { status: 401 });
         }
         return HttpResponse.json({
           success: true,
@@ -282,9 +279,12 @@ describe('Session Expiration & Token Refresh Flow', () => {
     });
 
     // Should remain on dashboard
-    await waitFor(() => {
-      expect(screen.queryByText(/dashboard|welcome/i)).toBeDefined();
-    }, { timeout: 3000 });
+    await waitFor(
+      () => {
+        expect(screen.queryByText(/dashboard|welcome/i)).toBeDefined();
+      },
+      { timeout: 3000 }
+    );
 
     // Verify API was called successfully
     expect(apiCallCount).toBeGreaterThan(0);
@@ -317,7 +317,7 @@ describe('Tenant Switching Functionality', () => {
   });
 
   test('Tenant switch updates API requests with correct tenant header', async () => {
-    let capturedTenantIds: string[] = [];
+    const capturedTenantIds: string[] = [];
 
     server.use(
       http.get(`${API_URL}/contacts`, ({ request }) => {
@@ -436,10 +436,7 @@ describe('Tenant Switching Functionality', () => {
         const tenantId = request.headers.get('x-tenant-id');
         // Simulate rejecting invalid tenant
         if (tenantId === 'invalid-tenant') {
-          return HttpResponse.json(
-            { message: 'Invalid tenant access' },
-            { status: 403 }
-          );
+          return HttpResponse.json({ message: 'Invalid tenant access' }, { status: 403 });
         }
         return HttpResponse.json({
           success: true,
@@ -469,7 +466,7 @@ describe('Tenant Switching Functionality', () => {
 
   test('Multiple tenant switches maintain data consistency', async () => {
     const capturedTenantIds: string[] = [];
-    const capturedEndpoints: Array<{ tenantId: string; endpoint: string }> = [];
+    const capturedEndpoints: { tenantId: string; endpoint: string }[] = [];
 
     server.use(
       http.get(`${API_URL}/contacts`, ({ request }) => {
@@ -537,14 +534,15 @@ describe('Tenant Switching Functionality', () => {
   });
 
   test('Tenant switch clears previous tenant cached data', async () => {
-    let contactRequests: Array<{ tenantId: string; contacts: any[] }> = [];
+    const contactRequests: { tenantId: string; contacts: any[] }[] = [];
 
     server.use(
       http.get(`${API_URL}/contacts`, ({ request }) => {
         const tenantId = request.headers.get('x-tenant-id') || 'unknown';
-        const contacts = tenantId === 'tenant-1'
-          ? [{ id: 1, first_name: 'John Tenant1' }]
-          : [{ id: 2, first_name: 'Jane Tenant2' }];
+        const contacts =
+          tenantId === 'tenant-1'
+            ? [{ id: 1, first_name: 'John Tenant1' }]
+            : [{ id: 2, first_name: 'Jane Tenant2' }];
 
         contactRequests.push({ tenantId, contacts });
 
@@ -688,13 +686,16 @@ describe('Multi-Tenant Data Isolation UI Behavior', () => {
   });
 
   test('Create operation respects tenant isolation', async () => {
-    let createdContacts: any[] = [];
+    const createdContacts: any[] = [];
 
     server.use(
       http.get(`${API_URL}/contacts`, ({ request }) => {
         const tenantId = request.headers.get('x-tenant-id');
         const existingContacts = tenantId === 'tenant-1' ? tenant1Contacts : tenant2Contacts;
-        const allContacts = [...existingContacts, ...createdContacts.filter(c => c.tenant_id === tenantId)];
+        const allContacts = [
+          ...existingContacts,
+          ...createdContacts.filter(c => c.tenant_id === tenantId),
+        ];
         return HttpResponse.json({
           success: true,
           data: allContacts,
@@ -746,10 +747,13 @@ describe('Multi-Tenant Data Isolation UI Behavior', () => {
       http.get(`${API_URL}/contacts`, ({ request }) => {
         const tenantId = request.headers.get('x-tenant-id');
         if (tenantId === 'tenant-1') {
-          return HttpResponse.json({
-            success: false,
-            message: 'Database connection failed for tenant-1',
-          }, { status: 500 });
+          return HttpResponse.json(
+            {
+              success: false,
+              message: 'Database connection failed for tenant-1',
+            },
+            { status: 500 }
+          );
         }
         return HttpResponse.json({
           success: true,

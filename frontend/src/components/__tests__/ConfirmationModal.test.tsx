@@ -301,7 +301,10 @@ describe('ConfirmationModal Component', () => {
 
   describe('Content Variations', () => {
     it('should handle long messages', () => {
-      const longMessage = 'This is a very long message that explains in detail why you need to confirm this action. '.repeat(5);
+      const longMessage =
+        'This is a very long message that explains in detail why you need to confirm this action. '.repeat(
+          5
+        );
       renderWithProviders(
         <ConfirmationModal
           isOpen={true}
@@ -563,12 +566,7 @@ Line 3`;
 
     it('should handle empty string message', () => {
       renderWithProviders(
-        <ConfirmationModal
-          isOpen={true}
-          message=""
-          onConfirm={() => {}}
-          onCancel={() => {}}
-        />
+        <ConfirmationModal isOpen={true} message="" onConfirm={() => {}} onCancel={() => {}} />
       );
 
       // Modal should still render with buttons

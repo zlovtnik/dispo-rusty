@@ -152,13 +152,56 @@ const looksLikeState = (segment: string): boolean => {
   if (/^[A-Z]{2}$/.test(trimmed)) return true;
   // Common full state names
   const stateNames = [
-    'ALABAMA', 'ALASKA', 'ARIZONA', 'ARKANSAS', 'CALIFORNIA', 'COLORADO', 'CONNECTICUT',
-    'DELAWARE', 'FLORIDA', 'GEORGIA', 'HAWAII', 'IDAHO', 'ILLINOIS', 'INDIANA', 'IOWA',
-    'KANSAS', 'KENTUCKY', 'LOUISIANA', 'MAINE', 'MARYLAND', 'MASSACHUSETTS', 'MICHIGAN',
-    'MINNESOTA', 'MISSISSIPPI', 'MISSOURI', 'MONTANA', 'NEBRASKA', 'NEVADA', 'NEWHAMPSHIRE',
-    'NEWJERSEY', 'NEWMEXICO', 'NEWYORK', 'NORTHCAROLINA', 'NORTHDAKOTA', 'OHIO', 'OKLAHOMA',
-    'OREGON', 'PENNSYLVANIA', 'RHODEISLAND', 'SOUTHCAROLINA', 'SOUTHDAKOTA', 'TENNESSEE',
-    'TEXAS', 'UTAH', 'VERMONT', 'VIRGINIA', 'WASHINGTON', 'WESTVIRGINIA', 'WISCONSIN', 'WYOMING',
+    'ALABAMA',
+    'ALASKA',
+    'ARIZONA',
+    'ARKANSAS',
+    'CALIFORNIA',
+    'COLORADO',
+    'CONNECTICUT',
+    'DELAWARE',
+    'FLORIDA',
+    'GEORGIA',
+    'HAWAII',
+    'IDAHO',
+    'ILLINOIS',
+    'INDIANA',
+    'IOWA',
+    'KANSAS',
+    'KENTUCKY',
+    'LOUISIANA',
+    'MAINE',
+    'MARYLAND',
+    'MASSACHUSETTS',
+    'MICHIGAN',
+    'MINNESOTA',
+    'MISSISSIPPI',
+    'MISSOURI',
+    'MONTANA',
+    'NEBRASKA',
+    'NEVADA',
+    'NEWHAMPSHIRE',
+    'NEWJERSEY',
+    'NEWMEXICO',
+    'NEWYORK',
+    'NORTHCAROLINA',
+    'NORTHDAKOTA',
+    'OHIO',
+    'OKLAHOMA',
+    'OREGON',
+    'PENNSYLVANIA',
+    'RHODEISLAND',
+    'SOUTHCAROLINA',
+    'SOUTHDAKOTA',
+    'TENNESSEE',
+    'TEXAS',
+    'UTAH',
+    'VERMONT',
+    'VIRGINIA',
+    'WASHINGTON',
+    'WESTVIRGINIA',
+    'WISCONSIN',
+    'WYOMING',
   ];
   return stateNames.includes(trimmed.replace(/\s+/g, ''));
 };
@@ -184,7 +227,14 @@ const looksLikeCountry = (segment: string): boolean => {
  */
 const parseAddressSegmentsWithHeuristics = (
   segments: string[]
-): { street1: string; street2?: string; city: string; state: string; zipCode: string; country: string } => {
+): {
+  street1: string;
+  street2?: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  country: string;
+} => {
   const result = {
     street1: '',
     street2: undefined as string | undefined,

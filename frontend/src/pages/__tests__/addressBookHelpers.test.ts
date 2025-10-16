@@ -16,13 +16,13 @@ const createPerson = (overrides: Record<string, unknown> = {}): PersonDTO => {
     email: 'test@example.com',
     is_active: true,
   };
-  
+
   // Only add default names if not explicitly overriding with fullName
   if (!overrides.full_name && !overrides.fullName) {
     defaults.first_name = 'Test';
     defaults.last_name = 'User';
   }
-  
+
   return normalizePersonDTO({
     ...defaults,
     ...overrides,

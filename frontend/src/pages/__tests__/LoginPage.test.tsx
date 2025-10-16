@@ -11,7 +11,8 @@ const mockLoginResponse = {
   success: true,
   message: 'Login successful',
   data: {
-    token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjoidGVzdHVzZXIiLCJ0ZW5hbnRfaWQiOiJ0ZW5hbnQxIiwiZXhwIjoxNjk2MDAwMDAwfQ.signature',
+    token:
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjoidGVzdHVzZXIiLCJ0ZW5hbnRfaWQiOiJ0ZW5hbnQxIiwiZXhwIjoxNjk2MDAwMDAwfQ.signature',
     user: {
       id: 'user1',
       username: 'testuser',
@@ -262,7 +263,9 @@ describe('LoginPage Component', () => {
 
       // Button should be disabled during submission
       await waitFor(() => {
-        expect(submitButton.getAttribute('disabled') !== null || submitButton.hasAttribute('aria-busy')).toBe(true);
+        expect(
+          submitButton.getAttribute('disabled') !== null || submitButton.hasAttribute('aria-busy')
+        ).toBe(true);
       });
     });
   });
@@ -292,10 +295,7 @@ describe('LoginPage Component', () => {
     it('should display alert on API error', async () => {
       server.use(
         http.post('/api/auth/login', () => {
-          return HttpResponse.json(
-            { success: false, message: 'Server error' },
-            { status: 500 }
-          );
+          return HttpResponse.json({ success: false, message: 'Server error' }, { status: 500 });
         })
       );
 
@@ -325,10 +325,7 @@ describe('LoginPage Component', () => {
       // First render with error
       server.use(
         http.post('/api/auth/login', () => {
-          return HttpResponse.json(
-            { success: false, message: 'Temporary error' },
-            { status: 500 }
-          );
+          return HttpResponse.json({ success: false, message: 'Temporary error' }, { status: 500 });
         })
       );
 
@@ -386,7 +383,7 @@ describe('LoginPage Component', () => {
       const user = userEvent.setup();
       renderWithoutAuth(<LoginPage />);
 
-      const checkbox = screen.getByRole('checkbox') as HTMLInputElement;
+      const checkbox = screen.getByRole('checkbox');
       const initialState = checkbox.checked;
 
       await user.click(checkbox);
@@ -400,7 +397,7 @@ describe('LoginPage Component', () => {
       const user = userEvent.setup();
       renderWithoutAuth(<LoginPage />);
 
-      const input = screen.getByPlaceholderText(/username|email/i) as HTMLInputElement;
+      const input = screen.getByPlaceholderText(/username|email/i);
       await user.type(input, 'testuser');
 
       expect(input.value).toBe('testuser');
@@ -410,7 +407,7 @@ describe('LoginPage Component', () => {
       const user = userEvent.setup();
       renderWithoutAuth(<LoginPage />);
 
-      const input = screen.getByPlaceholderText(/password/i) as HTMLInputElement;
+      const input = screen.getByPlaceholderText(/password/i);
       await user.type(input, 'password123');
 
       expect(input.value).toBe('password123');
@@ -420,7 +417,7 @@ describe('LoginPage Component', () => {
       const user = userEvent.setup();
       renderWithoutAuth(<LoginPage />);
 
-      const input = screen.getByPlaceholderText(/tenant/i) as HTMLInputElement;
+      const input = screen.getByPlaceholderText(/tenant/i);
       await user.type(input, 'tenant1');
 
       expect(input.value).toBe('tenant1');
@@ -507,7 +504,7 @@ describe('LoginPage Component', () => {
       const user = userEvent.setup();
       renderWithoutAuth(<LoginPage />);
 
-      const usernameInput = screen.getByPlaceholderText(/username|email/i) as HTMLInputElement;
+      const usernameInput = screen.getByPlaceholderText(/username|email/i);
       const longText = 'x'.repeat(1000);
       await user.type(usernameInput, longText);
 

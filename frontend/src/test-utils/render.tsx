@@ -231,8 +231,7 @@ export function renderWithoutAuth(ui: ReactElement, options?: CustomRenderOption
  * @param ms - Milliseconds to wait
  * @returns Promise that resolves after the specified time
  */
-export const sleep = (ms: number): Promise<void> =>
-  new Promise(resolve => setTimeout(resolve, ms));
+export const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
 
 /**
  * Create a deferred promise for testing async behavior

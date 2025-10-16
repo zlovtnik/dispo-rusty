@@ -746,7 +746,7 @@ export const authService = {
    */
   login(credentials: LoginCredentials, client?: IHttpClient): AsyncResult<AuthResponse, AuthError> {
     const httpClient = client || apiClient;
-    
+
     const validation = validateAndDecode<LoginRequestSchema>(loginRequestSchema, {
       usernameOrEmail: credentials.usernameOrEmail,
       password: credentials.password,

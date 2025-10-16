@@ -131,7 +131,7 @@ export function useValidation<T, E = string>(
           }
         } catch (e) {
           // Convert thrown errors to validation errors
-          errors.push((e as E));
+          errors.push(e as E);
           if (shortCircuit) {
             break;
           }
@@ -185,9 +185,10 @@ export function useValidation<T, E = string>(
         setResult(validationResult);
         // Keep state value in sync with transformed value (if validators normalize input)
         // Store the transformed value from validators, or the original if no transformation
-        const next = validationResult.isValid && validationResult.value !== null
-          ? (validationResult.value as T)
-          : newValue;
+        const next =
+          validationResult.isValid && validationResult.value !== null
+            ? (validationResult.value as T)
+            : newValue;
         setValueState(next);
         return validationResult;
       } finally {
@@ -205,9 +206,10 @@ export function useValidation<T, E = string>(
         const validationResult = validateValue(newValue);
         setResult(validationResult);
         // Keep state value in sync with transformed value (if validators normalize input)
-        const next = validationResult.isValid && validationResult.value !== null
-          ? (validationResult.value as T)
-          : newValue;
+        const next =
+          validationResult.isValid && validationResult.value !== null
+            ? (validationResult.value as T)
+            : newValue;
         setValueState(next);
       } else {
         setValueState(newValue);
