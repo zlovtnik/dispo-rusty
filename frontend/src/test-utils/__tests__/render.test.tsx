@@ -45,7 +45,7 @@ describe('MockAuthProvider', () => {
           isAuthenticated: false,
           user: null,
           tenant: null,
-          loading: true,
+          isLoading: true,
         }}
       >
         <TestAuthConsumer />

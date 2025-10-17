@@ -6,7 +6,10 @@
  */
 
 import type { CommonPasswordsConfig } from '@/config/commonPasswords';
-import { COMMON_PASSWORDS_FALLBACK } from '@/config/commonPasswords';
+import {
+  COMMON_PASSWORDS_FALLBACK,
+  DEFAULT_COMMON_PASSWORDS_CONFIG,
+} from '@/config/commonPasswords';
 import { getEnv } from '@/config/env';
 import { testLogger } from '@/test-utils/logger';
 
@@ -48,9 +51,7 @@ export class CommonPasswordsLoader {
       }
     }
     if (config.cacheTtlMs < 0) {
-      throw new Error(
-        `Invalid cacheTtlMs: must be non-negative, got ${config.cacheTtlMs}`
-      );
+      throw new Error(`Invalid cacheTtlMs: must be non-negative, got ${config.cacheTtlMs}`);
     }
     if (config.requestTimeoutMs < 0) {
       throw new Error(
@@ -64,7 +65,6 @@ export class CommonPasswordsLoader {
    */
   static getInstance(config?: Partial<CommonPasswordsConfig>): CommonPasswordsLoader {
     if (!CommonPasswordsLoader.instance) {
-      const { DEFAULT_COMMON_PASSWORDS_CONFIG } = require('@/config/commonPasswords');
       const finalConfig = {
         ...DEFAULT_COMMON_PASSWORDS_CONFIG,
         ...config,
@@ -122,7 +122,12 @@ export class CommonPasswordsLoader {
   /**
    * Get cache status for debugging
    */
-  getCacheStatus(): { hasCache: boolean; isExpired: boolean; source?: string; version?: string } | null {
+  getCacheStatus(): {
+    hasCache: boolean;
+    isExpired: boolean;
+    source?: string;
+    version?: string;
+  } | null {
     if (!this.cachedList) {
       return null;
     }
@@ -159,17 +164,21 @@ export class CommonPasswordsLoader {
         version: response.version,
       };
 
-      testLogger.info(`[CommonPasswordsLoader] Loaded ${passwordList.length} passwords from ${this.config.filePath}`);
+      testLogger.info(
+        `[CommonPasswordsLoader] Loaded ${passwordList.length} passwords from ${this.config.filePath}`
+      );
       return this.cachedList.passwords;
-
     } catch (error) {
-      testLogger.warn(`[CommonPasswordsLoader] Failed to load passwords from ${this.config.filePath}, using fallback:`, error);
+      testLogger.warn(
+        `[CommonPasswordsLoader] Failed to load passwords from ${this.config.filePath}, using fallback:`,
+        error
+      );
 
       // Cache fallback with shorter TTL
       this.cachedList = {
         passwords: Object.freeze(COMMON_PASSWORDS_FALLBACK),
         loadedAt: Date.now(),
-        expiresAt: Date.now() + (5 * 60 * 1000), // 5 minutes
+        expiresAt: Date.now() + 5 * 60 * 1000, // 5 minutes
         source: 'fallback',
       };
 
@@ -187,13 +196,15 @@ export class CommonPasswordsLoader {
       : new URL(this.config.filePath, window.location.origin).toString();
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.config.requestTimeoutMs);
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+    }, this.config.requestTimeoutMs);
 
     try {
       const response = await fetch(url, {
         signal: controller.signal,
         headers: {
-          'Accept': 'application/json',
+          Accept: 'application/json',
           'Cache-Control': 'no-cache',
         },
       });
@@ -238,7 +249,7 @@ export class CommonPasswordsLoader {
     if (maxEntries > 0 && uniquePasswords.length > maxEntries) {
       testLogger.warn(
         `[CommonPasswordsLoader] Password list (${uniquePasswords.length}) exceeds maxCacheEntries (${maxEntries}). ` +
-        `Truncating to limit cache memory growth.`
+          `Truncating to limit cache memory growth.`
       );
       return uniquePasswords.slice(0, maxEntries);
     }

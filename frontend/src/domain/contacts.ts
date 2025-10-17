@@ -10,7 +10,7 @@
 
 import { ok, err } from 'neverthrow';
 import type { Result } from '../types/fp';
-import type { Contact } from '../types/contact';
+import type { Contact, Gender } from '../types/contact';
 import type { ContactId, UserId, TenantId } from '../types/ids';
 import { validateEmailFormat, validatePhoneFormat } from './rules/contactRules';
 
@@ -37,7 +37,7 @@ export interface ContactCreateData {
   company?: string;
   jobTitle?: string;
   dateOfBirth?: Date;
-  gender?: 'male' | 'female';
+  gender?: Gender;
   notes?: string;
   tags?: string[];
   customFields?: Record<string, unknown>;
@@ -329,8 +329,8 @@ function validateContactUpdateData(
 ): Result<ContactUpdateData, ContactError> {
   const errors: Record<string, string> = {};
 
-  // Email validation
-  if (data.email !== undefined) {
+  // Email validation - only validate if provided and non-empty
+  if (isNonEmptyString(data.email)) {
     const emailValidation = validateEmailFormat(data.email);
     if (emailValidation.isErr()) {
       errors.email =
@@ -338,8 +338,8 @@ function validateContactUpdateData(
     }
   }
 
-  // Phone validation
-  if (data.phone !== undefined) {
+  // Phone validation - only validate if provided and non-empty
+  if (isNonEmptyString(data.phone)) {
     const phoneValidation = validatePhoneFormat(data.phone);
     if (phoneValidation.isErr()) {
       errors.phone =

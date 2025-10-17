@@ -63,15 +63,20 @@ export const parseOptionalGender = (value: unknown): Result<Option<Gender>, AppE
   return ensureGender(option.value, 'gender').map(some);
 };
 
-export const genderToBoolean = (value: Gender | string): Result<boolean, AppError> =>
-  ensureGender(value, 'gender').map(gender => gender === Gender.male);
+export const genderToBoolean = (value: string): Result<boolean, AppError> =>
+  ensureGender(value, 'gender').andThen(gender => {
+    if (gender === Gender.other) {
+      return err(createGenderError('Cannot convert Gender.other to boolean', { value }));
+    }
+    return ok(gender === Gender.male);
+  });
 
 export const booleanToGender = (value: boolean): Result<Gender, AppError> => {
   return ok(value ? Gender.male : Gender.female);
 };
 
 export interface GenderConversion {
-  readonly toBoolean: (value: Gender | string) => Result<boolean, AppError>;
+  readonly toBoolean: (value: string) => Result<boolean, AppError>;
   readonly fromBoolean: (value: boolean) => Result<Gender, AppError>;
   readonly normalize: (value: unknown) => Result<Gender, AppError>;
   readonly normalizeOptional: (value: unknown) => Result<Option<Gender>, AppError>;

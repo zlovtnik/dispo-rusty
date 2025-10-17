@@ -72,7 +72,7 @@ If your static hosting supports custom build commands with Bun:
 curl -fsSL https://bun.sh/install | bash && \
 export PATH="$HOME/.bun/bin:$PATH" && \
 bun install && \
-bun run build:bun
+bun run build
 ```
 
 ### Troubleshooting
@@ -106,7 +106,7 @@ npm install  # or bun install
 npm run dev  # or bun run dev
 
 # Build for production
-npm run build  # or bun run build:bun
+npm run build  # or bun run build
 
 # Preview production build
 npm run preview

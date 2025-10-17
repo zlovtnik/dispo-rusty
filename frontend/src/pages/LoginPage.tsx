@@ -3,7 +3,10 @@ import { useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import type { LoginCredentials } from '@/types/auth';
 import { asTenantId } from '@/types/ids';
-import { Card, Form, Input, Button, Checkbox, Typography, Alert, Flex } from 'antd';
+import { loginSchema } from '@/validation/schemas';
+import type { z } from 'zod';
+import { Card, Form, Button, Checkbox, Typography, Alert, Flex, Input } from 'antd';
+import { CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
 
 interface LoginFormValues {
   usernameOrEmail: string;

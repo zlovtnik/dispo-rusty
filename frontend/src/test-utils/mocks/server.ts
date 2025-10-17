@@ -1,6 +1,6 @@
 /**
  * Mock Service Worker (MSW) Server Setup
- * 
+ *
  * This file configures the MSW server for intercepting API calls in tests.
  */
 
@@ -30,11 +30,15 @@ export function getServer() {
 
 // Create a lazy proxy for backward compatibility
 export const server = new Proxy({} as unknown as ReturnType<typeof setupServer>, {
-  get(target, prop) {
-    return (ensureServer() as unknown as Record<string, unknown>)[prop as string];
+  get(_target, prop, _receiver) {
+    const inst = ensureServer() as unknown as Record<string, unknown>;
+    const value = (inst as any)[prop as string];
+    // Bind functions to preserve 'this' context
+    return typeof value === 'function' ? value.bind(inst) : value;
   },
-  has(target, prop) {
-    return prop in (ensureServer() as unknown as Record<string, unknown>);
+  has(_target, prop) {
+    const inst = ensureServer() as unknown as Record<string, unknown>;
+    return prop in inst;
   },
 });
 
@@ -69,7 +73,7 @@ export function resetMSW(): void {
   if (_server) {
     _server.resetHandlers();
   }
-  
+
   // Reset mock data
   resetMockData();
 }

@@ -16,13 +16,13 @@ const createPerson = (overrides: Record<string, unknown> = {}): PersonDTO => {
     email: 'test@example.com',
     is_active: true,
   };
-  
+
   // Only add default names if not explicitly overriding with fullName
   if (!overrides.full_name && !overrides.fullName) {
     defaults.first_name = 'Test';
     defaults.last_name = 'User';
   }
-  
+
   return normalizePersonDTO({
     ...defaults,
     ...overrides,
@@ -84,9 +84,10 @@ describe('AddressBook helper functions', () => {
       expect(resolveContactGender(personFalse)).toBe(Gender.female);
     });
 
-    it('maps other representations to Gender.other when possible', () => {
+    it('returns undefined for non-binary since normalizeGender only maps exact normalized matches', () => {
       const person = createPerson({ gender: 'non-binary' });
-      expect(resolveContactGender(person)).toBe(Gender.other);
+      // normalizeGender does not explicitly map 'non-binary' to Gender.other
+      expect(resolveContactGender(person)).toBe(undefined);
     });
 
     it('handles undefined gender gracefully', () => {

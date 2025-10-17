@@ -72,7 +72,7 @@ if (!rootElement) {
 const root = ReactDOM.createRoot(rootElement);
 
 // Preload common passwords for synchronous access
-preloadCommonPasswords().catch(error => {
+preloadCommonPasswords().catch((error: unknown) => {
   console.warn('Failed to preload common passwords:', error);
 });
 

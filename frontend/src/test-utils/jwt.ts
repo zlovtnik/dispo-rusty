@@ -47,8 +47,10 @@ export const createMockAuthJwt = (
 ): string => {
   const now = Math.floor(Date.now() / 1000);
   const payload = {
-    user: username,
-    tenant_id: tenantId,
+    sub: `user-${username}`, // Mock user ID
+    email: `${username}@example.com`, // Mock email
+    tenantId: tenantId,
+    roles: ['user'], // Default role
     exp: now + expiresInSeconds,
     iat: now,
   };
