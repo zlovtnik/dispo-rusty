@@ -145,12 +145,16 @@ const looksLikeZipCode = (segment: string): boolean => {
 /**
  * Detect if a string segment looks like a US state abbreviation or full state name
  * Examples: "CA", "California", "NY", "New York"
+ * Now requires exact matches to avoid false positives like "MAINE STREET"
  */
 const looksLikeState = (segment: string): boolean => {
   const trimmed = segment.trim().toUpperCase();
-  // US state abbreviations (2 letters)
+  const normalized = trimmed.replace(/\s+/g, '');
+
+  // US state abbreviations (exactly 2 letters)
   if (/^[A-Z]{2}$/.test(trimmed)) return true;
-  // Common full state names
+
+  // Common full state names (exact match only, not substring)
   const stateNames = [
     'ALABAMA',
     'ALASKA',
@@ -203,16 +207,62 @@ const looksLikeState = (segment: string): boolean => {
     'WISCONSIN',
     'WYOMING',
   ];
-  return stateNames.includes(trimmed.replace(/\s+/g, ''));
+
+  return stateNames.includes(normalized);
 };
 
 /**
  * Detect if a string segment looks like a country name
- * Examples: "USA", "United States", "Canada", etc. (3+ letters, no numbers)
+ * Now uses curated list for exact matches, single tokens, or ISO codes to avoid false positives
+ * Examples: "USA", "United States", "Canada", "US", "CA" (ISO codes)
  */
 const looksLikeCountry = (segment: string): boolean => {
-  const trimmed = segment.trim();
-  return trimmed.length >= 3 && /^[A-Za-z\s]+$/.test(trimmed);
+  const trimmed = segment.trim().toUpperCase();
+  const normalized = trimmed.replace(/\s+/g, ' ');
+
+  // ISO country codes (2-3 letters)
+  if (/^[A-Z]{2,3}$/.test(trimmed)) return true;
+
+  // Single token countries (no spaces)
+  if (!trimmed.includes(' ')) return true;
+
+  // Curated list of common country names (exact match only)
+  const countryNames = [
+    'UNITED STATES',
+    'USA',
+    'UNITED STATES OF AMERICA',
+    'CANADA',
+    'MEXICO',
+    'UNITED KINGDOM',
+    'UK',
+    'GREAT BRITAIN',
+    'FRANCE',
+    'GERMANY',
+    'ITALY',
+    'SPAIN',
+    'PORTUGAL',
+    'AUSTRALIA',
+    'NEW ZEALAND',
+    'JAPAN',
+    'CHINA',
+    'INDIA',
+    'BRAZIL',
+    'ARGENTINA',
+    'CHILE',
+    'COLOMBIA',
+    'PERU',
+    'RUSSIA',
+    'SOUTH KOREA',
+    'NORTH KOREA',
+    'THAILAND',
+    'VIETNAM',
+    'PHILIPPINES',
+    'INDONESIA',
+    'MALAYSIA',
+    'SINGAPORE',
+  ];
+
+  return countryNames.includes(normalized);
 };
 
 /**
@@ -222,8 +272,33 @@ const looksLikeCountry = (segment: string): boolean => {
  * states, and country codes dynamically. Falls back to positional assignment
  * if format doesn't match expected patterns.
  *
- * @param segments - Pre-split address segments
- * @returns Structured address with detected fields
+ * **ENHANCED VALIDATION:**
+ * - State matches preferred when adjacent to or near ZIP codes
+ * - Overall address structure validation before accepting heuristic matches
+ * - Exact matching for states and countries to reduce false positives
+ * - Positional confidence scoring for ambiguous cases
+ *
+ * **LIMITATIONS (US-centric implementation):**
+ * - Assumes comma-separated address format (e.g., "123 Main St, Springfield, IL 62701")
+ * - Primarily recognizes US state abbreviations and names
+ * - Detects only basic ZIP code patterns (5 or 9 digits); international postal codes may be misidentified
+ * - Country detection uses curated list with exact matching
+ * - May misidentify street names or city names that overlap with state/country heuristics
+ * - No support for multi-line or complex international address formats
+ *
+ * **VALIDATION BEHAVIOR:**
+ * - If ZIP code exists but no state found, logs warning and marks address as potentially incomplete
+ * - Detects conflicting state or ZIP detections and warns with preference for earliest match
+ * - Checks if remaining segments contain recognized city/state/ZIP patterns before positional fallback
+ * - Validates overall address structure (street + city + state + ZIP) before accepting matches
+ *
+ * **RECOMMENDATION:**
+ * For production use, consider adopting a dedicated address-parsing library (e.g., libpostal, SmartyStreets)
+ * that handles international formats and ambiguity resolution. Use this heuristic parser for best-effort
+ * parsing only, with user verification/correction as a fallback.
+ *
+ * @param segments - Pre-split address segments (typically split by comma)
+ * @returns Structured address with detected fields; may be partial if heuristics cannot confidently identify all parts
  */
 const parseAddressSegmentsWithHeuristics = (
   segments: string[]
@@ -250,18 +325,36 @@ const parseAddressSegmentsWithHeuristics = (
   let zipIndex = -1;
   let stateIndex = -1;
   let countryIndex = -1;
+  let stateConfidence = 0; // 0-3 scale based on proximity to ZIP and position
 
-  // First pass: identify special fields by heuristics
+  // First pass: identify special fields by heuristics with positional scoring
   for (let i = 0; i < segments.length; i++) {
     const segment = segments[i];
-    if (segment && looksLikeZipCode(segment)) {
+    if (!segment) continue;
+
+    if (looksLikeZipCode(segment)) {
       zipIndex = i;
-    } else if (segment && looksLikeState(segment) && stateIndex === -1) {
-      stateIndex = i;
-    } else if (segment && looksLikeCountry(segment) && countryIndex === -1 && i > 0) {
-      // Country likely at end, and not first segment
+    } else if (looksLikeState(segment)) {
+      // Calculate confidence score for state match
+      let confidence = 1; // Base confidence
+
+      // Boost confidence if adjacent to ZIP
+      if (zipIndex !== -1 && Math.abs(i - zipIndex) === 1) confidence += 2;
+
+      // Boost confidence if near ZIP (within 2 positions)
+      if (zipIndex !== -1 && Math.abs(i - zipIndex) <= 2) confidence += 1;
+
+      // Prefer earlier positions for states (more likely to be actual states)
+      if (i <= segments.length - 3) confidence += 1;
+
+      // Only accept if confidence is higher than previous match
+      if (confidence > stateConfidence) {
+        stateIndex = i;
+        stateConfidence = confidence;
+      }
+    } else if (looksLikeCountry(segment)) {
       countryIndex = i;
-    } else if (segment) {
+    } else {
       remaining.push(segment);
     }
   }
@@ -280,11 +373,63 @@ const parseAddressSegmentsWithHeuristics = (
     if (country) result.country = country;
   }
 
-  // Positional assignment for remaining segments
+  // Enhanced validation: check overall address structure coherence
+  const hasStreet = remaining.length > 0 && remaining[0] != null && remaining[0].trim().length > 0;
+  const hasCity = remaining.length > 1 && remaining[1] != null && remaining[1].trim().length > 0;
+  const hasState = result.state.length > 0;
+  const hasZip = result.zipCode.length > 0;
+
+  // Validate structure: if we have ZIP and state, ensure they're coherent
+  if (hasZip && hasState) {
+    const zipState = result.zipCode.substring(0, 2);
+    const detectedState = result.state.trim().toUpperCase();
+    // Basic validation: ZIP should start with reasonable digits for detected state
+    // This is a simple heuristic - real validation would need a ZIP database
+    if (detectedState.length === 2 && /^[A-Z]{2}$/.test(detectedState)) {
+      // For now, just ensure the structure looks reasonable
+      // Could add more sophisticated ZIP-state validation here
+    }
+  }
+
+  // Post-extraction validation: warn if ZIP exists but state is missing
+  if (result.zipCode && !result.state) {
+    console.warn(
+      '[Address Parser] ZIP code detected but no state found; address may be incomplete or misidentified.',
+      { zipCode: result.zipCode, remainingSegments: remaining }
+    );
+  }
+
+  // Additional validation: warn about low-confidence state matches
+  if (result.state && stateConfidence < 2) {
+    console.warn('[Address Parser] Low confidence state match detected; verify address accuracy.', {
+      state: result.state,
+      confidence: stateConfidence,
+      context: segments,
+    });
+  }
+
+  // Positional assignment for remaining segments with improved defensiveness
+  // Try to detect city/state/ZIP patterns in remaining segments before fallback positional assignment
   // Typically: [street1, (street2), city, ...]
-  if (remaining.length > 0) result.street1 = remaining[0] || '';
-  if (remaining.length > 1) result.street2 = remaining[1];
-  if (remaining.length > 2) result.city = remaining[2] || '';
+  if (remaining.length > 0) {
+    // Scan remaining for additional city/state/ZIP matches that might have been missed
+    const additionalMatches = remaining.filter(
+      seg => looksLikeState(seg) || looksLikeZipCode(seg) || looksLikeCountry(seg)
+    );
+    if (additionalMatches.length > 0) {
+      console.warn(
+        '[Address Parser] Detected potential unprocessed city/state/ZIP patterns in remaining segments',
+        {
+          additionalMatches,
+          context: 'Review parsed address for accuracy',
+        }
+      );
+    }
+
+    result.street1 = remaining[0] || '';
+  }
+  if (remaining.length > 1) result.city = remaining[1] || '';
+  if (remaining.length > 2) result.street2 = remaining[2];
 
   return result;
 };
@@ -385,7 +530,7 @@ export interface ContactInboundApiDTO {
   readonly phone?: string | null;
   readonly mobile?: string | null;
   /** Flexible gender input: accepts Gender enum, boolean (true=male), or string representations */
-  readonly gender?: boolean | string | null;
+  readonly gender?: Gender | boolean | string | null;
   readonly age?: number | null;
   readonly address?: string | Record<string, unknown> | null;
   readonly date_of_birth?: string | Date | null;

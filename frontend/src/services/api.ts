@@ -772,6 +772,7 @@ export const authService = {
 
   /**
    * Logs out the current user and invalidates the session
+   * This operation is idempotent - succeeds even if not authenticated
    *
    * @returns AsyncResult<void, AuthError> - Success with no data, or auth error
    *
@@ -788,6 +789,14 @@ export const authService = {
    * ```
    */
   logout(): AsyncResult<void, AuthError> {
+    // Check if there's an active authentication token
+    const authToken = localStorage.getItem('auth_token');
+
+    // If no token exists, logout is already complete (idempotent)
+    if (!authToken) {
+      return okAsync(undefined);
+    }
+
     return handleSuccessResponse(
       apiClient.post<Record<string, unknown>>('/auth/logout'),
       emptyObjectSchema

@@ -10,9 +10,7 @@ describe('HomePage Component', () => {
       renderWithoutAuth(<HomePage />);
 
       // Should display feature cards
-      const features = screen.queryAllByText(
-        /Secure Authentication|Multi-Tenant|High Performance/i
-      );
+      const features = screen.getAllByText(/Secure Authentication|Multi-Tenant|High Performance/i);
       expect(features.length).toBeGreaterThan(0);
     });
 
@@ -28,15 +26,15 @@ describe('HomePage Component', () => {
       renderWithoutAuth(<HomePage />);
 
       // Should have descriptions for features
-      const descriptions = screen.queryAllByText(/JWT|tenant|Bun|TypeScript/i);
-      expect(descriptions.length).toBeGreaterThanOrEqual(0);
+      const descriptions = screen.getAllByText(/JWT|tenant|Bun|TypeScript/i);
+      expect(descriptions.length).toBeGreaterThan(0);
     });
 
     it('should have navigation links', () => {
       renderWithoutAuth(<HomePage />);
 
       // Should have login/signup buttons
-      const buttons = screen.queryAllByRole('button');
+      const buttons = screen.getAllByRole('button');
       expect(buttons.length).toBeGreaterThan(0);
     });
   });
@@ -45,19 +43,22 @@ describe('HomePage Component', () => {
     it('should display security feature', () => {
       renderWithoutAuth(<HomePage />);
 
-      expect(screen.queryAllByText(/Secure|Security|JWT/i).length).toBeGreaterThan(0);
+      const securityElements = screen.getAllByText(/Secure|Security|JWT/i);
+      expect(securityElements.length).toBeGreaterThan(0);
     });
 
     it('should display multi-tenant feature', () => {
       renderWithoutAuth(<HomePage />);
 
-      expect(screen.queryAllByText(/Multi-Tenant|tenant|isolation/i).length).toBeGreaterThan(0);
+      const tenantElements = screen.getAllByText(/Multi-Tenant|tenant|isolation/i);
+      expect(tenantElements.length).toBeGreaterThan(0);
     });
 
     it('should display performance feature', () => {
       renderWithoutAuth(<HomePage />);
 
-      expect(screen.queryAllByText(/Performance|Bun|fast|speed/i).length).toBeGreaterThan(0);
+      const performanceElements = screen.getAllByText(/Performance|Bun|fast|speed/i);
+      expect(performanceElements.length).toBeGreaterThan(0);
     });
   });
 
@@ -67,16 +68,20 @@ describe('HomePage Component', () => {
         initialRoute: '/',
       });
 
-      // Should not show home page content
-      const features = screen.queryAllByText(/Secure Authentication/i);
-      expect(features.length).toBe(0);
+      // Verify user was redirected to dashboard or verify dashboard content is present
+      // Option 1: Check for dashboard-specific content
+      const dashboardElements = screen.queryAllByText(/Dashboard|Your Projects/i);
+      expect(dashboardElements.length).toBeGreaterThan(0);
+
+      // Option 2: If using a router, verify the URL changed
+      // expect(window.location.pathname).toBe('/dashboard');
     });
 
     it('should show home page for unauthenticated users', () => {
       renderWithoutAuth(<HomePage />);
 
       // Should display features
-      const elements = screen.queryAllByRole('heading');
+      const elements = screen.getAllByRole('heading');
       expect(elements.length).toBeGreaterThan(0);
     });
   });
@@ -85,13 +90,13 @@ describe('HomePage Component', () => {
     it('should have login button', () => {
       renderWithoutAuth(<HomePage />);
 
-      const buttons = screen.queryAllByRole('button');
+      const buttons = screen.getAllByRole('button');
       const loginButton = buttons.find(
         b =>
           b.textContent?.toLowerCase().includes('login') ||
           b.textContent?.toLowerCase().includes('sign')
       );
-      expect(loginButton || buttons.length).toBeGreaterThan(0);
+      expect(loginButton).toBeDefined();
     });
 
     it('should navigate to login on button click', async () => {
@@ -101,8 +106,16 @@ describe('HomePage Component', () => {
       });
 
       const buttons = screen.queryAllByRole('button');
-      if (buttons.length > 0) {
-        // Should have clickable button
+      const loginButton = buttons.find(
+        b =>
+          b.textContent?.toLowerCase().includes('login') ||
+          b.textContent?.toLowerCase().includes('sign')
+      );
+      expect(loginButton).toBeDefined();
+      if (loginButton) {
+        await user.click(loginButton);
+        // Verify navigation occurred (e.g., check URL or confirm redirect)
+        // This depends on your router setup
       }
     });
   });
@@ -112,7 +125,7 @@ describe('HomePage Component', () => {
       renderWithoutAuth(<HomePage />);
 
       // Should have some welcome text
-      const elements = screen.queryAllByRole('heading');
+      const elements = screen.getAllByRole('heading');
       expect(elements.length).toBeGreaterThan(0);
     });
 
@@ -120,8 +133,8 @@ describe('HomePage Component', () => {
       renderWithoutAuth(<HomePage />);
 
       // Should mention React, Rust, etc.
-      const elements = screen.queryAllByText(/React|Rust|TypeScript|Bun/i);
-      expect(elements.length).toBeGreaterThanOrEqual(0);
+      const elements = screen.getAllByText(/React|Rust|TypeScript|Bun/i);
+      expect(elements.length).toBeGreaterThan(0);
     });
   });
 
@@ -145,14 +158,14 @@ describe('HomePage Component', () => {
     it('should have proper heading hierarchy', () => {
       renderWithoutAuth(<HomePage />);
 
-      const headings = screen.queryAllByRole('heading');
+      const headings = screen.getAllByRole('heading');
       expect(headings.length).toBeGreaterThan(0);
     });
 
     it('should have accessible buttons', () => {
       renderWithoutAuth(<HomePage />);
 
-      const buttons = screen.queryAllByRole('button');
+      const buttons = screen.getAllByRole('button');
       expect(buttons.length).toBeGreaterThan(0);
     });
   });

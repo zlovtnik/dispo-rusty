@@ -179,5 +179,5 @@ node_modules/
 package-lock.json
 
 # GitHub directory (if temporary)
-.github/
-frontend/.github/
+.github/temp/
+frontend/.github/temp/

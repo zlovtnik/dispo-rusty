@@ -3,17 +3,10 @@
  *
  * This file is preloaded before all tests via bunfig.toml.
  * It sets up the testing environment, including DOM environment,
- * jest-dom matchers, and global test utilities.
+ * and global test utilities.
  */
 
-import '@testing-library/jest-dom';
 import { expect } from 'bun:test';
-// Import matchers as a module (ESM-compatible)
-import * as jestDomMatchers from '@testing-library/jest-dom/matchers';
-
-// Extend expect with jest-dom matchers for Bun
-// This is needed because Bun doesn't automatically extend expect like Jest does
-expect.extend(jestDomMatchers as any);
 
 // Ensure environment variables are available in import.meta.env
 // Bun loads .env automatically, but we need to explicitly set import.meta.env for tests
@@ -32,23 +25,7 @@ if (!import.meta.env.PROD) {
   (import.meta.env as Record<string, boolean>).PROD =
     (process.env.NODE_ENV || 'test') === 'production';
 }
-
-// Type augmentation for Bun's expect to include jest-dom matchers
-declare module 'bun:test' {
-  interface Matchers<T> {
-    toBeInTheDocument(): T;
-    toHaveClass(...classNames: string[]): T;
-    toHaveAttribute(attr: string, value?: string): T;
-    toHaveValue(value?: string | number | string[]): T;
-    toBeChecked(): T;
-    toBeDisabled(): T;
-    toBeEnabled(): T;
-    toBeVisible(): T;
-    toBeHidden(): T;
-    toHaveFocus(): T;
-    toHaveTextContent(text?: string | RegExp, options?: { normalizeWhitespace?: boolean }): T;
-  }
-}
+import '@testing-library/jest-dom';
 import { cleanup } from '@testing-library/react';
 import { afterEach, beforeAll, afterAll } from 'bun:test';
 import { setupMSW, teardownMSW, resetMSW } from './mocks/server';

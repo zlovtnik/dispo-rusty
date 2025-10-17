@@ -472,11 +472,11 @@ it('should handle loading state', async () => {
   renderWithAuth(<Component />);
   
   // Should show loading initially
-  expect(screen.getByText(/loading/i)).toBeDefined();
+  expect(screen.queryByText(/loading/i)).toBeInTheDocument();
   
   // Wait for content to load
   await waitFor(() => {
-    expect(screen.getByText('Content')).toBeDefined();
+    expect(screen.getByText('Content')).toBeInTheDocument();
   });
 });
 ```

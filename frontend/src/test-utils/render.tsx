@@ -65,26 +65,35 @@ export interface MockAuthContextValue {
   isAuthenticated: boolean;
   user: User | null;
   tenant: Tenant | null;
-  loading: boolean;
+  isLoading: boolean;
   login: (credentials: LoginCredentials) => Promise<void>;
   logout: () => Promise<void>;
   refreshToken: () => Promise<void>;
 }
 
+/**
+ * Mock AuthContext value - define functions separately to ensure stability
+ */
+const mockLogin = async () => {
+  // Intentionally empty - mock implementation
+};
+
+const mockLogout = async () => {
+  // Intentionally empty - mock implementation
+};
+
+const mockRefreshToken = async () => {
+  // Intentionally empty - mock implementation
+};
+
 export const mockAuthContextValue: MockAuthContextValue = {
   isAuthenticated: true,
   user: mockUser,
   tenant: mockTenant,
-  loading: false,
-  login: async () => {
-    // Intentionally empty - mock implementation
-  },
-  logout: async () => {
-    // Intentionally empty - mock implementation
-  },
-  refreshToken: async () => {
-    // Intentionally empty - mock implementation
-  },
+  isLoading: false,
+  login: mockLogin,
+  logout: mockLogout,
+  refreshToken: mockRefreshToken,
 };
 
 /**
@@ -122,24 +131,17 @@ export interface CustomRenderOptions extends Omit<RenderOptions, 'wrapper'> {
  */
 const MockAuthProvider: React.FC<{
   children: React.ReactNode;
-  value?: Partial<MockAuthContextValue>;
-}> = ({ children, value }) => {
+  value?: Partial<MockAuthContextValue> | (() => Partial<MockAuthContextValue>);
+}> = React.memo(({ children, value }) => {
   // Merge default mock values with provided overrides
-  const mergedValue = { ...mockAuthContextValue, ...value };
+  // Stringify the value for stable dependency tracking to prevent unnecessary updates
+  const mergedValue = React.useMemo(() => {
+    const resolvedValue = typeof value === 'function' ? value() : value;
+    return { ...mockAuthContextValue, ...resolvedValue };
+  }, [JSON.stringify(value)]);
 
-  // Map MockAuthContextValue to AuthContextType
-  const contextValue: AuthContextType = {
-    user: mergedValue.user,
-    tenant: mergedValue.tenant,
-    isAuthenticated: mergedValue.isAuthenticated,
-    isLoading: mergedValue.loading,
-    login: mergedValue.login,
-    logout: mergedValue.logout,
-    refreshToken: mergedValue.refreshToken,
-  };
-
-  return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>;
-};
+  return <AuthContext.Provider value={mergedValue}>{children}</AuthContext.Provider>;
+});
 
 // Export for testing
 export { MockAuthProvider };
@@ -174,20 +176,26 @@ export function renderWithProviders(
   const RouterComponent = useBrowserRouter ? BrowserRouter : MemoryRouter;
   const routerProps = useBrowserRouter ? {} : { initialEntries: initialRoutes, initialIndex: 0 };
 
-  const Wrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    let content = (
-      <RouterComponent {...routerProps}>
-        <MockAuthProvider value={authValue}>{children}</MockAuthProvider>
-      </RouterComponent>
-    );
+  // Create wrapper component factory that returns a memoized component
+  // This prevents the wrapper from being recreated on every render
+  const createWrapper = () => {
+    return React.memo<{ children: React.ReactNode }>(({ children }) => {
+      let content = (
+        <RouterComponent {...routerProps}>
+          <MockAuthProvider value={authValue}>{children}</MockAuthProvider>
+        </RouterComponent>
+      );
 
-    // Optionally wrap with Ant Design App component for message, modal, notification
-    if (withAntApp) {
-      content = <AntApp>{content}</AntApp>;
-    }
+      // Optionally wrap with Ant Design App component for message, modal, notification
+      if (withAntApp) {
+        content = <AntApp>{content}</AntApp>;
+      }
 
-    return content;
+      return content;
+    });
   };
+
+  const Wrapper = createWrapper();
 
   return render(ui, { wrapper: Wrapper, ...renderOptions });
 }
@@ -228,6 +236,47 @@ export function renderWithoutAuth(ui: ReactElement, options?: CustomRenderOption
       ...options?.authValue,
     },
   });
+}
+
+/**
+ * Render for integration tests without mock auth provider
+ * Allows the App's AuthProvider to work normally with mocked API calls
+ *
+ * @param ui - React component to render
+ * @param options - Render options
+ * @returns Render result
+ */
+export function renderForIntegration(
+  ui: ReactElement,
+  {
+    initialRoute = '/',
+    initialRoutes = [initialRoute],
+    useBrowserRouter = false,
+    withAntApp = true,
+    ...renderOptions
+  }: Omit<CustomRenderOptions, 'authValue'> = {}
+) {
+  // Choose router type
+  const RouterComponent = useBrowserRouter ? BrowserRouter : MemoryRouter;
+  const routerProps = useBrowserRouter ? {} : { initialEntries: initialRoutes, initialIndex: 0 };
+
+  // Create wrapper component without MockAuthProvider
+  const Wrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    let content = (
+      <RouterComponent {...routerProps}>
+        {children}
+      </RouterComponent>
+    );
+
+    // Optionally wrap with Ant Design App component for message, modal, notification
+    if (withAntApp) {
+      content = <AntApp>{content}</AntApp>;
+    }
+
+    return content;
+  };
+
+  return render(ui, { wrapper: Wrapper, ...renderOptions });
 }
 
 /**

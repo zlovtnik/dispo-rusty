@@ -1,5 +1,5 @@
 import React, { memo } from 'react';
-import { useFormContext } from 'react-hook-form';
+import { useFormContext, Controller } from 'react-hook-form';
 import { Form, Input, InputNumber, Select, Checkbox } from 'antd';
 import type { InputNumberProps, SelectProps } from 'antd';
 import type { Rule } from 'antd/es/form';
@@ -77,7 +77,7 @@ export const FormField = memo<FormFieldProps>(
     ...props
   }) => {
     const {
-      register,
+      control,
       formState: { errors, touchedFields, isSubmitted, dirtyFields },
       watch,
     } = useFormContext();
@@ -103,13 +103,9 @@ export const FormField = memo<FormFieldProps>(
       })();
 
     const formItemProps: FormItemProps = {
-      name,
       label,
       required,
-      rules,
-      help:
-        (typeof fieldError?.message === 'string' ? fieldError.message : fieldError?.message) ||
-        help,
+      help: (fieldError as { message?: string })?.message || help,
       extra,
       tooltip,
       validateStatus: status,
@@ -146,91 +142,145 @@ export const FormField = memo<FormFieldProps>(
         case 'text':
         case 'email':
           return (
-            <Input
-              {...register(name)}
-              placeholder={placeholder}
-              disabled={disabled}
-              maxLength={props.maxLength}
-              type={props.type === 'email' ? 'email' : 'text'}
-              suffix={
-                status === 'success' ? (
-                  <CheckCircleOutlined style={{ color: 'var(--color-success)' }} />
-                ) : null
-              }
+            <Controller
+              name={name}
+              control={control}
+              defaultValue=""
+              render={({ field }) => (
+                <Input
+                  {...field}
+                  placeholder={placeholder}
+                  disabled={disabled}
+                  maxLength={props.maxLength}
+                  type={props.type === 'email' ? 'email' : 'text'}
+                />
+              )}
             />
           );
 
         case 'password':
           return (
-            <Input.Password
-              {...register(name)}
-              placeholder={placeholder}
-              disabled={disabled}
-              iconRender={visible => (visible ? <EyeTwoTone /> : <EyeInvisibleOutlined />)}
-              suffix={
-                status === 'success' ? (
-                  <CheckCircleOutlined style={{ color: 'var(--color-success)' }} />
-                ) : null
-              }
+            <Controller
+              name={name}
+              control={control}
+              defaultValue=""
+              render={({ field }) => (
+                <Input.Password
+                  {...field}
+                  placeholder={placeholder}
+                  disabled={disabled}
+                  iconRender={visible => (visible ? <EyeTwoTone /> : <EyeInvisibleOutlined />)}
+                  suffix={
+                    status === 'success' ? (
+                      <CheckCircleOutlined style={{ color: 'var(--color-success)' }} />
+                    ) : null
+                  }
+                />
+              )}
             />
           );
 
         case 'textarea':
           return (
-            <Input.TextArea
-              {...register(name)}
-              placeholder={placeholder}
-              disabled={disabled}
-              maxLength={props.maxLength}
-              showCount={props.showCount}
-              rows={props.rows || 4}
-              suffix={
-                status === 'success' ? (
-                  <CheckCircleOutlined style={{ color: 'var(--color-success)' }} />
-                ) : null
-              }
+            <Controller
+              name={name}
+              control={control}
+              defaultValue=""
+              render={({ field }) => (
+                <Input.TextArea
+                  {...field}
+                  placeholder={placeholder}
+                  disabled={disabled}
+                  maxLength={props.maxLength}
+                  showCount={props.showCount}
+                  rows={props.rows || 4}
+                />
+              )}
             />
           );
 
         case 'number':
           return (
-            <InputNumber
-              {...register(name)}
-              placeholder={placeholder}
-              disabled={disabled}
-              min={props.min}
-              max={props.max}
-              step={props.step}
-              precision={props.precision}
-              style={{ width: '100%' }}
-              {...(props as NumberFormFieldProps).inputNumberProps}
+            <Controller
+              name={name}
+              control={control}
+              defaultValue={null}
+              render={({ field: { onChange, value, ...field } }) => (
+                <InputNumber
+                  {...field}
+                  value={value}
+                  onChange={val => {
+                    onChange(val);
+                  }}
+                  placeholder={placeholder}
+                  disabled={disabled}
+                  min={props.min}
+                  max={props.max}
+                  step={props.step}
+                  precision={props.precision}
+                  style={{ width: '100%' }}
+                  {...(props as NumberFormFieldProps).inputNumberProps}
+                />
+              )}
             />
           );
 
         case 'select':
           return (
-            <Select
-              placeholder={placeholder}
-              disabled={disabled}
-              {...(props as SelectFormFieldProps).selectProps}
-            >
-              {props.options.map(({ value, label, disabled: optionDisabled }) => (
-                <Select.Option key={value} value={value} disabled={optionDisabled}>
-                  {label}
-                </Select.Option>
-              ))}
-            </Select>
+            <Controller
+              name={name}
+              control={control}
+              defaultValue={undefined}
+              render={({ field }) => (
+                <Select
+                  {...field}
+                  placeholder={placeholder}
+                  disabled={disabled}
+                  {...(props as SelectFormFieldProps).selectProps}
+                >
+                  {props.options.map(({ value, label, disabled: optionDisabled }) => (
+                    <Select.Option key={value} value={value} disabled={optionDisabled}>
+                      {label}
+                    </Select.Option>
+                  ))}
+                </Select>
+              )}
+            />
           );
 
         case 'checkbox':
           return (
-            <Checkbox {...register(name)} disabled={disabled} style={{ marginLeft: 0 }}>
-              {(props as CheckboxFormFieldProps).children}
-            </Checkbox>
+            <Controller
+              name={name}
+              control={control}
+              defaultValue={false}
+              render={({ field: { onChange, value, ...field } }) => (
+                <Checkbox
+                  {...field}
+                  checked={value}
+                  onChange={e => {
+                    onChange(e.target.checked);
+                  }}
+                  disabled={disabled}
+                  style={{ marginLeft: 0 }}
+                >
+                  {(props as CheckboxFormFieldProps).children}
+                </Checkbox>
+              )}
+            />
           );
 
         default:
-          return <Input {...register(name)} placeholder={placeholder} disabled={disabled} />;
+          return (
+            <Controller
+              name={name}
+              control={control}
+              defaultValue=""
+              render={({ field }) => (
+                <Input {...field} placeholder={placeholder} disabled={disabled} />
+              )}
+            />
+          );
       }
     };
 

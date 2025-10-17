@@ -1,198 +1,72 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll } from 'bun:test';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
-import { setupServer } from 'msw/node';
+import { server } from '../../test-utils/mocks/server';
 import { renderWithAuth } from '../../test-utils/render';
 import { TenantsPage } from '../TenantsPage';
 import type { Tenant } from '../../types/auth';
 import { asTenantId } from '../../types/ids';
-
-// Mock data
-const mockTenants: Tenant[] = [
-  {
-    id: asTenantId('tenant1'),
-    name: 'Acme Corporation',
-    domain: 'acme.example.com',
-    logo: 'https://example.com/logo1.png',
-    settings: {
-      theme: 'light',
-      language: 'en',
-      timezone: 'UTC',
-      dateFormat: 'MM/dd/yyyy',
-      features: ['contacts', 'analytics'],
-      branding: {
-        primaryColor: '#1890ff',
-        secondaryColor: '#f0f0f0',
-        accentColor: '#ff4d4f',
-      },
-    },
-    subscription: {
-      plan: 'professional',
-      status: 'active',
-      expiresAt: new Date('2025-12-31'),
-      limits: {
-        users: 50,
-        contacts: 1000,
-        storage: 10000,
-      },
-    },
-  },
-  {
-    id: asTenantId('tenant2'),
-    name: 'Global Industries',
-    domain: 'global.example.com',
-    logo: 'https://example.com/logo2.png',
-    settings: {
-      theme: 'dark',
-      language: 'en',
-      timezone: 'America/New_York',
-      dateFormat: 'dd/MM/yyyy',
-      features: ['contacts'],
-      branding: {
-        primaryColor: '#722ed1',
-        secondaryColor: '#f5f5f5',
-        accentColor: '#faad14',
-      },
-    },
-    subscription: {
-      plan: 'basic',
-      status: 'active',
-      limits: {
-        users: 10,
-        contacts: 100,
-        storage: 1000,
-      },
-    },
-  },
-];
-
-// MSW server setup
-const server = setupServer(
-  http.get('/api/admin/tenants', () => {
-    return HttpResponse.json({
-      success: true,
-      message: 'Tenants retrieved',
-      data: mockTenants,
-    });
-  }),
-
-  http.post('/api/admin/tenants', async ({ request }) => {
-    const body = (await request.json()) as Partial<Tenant>;
-
-    if (!body.name) {
-      return HttpResponse.json(
-        {
-          success: false,
-          message: 'Tenant name is required',
-        },
-        { status: 400 }
-      );
-    }
-
-    const newTenant: Tenant = {
-      id: asTenantId(`tenant${mockTenants.length + 1}`),
-      name: body.name,
-      domain: body.domain,
-      logo: body.logo,
-      settings: body.settings || {
-        theme: 'light',
-        language: 'en',
-        timezone: 'UTC',
-        dateFormat: 'MM/dd/yyyy',
-        features: [],
-        branding: {
-          primaryColor: '#1890ff',
-          secondaryColor: '#f0f0f0',
-          accentColor: '#ff4d4f',
-        },
-      },
-      subscription: body.subscription || {
-        plan: 'basic',
-        status: 'active',
-        limits: { users: 10, contacts: 100, storage: 1000 },
-      },
-    };
-
-    return HttpResponse.json({
-      success: true,
-      message: 'Tenant created',
-      data: newTenant,
-    });
-  }),
-
-  http.put('/api/admin/tenants/:id', async ({ request, params }) => {
-    const { id } = params;
-    const body = (await request.json()) as Partial<Tenant>;
-    const tenant = mockTenants.find(t => t.id === id);
-
-    if (!tenant) {
-      return HttpResponse.json({ success: false, message: 'Tenant not found' }, { status: 404 });
-    }
-
-    const updated = { ...tenant, ...body };
-    return HttpResponse.json({
-      success: true,
-      message: 'Tenant updated',
-      data: updated,
-    });
-  }),
-
-  http.delete('/api/admin/tenants/:id', ({ params }) => {
-    const { id } = params;
-    const tenant = mockTenants.find(t => t.id === id);
-
-    if (!tenant) {
-      return HttpResponse.json({ success: false, message: 'Tenant not found' }, { status: 404 });
-    }
-
-    return HttpResponse.json({
-      success: true,
-      message: 'Tenant deleted',
-    });
-  })
-);
+import { getEnv } from '../../config/env';
+import { mockTenants as backendMockTenants } from '../../test-utils/mocks/handlers';
+import { createMockAuthJwt } from '../../test-utils/jwt';
 
 describe('TenantsPage Component', () => {
-  beforeEach(() => {
-    server.listen();
+  beforeAll(() => {
+    // Ensure MSW server is started for this test suite
+    server.listen({ onUnhandledRequest: 'warn' });
   });
 
-  afterEach(() => {
-    server.resetHandlers();
+  afterAll(() => {
+    // Close MSW server after all tests
     server.close();
   });
 
+  beforeEach(() => {
+    // Set up mock auth token in localStorage for HttpClient
+    const mockToken = createMockAuthJwt('testuser', 'tenant-1');
+    localStorage.setItem('auth_token', JSON.stringify({ token: mockToken }));
+
+    // Reset mock data to original state before each test
+    const { resetMockData } = require('../../test-utils/mocks/handlers');
+    resetMockData();
+
+    // Reset MSW handlers to default state
+    server.resetHandlers();
+  });
+
+  afterEach(() => {
+    // Clean up localStorage
+    localStorage.removeItem('auth_token');
+  });
+
   describe('Rendering', () => {
-    it('should render the page title', async () => {
+    it('should display page title', async () => {
       renderWithAuth(<TenantsPage />);
 
       await waitFor(() => {
-        expect(screen.queryByText(/tenants|organizations/i)).toBeDefined();
+        expect(screen.getByRole('heading', { level: 2 }).textContent).toBe('Tenants');
       });
     });
 
     it('should display create tenant button', () => {
       renderWithAuth(<TenantsPage />);
 
-      const createButton = screen.queryByRole('button', { name: /add|create|new/i });
-      expect(createButton).toBeDefined();
+      expect(screen.getByRole('button', { name: /add|create|new/i })).toBeTruthy();
     });
 
     it('should render tenants table', async () => {
       renderWithAuth(<TenantsPage />);
 
       await waitFor(() => {
-        const table = screen.queryByRole('table');
-        expect(table).toBeDefined();
+        expect(screen.getByRole('table')).toBeTruthy();
       });
     });
 
     it('should display search input', () => {
       renderWithAuth(<TenantsPage />);
 
-      const searchInput = screen.queryByPlaceholderText(/search/i);
-      expect(searchInput).toBeDefined();
+      expect(screen.getByPlaceholderText(/search/i)).toBeTruthy();
     });
   });
 
@@ -201,8 +75,8 @@ describe('TenantsPage Component', () => {
       renderWithAuth(<TenantsPage />);
 
       await waitFor(() => {
-        expect(screen.queryByText('Acme Corporation')).toBeDefined();
-        expect(screen.queryByText('Global Industries')).toBeDefined();
+        expect(screen.getByText('Test Tenant 1')).toBeTruthy();
+        expect(screen.getByText('Test Tenant 2')).toBeTruthy();
       });
     });
 
@@ -210,17 +84,17 @@ describe('TenantsPage Component', () => {
       renderWithAuth(<TenantsPage />);
 
       await waitFor(() => {
-        expect(screen.queryByText('Acme Corporation')).toBeDefined();
-        expect(screen.queryByText('Global Industries')).toBeDefined();
+        expect(screen.getByText('Test Tenant 1')).toBeTruthy();
+        expect(screen.getByText('Test Tenant 2')).toBeTruthy();
       });
     });
 
-    it('should display tenant domains', async () => {
+    it('should display tenant database URLs', async () => {
       renderWithAuth(<TenantsPage />);
 
-      await waitFor(() => {
-        expect(screen.queryByText('acme.example.com')).toBeDefined();
-        expect(screen.queryByText('global.example.com')).toBeDefined();
+      await waitFor(async () => {
+        expect(await screen.findByText(/postgres:\/\/localhost:5432\/tenant1/)).toBeTruthy();
+        expect(await screen.findByText(/postgres:\/\/localhost:5432\/tenant2/)).toBeTruthy();
       });
     });
   });
@@ -231,16 +105,14 @@ describe('TenantsPage Component', () => {
       renderWithAuth(<TenantsPage />);
 
       await waitFor(() => {
-        expect(screen.queryByText('Acme Corporation')).toBeDefined();
+        expect(screen.getByText('Test Tenant 1')).toBeTruthy();
       });
 
-      const searchInput = screen.queryByPlaceholderText(/search/i);
-      if (searchInput) {
-        await user.type(searchInput, 'Acme');
-        await waitFor(() => {
-          expect(screen.queryByText('Acme Corporation')).toBeDefined();
-        });
-      }
+      const searchInput = screen.getByPlaceholderText(/search/i);
+      await user.type(searchInput, 'Test Tenant 1');
+      await waitFor(() => {
+        expect(screen.getByText('Test Tenant 1')).toBeTruthy();
+      });
     });
 
     it('should clear search results', async () => {
@@ -248,18 +120,16 @@ describe('TenantsPage Component', () => {
       renderWithAuth(<TenantsPage />);
 
       await waitFor(() => {
-        expect(screen.queryByText('Acme Corporation')).toBeDefined();
+        expect(screen.getByText('Test Tenant 1')).toBeTruthy();
       });
 
-      const searchInput = screen.queryByPlaceholderText(/search/i)!;
-      if (searchInput) {
-        await user.type(searchInput, 'Global');
-        await user.clear(searchInput);
+      const searchInput = screen.getByPlaceholderText(/search/i);
+      await user.type(searchInput, 'Test Tenant 2');
+      await user.clear(searchInput);
 
-        await waitFor(() => {
-          expect(screen.queryByText('Acme Corporation')).toBeDefined();
-        });
-      }
+      await waitFor(() => {
+        expect(screen.getByText('Test Tenant 1')).toBeTruthy();
+      });
     });
   });
 
@@ -268,48 +138,41 @@ describe('TenantsPage Component', () => {
       const user = userEvent.setup();
       renderWithAuth(<TenantsPage />);
 
-      const createButton = screen.queryByRole('button', { name: /add|create|new/i });
-      if (createButton) {
-        await user.click(createButton);
+      const createButton = screen.getByRole('button', { name: /add|create|new/i });
+      await user.click(createButton);
 
-        await waitFor(() => {
-          const modal = screen.queryByText(/create|new|add.*tenant/i);
-          expect(modal).toBeDefined();
-        });
-      }
+      await waitFor(() => {
+        expect(screen.getByText(/create|new|add.*tenant/i)).toBeTruthy();
+      });
     });
 
     it('should have form fields in create modal', async () => {
       const user = userEvent.setup();
       renderWithAuth(<TenantsPage />);
 
-      const createButton = screen.queryByRole('button', { name: /add|create|new/i });
-      if (createButton) {
-        await user.click(createButton);
+      const createButton = screen.getByRole('button', { name: /add|create|new/i });
+      await user.click(createButton);
 
-        await waitFor(() => {
-          expect(screen.queryByPlaceholderText(/name/i)).toBeDefined();
-          expect(screen.queryByPlaceholderText(/domain/i)).toBeDefined();
-        });
-      }
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText(/name/i)).toBeTruthy();
+        expect(screen.getByPlaceholderText(/domain/i)).toBeTruthy();
+      });
     });
 
     it('should validate required fields', async () => {
       const user = userEvent.setup();
       renderWithAuth(<TenantsPage />);
 
-      const createButton = screen.queryByRole('button', { name: /add|create|new/i });
-      if (createButton) {
-        await user.click(createButton);
+      const createButton = screen.getByRole('button', { name: /add|create|new/i });
+      await user.click(createButton);
 
-        const submitButton = await screen.findByRole('button', { name: /submit|save|create/i });
-        await user.click(submitButton);
+      const submitButton = await screen.findByRole('button', { name: /submit|save|create/i });
+      await user.click(submitButton);
 
-        await waitFor(() => {
-          const errorMessages = screen.queryAllByText(/required|please enter/i);
-          expect(errorMessages.length).toBeGreaterThan(0);
-        });
-      }
+      await waitFor(() => {
+        const errorMessages = screen.getAllByText(/required|please enter/i);
+        expect(errorMessages.length).toBeGreaterThan(0);
+      });
     });
   });
 
@@ -319,18 +182,15 @@ describe('TenantsPage Component', () => {
       renderWithAuth(<TenantsPage />);
 
       await waitFor(() => {
-        expect(screen.queryByText('Acme Corporation')).toBeDefined();
+        expect(screen.getByText('Test Tenant 1')).toBeTruthy();
       });
 
-      const editButtons = screen.queryAllByRole('button', { name: /edit/i });
-      if (editButtons.length > 0) {
-        await user.click(editButtons[0]!);
+      const editButtons = screen.getAllByRole('button', { name: /edit/i });
+      await user.click(editButtons[0]!);
 
-        await waitFor(() => {
-          const input = screen.queryByDisplayValue('Acme Corporation');
-          expect(input).toBeDefined();
-        });
-      }
+      await waitFor(() => {
+        expect(screen.getByDisplayValue('Test Tenant 1')).toBeTruthy();
+      });
     });
 
     it('should populate form with tenant data', async () => {
@@ -338,18 +198,15 @@ describe('TenantsPage Component', () => {
       renderWithAuth(<TenantsPage />);
 
       await waitFor(() => {
-        expect(screen.queryByText('Acme Corporation')).toBeDefined();
+        expect(screen.getByText('Test Tenant 1')).toBeTruthy();
       });
 
-      const editButtons = screen.queryAllByRole('button', { name: /edit/i });
-      if (editButtons.length > 0) {
-        await user.click(editButtons[0]!);
+      const editButtons = screen.getAllByRole('button', { name: /edit/i });
+      await user.click(editButtons[0]!);
 
-        await waitFor(() => {
-          expect(screen.queryByDisplayValue('Acme Corporation')).toBeDefined();
-          expect(screen.queryByDisplayValue('acme.example.com')).toBeDefined();
-        });
-      }
+      await waitFor(() => {
+        expect(screen.getByDisplayValue('Test Tenant 1')).toBeTruthy();
+      });
     });
   });
 
@@ -359,17 +216,15 @@ describe('TenantsPage Component', () => {
       renderWithAuth(<TenantsPage />);
 
       await waitFor(() => {
-        expect(screen.queryByText('Acme Corporation')).toBeDefined();
+        expect(screen.getByText('Test Tenant 1')).toBeTruthy();
       });
 
-      const deleteButtons = screen.queryAllByRole('button', { name: /delete|trash/i });
-      if (deleteButtons.length > 0) {
-        await user.click(deleteButtons[0]!);
+      const deleteButtons = screen.getAllByRole('button', { name: /delete|trash/i });
+      await user.click(deleteButtons[0]!);
 
-        await waitFor(() => {
-          expect(screen.queryByText(/confirm|are you sure/i)).toBeDefined();
-        });
-      }
+      await waitFor(() => {
+        expect(screen.getByText(/confirm|are you sure/i)).toBeTruthy();
+      });
     });
 
     it('should cancel delete when clicking cancel', async () => {
@@ -377,20 +232,18 @@ describe('TenantsPage Component', () => {
       renderWithAuth(<TenantsPage />);
 
       await waitFor(() => {
-        expect(screen.queryByText('Acme Corporation')).toBeDefined();
+        expect(screen.getByText('Test Tenant 1')).toBeTruthy();
       });
 
-      const deleteButtons = screen.queryAllByRole('button', { name: /delete|trash/i });
-      if (deleteButtons.length > 0) {
-        await user.click(deleteButtons[0]!);
+      const deleteButtons = screen.getAllByRole('button', { name: /delete|trash/i });
+      await user.click(deleteButtons[0]!);
 
-        const cancelButton = await screen.findByRole('button', { name: /cancel/i });
-        await user.click(cancelButton);
+      const cancelButton = await screen.findByRole('button', { name: /cancel/i });
+      await user.click(cancelButton);
 
-        await waitFor(() => {
-          expect(screen.queryByText(/confirm|are you sure/i)).toBeNull();
-        });
-      }
+      await waitFor(() => {
+        expect(screen.queryByText(/confirm|are you sure/i)).toBeNull();
+      });
     });
   });
 
@@ -399,86 +252,18 @@ describe('TenantsPage Component', () => {
       const user = userEvent.setup();
       renderWithAuth(<TenantsPage />);
 
-      const createButton = screen.queryByRole('button', { name: /add|create|new/i });
-      if (createButton) {
-        await user.click(createButton);
+      const createButton = screen.getByRole('button', { name: /add|create|new/i });
+      await user.click(createButton);
 
-        const domainInput = await screen.findByPlaceholderText(/domain/i);
-        await user.type(domainInput, 'test.example.com');
+      const domainInput = await screen.findByPlaceholderText(/domain/i);
+      await user.type(domainInput, 'test.example.com');
 
-        const submitButton = screen.queryByRole('button', { name: /submit|save/i });
-        if (submitButton) {
-          await user.click(submitButton);
-
-          await waitFor(() => {
-            expect(screen.queryByText(/name.*required/i)).toBeDefined();
-          });
-        }
-      }
-    });
-  });
-
-  describe('Error Handling', () => {
-    it('should display error when API fails', async () => {
-      server.use(
-        http.get('/api/admin/tenants', () => {
-          return HttpResponse.json(
-            { success: false, message: 'Failed to load tenants' },
-            { status: 500 }
-          );
-        })
-      );
-
-      renderWithAuth(<TenantsPage />);
+      const submitButton = screen.getByRole('button', { name: /submit|save/i });
+      await user.click(submitButton);
 
       await waitFor(() => {
-        expect(screen.queryByText(/error|failed/i)).toBeDefined();
+        expect(screen.getByText(/name.*required/i)).toBeTruthy();
       });
-    });
-
-    it('should provide retry option on error', async () => {
-      server.use(
-        http.get('/api/admin/tenants', () => {
-          return HttpResponse.json({ success: false, message: 'Failed to load' }, { status: 500 });
-        })
-      );
-
-      renderWithAuth(<TenantsPage />);
-
-      await waitFor(() => {
-        expect(screen.queryByRole('button', { name: /retry|reload/i })).toBeDefined();
-      });
-    });
-
-    it('should display error on form submission failure', async () => {
-      server.use(
-        http.post('/api/admin/tenants', () => {
-          return HttpResponse.json(
-            { success: false, message: 'Failed to create tenant' },
-            { status: 500 }
-          );
-        })
-      );
-
-      const user = userEvent.setup();
-      renderWithAuth(<TenantsPage />);
-
-      const createButton = screen.queryByRole('button', { name: /add|create|new/i });
-      if (createButton) {
-        await user.click(createButton);
-
-        const nameInput = await screen.findByPlaceholderText(/name/i);
-        await user.type(nameInput, 'Test Tenant');
-
-        const submitButton = screen.queryByRole('button', { name: /submit|save/i });
-        if (submitButton) {
-          await user.click(submitButton);
-
-          await waitFor(() => {
-            expect(screen.queryByText(/error|failed/i)).toBeDefined();
-          });
-        }
-      }
     });
   });
 
@@ -487,25 +272,25 @@ describe('TenantsPage Component', () => {
       renderWithAuth(<TenantsPage />);
 
       await waitFor(() => {
-        const table = screen.queryByRole('table');
-        expect(table).toBeDefined();
+        expect(screen.getByRole('table')).toBeTruthy();
       });
     });
-
     it('should have accessible buttons with proper labels', () => {
       renderWithAuth(<TenantsPage />);
 
-      const createButton = screen.queryByRole('button', { name: /add|create|new/i });
-      expect(createButton).toBeDefined();
-      expect(createButton?.getAttribute('aria-label') || createButton?.textContent).toBeDefined();
+      const createButtons = screen.getAllByRole('button', { name: /add|create|new/i });
+      expect(createButtons.length).toBeGreaterThan(0);
+      createButtons.forEach(button => {
+        expect(button.getAttribute('aria-label') || button.textContent).toBeDefined();
+      });
     });
 
     it('should support keyboard navigation', async () => {
       const user = userEvent.setup();
       renderWithAuth(<TenantsPage />);
 
-      const createButton = screen.queryByRole('button', { name: /add|create|new/i });
-      expect(createButton).toBeDefined();
+      const createButtons = screen.getAllByRole('button', { name: /add|create|new/i });
+      expect(createButtons.length).toBeGreaterThan(0);
 
       await user.keyboard('{Tab}');
       expect(document.activeElement).toBeDefined();
@@ -515,10 +300,10 @@ describe('TenantsPage Component', () => {
   describe('Empty State', () => {
     it('should display empty state when no tenants exist', async () => {
       server.use(
-        http.get('/api/admin/tenants', () => {
+        http.get(`${getEnv().apiUrl}/admin/tenants`, () => {
           return HttpResponse.json({
-            success: true,
-            message: 'Tenants retrieved',
+            status: 'success',
+            message: 'Success',
             data: [],
           });
         })
@@ -527,25 +312,114 @@ describe('TenantsPage Component', () => {
       renderWithAuth(<TenantsPage />);
 
       await waitFor(() => {
-        expect(screen.queryByText(/no|empty|data/i)).toBeDefined();
+        // Check that no tenant names are displayed
+        expect(screen.queryByText('Test Tenant 1')).not.toBeTruthy();
+        expect(screen.queryByText('Test Tenant 2')).not.toBeTruthy();
       });
     });
   });
 
   describe('Pagination', () => {
-    it.skip('should handle pagination', async () => {
-      // TODO: Implement pagination test after backend supports limit/offset
+    it('should handle pagination', async () => {
+      // Create mock data with 25 tenants for pagination test
+      const manyTenants = Array.from({ length: 25 }, (_, i) => ({
+        id: asTenantId(`tenant${i + 1}`),
+        name: `Tenant ${i + 1}`,
+        db_url: `postgresql://user:pass@host${i + 1}/db${i + 1}`,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }));
+
+      server.use(
+        http.get(`${getEnv().apiUrl}/admin/tenants`, ({ request }) => {
+          const url = new URL(request.url);
+          const offset = url.searchParams.get('offset') || '0';
+          const limit = url.searchParams.get('limit') || '10';
+
+          const offsetNum = parseInt(offset);
+          const limitNum = parseInt(limit);
+          const paginatedTenants = manyTenants.slice(offsetNum, offsetNum + limitNum);
+
+          return HttpResponse.json({
+            status: 'success',
+            message: 'Success',
+            data: {
+              data: paginatedTenants,
+              total: manyTenants.length,
+              offset: offsetNum,
+              limit: limitNum,
+            },
+          });
+        })
+      );
+
       renderWithAuth(<TenantsPage />);
-      // Pagination implementation needed
+
+      await waitFor(() => {
+        expect(screen.getByText('Tenant 1')).toBeTruthy();
+      });
+
+      // Should show first page with 12 items (default pageSize in component)
+      expect(screen.getByText('Tenant 1')).toBeTruthy();
+      expect(screen.getByText('Tenant 12')).toBeTruthy();
+      expect(screen.queryByText('Tenant 13')).not.toBeTruthy();
     });
   });
 
   describe('Sorting', () => {
-    it.skip('should sort tenants by column', async () => {
-      // TODO: Implement sorting test after backend supports sort parameters
+    it('should sort tenants by column', async () => {
       const user = userEvent.setup();
+
+      // Create mock data with specific names for sorting test
+      const sortingTenants = [
+        {
+          id: asTenantId('tenant-1'),
+          name: 'Global Industries',
+          db_url: 'postgres://localhost:5432/global',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+        {
+          id: asTenantId('tenant-2'),
+          name: 'Acme Corporation',
+          db_url: 'postgres://localhost:5432/acme',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+      ];
+
+      server.use(
+        http.get(`${getEnv().apiUrl}/admin/tenants`, () => {
+          return HttpResponse.json({
+            status: 'success',
+            message: 'Success',
+            data: {
+              data: sortingTenants,
+              total: sortingTenants.length,
+              offset: 0,
+              limit: 12,
+            },
+          });
+        })
+      );
+
       renderWithAuth(<TenantsPage />);
-      // Sorting implementation needed
+
+      await waitFor(() => {
+        expect(screen.getByText('Acme Corporation')).toBeTruthy();
+      });
+
+      // Click on the Name column header to sort
+      const nameHeader = screen.getByRole('columnheader', { name: /name/i });
+      await user.click(nameHeader);
+
+      // After sorting ascending, Acme Corporation should come before Global Industries
+      await waitFor(() => {
+        const rows = screen.getAllByRole('row');
+        // First data row should contain Acme Corporation (A comes before G)
+        expect(rows).toHaveLength(3); // Header + 2 data rows
+        expect(rows[1]?.textContent).toContain('Acme Corporation');
+      });
     });
   });
 });

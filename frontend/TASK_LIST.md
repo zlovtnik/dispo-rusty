@@ -1129,7 +1129,7 @@ Types:        N/A
 
 **Files Created:**
 
-```
+```text
 frontend/src/
 ├── components/__tests__/
 │   ├── Layout.test.tsx (220+ tests)

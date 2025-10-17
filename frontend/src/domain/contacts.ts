@@ -10,9 +10,8 @@
 
 import { ok, err } from 'neverthrow';
 import type { Result } from '../types/fp';
-import type { Contact } from '../types/contact';
+import type { Contact, Gender } from '../types/contact';
 import type { ContactId, UserId, TenantId } from '../types/ids';
-import { type Gender } from '../types/contact';
 import { validateEmailFormat, validatePhoneFormat } from './rules/contactRules';
 
 /**

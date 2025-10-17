@@ -160,7 +160,7 @@ export const contactSchema = z
     jobTitle: z.string().optional(),
     department: z.string().optional(),
     dateOfBirth: optionalDateSchema,
-    gender: z.enum(['male', 'female']).optional(),
+    gender: z.enum(['male', 'female', 'other']).optional(),
     age: z.number().optional(),
     allergies: z.array(z.string()).optional(),
     medications: z.array(z.string()).optional(),
@@ -277,17 +277,12 @@ export const contactFormSchema = z
     email: z.string().email('Please enter a valid email address').optional().or(z.literal('')),
     phone: z
       .string()
-      .regex(/^\+?[1-9]\d{0,14}$/, 'Please enter a valid phone number')
+      .regex(/^\+?[1-9]\d{6,14}$/, 'Please enter a valid phone number')
       .optional()
       .or(z.literal('')),
-    gender: z.enum(['male', 'female', 'other'], {
-      required_error: 'Please select a gender',
-    }),
+    gender: z.enum(['male', 'female', 'other']).catch('other'),
     age: z
-      .number({
-        required_error: 'Age is required',
-        invalid_type_error: 'Age must be a number',
-      })
+      .number()
       .min(1, 'Age must be at least 1')
       .max(120, 'Age must be at most 120'),
     street1: z.string().min(1, 'Street address is required'),
@@ -309,6 +304,19 @@ export const contactFormSchema = z
       message: 'Either email or phone number is required',
       path: ['email'], // Attach error to email field
     }
+  )
+  .refine(
+    data => {
+      // Cross-field validation: email or phone must be provided
+      if (!data.email && !data.phone) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message: 'Either email or phone number is required',
+      path: ['phone'], // Attach error to phone field
+    }
   );
 
 export const tenantFormSchema = z
@@ -323,24 +331,54 @@ export const tenantFormSchema = z
       .string()
       .min(1, 'Database URL is required')
       .refine(value => {
-        // PostgreSQL URL validation
-        const urlRegex =
-          /^postgres(?:ql)?:\/\/(?:[A-Za-z0-9._%+-]+(?::[A-Za-z0-9._%+-]+)?@)?(?:\[[^\]]+\]|[A-Za-z0-9.-]+(?:,[A-Za-z0-9.-]+)*(?::\d{1,5})?|\/[^/]+)?\/[A-Za-z0-9_\-]+(?:\?.*)?$/;
-        // Libpq connection string regex
-        const libpqRegex = /^[^&=]+=[^&]*(&[^&=]+=[^&]*)*$/;
-        return urlRegex.test(value) || libpqRegex.test(value);
-      }, 'Please enter a valid PostgreSQL URL or connection string'),
+        // Try parsing as a PostgreSQL URL first
+        try {
+          const url = new URL(value);
+          if (url.protocol === 'postgres:' || url.protocol === 'postgresql:') {
+            return true;
+          }
+        } catch {
+          // Not a valid URL, try parsing as libpq connection string
+        }
+
+        // Parse as libpq-style connection string (key=value pairs separated by whitespace)
+        const pairs = value.trim().split(/\s+/);
+        if (pairs.length === 0) {
+          return false;
+        }
+
+        // Validate each key=value pair
+        const keyValueRegex = /^[A-Za-z_][A-Za-z0-9_]*=\S+$/;
+        return pairs.every(pair => keyValueRegex.test(pair));
+      }, 'Please enter a valid PostgreSQL URL (postgres://...) or connection string (key=value pairs)'),
   })
   .refine(
     data => {
       // Ensure tenant name doesn't contain potentially harmful database connection strings
       const name = data.name.toLowerCase();
-      if (
-        name.includes('postgres://') ||
-        name.includes('postgresql://') ||
-        name.includes('host=') ||
-        name.includes('port=')
-      ) {
+      // Check for URI schemes
+      const forbiddenSchemes = ['postgres://', 'postgresql://', 'pgsql://'];
+      if (forbiddenSchemes.some(scheme => name.includes(scheme))) {
+        return false;
+      }
+      // Check for common database connection parameters
+      const forbiddenParams = [
+        'host=',
+        'port=',
+        'dbname=',
+        'user=',
+        'password=',
+        'sslmode=',
+        'ssl=',
+        'service=',
+        'socket=',
+      ];
+      if (forbiddenParams.some(param => name.includes(param))) {
+        return false;
+      }
+      // Check for generic key=value patterns (word boundary to avoid false positives)
+      const keyValueRegex = /\b\w+=\S+/;
+      if (keyValueRegex.test(name)) {
         return false;
       }
       return true;
@@ -352,11 +390,13 @@ export const tenantFormSchema = z
   );
 
 export const searchFormSchema = z.object({
+  // Note: Search terms allow most printable characters for flexibility.
+  // Security should be handled via server-side parameterized queries
+  // or proper input escaping to prevent injection attacks.
   searchTerm: z
     .string()
     .min(1, 'Search term is required')
-    .max(255, 'Search term must be less than 255 characters')
-    .regex(/^[a-zA-Z0-9\s\-_'.,()]+$/, 'Search term contains invalid characters'),
+    .max(255, 'Search term must be less than 255 characters'),
 });
 
 export type UserSchema = z.infer<typeof userSchema>;
@@ -368,3 +408,9 @@ export type ContactListResponseSchema = z.infer<typeof contactListResponseSchema
 export type PaginatedTenantResponseSchema = z.infer<typeof paginatedTenantResponseSchema>;
 export type ApiErrorSchema = z.infer<typeof apiErrorSchema>;
 export type LoginRequestSchema = z.infer<typeof loginRequestSchema>;
+
+// Form schema TypeScript inference types
+export type LoginSchema = z.infer<typeof loginSchema>;
+export type ContactFormSchema = z.infer<typeof contactFormSchema>;
+export type TenantFormSchema = z.infer<typeof tenantFormSchema>;
+export type SearchFormSchema = z.infer<typeof searchFormSchema>;

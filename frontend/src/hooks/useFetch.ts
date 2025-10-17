@@ -8,6 +8,47 @@ import { createBusinessLogicError, createNetworkError } from '../types/errors';
 import type { z } from 'zod';
 
 /**
+ * Sanitizes a URL by removing or redacting sensitive query parameters
+ * to prevent exposing tokens, sessions, auth keys, etc. in error logs
+ *
+ * @param urlStr - The URL string to sanitize
+ * @returns URL with sensitive query parameters removed/redacted, or just origin+path
+ */
+const sanitizeUrlForLogging = (urlStr: string): string => {
+  try {
+    // If it's just a path (no protocol), return it as-is (already safe)
+    if (!urlStr.includes('://')) {
+      return urlStr;
+    }
+
+    const url = new URL(urlStr);
+    const sensitiveKeys = [
+      'token',
+      'auth',
+      'apikey',
+      'api_key',
+      'session',
+      'sessionid',
+      'pwd',
+      'password',
+    ];
+
+    // Remove sensitive parameters
+    for (const key of sensitiveKeys) {
+      if (url.searchParams.has(key)) {
+        url.searchParams.delete(key);
+      }
+    }
+
+    // Return origin + pathname + any remaining safe query params
+    return url.origin + url.pathname + (url.search ? url.search : '');
+  } catch {
+    // If URL parsing fails, return just the origin (safest fallback)
+    return 'unknown-url';
+  }
+};
+
+/**
  * Module-level cache for useCachedFetch to persist across component lifecycles
  *
  * Note: For production applications, consider using:
@@ -49,7 +90,7 @@ export interface FetchOptions<T = unknown> extends RequestInit {
   /** Transform response data before returning */
   transformResponse?: (data: unknown) => T;
   /** Validate transformed response data (Zod schema) - must match response type T */
-  validateResponse?: z.ZodSchema<T>;
+  validateResponse?: z.ZodType<T>;
   /** Transform error before returning */
   transformError?: (error: AppError) => AppError;
   /** When true, the request will only run when refetch is called */
@@ -180,14 +221,27 @@ export function useFetch<T = unknown>(
           if (validateResponse) {
             const validationResult = validateResponse.safeParse(transformedData);
             if (!validationResult.success) {
+              // Extract validation paths and schema information for better diagnostics
+              const validationPaths = validationResult.error.issues.map(issue => ({
+                path: issue.path.join('.'),
+                code: issue.code,
+                message: issue.message,
+              }));
+
+              // Determine response shape for diagnostics
+              const responseShape =
+                typeof transformedData === 'object' && transformedData !== null
+                  ? Object.keys(transformedData as Record<string, unknown>)
+                  : typeof transformedData;
+
               return err(
                 createBusinessLogicError(
                   `Response validation failed: ${validationResult.error.message}`,
                   {
-                    validationErrors: validationResult.error.issues,
-                    // Include non-sensitive request context for troubleshooting
-                    url: url ?? 'unknown',
-                    responseType: typeof transformedData,
+                    validationPaths,
+                    responseShape,
+                    // Use sanitized URL to prevent leaking sensitive query parameters
+                    url: sanitizeUrlForLogging(fullUrl),
                   }
                 )
               );
@@ -263,6 +317,21 @@ export function useFetch<T = unknown>(
 }
 
 /**
+ * Helper type to extract optimistic-specific options from combined options
+ * This allows better separation of concerns and avoids type casting
+ */
+interface OptimisticProps<T> {
+  initialData?: T;
+  optimisticUpdate?: (currentData: T | null) => Result<T, AppError>;
+  rollbackUpdate?: (optimisticData: T, error: AppError) => Result<T, AppError>;
+}
+
+/**
+ * Combined options for useOptimisticFetch combining base fetch and optimistic props
+ */
+type OptimisticFetchOptions<T> = FetchOptions<T> & OptimisticProps<T>;
+
+/**
  * Adds optimistic update helpers on top of `useFetch` for latency-sensitive flows.
  *
  * @template T Response data type
@@ -286,19 +355,14 @@ export function useFetch<T = unknown>(
  * };
  * ```
  */
-export function useOptimisticFetch<T>(
-  url: string | null,
-  options: FetchOptions<T> & {
-    /** Initial data to show while loading */
-    initialData?: T;
-    /** Function to update data optimistically before the request */
-    optimisticUpdate?: (currentData: T | null) => Result<T, AppError>;
-    /** Function to rollback optimistic update on error */
-    rollbackUpdate?: (optimisticData: T, error: AppError) => Result<T, AppError>;
-  } = {}
-) {
+export function useOptimisticFetch<T>(url: string | null, options: OptimisticFetchOptions<T> = {}) {
+  // Extract optimistic-specific properties from the combined options
   const { initialData, optimisticUpdate, rollbackUpdate, ...fetchOptions } = options;
-  const fetchState = useFetch<T>(url, fetchOptions as FetchOptions<T>);
+
+  // Create properly-typed base fetch options without explicit cast
+  // The spread operator here ensures TypeScript infers the correct type
+  const baseFetchOptions: FetchOptions<T> = fetchOptions as FetchOptions<T>;
+  const fetchState = useFetch<T>(url, baseFetchOptions);
 
   const [optimisticResult, setOptimisticResult] = React.useState<Result<T, AppError> | null>(
     initialData !== undefined ? ok(initialData) : null

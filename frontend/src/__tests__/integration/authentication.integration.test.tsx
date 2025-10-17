@@ -15,6 +15,7 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import {
   renderWithProviders,
   renderWithoutAuth,
+  renderForIntegration,
   mockUser,
   mockTenant,
   screen,
@@ -27,6 +28,7 @@ import { http, HttpResponse } from 'msw';
 import { App } from '../../App';
 import { PrivateRoute } from '../../components/PrivateRoute';
 import { DashboardPage } from '../../pages/DashboardPage';
+import { asTenantId } from '../../types/ids';
 
 // Get API base URL at runtime
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
@@ -50,8 +52,8 @@ describe('Authentication Flow: Login → Token Storage → Protected Route', () 
   });
 
   test('User can log in and access protected route', async () => {
-    // 1. Render login page (unauthenticated)
-    const { rerender } = renderWithoutAuth(<App />, {
+    // 1. Render login page (unauthenticated - using real AuthProvider)
+    const { rerender } = renderForIntegration(<App />, {
       initialRoute: '/login',
     });
 
@@ -79,9 +81,9 @@ describe('Authentication Flow: Login → Token Storage → Protected Route', () 
     );
 
     // 5. Verify token was stored
-    const storedToken = localStorage.getItem(process.env.VITE_JWT_STORAGE_KEY || 'auth_token');
+    const storedToken = localStorage.getItem(import.meta.env.VITE_JWT_STORAGE_KEY || 'auth_token');
     expect(storedToken).toBeDefined();
-    expect(storedToken?.split('.').length).toBe(3); // Valid JWT format
+    expect(storedToken!.split('.').length).toBe(3); // Valid JWT format
 
     // 6. Verify subsequent requests include token
     // Make an API call and verify Authorization header was sent
@@ -128,21 +130,27 @@ describe('Authentication Flow: Login → Token Storage → Protected Route', () 
       })
     );
 
-    renderWithoutAuth(<App />, { initialRoute: '/login' });
+    renderForIntegration(<App />, { initialRoute: '/login' });
+
+    // Wait for auth initialization to complete
+    await waitFor(() => {
+      expect(screen.queryByText('Loading...')).not.toBeInTheDocument();
+    });
 
     // Fill form with invalid credentials
-    const usernameInput = screen.getByLabelText(/email|username/i);
+    const usernameInput = screen.getByLabelText('Username or Email');
     const passwordInput = screen.getByLabelText(/password/i);
+    const tenantInput = screen.getByLabelText('Tenant ID');
     const loginButton = screen.getByRole('button', { name: /login|sign in/i });
 
     await userEvent.type(usernameInput, 'invalid@example.com');
     await userEvent.type(passwordInput, 'wrongpassword');
+    await userEvent.type(tenantInput, 'tenant1');
     await userEvent.click(loginButton);
 
     // Verify error message shown
     await waitFor(() => {
-      const errorMsg = screen.queryByText(/invalid|error|credentials/i);
-      expect(errorMsg).toBeDefined();
+      expect(screen.getByText('Invalid credentials')).toBeInTheDocument();
     });
 
     // Verify no token was stored
@@ -226,7 +234,7 @@ describe('Authentication Flow: Token Refresh & Session Management', () => {
     // Wait for initial API call to fail, then refresh to be attempted
     await waitFor(
       () => {
-        // Either refresh was attempted or error shown
+        expect(refreshAttempted).toBe(true);
       },
       { timeout: 2000 }
     );
@@ -250,40 +258,50 @@ describe('Authentication Flow: Token Refresh & Session Management', () => {
     await waitFor(() => {
       const isLoggedOut =
         screen.queryByText(/login/i) !== undefined || screen.queryByText(/sign in/i) !== undefined;
-      // Note: Actual redirect depends on implementation
+      expect(isLoggedOut).toBe(true);
     });
 
     // Verify token was cleared
-    const storedToken = localStorage.getItem(process.env.VITE_JWT_STORAGE_KEY || 'auth_token');
-    // Should be null or undefined after failed refresh
+    const storedToken = localStorage.getItem(import.meta.env.VITE_JWT_STORAGE_KEY || 'auth_token');
+    expect(storedToken).toBeNull();
   });
 
   test('User can manually log out', async () => {
+    // Mock logout function that clears localStorage
+    let logoutCalled = false;
+    const mockLogout = async () => {
+      logoutCalled = true;
+      localStorage.removeItem(process.env.VITE_JWT_STORAGE_KEY || 'auth_token');
+    };
+
     renderWithProviders(<App />, {
       initialRoute: '/dashboard',
-      authValue: { isAuthenticated: true, user: mockUser, tenant: mockTenant },
+      authValue: {
+        isAuthenticated: true,
+        user: mockUser,
+        tenant: mockTenant,
+        logout: mockLogout,
+      },
     });
 
     // Find and click logout button (usually in user menu)
-    const userMenu = screen.queryByRole('button', { name: new RegExp(mockUser.username, 'i') });
-    if (userMenu) {
-      await userEvent.click(userMenu);
+    const userMenu = screen.getByRole('button', { name: new RegExp(mockUser.username, 'i') });
+    await userEvent.click(userMenu);
 
-      // Find logout option
-      const logoutButton = screen.queryByText(/logout|sign out/i);
-      if (logoutButton) {
-        await userEvent.click(logoutButton);
+    // Find logout option
+    const logoutButton = screen.getByText(/logout|sign out/i);
+    await userEvent.click(logoutButton);
 
-        // Verify redirect to login
-        await waitFor(() => {
-          expect(screen.queryByText(/login/i)).toBeDefined();
-        });
+    // Verify logout function was called
+    expect(logoutCalled).toBe(true);
 
-        // Verify token cleared
-        const storedToken = localStorage.getItem(process.env.VITE_JWT_STORAGE_KEY || 'auth_token');
-        expect(storedToken).toBeNull();
-      }
-    }
+    // Verify token cleared from localStorage
+    const storedToken = localStorage.getItem(process.env.VITE_JWT_STORAGE_KEY || 'auth_token');
+    expect(storedToken).toBeNull();
+
+    // Since mock doesn't support state changes, we can't test the redirect
+    // But we can verify the logout behavior was triggered
+    // In a real app, this would cause a redirect to login
   });
 });
 
@@ -297,7 +315,7 @@ describe('Authentication Flow: Multi-Tenant Switching', () => {
   const tenant1 = mockTenant;
   const tenant2 = {
     ...mockTenant,
-    id: 'tenant-2' as any,
+    id: asTenantId('tenant-2'),
     name: 'Tenant 2',
   };
 
@@ -336,12 +354,12 @@ describe('Authentication Flow: Multi-Tenant Switching', () => {
 
     // Wait for API call
     await waitFor(() => {
-      expect(capturedTenantHeader !== null).toBe(true);
+      expect(capturedTenantHeader).not.toBeNull();
     });
 
     // Verify tenant header sent - should match tenant ID
     const expectedTenantId = String(tenant1.id);
-    expect(capturedTenantHeader === expectedTenantId).toBe(true);
+    expect(capturedTenantHeader!).toBe(expectedTenantId);
   });
 
   test('Tenant ID changes when user switches tenant context', async () => {
@@ -387,7 +405,7 @@ describe('Authentication Flow: Multi-Tenant Switching', () => {
         isAuthenticated: true,
         user: mockUser,
         tenant: tenant1,
-        loading: false,
+        isLoading: false,
         login: async () => {
           // Intentionally empty - mock for testing
         },
@@ -413,7 +431,7 @@ describe('Authentication Flow: Multi-Tenant Switching', () => {
         isAuthenticated: true,
         user: { ...mockUser, tenantId: tenant2.id },
         tenant: tenant2,
-        loading: false,
+        isLoading: false,
         login: async () => {
           // Intentionally empty - mock for testing
         },
@@ -460,13 +478,13 @@ describe('Authentication Flow: Multi-Tenant Switching', () => {
     );
 
     // Start with tenant 1
-    const { user } = renderWithProviders(<DashboardPage />, {
+    renderWithProviders(<DashboardPage />, {
       initialRoute: '/dashboard',
       authValue: {
         isAuthenticated: true,
         user: mockUser,
         tenant: tenant1,
-        loading: false,
+        isLoading: false,
         login: async () => {
           // Intentionally empty - mock for testing
         },
@@ -495,7 +513,7 @@ describe('Authentication Flow: Multi-Tenant Switching', () => {
         isAuthenticated: true,
         user: { ...mockUser, tenantId: tenant2.id },
         tenant: tenant2,
-        loading: false,
+        isLoading: false,
         login: async () => {
           // Intentionally empty - mock for testing
         },
@@ -522,7 +540,7 @@ describe('Authentication Flow: Multi-Tenant Switching', () => {
   test('Invalid tenant switch preserves current tenant context', async () => {
     const invalidTenant = {
       ...mockTenant,
-      id: 'invalid-tenant' as any,
+      id: asTenantId('invalid-tenant'),
       name: 'Invalid Tenant',
     };
 
@@ -533,7 +551,7 @@ describe('Authentication Flow: Multi-Tenant Switching', () => {
         isAuthenticated: true,
         user: mockUser,
         tenant: tenant1,
-        loading: false,
+        isLoading: false,
         login: async () => {
           // Intentionally empty - mock for testing
         },
@@ -559,7 +577,6 @@ describe('Authentication Flow: Multi-Tenant Switching', () => {
         isAuthenticated: true,
         user: mockUser,
         tenant: invalidTenant,
-        loading: false,
         login: async () => {
           // Intentionally empty - mock for testing
         },

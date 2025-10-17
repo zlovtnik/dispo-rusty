@@ -144,23 +144,20 @@ describe('AddressBookPage Component', () => {
     it('should display add contact button', () => {
       renderWithAuth(<AddressBookPage />);
 
-      const addButton = screen.queryByRole('button', { name: /add/i });
-      expect(addButton).toBeDefined();
+      expect(screen.getByRole('button', { name: /add/i })).toBeInTheDocument();
     });
 
     it('should display search input', () => {
       renderWithAuth(<AddressBookPage />);
 
-      const searchInput = screen.queryByPlaceholderText(/search/i);
-      expect(searchInput).toBeDefined();
+      expect(screen.getByPlaceholderText(/search/i)).toBeInTheDocument();
     });
 
     it('should render contacts table', async () => {
       renderWithAuth(<AddressBookPage />);
 
       await waitFor(() => {
-        const table = screen.queryByRole('table');
-        expect(table).toBeDefined();
+        expect(screen.getByRole('table')).toBeInTheDocument();
       });
     });
   });
@@ -170,8 +167,8 @@ describe('AddressBookPage Component', () => {
       renderWithAuth(<AddressBookPage />);
 
       await waitFor(() => {
-        expect(screen.queryByText('John')).toBeDefined();
-        expect(screen.queryByText('Jane')).toBeDefined();
+        expect(screen.getByText('John')).toBeInTheDocument();
+        expect(screen.getByText('Jane')).toBeInTheDocument();
       });
     });
 
@@ -179,8 +176,8 @@ describe('AddressBookPage Component', () => {
       renderWithAuth(<AddressBookPage />);
 
       await waitFor(() => {
-        expect(screen.queryByText('John Doe')).toBeDefined();
-        expect(screen.queryByText('Jane Smith')).toBeDefined();
+        expect(screen.getByText('John Doe')).toBeInTheDocument();
+        expect(screen.getByText('Jane Smith')).toBeInTheDocument();
       });
     });
 
@@ -188,8 +185,8 @@ describe('AddressBookPage Component', () => {
       renderWithAuth(<AddressBookPage />);
 
       await waitFor(() => {
-        expect(screen.queryByText('john@example.com')).toBeDefined();
-        expect(screen.queryByText('jane@example.com')).toBeDefined();
+        expect(screen.getByText('john@example.com')).toBeInTheDocument();
+        expect(screen.getByText('jane@example.com')).toBeInTheDocument();
       });
     });
   });
@@ -200,16 +197,14 @@ describe('AddressBookPage Component', () => {
       renderWithAuth(<AddressBookPage />);
 
       await waitFor(() => {
-        expect(screen.queryByText('John Doe')).toBeDefined();
+        expect(screen.getByText('John Doe')).toBeInTheDocument();
       });
 
-      const searchInput = screen.queryByPlaceholderText(/search/i);
-      if (searchInput) {
-        await user.type(searchInput, 'John');
-        await waitFor(() => {
-          expect(screen.queryByText('John Doe')).toBeDefined();
-        });
-      }
+      const searchInput = screen.getByPlaceholderText(/search/i);
+      await user.type(searchInput, 'John');
+      await waitFor(() => {
+        expect(screen.getByText('John Doe')).toBeInTheDocument();
+      });
     });
 
     it('should clear search results', async () => {
@@ -217,17 +212,15 @@ describe('AddressBookPage Component', () => {
       renderWithAuth(<AddressBookPage />);
 
       await waitFor(() => {
-        expect(screen.queryByText('John Doe')).toBeDefined();
+        expect(screen.getByText('John Doe')).toBeInTheDocument();
       });
 
-      const searchInput = screen.queryByPlaceholderText(/search/i)!;
-      if (searchInput) {
-        await user.type(searchInput, 'Jane');
-        await user.clear(searchInput);
-        await waitFor(() => {
-          expect(screen.queryByText('John Doe')).toBeDefined();
-        });
-      }
+      const searchInput = screen.getByPlaceholderText(/search/i);
+      await user.type(searchInput, 'Jane');
+      await user.clear(searchInput);
+      await waitFor(() => {
+        expect(screen.getByText('John Doe')).toBeInTheDocument();
+      });
     });
   });
 
@@ -236,46 +229,39 @@ describe('AddressBookPage Component', () => {
       const user = userEvent.setup();
       renderWithAuth(<AddressBookPage />);
 
-      const addButton = screen.queryByRole('button', { name: /add/i });
-      if (addButton) {
-        await user.click(addButton);
-        await waitFor(() => {
-          const modal = screen.queryByText(/create|edit|new contact/i);
-          expect(modal).toBeDefined();
-        });
-      }
+      const addButton = screen.getByRole('button', { name: /add/i });
+      await user.click(addButton);
+      await waitFor(() => {
+        expect(screen.getByText(/create|edit|new contact/i)).toBeInTheDocument();
+      });
     });
 
     it('should have form fields in create modal', async () => {
       const user = userEvent.setup();
       renderWithAuth(<AddressBookPage />);
 
-      const addButton = screen.queryByRole('button', { name: /add/i });
-      if (addButton) {
-        await user.click(addButton);
-        await waitFor(() => {
-          expect(screen.queryByPlaceholderText(/first name/i)).toBeDefined();
-          expect(screen.queryByPlaceholderText(/last name/i)).toBeDefined();
-          expect(screen.queryByPlaceholderText(/email/i)).toBeDefined();
-        });
-      }
+      const addButton = screen.getByRole('button', { name: /add/i });
+      await user.click(addButton);
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText(/first name/i)).toBeInTheDocument();
+        expect(screen.getByPlaceholderText(/last name/i)).toBeInTheDocument();
+        expect(screen.getByPlaceholderText(/email/i)).toBeInTheDocument();
+      });
     });
 
     it('should validate required fields', async () => {
       const user = userEvent.setup();
       renderWithAuth(<AddressBookPage />);
 
-      const addButton = screen.queryByRole('button', { name: /add/i });
-      if (addButton) {
-        await user.click(addButton);
-        const submitButton = await screen.findByRole('button', { name: /submit|save|create/i });
-        await user.click(submitButton);
+      const addButton = screen.getByRole('button', { name: /add/i });
+      await user.click(addButton);
+      const submitButton = await screen.findByRole('button', { name: /submit|save|create/i });
+      await user.click(submitButton);
 
-        await waitFor(() => {
-          const errorMessages = screen.queryAllByText(/required|please enter/i);
-          expect(errorMessages.length).toBeGreaterThan(0);
-        });
-      }
+      await waitFor(() => {
+        const errorMessages = screen.getAllByText(/required|please enter/i);
+        expect(errorMessages.length).toBeGreaterThan(0);
+      });
     });
   });
 
@@ -285,17 +271,15 @@ describe('AddressBookPage Component', () => {
       renderWithAuth(<AddressBookPage />);
 
       await waitFor(() => {
-        expect(screen.queryByText('John Doe')).toBeDefined();
+        expect(screen.getByText('John Doe')).toBeInTheDocument();
       });
 
-      const editButtons = screen.queryAllByRole('button', { name: /edit/i });
-      if (editButtons.length > 0) {
-        await user.click(editButtons[0]!);
-        await waitFor(() => {
-          const input = screen.queryByDisplayValue('John');
-          expect(input).toBeDefined();
-        });
-      }
+      const editButtons = screen.getAllByRole('button', { name: /edit/i });
+      expect(editButtons.length).toBeGreaterThan(0);
+      await user.click(editButtons[0]!);
+      await waitFor(() => {
+        expect(screen.getByDisplayValue('John')).toBeInTheDocument();
+      });
     });
   });
 
@@ -305,16 +289,15 @@ describe('AddressBookPage Component', () => {
       renderWithAuth(<AddressBookPage />);
 
       await waitFor(() => {
-        expect(screen.queryByText('John Doe')).toBeDefined();
+        expect(screen.getByText('John Doe')).toBeInTheDocument();
       });
 
-      const deleteButtons = screen.queryAllByRole('button', { name: /delete|trash/i });
-      if (deleteButtons.length > 0) {
-        await user.click(deleteButtons[0]!);
-        await waitFor(() => {
-          expect(screen.queryByText(/confirm|are you sure/i)).toBeDefined();
-        });
-      }
+      const deleteButtons = screen.getAllByRole('button', { name: /delete|trash/i });
+      expect(deleteButtons.length).toBeGreaterThan(0);
+      await user.click(deleteButtons[0]!);
+      await waitFor(() => {
+        expect(screen.getByText(/confirm|are you sure/i)).toBeInTheDocument();
+      });
     });
 
     it('should cancel delete when clicking cancel', async () => {
@@ -322,19 +305,18 @@ describe('AddressBookPage Component', () => {
       renderWithAuth(<AddressBookPage />);
 
       await waitFor(() => {
-        expect(screen.queryByText('John Doe')).toBeDefined();
+        expect(screen.getByText('John Doe')).toBeInTheDocument();
       });
 
-      const deleteButtons = screen.queryAllByRole('button', { name: /delete|trash/i });
-      if (deleteButtons.length > 0) {
-        await user.click(deleteButtons[0]!);
-        const cancelButton = await screen.findByRole('button', { name: /cancel/i });
-        await user.click(cancelButton);
+      const deleteButtons = screen.getAllByRole('button', { name: /delete|trash/i });
+      expect(deleteButtons.length).toBeGreaterThan(0);
+      await user.click(deleteButtons[0]!);
+      const cancelButton = await screen.findByRole('button', { name: /cancel/i });
+      await user.click(cancelButton);
 
-        await waitFor(() => {
-          expect(screen.queryByText(/confirm|are you sure/i)).toBeNull();
-        });
-      }
+      await waitFor(() => {
+        expect(screen.queryByText(/confirm|are you sure/i)).toBeNull();
+      });
     });
   });
 
@@ -343,42 +325,31 @@ describe('AddressBookPage Component', () => {
       const user = userEvent.setup();
       renderWithAuth(<AddressBookPage />);
 
-      const addButton = screen.queryByRole('button', { name: /add/i });
-      if (addButton) {
-        await user.click(addButton);
-        const emailInput = await screen.findByPlaceholderText(/email/i);
-        await user.type(emailInput, 'invalid-email');
+      const addButton = screen.getByRole('button', { name: /add/i });
+      await user.click(addButton);
+      const emailInput = await screen.findByPlaceholderText(/email/i);
+      await user.type(emailInput, 'invalid-email');
 
-        const submitButton = screen.queryByRole('button', { name: /submit|save/i });
-        if (submitButton) {
-          await user.click(submitButton);
-          await waitFor(() => {
-            expect(screen.queryByText(/email|invalid/i)).toBeDefined();
-          });
-        }
-      }
+      const submitButton = screen.getByRole('button', { name: /submit|save/i });
+      await user.click(submitButton);
+      await waitFor(() => {
+        expect(screen.getByText(/email|invalid/i)).toBeInTheDocument();
+      });
     });
 
     it('should validate phone format', async () => {
       const user = userEvent.setup();
       renderWithAuth(<AddressBookPage />);
 
-      const addButton = screen.queryByRole('button', { name: /add/i });
-      if (addButton) {
-        await user.click(addButton);
-        const phoneInput = await screen.findByPlaceholderText(/phone|mobile/i);
-        if (phoneInput) {
-          await user.type(phoneInput, 'invalid');
-          const submitButton = screen.queryByRole('button', { name: /submit|save/i });
-          if (submitButton) {
-            await user.click(submitButton);
-            await waitFor(() => {
-              const errorText = screen.queryByText(/phone|format|invalid/i);
-              expect(errorText).toBeDefined();
-            });
-          }
-        }
-      }
+      const addButton = screen.getByRole('button', { name: /add/i });
+      await user.click(addButton);
+      const phoneInput = await screen.findByPlaceholderText(/phone|mobile/i);
+      await user.type(phoneInput, 'invalid');
+      const submitButton = screen.getByRole('button', { name: /submit|save/i });
+      await user.click(submitButton);
+      await waitFor(() => {
+        expect(screen.getByText(/phone|format|invalid/i)).toBeInTheDocument();
+      });
     });
   });
 
@@ -396,7 +367,7 @@ describe('AddressBookPage Component', () => {
       renderWithAuth(<AddressBookPage />);
 
       await waitFor(() => {
-        expect(screen.queryByText(/error|failed/i)).toBeDefined();
+        expect(screen.getByText(/error|failed/i)).toBeInTheDocument();
       });
     });
 
@@ -410,7 +381,7 @@ describe('AddressBookPage Component', () => {
       renderWithAuth(<AddressBookPage />);
 
       await waitFor(() => {
-        expect(screen.queryByRole('button', { name: /retry|reload/i })).toBeDefined();
+        expect(screen.getByRole('button', { name: /retry|reload/i })).toBeInTheDocument();
       });
     });
   });
@@ -420,25 +391,24 @@ describe('AddressBookPage Component', () => {
       renderWithAuth(<AddressBookPage />);
 
       await waitFor(() => {
-        const table = screen.queryByRole('table');
-        expect(table).toBeDefined();
+        expect(screen.getByRole('table')).toBeInTheDocument();
       });
     });
 
     it('should have accessible buttons with proper labels', () => {
       renderWithAuth(<AddressBookPage />);
 
-      const addButton = screen.queryByRole('button', { name: /add/i });
-      expect(addButton).toBeDefined();
-      expect(addButton?.getAttribute('aria-label') || addButton?.textContent).toBeDefined();
+      const addButton = screen.getByRole('button', { name: /add/i });
+      expect(addButton).toBeInTheDocument();
+      expect(addButton.getAttribute('aria-label') || addButton.textContent).toBeTruthy();
     });
 
     it('should support keyboard navigation', async () => {
       const user = userEvent.setup();
       renderWithAuth(<AddressBookPage />);
 
-      const addButton = screen.queryByRole('button', { name: /add/i });
-      expect(addButton).toBeDefined();
+      const addButton = screen.getByRole('button', { name: /add/i });
+      expect(addButton).toBeInTheDocument();
 
       await user.keyboard('{Tab}');
       expect(document.activeElement).toBeDefined();
@@ -460,7 +430,7 @@ describe('AddressBookPage Component', () => {
       renderWithAuth(<AddressBookPage />);
 
       await waitFor(() => {
-        expect(screen.queryByText(/no|empty|data/i)).toBeDefined();
+        expect(screen.getByText(/no|empty|data/i)).toBeInTheDocument();
       });
     });
   });

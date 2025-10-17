@@ -16,6 +16,7 @@ import {
   screen,
   waitFor,
   userEvent,
+  cleanup,
 } from '../../test-utils';
 import { server, resetMSW } from '../../test-utils/mocks/server';
 import { http, HttpResponse } from 'msw';
@@ -25,8 +26,10 @@ import { TenantsPage } from '../../pages/TenantsPage';
 
 // Create mock JWT tokens for testing
 function createExpiredToken(): string {
-  const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
-  const payload = btoa(
+  const base64url = (str: string) =>
+    btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const header = base64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+  const payload = base64url(
     JSON.stringify({
       sub: 'test-user',
       tenant_id: 'tenant-1',
@@ -39,8 +42,10 @@ function createExpiredToken(): string {
 }
 
 function createValidToken(): string {
-  const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
-  const payload = btoa(
+  const base64url = (str: string) =>
+    btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const header = base64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+  const payload = base64url(
     JSON.stringify({
       sub: 'test-user',
       tenant_id: 'tenant-1',
@@ -112,7 +117,7 @@ describe('Session Expiration & Token Refresh Flow', () => {
         isAuthenticated: true,
         user: mockUser,
         tenant: mockTenant,
-        loading: false,
+        isLoading: false,
       },
     });
 
@@ -157,7 +162,7 @@ describe('Session Expiration & Token Refresh Flow', () => {
         isAuthenticated: true,
         user: mockUser,
         tenant: mockTenant,
-        loading: false,
+        isLoading: false,
       },
     });
 
@@ -189,7 +194,7 @@ describe('Session Expiration & Token Refresh Flow', () => {
         isAuthenticated: true,
         user: mockUser,
         tenant: mockTenant,
-        loading: false,
+        isLoading: false,
       },
     });
 
@@ -198,17 +203,13 @@ describe('Session Expiration & Token Refresh Flow', () => {
       expect(screen.queryByText(/dashboard|welcome/i)).toBeDefined();
     });
 
-    // Find and click logout (this would be implemented in your app)
-    // Since logout UI may vary, we'll simulate by calling logout directly
-    // In a real app, you'd click a logout button
+    // Trigger logout
+    const logoutButton = screen.getByRole('button', { name: /logout|sign out/i });
+    await userEvent.click(logoutButton);
 
-    // For this test, we'll assume there's a logout mechanism
-    // Verify after logout that user is redirected to login
     await waitFor(() => {
-      // After logout, should be redirected or show login
-      const isOnLogin = screen.queryByText(/login/i) !== null;
-      const isLoggedOut = localStorage.getItem('auth_token') === null;
-      expect(isOnLogin || isLoggedOut).toBe(true);
+      expect(screen.queryByText(/login|sign in/i)).toBeDefined();
+      expect(localStorage.getItem('auth_token')).toBeNull();
     });
   });
 
@@ -233,7 +234,7 @@ describe('Session Expiration & Token Refresh Flow', () => {
         isAuthenticated: true,
         user: mockUser,
         tenant: mockTenant,
-        loading: false,
+        isLoading: false,
       },
     });
 
@@ -274,7 +275,7 @@ describe('Session Expiration & Token Refresh Flow', () => {
         isAuthenticated: true,
         user: mockUser,
         tenant: mockTenant,
-        loading: false,
+        isLoading: false,
       },
     });
 
@@ -345,13 +346,13 @@ describe('Tenant Switching Functionality', () => {
     );
 
     // Start with tenant 1
-    const { rerender } = renderWithProviders(<App />, {
+    renderWithProviders(<App />, {
       initialRoute: '/dashboard',
       authValue: {
         isAuthenticated: true,
         user: mockUser,
         tenant: tenant1,
-        loading: false,
+        isLoading: false,
       },
     });
 
@@ -363,14 +364,15 @@ describe('Tenant Switching Functionality', () => {
     // Clear captured headers for next check
     capturedTenantIds.length = 0;
 
-    // Switch to tenant 2
+    // Switch to tenant 2 - cleanup first render to avoid multiple mounted apps
+    cleanup();
     renderWithProviders(<App />, {
       initialRoute: '/dashboard',
       authValue: {
         isAuthenticated: true,
         user: { ...mockUser, tenantId: tenant2.id },
         tenant: tenant2,
-        loading: false,
+        isLoading: false,
       },
     });
 
@@ -389,13 +391,13 @@ describe('Tenant Switching Functionality', () => {
 
   test('Tenant switch preserves user authentication state', async () => {
     // Start with tenant 1
-    renderWithProviders(<App />, {
+    const firstRender = renderWithProviders(<App />, {
       initialRoute: '/dashboard',
       authValue: {
         isAuthenticated: true,
         user: mockUser,
         tenant: tenant1,
-        loading: false,
+        isLoading: false,
       },
     });
 
@@ -404,6 +406,9 @@ describe('Tenant Switching Functionality', () => {
       expect(screen.queryByText(/dashboard|welcome/i)).toBeDefined();
     });
 
+    // Unmount first render
+    firstRender.unmount();
+
     // Switch tenant
     renderWithProviders(<App />, {
       initialRoute: '/dashboard',
@@ -411,7 +416,7 @@ describe('Tenant Switching Functionality', () => {
         isAuthenticated: true,
         user: { ...mockUser, tenantId: tenant2.id },
         tenant: tenant2,
-        loading: false,
+        isLoading: false,
       },
     });
 
@@ -452,7 +457,7 @@ describe('Tenant Switching Functionality', () => {
         isAuthenticated: true,
         user: mockUser,
         tenant: invalidTenant,
-        loading: false,
+        isLoading: false,
       },
     });
 
@@ -498,29 +503,31 @@ describe('Tenant Switching Functionality', () => {
         isAuthenticated: true,
         user: mockUser,
         tenant: tenant1,
-        loading: false,
+        isLoading: false,
       },
     });
 
     // Switch to tenant 2
+    cleanup();
     renderWithProviders(<App />, {
       initialRoute: '/contacts',
       authValue: {
         isAuthenticated: true,
         user: { ...mockUser, tenantId: tenant2.id },
         tenant: tenant2,
-        loading: false,
+        isLoading: false,
       },
     });
 
     // Switch back to tenant 1
+    cleanup();
     renderWithProviders(<App />, {
       initialRoute: '/dashboard',
       authValue: {
         isAuthenticated: true,
         user: { ...mockUser, tenantId: tenant1.id },
         tenant: tenant1,
-        loading: false,
+        isLoading: false,
       },
     });
 
@@ -555,13 +562,13 @@ describe('Tenant Switching Functionality', () => {
     );
 
     // Start with tenant 1 data
-    const { rerender } = renderWithProviders(<App />, {
+    renderWithProviders(<App />, {
       initialRoute: '/contacts',
       authValue: {
         isAuthenticated: true,
         user: mockUser,
         tenant: tenant1,
-        loading: false,
+        isLoading: false,
       },
     });
 
@@ -575,13 +582,14 @@ describe('Tenant Switching Functionality', () => {
     contactRequests.length = 0;
 
     // Switch to tenant 2
+    cleanup();
     renderWithProviders(<App />, {
       initialRoute: '/contacts',
       authValue: {
         isAuthenticated: true,
         user: { ...mockUser, tenantId: tenant2.id },
         tenant: tenant2,
-        loading: false,
+        isLoading: false,
       },
     });
 
@@ -645,13 +653,13 @@ describe('Multi-Tenant Data Isolation UI Behavior', () => {
       })
     );
 
-    const { rerender } = renderWithProviders(<App />, {
+    renderWithProviders(<App />, {
       initialRoute: '/contacts',
       authValue: {
         isAuthenticated: true,
         user: mockUser,
         tenant: mockTenant,
-        loading: false,
+        isLoading: false,
       },
     });
 
@@ -662,6 +670,7 @@ describe('Multi-Tenant Data Isolation UI Behavior', () => {
     });
 
     // Switch tenant and verify different data
+    cleanup();
     const tenant2 = {
       ...mockTenant,
       id: 'tenant-2' as any,
@@ -674,7 +683,7 @@ describe('Multi-Tenant Data Isolation UI Behavior', () => {
         isAuthenticated: true,
         user: { ...mockUser, tenantId: tenant2.id },
         tenant: tenant2,
-        loading: false,
+        isLoading: false,
       },
     });
 
@@ -730,7 +739,7 @@ describe('Multi-Tenant Data Isolation UI Behavior', () => {
         isAuthenticated: true,
         user: mockUser,
         tenant: mockTenant,
-        loading: false,
+        isLoading: false,
       },
     });
 
@@ -738,6 +747,40 @@ describe('Multi-Tenant Data Isolation UI Behavior', () => {
     await waitFor(() => {
       expect(screen.queryByText('John Tenant1')).toBeDefined();
       expect(screen.queryByText('Jane Tenant2')).toBeNull();
+    });
+
+    // Create a new contact in tenant 1
+    const createButton = screen.getByRole('button', { name: /create|add|new contact/i });
+    await userEvent.click(createButton);
+
+    const emailInput = screen.getByLabelText(/email/i);
+    await userEvent.type(emailInput, 'newuser@tenant1.com');
+
+    const saveButton = screen.getByRole('button', { name: /save|create|submit/i });
+    await userEvent.click(saveButton);
+
+    // Verify the new contact was created with tenant-1 ID
+    await waitFor(() => {
+      const createdInTenant1 = createdContacts.some(c => c.tenant_id === 'tenant-1');
+      expect(createdInTenant1).toBe(true);
+    });
+
+    // Verify tenant-2 doesn't see the new contact by switching tenant
+    cleanup();
+    const tenant2 = { ...mockTenant, id: 'tenant-2' as any, name: 'Tenant 2' };
+    renderWithProviders(<App />, {
+      initialRoute: '/contacts',
+      authValue: {
+        isAuthenticated: true,
+        user: { ...mockUser, tenantId: tenant2.id },
+        tenant: tenant2,
+        isLoading: false,
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText('newuser@tenant1.com')).toBeNull();
+      expect(screen.queryByText('Jane Tenant2')).toBeDefined();
     });
   });
 
@@ -769,7 +812,7 @@ describe('Multi-Tenant Data Isolation UI Behavior', () => {
         isAuthenticated: true,
         user: mockUser,
         tenant: mockTenant,
-        loading: false,
+        isLoading: false,
       },
     });
 

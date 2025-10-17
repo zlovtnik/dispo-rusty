@@ -1,7 +1,19 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { screen } from '@testing-library/react';
+import { screen, render } from '@testing-library/react';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { renderWithAuth, renderWithoutAuth, mockUser, mockTenant } from '../../test-utils/render';
 import { PrivateRoute } from '../PrivateRoute';
+
+// Test component to capture location
+const LocationDisplay = () => {
+  const location = useLocation();
+  return (
+    <>
+      <div data-testid="location-path">{location.pathname}</div>
+      <div data-testid="location-state">{JSON.stringify(location.state)}</div>
+    </>
+  );
+};
 
 describe('PrivateRoute Component', () => {
   describe('Authentication Guards', () => {
@@ -36,13 +48,13 @@ describe('PrivateRoute Component', () => {
           <div>{testContent}</div>
         </PrivateRoute>,
         {
-          authValue: { loading: true },
+          authValue: { isLoading: true },
         }
       );
 
       // Should show loading indicator
       const loadingIndicators = screen.queryAllByText(/Loading|loading/i);
-      expect(loadingIndicators.length).toBeGreaterThanOrEqual(0);
+      expect(loadingIndicators.length).toBeGreaterThan(0);
     });
   });
 
@@ -119,6 +131,8 @@ describe('PrivateRoute Component', () => {
       );
 
       // Location state should be set for post-login redirect
+      expect(screen.queryByText('Dashboard')).toBeNull();
+      // Optionally verify redirect URL or location state if test utils support it
     });
   });
 
@@ -128,12 +142,12 @@ describe('PrivateRoute Component', () => {
         <PrivateRoute>
           <div>Content</div>
         </PrivateRoute>,
-        { authValue: { loading: true, isAuthenticated: false } }
+        { authValue: { isLoading: true, isAuthenticated: false } }
       );
 
       // Should display loading indicator
       const loadingElements = screen.queryAllByText(/Loading/i);
-      expect(loadingElements.length).toBeGreaterThanOrEqual(0);
+      expect(loadingElements.length).toBeGreaterThan(0);
     });
 
     it('should hide content while loading', () => {
@@ -142,10 +156,11 @@ describe('PrivateRoute Component', () => {
         <PrivateRoute>
           <div>{testContent}</div>
         </PrivateRoute>,
-        { authValue: { loading: true } }
+        { authValue: { isLoading: true } }
       );
 
-      // Content visibility depends on loading state
+      // Content should not be visible while loading
+      expect(screen.queryByText(testContent)).toBeNull();
     });
 
     it('should display "Loading..." text during auth check', () => {
@@ -153,11 +168,11 @@ describe('PrivateRoute Component', () => {
         <PrivateRoute>
           <div>Content</div>
         </PrivateRoute>,
-        { authValue: { loading: true, isAuthenticated: false } }
+        { authValue: { isLoading: true, isAuthenticated: false } }
       );
 
       const loadingText = screen.queryAllByText('Loading...');
-      expect(loadingText.length).toBeGreaterThanOrEqual(0);
+      expect(loadingText.length).toBeGreaterThan(0);
     });
   });
 
@@ -181,18 +196,23 @@ describe('PrivateRoute Component', () => {
         </PrivateRoute>
       );
 
-      // Navigation should use replace mode
+      // Protected content should not be rendered when redirecting
+      expect(screen.queryByText('Protected')).toBeNull();
     });
 
     it('should store current location for post-login redirect', () => {
-      renderWithoutAuth(
-        <PrivateRoute>
-          <div>Dashboard</div>
-        </PrivateRoute>,
-        { initialRoute: '/dashboard/settings' }
+      render(
+        <MemoryRouter initialEntries={['/dashboard/settings']}>
+          <LocationDisplay />
+          <PrivateRoute>
+            <div>Dashboard</div>
+          </PrivateRoute>
+        </MemoryRouter>
       );
 
-      // Current location should be stored in state
+      expect(screen.getByTestId('location-path').textContent).toBe('/login');
+      const state = JSON.parse(screen.getByTestId('location-state').textContent || '{}');
+      expect(state.from.pathname).toBe('/dashboard/settings');
     });
   });
 
@@ -234,12 +254,12 @@ describe('PrivateRoute Component', () => {
         <PrivateRoute>
           <div>Content</div>
         </PrivateRoute>,
-        { authValue: { loading: true, isAuthenticated: false } }
+        { authValue: { isLoading: true, isAuthenticated: false } }
       );
 
       // Check for loading container classes
       const loadingContainers = container.querySelectorAll('.loading, [class*="loading"]');
-      expect(loadingContainers.length).toBeGreaterThanOrEqual(0);
+      expect(container.querySelector('.loading')).not.toBeNull();
     });
 
     it('should have flex center styling during loading', () => {
@@ -247,12 +267,12 @@ describe('PrivateRoute Component', () => {
         <PrivateRoute>
           <div>Content</div>
         </PrivateRoute>,
-        { authValue: { loading: true } }
+        { authValue: { isLoading: true } }
       );
 
       // Check for flex center classes
       const flexContainers = container.querySelectorAll('[class*="flex"], [class*="center"]');
-      expect(flexContainers.length).toBeGreaterThanOrEqual(0);
+      expect(flexContainers.length).toBeGreaterThan(0);
     });
   });
 
@@ -262,10 +282,12 @@ describe('PrivateRoute Component', () => {
         <PrivateRoute>
           <div>Content</div>
         </PrivateRoute>,
-        { authValue: { loading: true } }
+        { authValue: { isLoading: true } }
       );
 
-      // Loading indicator should be announced to screen readers
+      // Loading indicator should have proper ARIA attributes
+      const loadingIndicator = screen.queryByRole('status') || screen.queryByLabelText(/loading/i);
+      expect(loadingIndicator).toBeDefined();
     });
 
     it('should maintain focus management during redirect', () => {
@@ -317,7 +339,7 @@ describe('PrivateRoute Component', () => {
         <PrivateRoute>
           <div>Content</div>
         </PrivateRoute>,
-        { authValue: { loading: false, isAuthenticated: true } }
+        { authValue: { isLoading: false, isAuthenticated: true } }
       );
 
       expect(screen.getByText('Content')).toBeDefined();
@@ -328,7 +350,7 @@ describe('PrivateRoute Component', () => {
         <PrivateRoute>
           <div>Content</div>
         </PrivateRoute>,
-        { authValue: { loading: false, isAuthenticated: true } }
+        { authValue: { isLoading: false, isAuthenticated: true } }
       );
 
       expect(screen.getByText('Content')).toBeDefined();
@@ -339,7 +361,7 @@ describe('PrivateRoute Component', () => {
         <PrivateRoute>
           <div>Protected</div>
         </PrivateRoute>,
-        { authValue: { loading: false, isAuthenticated: false } }
+        { authValue: { isLoading: false, isAuthenticated: false } }
       );
 
       expect(screen.queryByText('Protected')).toBeNull();

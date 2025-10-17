@@ -92,7 +92,7 @@ let mockContacts: ContactApiDTO[] = createMockContacts();
 /**
  * Mock tenants database
  */
-let mockTenants: BackendTenant[] = createMockTenants();
+export let mockTenants: BackendTenant[] = createMockTenants();
 
 /**
  * Helper to assert request headers for tenant-scoped operations
@@ -242,6 +242,7 @@ export function getHandlers() {
 
         return HttpResponse.json(
           {
+            status: 'success',
             message: 'Success',
             data: {
               data: paginatedTenants,
@@ -257,6 +258,7 @@ export function getHandlers() {
       // Otherwise return simple array for getAll()
       return HttpResponse.json(
         {
+          status: 'success',
           message: 'Success',
           data: mockTenants,
         },
@@ -268,6 +270,13 @@ export function getHandlers() {
      * GET /admin/tenants/filter - Filter tenants (MUST be before /:id to match specific path)
      */
     http.get(`${API_BASE_URL}/admin/tenants/filter`, ({ request }) => {
+      // Validate required headers for authenticated operation
+      try {
+        getAuthorizationFromHeaders(request);
+      } catch (e) {
+        return HttpResponse.json({ message: (e as Error).message, data: null }, { status: 401 });
+      }
+
       try {
         const url = new URL(request.url);
         const cursor = parseInt(url.searchParams.get('cursor') || '0');
@@ -368,7 +377,14 @@ export function getHandlers() {
     /**
      * GET /admin/tenants/:id - Get tenant by ID
      */
-    http.get(`${API_BASE_URL}/admin/tenants/:id`, ({ params }) => {
+    http.get(`${API_BASE_URL}/admin/tenants/:id`, ({ params, request }) => {
+      // Validate required headers for authenticated operation
+      try {
+        getAuthorizationFromHeaders(request);
+      } catch (e) {
+        return HttpResponse.json({ message: (e as Error).message, data: null }, { status: 401 });
+      }
+
       const { id } = params;
       const tenant = mockTenants.find(t => t.id === id);
 
@@ -395,6 +411,13 @@ export function getHandlers() {
      * POST /admin/tenants - Create tenant
      */
     http.post(`${API_BASE_URL}/admin/tenants`, async ({ request }) => {
+      // Validate required headers for authenticated operation
+      try {
+        getAuthorizationFromHeaders(request);
+      } catch (e) {
+        return HttpResponse.json({ message: (e as Error).message, data: null }, { status: 401 });
+      }
+
       const body = (await request.json()) as Partial<BackendTenant>;
 
       const newTenant: BackendTenant = {
@@ -420,6 +443,13 @@ export function getHandlers() {
      * PUT /admin/tenants/:id - Update tenant
      */
     http.put(`${API_BASE_URL}/admin/tenants/:id`, async ({ params, request }) => {
+      // Validate required headers for authenticated operation
+      try {
+        getAuthorizationFromHeaders(request);
+      } catch (e) {
+        return HttpResponse.json({ message: (e as Error).message, data: null }, { status: 401 });
+      }
+
       const { id } = params;
       const body = (await request.json()) as Partial<BackendTenant>;
       const tenantIndex = mockTenants.findIndex(t => t.id === id);
@@ -434,7 +464,17 @@ export function getHandlers() {
         );
       }
 
-      const existingTenant = mockTenants[tenantIndex]!;
+      const existingTenant = mockTenants[tenantIndex];
+      if (!existingTenant) {
+        return HttpResponse.json(
+          {
+            message: 'Tenant not found',
+            data: null,
+          },
+          { status: 404 }
+        );
+      }
+
       const updatedTenant: BackendTenant = {
         id: existingTenant.id,
         name: body.name ?? existingTenant.name,
@@ -457,7 +497,14 @@ export function getHandlers() {
     /**
      * DELETE /admin/tenants/:id - Delete tenant
      */
-    http.delete(`${API_BASE_URL}/admin/tenants/:id`, ({ params }) => {
+    http.delete(`${API_BASE_URL}/admin/tenants/:id`, ({ params, request }) => {
+      // Validate required headers for authenticated operation
+      try {
+        getAuthorizationFromHeaders(request);
+      } catch (e) {
+        return HttpResponse.json({ message: (e as Error).message, data: null }, { status: 401 });
+      }
+
       const { id } = params;
       const tenantIndex = mockTenants.findIndex(t => t.id === id);
 
@@ -488,6 +535,15 @@ export function getHandlers() {
      * GET /address-book - Get all contacts (with pagination support)
      */
     http.get(`${API_BASE_URL}/address-book`, ({ request }) => {
+      // Validate required headers for authenticated operation
+      try {
+        getAuthorizationFromHeaders(request);
+        getTenantIdFromHeaders(request);
+      } catch (e) {
+        const status = (e as Error).message.includes('Authorization') ? 401 : 400;
+        return HttpResponse.json({ message: (e as Error).message, data: null }, { status });
+      }
+
       const url = new URL(request.url);
       const page = parseInt(url.searchParams.get('page') || '1');
       const limit = parseInt(url.searchParams.get('limit') || '10');
@@ -566,7 +622,7 @@ export function getHandlers() {
       const last_name = parts.slice(1).join(' ') || 'User';
 
       const newContact = {
-        id: mockContacts.length + 1,
+        id: Math.max(0, ...mockContacts.map(c => Number(c.id))) + 1,
         tenant_id: 'tenant1', // Mock tenant ID
         first_name,
         last_name,

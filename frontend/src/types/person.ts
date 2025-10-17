@@ -1,9 +1,4 @@
-/**
- * Backend API Person DTO Types
- *
- * These types represent the data structures returned from the backend API.
- * They may differ from the frontend Contact types and require transformation.
- */
+import { logger } from '../utils/logger';
 
 export const Gender = {
   male: 'male',
@@ -127,7 +122,10 @@ const asDate = (value: unknown): Date | undefined => {
   return undefined;
 };
 
-const normalizeGender = (value: unknown): Gender | null | undefined => {
+const normalizeGender = (
+  value: unknown,
+  options?: { strict?: boolean; context?: string }
+): Gender | null | undefined => {
   if (value === null) {
     return null;
   }
@@ -151,6 +149,19 @@ const normalizeGender = (value: unknown): Gender | null | undefined => {
 
     if (['other', 'non-binary', 'nonbinary', 'nb'].includes(normalized)) {
       return Gender.other;
+    }
+
+    // Log unrecognized gender values for visibility
+    logger.warn('Unrecognized gender value encountered', {
+      rawValue: value,
+      normalizedValue: normalized,
+      context: options?.context || 'unknown',
+    });
+
+    if (options?.strict) {
+      throw new Error(
+        `Invalid gender value: "${value}" in context: ${options.context || 'unknown'}`
+      );
     }
 
     // Intentional fallback: Unrecognized gender strings default to 'other'

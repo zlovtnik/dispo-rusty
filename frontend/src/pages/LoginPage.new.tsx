@@ -8,7 +8,12 @@ import { asTenantId } from '@/types/ids';
 import { loginSchema } from '@/validation/schemas';
 import type { z } from 'zod';
 import { Card, Input, Button, Checkbox, Typography, Alert, Flex } from 'antd';
-import { CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
+import {
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+  EyeTwoTone,
+  EyeInvisibleOutlined,
+} from '@ant-design/icons';
 
 type LoginFormData = z.infer<typeof loginSchema>;
 
@@ -36,7 +41,6 @@ export const LoginPage: React.FC = () => {
       usernameOrEmail: '',
       password: '',
       tenantId: '',
-      rememberMe: false,
     },
   });
 
@@ -53,7 +57,7 @@ export const LoginPage: React.FC = () => {
       await login(credentials);
       navigate(from, { replace: true });
     } catch (error) {
-      console.error('Login error occurred', error);
+      console.error('Login failed:', error instanceof Error ? error.message : 'Unknown error');
       setSubmitError(error instanceof Error ? error.message : 'Login failed');
     } finally {
       setIsSubmitting(false);
@@ -63,9 +67,7 @@ export const LoginPage: React.FC = () => {
   const getFieldStatus = (fieldName: keyof LoginFormData) => {
     const error = errors[fieldName];
     const touched = touchedFields[fieldName];
-    const isFieldValid = !error && touched;
     if (error && (touched || isSubmitted)) return 'error';
-    if (isFieldValid) return 'success';
     return undefined;
   };
 
@@ -76,7 +78,11 @@ export const LoginPage: React.FC = () => {
 
     if (error && (touched || isSubmitted)) {
       return (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+        <div
+          id={`${fieldName}-help`}
+          role="alert"
+          style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}
+        >
           <CloseCircleOutlined style={{ color: 'var(--color-danger)' }} />
           <span style={{ color: 'var(--color-danger)', fontSize: '14px' }}>
             {typeof error.message === 'string' ? error.message : 'Invalid input'}
@@ -87,7 +93,10 @@ export const LoginPage: React.FC = () => {
 
     if (isFieldValid) {
       return (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+        <div
+          id={`${fieldName}-help`}
+          style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}
+        >
           <CheckCircleOutlined style={{ color: 'var(--color-success)' }} />
           <span style={{ color: 'var(--color-success)', fontSize: '14px' }}>Valid</span>
         </div>
@@ -164,6 +173,7 @@ export const LoginPage: React.FC = () => {
         <form onSubmit={handleSubmit(onSubmit)} style={{ width: '100%' }}>
           <div style={{ marginBottom: '24px' }}>
             <label
+              htmlFor="usernameOrEmail"
               style={{
                 color: 'var(--primary-700)',
                 fontWeight: 600,
@@ -174,10 +184,12 @@ export const LoginPage: React.FC = () => {
               Username or Email
             </label>
             <Input
+              id="usernameOrEmail"
               {...register('usernameOrEmail')}
               placeholder="Enter your username or email"
               size="large"
               status={getFieldStatus('usernameOrEmail')}
+              aria-describedby="usernameOrEmail-help"
               onBlur={() => trigger('usernameOrEmail')}
             />
             {renderFieldHelp('usernameOrEmail')}
@@ -185,6 +197,7 @@ export const LoginPage: React.FC = () => {
 
           <div style={{ marginBottom: '24px' }}>
             <label
+              htmlFor="password"
               style={{
                 color: 'var(--primary-700)',
                 fontWeight: 600,
@@ -195,10 +208,12 @@ export const LoginPage: React.FC = () => {
               Password
             </label>
             <Input.Password
+              id="password"
               {...register('password')}
               placeholder="Enter your password"
               size="large"
               status={getFieldStatus('password')}
+              aria-describedby="password-help"
               iconRender={visible => (visible ? <EyeTwoTone /> : <EyeInvisibleOutlined />)}
               onBlur={() => trigger('password')}
             />
@@ -207,6 +222,7 @@ export const LoginPage: React.FC = () => {
 
           <div style={{ marginBottom: '24px' }}>
             <label
+              htmlFor="tenantId"
               style={{
                 color: 'var(--primary-700)',
                 fontWeight: 600,
@@ -217,10 +233,12 @@ export const LoginPage: React.FC = () => {
               Tenant ID
             </label>
             <Input
+              id="tenantId"
               {...register('tenantId')}
               placeholder="Enter your tenant ID"
               size="large"
               status={getFieldStatus('tenantId')}
+              aria-describedby="tenantId-help"
               onBlur={() => trigger('tenantId')}
             />
             {renderFieldHelp('tenantId')}

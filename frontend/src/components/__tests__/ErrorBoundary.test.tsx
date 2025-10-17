@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
 import React from 'react';
 import { screen } from '@testing-library/react';
+import '@testing-library/jest-dom';
 import { renderWithProviders } from '../../test-utils/render';
 import { ErrorBoundary } from '../ErrorBoundary';
 
@@ -19,18 +20,18 @@ const RenderErrorComponent: React.FC<{ errorMessage: string }> = ({ errorMessage
 
 describe('ErrorBoundary Component', () => {
   // Suppress console.error during tests since ErrorBoundary logs errors
+  const originalConsoleError = console.error;
+
   beforeEach(() => {
     // Mock console.error to suppress error logs during testing
-    mock.module('console', () => ({
-      error: mock(() => {
-        // Intentionally empty - test mock
-      }),
-    }));
+    console.error = mock(() => {
+      // Intentionally empty - suppress console.error
+    });
   });
 
   afterEach(() => {
-    // Restore all mocks to prevent test pollution
-    mock.restore();
+    // Restore console.error
+    console.error = originalConsoleError;
   });
 
   describe('Error Catching', () => {
@@ -42,8 +43,7 @@ describe('ErrorBoundary Component', () => {
       );
 
       // Error boundary should catch and display error UI
-      const errorElements = screen.queryAllByText(/error|failed/i);
-      expect(errorElements.length).toBeGreaterThanOrEqual(0);
+      expect(screen.getByText('Something went wrong')).toBeInTheDocument();
     });
 
     it('should display error information in UI', () => {
@@ -54,8 +54,7 @@ describe('ErrorBoundary Component', () => {
       );
 
       // Error details should be displayed
-      const resultElements = screen.queryAllByRole('heading');
-      expect(resultElements.length).toBeGreaterThanOrEqual(0);
+      expect(screen.getByRole('heading')).toBeInTheDocument();
     });
 
     it('should display fallback UI when error occurs', () => {
@@ -66,9 +65,7 @@ describe('ErrorBoundary Component', () => {
         </ErrorBoundary>
       );
 
-      expect(
-        screen.queryByText(fallbackContent) || screen.queryByText(/error|Error/i)
-      ).toBeDefined();
+      expect(screen.getByText(fallbackContent)).toBeInTheDocument();
     });
 
     it('should not catch errors in event handlers', () => {
@@ -88,7 +85,7 @@ describe('ErrorBoundary Component', () => {
       );
 
       // Button should still be renderable
-      expect(screen.getByText('Click Me')).toBeDefined();
+      expect(screen.getByText('Click Me')).toBeInTheDocument();
     });
 
     it('should not catch errors in async code', () => {
@@ -106,42 +103,40 @@ describe('ErrorBoundary Component', () => {
         </ErrorBoundary>
       );
 
-      expect(screen.getByText('Async Button')).toBeDefined();
+      expect(screen.getByText('Async Button')).toBeInTheDocument();
     });
   });
 
-  describe('Error Display', () => {
-    it('should show error message to user', () => {
-      renderWithProviders(
-        <ErrorBoundary>
-          <RenderErrorComponent errorMessage="User-friendly error message" />
-        </ErrorBoundary>
-      );
+  it('should show error message to user', () => {
+    renderWithProviders(
+      <ErrorBoundary>
+        <RenderErrorComponent errorMessage="User-friendly error message" />
+      </ErrorBoundary>
+    );
 
-      // Should display result or error message
-    });
+    expect(screen.getByText(/error|Error|went wrong/i)).toBeInTheDocument();
+  });
 
-    it('should display default error UI when no fallback provided', () => {
-      renderWithProviders(
-        <ErrorBoundary>
-          <RenderErrorComponent errorMessage="Default error" />
-        </ErrorBoundary>
-      );
+  it('should display default error UI when no fallback provided', () => {
+    renderWithProviders(
+      <ErrorBoundary>
+        <RenderErrorComponent errorMessage="Default error" />
+      </ErrorBoundary>
+    );
 
-      // Should display some error UI
-      const elements = screen.queryAllByRole('heading');
-      expect(elements.length).toBeGreaterThanOrEqual(0);
-    });
+    // Should display some error UI
+    expect(screen.getByText('Something went wrong')).toBeInTheDocument();
+  });
 
-    it('should include error details in fallback', () => {
-      renderWithProviders(
-        <ErrorBoundary>
-          <RenderErrorComponent errorMessage="Detailed error information" />
-        </ErrorBoundary>
-      );
+  it('should include error details in fallback', () => {
+    renderWithProviders(
+      <ErrorBoundary>
+        <RenderErrorComponent errorMessage="Detailed error information" />
+      </ErrorBoundary>
+    );
 
-      // Error should be handled and displayed
-    });
+    expect(screen.getByText(/error|Error|went wrong/i)).toBeInTheDocument();
+    expect(screen.getByText('Detailed error information')).toBeInTheDocument();
   });
 
   describe('Error Handling', () => {
@@ -157,7 +152,7 @@ describe('ErrorBoundary Component', () => {
       );
 
       // onError callback should be called
-      expect(onErrorMock.mock.calls.length).toBeGreaterThanOrEqual(0);
+      expect(onErrorMock).toHaveBeenCalled();
     });
 
     it('should provide error info to callback', () => {
@@ -172,6 +167,12 @@ describe('ErrorBoundary Component', () => {
       );
 
       // Error info should contain componentStack
+      expect(onErrorMock).toHaveBeenCalledWith(
+        expect.any(Error),
+        expect.objectContaining({
+          componentStack: expect.stringContaining('RenderErrorComponent'),
+        })
+      );
     });
 
     it('should continue rendering if onError callback is provided', () => {
@@ -186,6 +187,7 @@ describe('ErrorBoundary Component', () => {
       );
 
       // Component should still render error UI even with callback
+      expect(screen.getByText('Something went wrong')).toBeInTheDocument();
     });
   });
 
@@ -198,7 +200,7 @@ describe('ErrorBoundary Component', () => {
         </ErrorBoundary>
       );
 
-      expect(screen.getByText(testContent)).toBeDefined();
+      expect(screen.getByText(testContent)).toBeInTheDocument();
     });
 
     it('should render multiple children', () => {
@@ -210,9 +212,9 @@ describe('ErrorBoundary Component', () => {
         </ErrorBoundary>
       );
 
-      expect(screen.getByText('Child 1')).toBeDefined();
-      expect(screen.getByText('Child 2')).toBeDefined();
-      expect(screen.getByText('Child 3')).toBeDefined();
+      expect(screen.getByText('Child 1')).toBeInTheDocument();
+      expect(screen.getByText('Child 2')).toBeInTheDocument();
+      expect(screen.getByText('Child 3')).toBeInTheDocument();
     });
 
     it('should render nested components', () => {
@@ -227,20 +229,33 @@ describe('ErrorBoundary Component', () => {
         </ErrorBoundary>
       );
 
-      expect(screen.getByText('Title')).toBeDefined();
-      expect(screen.getByText('Content')).toBeDefined();
+      expect(screen.getByText('Title')).toBeInTheDocument();
+      expect(screen.getByText('Content')).toBeInTheDocument();
     });
   });
 
   describe('Recovery', () => {
     it('should reset error state when component unmounts and remounts', () => {
+      const ThrowingComponent = ({ shouldThrow }: { shouldThrow: boolean }) => {
+        if (shouldThrow) throw new Error('Test error');
+        return <div>Working</div>;
+      };
+
       const { rerender } = renderWithProviders(
-        <ErrorBoundary>
-          <div>Working</div>
+        <ErrorBoundary key="error">
+          <ThrowingComponent shouldThrow={true} />
         </ErrorBoundary>
       );
 
-      expect(screen.getByText('Working')).toBeDefined();
+      expect(screen.getByText('Something went wrong')).toBeInTheDocument();
+
+      rerender(
+        <ErrorBoundary key="working">
+          <ThrowingComponent shouldThrow={false} />
+        </ErrorBoundary>
+      );
+
+      expect(screen.getByText('Working')).toBeInTheDocument();
     });
 
     it('should display recovery button/action', () => {
@@ -251,6 +266,7 @@ describe('ErrorBoundary Component', () => {
       );
 
       // Should provide some way to recover (button, text, etc.)
+      expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument();
     });
   });
 
@@ -261,6 +277,8 @@ describe('ErrorBoundary Component', () => {
           <RenderErrorComponent errorMessage="JavaScript error" />
         </ErrorBoundary>
       );
+
+      expect(screen.getByText('Something went wrong')).toBeInTheDocument();
     });
 
     it('should handle TypeError', () => {
@@ -273,6 +291,8 @@ describe('ErrorBoundary Component', () => {
           <TypeErrorComponent />
         </ErrorBoundary>
       );
+
+      expect(screen.getByText('Something went wrong')).toBeInTheDocument();
     });
 
     it('should handle ReferenceError', () => {
@@ -285,6 +305,8 @@ describe('ErrorBoundary Component', () => {
           <ReferenceErrorComponent />
         </ErrorBoundary>
       );
+
+      expect(screen.getByText('Something went wrong')).toBeInTheDocument();
     });
   });
 
@@ -313,6 +335,7 @@ describe('ErrorBoundary Component', () => {
       );
 
       // Callback should be set up
+      expect(callback).toHaveBeenCalled();
     });
 
     it('should handle all valid props', () => {
@@ -338,6 +361,7 @@ describe('ErrorBoundary Component', () => {
       );
 
       // Error boundary should have error state
+      expect(screen.getByText('Something went wrong')).toBeInTheDocument();
     });
 
     it('should track error object', () => {
@@ -349,6 +373,7 @@ describe('ErrorBoundary Component', () => {
       );
 
       // Error should be stored in state
+      expect(screen.getByText(errorMessage)).toBeInTheDocument();
     });
   });
 
@@ -361,6 +386,7 @@ describe('ErrorBoundary Component', () => {
       );
 
       // Error message should be readable by screen readers
+      expect(screen.getByText('Accessible error')).toBeInTheDocument();
     });
 
     it('should provide error context', () => {
@@ -371,6 +397,7 @@ describe('ErrorBoundary Component', () => {
       );
 
       // Error UI should explain what happened
+      expect(screen.getByText('Error context')).toBeInTheDocument();
     });
   });
 
@@ -395,6 +422,7 @@ describe('ErrorBoundary Component', () => {
       );
 
       // Should still display error UI
+      expect(screen.getByText('Something went wrong')).toBeInTheDocument();
     });
 
     it('should handle error with very long message', () => {
@@ -406,6 +434,7 @@ describe('ErrorBoundary Component', () => {
       );
 
       // Should display error without breaking layout
+      expect(screen.getByText(longMessage)).toBeInTheDocument();
     });
   });
 });

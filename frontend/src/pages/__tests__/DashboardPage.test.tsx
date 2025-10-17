@@ -38,9 +38,9 @@ describe('DashboardPage Component', () => {
       renderWithAuth(<DashboardPage />);
 
       // Verify multiple tech items are present
-      expect(screen.queryByText(/TypeScript/i)).toBeDefined();
-      expect(screen.queryByText(/React/i)).toBeDefined();
-      expect(screen.queryByText(/Bun/i)).toBeDefined();
+      expect(screen.getByText(/TypeScript/i)).toBeInTheDocument();
+      expect(screen.getByText(/React/i)).toBeInTheDocument();
+      expect(screen.getByText(/Bun/i)).toBeInTheDocument();
     });
   });
 
@@ -65,7 +65,7 @@ describe('DashboardPage Component', () => {
       renderWithAuth(<DashboardPage />);
 
       // Verify activity items are rendered
-      const activityItems = screen.queryAllByText(/Application started|successful login/i);
+      const activityItems = screen.getAllByText(/Application started|successful login/i);
       expect(activityItems.length).toBeGreaterThan(0);
     });
 
@@ -105,7 +105,7 @@ describe('DashboardPage Component', () => {
   describe('Loading States', () => {
     it('should display loading indicator when authValue.loading is true', async () => {
       const { container } = renderWithAuth(<DashboardPage />, {
-        authValue: { loading: true },
+        authValue: { isLoading: true },
       });
 
       // Verify loading spinner exists
@@ -115,7 +115,7 @@ describe('DashboardPage Component', () => {
 
     it('should display content even while loading', () => {
       renderWithAuth(<DashboardPage />, {
-        authValue: { loading: true },
+        authValue: { isLoading: true },
       });
 
       // Welcome message should still render
@@ -124,7 +124,7 @@ describe('DashboardPage Component', () => {
 
     it('should hide loading indicator after data loads', async () => {
       const { container, rerender } = renderWithAuth(<DashboardPage />, {
-        authValue: { loading: true },
+        authValue: { isLoading: true },
       });
 
       // Verify spinner is present initially
@@ -136,7 +136,7 @@ describe('DashboardPage Component', () => {
 
       await waitFor(() => {
         spinner = container.querySelector('[class*="ant-spin"]');
-        // Spinner should be gone or hidden after loading completes
+        expect(spinner).toBeNull();
       });
     });
   });
@@ -149,14 +149,14 @@ describe('DashboardPage Component', () => {
       const appStarted = screen.queryByText(/Application started/i);
       const loginSuccess = screen.queryByText(/successful/i);
 
-      expect(appStarted || loginSuccess).toBeDefined();
+      expect(appStarted || loginSuccess).toBeTruthy();
     });
 
     it('should display technology versions in tech stack', () => {
       renderWithAuth(<DashboardPage />);
 
       // Tech items should be displayed
-      const techItems = screen.queryAllByText(/TypeScript|React|Actix|Bun/i);
+      const techItems = screen.getAllByText(/TypeScript|React|Actix|Bun/i);
       expect(techItems.length).toBeGreaterThan(2);
     });
 
@@ -247,7 +247,7 @@ describe('DashboardPage Component', () => {
 
       // Verify semantic components are used
       const semanticElements = container.querySelectorAll('article, section, nav, main');
-      expect(container.querySelector('[role="alert"]')).toBeDefined();
+      expect(screen.getByRole('alert')).toBeInTheDocument();
     });
   });
 
@@ -309,7 +309,7 @@ describe('DashboardPage Component', () => {
 
       expect(
         hasOverflow || hasWordWrap || container?.classList.toString().includes('truncate')
-      ).toBeDefined();
+      ).toBe(true);
     });
   });
 
@@ -318,7 +318,7 @@ describe('DashboardPage Component', () => {
       renderWithAuth(<DashboardPage />);
 
       const links = screen.queryAllByRole('link');
-      expect(links.length).toBeGreaterThanOrEqual(0);
+      expect(links.length).toBeGreaterThan(0);
     });
 
     it('should have clickable navigation elements', async () => {

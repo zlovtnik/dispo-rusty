@@ -218,6 +218,9 @@ describe('authService', () => {
     });
 
     test('should handle server error during logout', async () => {
+      // Set up authenticated state with a token
+      localStorage.setItem('auth_token', JSON.stringify({ token: 'mock-token' }));
+
       server.use(
         http.post(`${API_BASE_URL}/auth/logout`, () => {
           return HttpResponse.json({ message: 'Internal server error' }, { status: 500 });
@@ -693,9 +696,21 @@ describe('addressBookService', () => {
         if (result.isOk()) {
           const response = result.value;
           expect(response.status).toBe('success');
+
+          // Map expected gender based on input
+          let expectedGender: Gender;
+          if (testCase.inputGender === Gender.male || (testCase.inputGender as unknown) === true) {
+            expectedGender = Gender.male;
+          } else if (testCase.inputGender === Gender.female || (testCase.inputGender as unknown) === false) {
+            expectedGender = Gender.female;
+          } else {
+            expectedGender = testCase.inputGender as Gender;
+          }
+
           if (response.status === 'success') {
             // Verify gender is properly converted and persisted
             expect(response.data.gender).toBeDefined();
+            expect(response.data.gender).toBe(expectedGender);
           }
         }
       });
@@ -725,7 +740,10 @@ describe('addressBookService', () => {
 
       const result = await addressBookService.create(invalidContact);
 
-      // Should either be ok (MSW mock) or error with appropriate message
+      // Assert that the result is an error
+      expect(result.isErr()).toBe(true);
+
+      // Should have an appropriate error message
       if (result.isErr()) {
         const error = result.error;
         expect(error.message).toContain('gender');

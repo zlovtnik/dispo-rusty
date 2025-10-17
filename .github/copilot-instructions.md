@@ -108,10 +108,20 @@ let pool = req.extensions().get::<Pool>().cloned()
 
 **API Calls**: Always use service layer (`frontend/src/services/api.ts`), never direct `fetch`:
 ```typescript
-const result = await addressBookService.getContacts();
+// Result<T, E> from 'neverthrow' library provides railway-oriented error handling
+// API methods return AsyncResult<ApiResponse<T>, AppError>
+// See: frontend/src/types/fp.ts (Result/AsyncResult) and frontend/src/types/api.ts (ApiResponse<T>)
+
+const result = await addressBookService.getAll(); // Returns AsyncResult<ApiResponse<ContactListResponse>, AppError>
 result.match(
-  (response) => console.log('Contacts:', response.data.contacts),
-  (error) => console.error('Failed:', error.message)
+  (response) => {
+    if (response.status === 'success') {
+      console.log('Contacts:', response.data.contacts); // response.data is ContactListResponse
+    } else {
+      console.log('API Error:', response.error); // response.error is AppError
+    }
+  },
+  (error) => console.error('Network/Auth Error:', error.message) // error is AppError
 );
 ```
 
@@ -151,7 +161,20 @@ Diesel migrations in `migrations/` directory. **CRITICAL**: Run migrations befor
 Used for session management and health monitoring. Connection initialized in `src/config/cache.rs`.
 
 ### Pagination
-Backend uses iterator-based pagination with `Pagination` struct. Frontend receives paginated responses with metadata.
+Backend uses iterator-based pagination with `Pagination` struct in `src/pagination.rs` and functional patterns in `src/functional/pagination.rs`. Frontend receives paginated responses with metadata.
+
+**Backend Implementation:**
+- `src/pagination.rs`: Core pagination utilities with bounded memory usage
+- `src/functional/pagination.rs`: Functional programming patterns for pagination
+
+**Frontend Types:**
+- `PaginatedTenantResponse` in `src/types/tenant.ts`: Contains `data[]`, `total`, `offset?`, `limit?`
+- Validation schemas in `src/validation/schemas.ts` ensure proper response structure
+
+**Frontend Usage:**
+- Service methods like `tenantService.getAllWithPagination({ offset: 0, limit: 10 })` in `src/services/api.ts`
+- UI components like `TenantsPage.tsx` implement pagination with Ant Design Table component
+- Pagination state managed with `useState` for current page, page size, and total count
 
 ## Testing
 

@@ -12,15 +12,15 @@ import type { Contact } from '../../types/contact';
 import { createMockAuthJwt } from '../../test-utils/jwt';
 import { mockUser, mockTenant } from '../../test-utils/render';
 
-// Set up test environment variables
-import.meta.env.VITE_API_URL = 'http://localhost:8080/api';
-import.meta.env.VITE_DEFAULT_COUNTRY = 'USA';
+// Test environment variables are set via vitest globals
+// VITE_API_URL defaults to API_URL constant
+// VITE_DEFAULT_COUNTRY defaults to empty string
 
 // Multi-tenant mock stores
 const tenantContacts: Record<string, Contact[]> = {
   tenant1: [
     {
-      id: asContactId('1'),
+      id: asContactId('101'),
       tenantId: asTenantId('tenant1'),
       firstName: 'John',
       lastName: 'Doe',
@@ -77,7 +77,7 @@ let refreshTokenValid = true;
 const server = setupServer(
   // Auth login endpoint
   http.post('/api/auth/login', async ({ request }) => {
-    const body = await request.json();
+    const body = (await request.json()) as Record<string, any>;
     // Accept any credentials for testing; include tenant_id if provided
     const tenantId = body.tenantId || 'tenant1';
     const jwt = createMockAuthJwt(body.username || 'test', tenantId);
@@ -116,16 +116,20 @@ const server = setupServer(
   }),
 
   // Get contacts per tenant
-  http.get('/api/address-book', ({ headers }) => {
-    const tenantId = headers.get('x-tenant-id') || 'tenant1';
+  http.get('/api/address-book', ({ request }) => {
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader || !currentToken) {
+      return HttpResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
+    }
+    const tenantId = request.headers.get('x-tenant-id') || 'tenant1';
     const contacts = tenantContacts[tenantId] || [];
     return HttpResponse.json({ success: true, message: 'Contacts retrieved', data: { contacts } });
   }),
 
   // Create contact
-  http.post('/api/address-book', async ({ request, headers }) => {
-    const tenantId = headers.get('x-tenant-id') || 'tenant1';
-    const body = await request.json();
+  http.post('/api/address-book', async ({ request }) => {
+    const tenantId = request.headers.get('x-tenant-id') || 'tenant1';
+    const body = (await request.json()) as Record<string, any>;
     // simulate server-side validation error
     if (!body.firstName) {
       return HttpResponse.json(
@@ -156,21 +160,34 @@ const server = setupServer(
   }),
 
   // Update contact
-  http.put('/api/address-book/:id', async ({ request, params, headers }) => {
-    const tenantId = headers.get('x-tenant-id') || 'tenant1';
+  http.put('/api/address-book/:id', async ({ request, params }) => {
+    const tenantId = request.headers.get('x-tenant-id') || 'tenant1';
     const id = params.id;
     const arr = tenantContacts[tenantId] || [];
-    const body = await request.json();
+    const body = (await request.json()) as Record<string, any>;
+
+    // Validate required fields
+    if (body.firstName !== undefined && !body.firstName) {
+      return HttpResponse.json({ success: false, message: 'First name required' }, { status: 400 });
+    }
+
     const idx = arr.findIndex(c => c.id === id);
     if (idx === -1)
       return HttpResponse.json({ success: false, message: 'Not found' }, { status: 404 });
-    arr[idx] = { ...arr[idx], ...body, updatedAt: new Date() } as Contact;
+    // Only update allowed fields
+    arr[idx] = {
+      ...arr[idx],
+      firstName: body.firstName ?? arr[idx]?.firstName,
+      lastName: body.lastName ?? arr[idx]?.lastName,
+      // ... other safe fields
+      updatedAt: new Date(),
+    } as Contact;
     return HttpResponse.json({ success: true, message: 'Contact updated', data: arr[idx] });
   }),
 
   // Delete contact
-  http.delete('/api/address-book/:id', ({ params, headers }) => {
-    const tenantId = headers.get('x-tenant-id') || 'tenant1';
+  http.delete('/api/address-book/:id', ({ request, params }) => {
+    const tenantId = request.headers.get('x-tenant-id') || 'tenant1';
     const arr = tenantContacts[tenantId] || [];
     const idx = arr.findIndex(c => c.id === params.id);
     if (idx === -1)
@@ -196,6 +213,9 @@ describe('Contact Management Flow - Integration', () => {
   beforeEach(() => {
     localStorage.clear();
     server.listen();
+    // Reset module-level token state to prevent test leakage
+    currentToken = null;
+    refreshTokenValid = true;
   });
   afterEach(() => {
     server.resetHandlers();
@@ -261,33 +281,31 @@ describe('Contact Management Flow - Integration', () => {
     const bobEditButton = editButtons.find(button =>
       button.closest('[data-testid="contact-row"]')?.textContent?.includes('Bob Builder')
     );
-    if (bobEditButton) {
-      await user.click(bobEditButton);
-      const editFirstNameInput = await screen.findByDisplayValue('Bob');
-      await user.clear(editFirstNameInput);
-      await user.type(editFirstNameInput, 'Bobby');
-      const saveButton = screen.getByRole('button', { name: /save/i });
-      await user.click(saveButton);
+    expect(bobEditButton).toBeTruthy();
+    await user.click(bobEditButton!);
+    const editFirstNameInput = await screen.findByDisplayValue('Bob');
+    await user.clear(editFirstNameInput);
+    await user.type(editFirstNameInput, 'Bobby');
+    const saveButton = screen.getByRole('button', { name: /save/i });
+    await user.click(saveButton);
 
-      await waitFor(() => {
-        expect(screen.getByText('Bobby Builder')).toBeInTheDocument();
-      });
-    }
+    await waitFor(() => {
+      expect(screen.getByText('Bobby Builder')).toBeInTheDocument();
+    });
 
     // 5) Delete the contact
     const deleteButtons = screen.getAllByRole('button', { name: /delete/i });
     const bobbyDeleteButton = deleteButtons.find(button =>
       button.closest('[data-testid="contact-row"]')?.textContent?.includes('Bobby Builder')
     );
-    if (bobbyDeleteButton) {
-      await user.click(bobbyDeleteButton);
-      const confirmDelete = screen.getByRole('button', { name: /confirm|yes|delete/i });
-      await user.click(confirmDelete);
+    expect(bobbyDeleteButton).toBeTruthy();
+    await user.click(bobbyDeleteButton!);
+    const confirmDelete = screen.getByRole('button', { name: /confirm|yes|delete/i });
+    await user.click(confirmDelete);
 
-      await waitFor(() => {
-        expect(screen.queryByText('Bobby Builder')).not.toBeInTheDocument();
-      });
-    }
+    await waitFor(() => {
+      expect(screen.queryByText('Bobby Builder')).not.toBeInTheDocument();
+    });
 
     // 6) Switch tenants
     renderWithAuth(<TenantsPage />);

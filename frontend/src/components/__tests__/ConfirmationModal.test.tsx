@@ -208,7 +208,7 @@ describe('ConfirmationModal Component', () => {
       const confirmButton = screen.getByText('Yes');
       await user.click(confirmButton);
 
-      expect(onConfirm.mock.calls.length).toBeGreaterThan(0);
+      expect(onConfirm.mock.calls.length).toBe(1);
     });
 
     it('should call onCancel when cancel button is clicked', async () => {
@@ -232,7 +232,7 @@ describe('ConfirmationModal Component', () => {
       const cancelButton = screen.getByText('No');
       await user.click(cancelButton);
 
-      expect(onCancel.mock.calls.length).toBeGreaterThan(0);
+      expect(onCancel.mock.calls.length).toBe(1);
     });
 
     it('should call onCancel when modal backdrop is clicked', async () => {
@@ -260,7 +260,7 @@ describe('ConfirmationModal Component', () => {
       await user.click(mask as HTMLElement);
 
       // Verify onCancel was called
-      expect(onCancel.mock.calls.length).toBeGreaterThan(0);
+      expect(onCancel.mock.calls.length).toBe(1);
     });
 
     it('should not call callbacks multiple times for single click', async () => {
@@ -574,6 +574,8 @@ Line 3`;
       await user.tab();
 
       // Should be able to interact with keyboard
+      const confirmButton = screen.getByText('Yes');
+      expect(confirmButton).toHaveFocus();
     });
 
     it('should handle Enter key on confirm', async () => {
@@ -596,6 +598,7 @@ Line 3`;
 
       // Primary button should be activated with Enter
       await user.keyboard('{Enter}');
+      expect(onConfirm).toHaveBeenCalled();
     });
 
     it('should handle Escape key for cancel', async () => {
@@ -617,6 +620,7 @@ Line 3`;
 
       // Escape should trigger cancel/close
       await user.keyboard('{Escape}');
+      expect(onCancel).toHaveBeenCalled();
     });
   });
 
@@ -701,7 +705,7 @@ Line 3`;
       await user.click(button);
 
       // New callback should be called
-      expect(newCallback.mock.calls.length).toBeGreaterThan(0);
+      expect(newCallback.mock.calls.length).toBe(1);
     });
 
     it('should handle empty string message', () => {

@@ -1,4 +1,7 @@
 {
+  "name": "actix-web-rest-api-root",
+  "version": "1.0.0",
+    "react-hook-form": "^7.0.0",
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
     "react-hook-form": "^7.65.0",

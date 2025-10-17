@@ -66,42 +66,37 @@ describe('LoginPage Component', () => {
     it('should render login form with title', () => {
       renderWithoutAuth(<LoginPage />);
 
-      expect(screen.getByText('Welcome Back')).toBeDefined();
+      expect(screen.getByText('Welcome Back')).not.toBeNull();
     });
 
     it('should render username/email input field', () => {
       renderWithoutAuth(<LoginPage />);
 
-      const usernameInput = screen.queryByPlaceholderText(/username|email/i);
-      expect(usernameInput).toBeDefined();
+      expect(screen.getByPlaceholderText(/username|email/i)).toBeInTheDocument();
     });
 
     it('should render password input field', () => {
       renderWithoutAuth(<LoginPage />);
 
-      const passwordInput = screen.queryByPlaceholderText(/password/i);
-      expect(passwordInput).toBeDefined();
+      expect(screen.getByPlaceholderText(/password/i)).toBeInTheDocument();
     });
 
     it('should render tenant input field', () => {
       renderWithoutAuth(<LoginPage />);
 
-      const tenantInput = screen.queryByPlaceholderText(/tenant/i);
-      expect(tenantInput).toBeDefined();
+      expect(screen.getByPlaceholderText(/tenant/i)).toBeInTheDocument();
     });
 
     it('should render submit button', () => {
       renderWithoutAuth(<LoginPage />);
 
-      const submitButton = screen.queryByRole('button', { name: /login|sign in|submit/i });
-      expect(submitButton).toBeDefined();
+      expect(screen.getByRole('button', { name: /login|sign in|submit/i })).toBeInTheDocument();
     });
 
     it('should render remember me checkbox', () => {
       renderWithoutAuth(<LoginPage />);
 
-      const rememberCheckbox = screen.queryByRole('checkbox');
-      expect(rememberCheckbox).toBeDefined();
+      expect(screen.getByRole('checkbox')).toBeInTheDocument();
     });
   });
 
@@ -134,7 +129,7 @@ describe('LoginPage Component', () => {
 
       await waitFor(() => {
         const errorMsg = screen.queryByText(/username|email.*required/i);
-        expect(errorMsg).toBeDefined();
+        expect(errorMsg).not.toBeNull();
       });
     });
 
@@ -186,7 +181,7 @@ describe('LoginPage Component', () => {
       const passwordInput = screen.getByPlaceholderText(/password/i);
       const tenantInput = screen.getByPlaceholderText(/tenant/i);
 
-      await user.type(usernameInput, 'invalid-email');
+      await user.type(usernameInput, 'invalid@');
       await user.type(passwordInput, 'password123');
       await user.type(tenantInput, 'tenant1');
 
@@ -365,8 +360,9 @@ describe('LoginPage Component', () => {
       await user.click(submitButton);
 
       await waitFor(() => {
-        const successMsg = screen.queryByText(/success|welcome|dashboard/i);
-        expect(successMsg || !screen.queryByText(/error/i)).toBeDefined();
+        const hasSuccess = screen.queryByText(/success|welcome|dashboard/i);
+        const hasError = screen.queryByText(/error/i);
+        expect(hasSuccess !== null || hasError === null).toBe(true);
       });
     });
   });
@@ -383,7 +379,7 @@ describe('LoginPage Component', () => {
       const user = userEvent.setup();
       renderWithoutAuth(<LoginPage />);
 
-      const checkbox = screen.getByRole('checkbox');
+      const checkbox = screen.getByRole('checkbox') as HTMLInputElement;
       const initialState = checkbox.checked;
 
       await user.click(checkbox);
@@ -397,7 +393,7 @@ describe('LoginPage Component', () => {
       const user = userEvent.setup();
       renderWithoutAuth(<LoginPage />);
 
-      const input = screen.getByPlaceholderText(/username|email/i);
+      const input = screen.getByPlaceholderText(/username|email/i) as HTMLInputElement;
       await user.type(input, 'testuser');
 
       expect(input.value).toBe('testuser');
@@ -407,7 +403,7 @@ describe('LoginPage Component', () => {
       const user = userEvent.setup();
       renderWithoutAuth(<LoginPage />);
 
-      const input = screen.getByPlaceholderText(/password/i);
+      const input = screen.getByPlaceholderText(/password/i) as HTMLInputElement;
       await user.type(input, 'password123');
 
       expect(input.value).toBe('password123');
@@ -417,19 +413,20 @@ describe('LoginPage Component', () => {
       const user = userEvent.setup();
       renderWithoutAuth(<LoginPage />);
 
-      const input = screen.getByPlaceholderText(/tenant/i);
+      const input = screen.getByPlaceholderText(/tenant/i) as HTMLInputElement;
       await user.type(input, 'tenant1');
 
       expect(input.value).toBe('tenant1');
     });
-  });
 
-  describe('Accessibility', () => {
     it('should have form labels', () => {
       renderWithoutAuth(<LoginPage />);
 
-      const labels = screen.queryAllByRole('label');
-      expect(labels.length).toBeGreaterThan(0);
+      // Check that inputs have associated labels via aria-label or aria-labelledby
+      const usernameInput = screen.getByPlaceholderText(/username|email/i);
+      expect(
+        usernameInput.getAttribute('aria-label') || usernameInput.getAttribute('aria-labelledby')
+      ).not.toBeNull();
     });
 
     it('should be keyboard navigable', async () => {
@@ -504,7 +501,7 @@ describe('LoginPage Component', () => {
       const user = userEvent.setup();
       renderWithoutAuth(<LoginPage />);
 
-      const usernameInput = screen.getByPlaceholderText(/username|email/i);
+      const usernameInput = screen.getByPlaceholderText(/username|email/i) as HTMLInputElement;
       const longText = 'x'.repeat(1000);
       await user.type(usernameInput, longText);
 

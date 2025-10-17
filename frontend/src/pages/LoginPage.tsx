@@ -1,13 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation, Navigate } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { useAuth } from '@/contexts/AuthContext';
 import type { LoginCredentials } from '@/types/auth';
 import { asTenantId } from '@/types/ids';
 import { loginSchema } from '@/validation/schemas';
 import type { z } from 'zod';
-import { Card, Form, Button, Checkbox, Typography, Alert, Flex } from 'antd';
+import { Card, Form, Button, Checkbox, Typography, Alert, Flex, Input } from 'antd';
 import { CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
 
 interface LoginFormValues {
