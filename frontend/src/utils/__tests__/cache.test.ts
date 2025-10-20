@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { resultCache, invalidateEntity, _CacheKeys } from '@/utils/cache';
+import { resultCache, invalidateEntity } from '@/utils/cache';
 
 describe('cache', () => {
   beforeEach(() => {
@@ -475,7 +475,6 @@ describe('cache', () => {
           const result = invalidateEntity(input);
 
           // Should always be a Result
-          expect(result.isOk || result.isErr).toBeTruthy();
           expect(typeof result.isOk).toBe('function');
           expect(typeof result.isErr).toBe('function');
         });
