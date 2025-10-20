@@ -56,3 +56,8 @@ function validateTenantFilterFields(): void {
 
 // Export the validation function so it can be called in tests
 export { validateTenantFilterFields };
+
+import { test } from 'bun:test';
+test('tenant filter fields align with BackendTenant keys (runtime)', () => {
+  validateTenantFilterFields();
+});

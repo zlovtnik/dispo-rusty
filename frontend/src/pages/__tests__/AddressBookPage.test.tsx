@@ -473,7 +473,7 @@ describe('AddressBookPage Component', () => {
 
       // Get the descriptive text from aria-label or textContent
       const ariaLabel = addButton.getAttribute('aria-label');
-      const textContent = addButton.textContent.trim() || '';
+      const textContent = addButton.textContent?.trim() ?? '';
       const descriptiveText = ariaLabel ?? textContent;
 
       // Verify we have a descriptive string and it matches a meaningful pattern

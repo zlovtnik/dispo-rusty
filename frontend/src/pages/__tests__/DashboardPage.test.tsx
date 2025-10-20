@@ -85,7 +85,7 @@ describe('DashboardPage Component', () => {
         tenant: mockTenant,
       };
 
-      const { rerender } = renderWithAuth(<DashboardPage />, { authValue: initialAuthValue });
+      const { rerender, unmount } = renderWithAuth(<DashboardPage />, { authValue: initialAuthValue });
 
       // Verify initial greeting
       expect(
@@ -99,14 +99,15 @@ describe('DashboardPage Component', () => {
         tenant: mockTenant,
       };
 
+      // Unmount the first render before mounting the second
+      unmount();
+
       // Test that the component responds to different auth values
       // by rendering with the updated auth value
-      const { unmount } = renderWithAuth(<DashboardPage />, { authValue: updatedAuthValue });
+      renderWithAuth(<DashboardPage />, { authValue: updatedAuthValue });
 
       // Assert the greeting reflects the new firstName
       expect(screen.getByText(`Welcome back, Updated!`)).toBeInTheDocument();
-
-      unmount();
     });
 
     it('handles missing user name gracefully', () => {
@@ -220,7 +221,8 @@ describe('DashboardPage Component', () => {
       // Verify alert has proper ARIA attributes for accessibility
       const alert = screen.getByRole('alert');
       expect(alert).toBeInTheDocument();
-      expect(alert).toHaveAttribute('aria-live', 'polite');
+      // Alert role should be assertive by default, not polite
+      expect(alert).toHaveAttribute('aria-live', 'assertive');
     });
 
     it('uses semantic HTML elements', () => {

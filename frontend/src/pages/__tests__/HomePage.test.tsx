@@ -127,9 +127,10 @@ describe('HomePage Component', () => {
     it('should have proper semantic layout structure', () => {
       renderWithoutAuth(<HomePage />);
 
-      // Test for semantic landmarks that users can navigate to
-      const mainContent = screen.getByRole('main', { hidden: true });
-      expect(mainContent).toBeInTheDocument();
+      // Test for hero H1 heading (main page title)
+      const heroHeading = screen.getByRole('heading', { level: 1 });
+      expect(heroHeading).toBeInTheDocument();
+      expect(heroHeading).toHaveTextContent(/Welcome to.*Address Book/i);
 
       // Test for feature sections using accessible content
       // There are 4 headings total: 1 h1 (welcome), 1 h4 (header title), 3 h4 (features)

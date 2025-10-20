@@ -13,7 +13,9 @@ import { getCommonPasswords } from '@/utils/commonPasswordsLoader';
 
 /**
  * Fallback common passwords used when the main password list is unavailable
- * Curated list of the most frequently compromised passwords from various breach datasets
+ * Curated list of realistic frequent/common passwords (6-12 chars) from real-world breach data
+ * Note: This fallback is manually curated to common real-world breaches, while the primary
+ * list is sourced from external breach databases
  */
 export const FALLBACK_COMMON_PASSWORDS = [
   '123456',
@@ -124,31 +126,6 @@ export const FALLBACK_COMMON_PASSWORDS = [
   'qwertyui',
   'asdfghjk',
   'zxcvbnm1',
-  'qwerty12345',
-  'asdfghjkl1',
-  'zxcvbnm12',
-  'qwerty123456',
-  'asdfghjkl12',
-  'zxcvbnm123',
-  'qwerty1234567',
-  'asdfghjkl123',
-  'zxcvbnm1234',
-  'qwerty12345678',
-  'asdfghjkl1234',
-  'zxcvbnm12345',
-  'qwerty123456789',
-  'asdfghjkl12345',
-  'zxcvbnm123456',
-  'qwerty1234567890',
-  'asdfghjkl123456',
-  'zxcvbnm1234567',
-  'asdfghjkl1234567',
-  'zxcvbnm12345678',
-  'asdfghjkl12345678',
-  'zxcvbnm123456789',
-  'asdfghjkl123456789',
-  'zxcvbnm1234567890',
-  'asdfghjkl1234567890',
 ];
 
 /**

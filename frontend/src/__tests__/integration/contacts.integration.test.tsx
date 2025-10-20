@@ -131,9 +131,10 @@ describe('Contact CRUD Flow: Create Contact', () => {
     await userEvent.type(emailInput, 'duplicate@example.com');
     await userEvent.click(submitBtn);
 
-    // Should show API error message
-    const error = await screen.findByText(/Validation error/i);
-    expect(error).toBeInTheDocument();
+    // Should show API error message inside the alert
+    const alert = await screen.findByRole('alert');
+    expect(alert).toBeInTheDocument();
+    expect(alert).toHaveTextContent(/Validation error/i);
   });
 });
 
@@ -494,20 +495,8 @@ describe('Multi-Tenant Data Isolation', () => {
       name: 'Tenant 2',
     };
 
-    // Base authValue that can be reused across tests
-    const baseAuthValue = {
-      isAuthenticated: true,
-      user: mockUser,
-      tenant: mockTenant,
-      isLoading: false,
-      login: () => Promise.resolve(undefined),
-      logout: () => Promise.resolve(undefined),
-      refreshToken: () => Promise.resolve(undefined),
-    };
-
     renderWithAuth(<AddressBookPage />, {
       authValue: {
-        ...baseAuthValue,
         tenant: tenant2,
       },
     });
@@ -578,9 +567,8 @@ describe('Form Validation with Backend Errors', () => {
     await userEvent.click(submitBtn);
 
     // Verify error message is shown - check for the specific error message displayed by the app
-    const errorMsg = await screen.findByText(
-      /Network error: Unable to reach the server|Error Loading Contacts/i
-    );
-    expect(errorMsg).toBeInTheDocument();
+    const alert = await screen.findByRole('alert');
+    expect(alert).toBeInTheDocument();
+    expect(alert).toHaveTextContent(/Network error: Unable to reach the server|Error Loading Contacts/i);
   });
 });

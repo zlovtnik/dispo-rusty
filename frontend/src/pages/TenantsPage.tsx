@@ -287,11 +287,11 @@ export const TenantsPage: React.FC = () => {
     if (key === 'field') {
       const validOperators = getOperatorsForField(value);
       const currentOperator = currentFilter.operator;
-      const isDateField = isDateField(value);
+      const isDateFieldValue = isDateField(value);
       const wasDateField = isDateField(currentFilter.field);
 
       // If field type changed (date <-> text), clear the value
-      const shouldClearValue = isDateField !== wasDateField;
+      const shouldClearValue = isDateFieldValue !== wasDateField;
 
       // If current operator is not valid for the new field, reset to first valid operator
       if (!validOperators.includes(currentOperator)) {

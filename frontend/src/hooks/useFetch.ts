@@ -209,7 +209,7 @@ export interface FetchState<T> {
  */
 export function useFetch<T = unknown>(
   url: string | null,
-  options?: RequireTransformOrValidate<T>
+  options: RequireTransformOrValidate<T>
 ): FetchState<T> {
   // Destructure options for stable dependencies
   const {
@@ -223,7 +223,7 @@ export function useFetch<T = unknown>(
     transformError,
     manual = false,
     ...fetchOptions
-  } = options || {};
+  } = options;
 
   // Enhanced fetch function with error handling and retry logic
   const fetchData = useMemo(() => {
