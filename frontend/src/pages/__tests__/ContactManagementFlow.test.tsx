@@ -194,12 +194,12 @@ const server = setupServer(
     const idx = arr.findIndex(c => c.id === id);
     if (idx === -1)
       return HttpResponse.json({ success: false, message: 'Not found' }, { status: 404 });
-    
+
     const existingContact = arr[idx];
     if (!existingContact) {
       return HttpResponse.json({ success: false, message: 'Contact not found' }, { status: 404 });
     }
-    
+
     // Only update allowed fields
     arr[idx] = {
       ...existingContact,
@@ -253,7 +253,13 @@ const resetTokenState = (): void => {
 };
 
 // Shared helper for authorization and tenant validation
-const validateAuthAndGetTenantContacts = (request: Request, tenantId: string) => {
+const validateAuthAndGetTenantContacts = (
+  request: Request,
+  tenantId: string
+): {
+  error?: Response;
+  contacts?: Contact[];
+} => {
   const authHeader = request.headers.get('Authorization');
   if (!authHeader || !currentToken) {
     return {
@@ -263,7 +269,7 @@ const validateAuthAndGetTenantContacts = (request: Request, tenantId: string) =>
   return { contacts: tenantContacts[tenantId] || [] };
 };
 
-const createContactCRUDHandlers = (tenantId = 'tenant-1') => {
+const createContactCRUDHandlers = (tenantId = 'tenant-1'): ReturnType<typeof http.get>[] => {
   return [
     http.get('/api/address-book', ({ request }) => {
       const authResult = validateAuthAndGetTenantContacts(request, tenantId);
@@ -319,7 +325,7 @@ const createContactCRUDHandlers = (tenantId = 'tenant-1') => {
       if (authResult.error) return authResult.error;
 
       const id = params.id;
-      const arr = authResult.contacts;
+      const arr = authResult.contacts ?? [];
       const body = (await request.json()) as Record<string, unknown>;
 
       if (
@@ -352,7 +358,7 @@ const createContactCRUDHandlers = (tenantId = 'tenant-1') => {
       const authResult = validateAuthAndGetTenantContacts(request, tenantId);
       if (authResult.error) return authResult.error;
 
-      const arr = authResult.contacts;
+      const arr = authResult.contacts ?? [];
       const idx = arr.findIndex(c => c.id === params.id);
       if (idx === -1)
         return HttpResponse.json({ success: false, message: 'Not found' }, { status: 404 });
@@ -605,7 +611,9 @@ describe('Contact Management Flow - Integration', () => {
       expect(refreshCallCount).toBe(1);
 
       // Assert that a new token was saved to localStorage
-      const storedAuth = JSON.parse(localStorage.getItem('auth_token') ?? '{}') as { token: string };
+      const storedAuth = JSON.parse(localStorage.getItem('auth_token') ?? '{}') as {
+        token: string;
+      };
       expect(storedAuth.token).toBeDefined();
       expect(typeof storedAuth.token).toBe('string');
 
