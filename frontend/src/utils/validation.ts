@@ -91,24 +91,22 @@ export const validateUsername = (
     return err(ValidationErrors.emptyUsername());
   }
 
-  const trimmed = trimmedInput;
-
   // Check minimum length
-  if (trimmed.length < USERNAME_MIN_LENGTH) {
-    return err(ValidationErrors.usernameTooShort(USERNAME_MIN_LENGTH, trimmed.length));
+  if (trimmedInput.length < USERNAME_MIN_LENGTH) {
+    return err(ValidationErrors.usernameTooShort(USERNAME_MIN_LENGTH, trimmedInput.length));
   }
 
   // Check maximum length
-  if (trimmed.length > USERNAME_MAX_LENGTH) {
-    return err(ValidationErrors.usernameTooLong(USERNAME_MAX_LENGTH, trimmed.length));
+  if (trimmedInput.length > USERNAME_MAX_LENGTH) {
+    return err(ValidationErrors.usernameTooLong(USERNAME_MAX_LENGTH, trimmedInput.length));
   }
 
   // Check format
-  if (!USERNAME_PATTERN.test(trimmed)) {
+  if (!USERNAME_PATTERN.test(trimmedInput)) {
     return err(ValidationErrors.invalidUsernameFormat(USERNAME_PATTERN.source));
   }
 
-  return ok(trimmed as ValidatedUsername);
+  return ok(trimmedInput as ValidatedUsername);
 };
 
 /**

@@ -3,14 +3,6 @@ import { asContactId, asTenantId, asUserId } from '../types/ids';
 
 const nonEmptyString = z.string().min(1, 'Value is required');
 
-const _parseDate = (value: string | Date): Date => {
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    throw new Error('Invalid date value');
-  }
-  return date;
-};
-
 const dateSchema = z
   .union([nonEmptyString, z.date()])
   .transform((value: string | Date): Date => {
@@ -278,7 +270,7 @@ export const contactFormSchema = z
       .regex(/^\+?[1-9]\d{6,14}$/, 'Please enter a valid phone number')
       .optional()
       .or(z.literal('')),
-    gender: z.enum(['male', 'female', 'other']).catch('other'),
+    gender: z.enum(['male', 'female', 'other']),
     age: z.number().min(1, 'Age must be at least 1').max(120, 'Age must be at most 120'),
     street1: z.string().min(1, 'Street address is required'),
     street2: z.string().optional().or(z.literal('')),
@@ -360,10 +352,37 @@ export const tenantFormSchema = z
       if (forbiddenParams.some(param => name.includes(param))) {
         return false;
       }
-      // Check for generic key=value patterns (word boundary to avoid false positives)
-      const keyValueRegex = /\b\w+=\S+/;
-      if (keyValueRegex.test(name)) {
+      // Check for database connection patterns more specifically
+      // Only reject if multiple key=value pairs are present (indicating connection string)
+      // or if known database parameter keys are used
+      const dbParamKeys = [
+        'host',
+        'port',
+        'user',
+        'password',
+        'dbname',
+        'database',
+        'sslmode',
+        'ssl',
+        'service',
+        'socket',
+      ];
+      const keyValuePairs = name.match(/\b\w+=\S+/g) ?? [];
+
+      // Reject if multiple key=value pairs (likely connection string)
+      if (keyValuePairs.length > 1) {
         return false;
+      }
+
+      // Reject if single key=value pair uses known database parameter
+      if (keyValuePairs.length === 1) {
+        const firstPair = keyValuePairs[0];
+        if (firstPair) {
+          const key = firstPair.split('=')[0]?.toLowerCase();
+          if (key && dbParamKeys.includes(key)) {
+            return false;
+          }
+        }
       }
       return true;
     },

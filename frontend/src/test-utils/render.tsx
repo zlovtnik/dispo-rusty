@@ -77,28 +77,25 @@ export interface MockAuthContextValue {
 
 /**
  * Fallback mock for login function. Returns a resolved promise and can be overridden
- * by test-specific mocks. Includes debug logging for test visibility.
+ * by test-specific mocks.
  */
 const mockLogin = async () => {
-  console.debug('mockLogin called - fallback implementation');
   return Promise.resolve();
 };
 
 /**
  * Fallback mock for logout function. Returns a resolved promise and can be overridden
- * by test-specific mocks. Includes debug logging for test visibility.
+ * by test-specific mocks.
  */
 const mockLogout = async () => {
-  console.debug('mockLogout called - fallback implementation');
   return Promise.resolve();
 };
 
 /**
  * Fallback mock for refreshToken function. Returns a resolved promise and can be overridden
- * by test-specific mocks. Includes debug logging for test visibility.
+ * by test-specific mocks.
  */
 const mockRefreshToken = async () => {
-  console.debug('mockRefreshToken called - fallback implementation');
   return Promise.resolve();
 };
 
@@ -148,16 +145,13 @@ export interface CustomRenderOptions extends Omit<RenderOptions, 'wrapper'> {
 const MockAuthProvider: React.FC<{
   children: React.ReactNode;
   value?: Partial<MockAuthContextValue> | (() => Partial<MockAuthContextValue>);
-}> = React.memo(({ children, value }) => {
+}> = ({ children, value }) => {
   // Merge default mock values with provided overrides
-  // Stringify the value for stable dependency tracking to prevent unnecessary updates
-  const mergedValue = React.useMemo(() => {
-    const resolvedValue = typeof value === 'function' ? value() : value;
-    return { ...mockAuthContextValue, ...resolvedValue };
-  }, [value]);
+  const resolvedValue = typeof value === 'function' ? value() : value;
+  const mergedValue = { ...mockAuthContextValue, ...resolvedValue };
 
   return <AuthContext.Provider value={mergedValue}>{children}</AuthContext.Provider>;
-});
+};
 
 // Export for testing
 export { MockAuthProvider };
@@ -271,9 +265,9 @@ export function renderWithAuthAndNavigation(ui: ReactElement, options?: CustomRe
 
   let capturedLocation: { pathname: string } = { pathname: options?.initialRoute ?? '/' };
 
-  const handleLocationChange = (location: { pathname: string }) => {
+  const handleLocationChange = React.useCallback((location: { pathname: string }) => {
     capturedLocation = location;
-  };
+  }, []);
 
   const renderResult = renderWithProviders(
     <LocationTracker onLocationChange={handleLocationChange}>{ui}</LocationTracker>,

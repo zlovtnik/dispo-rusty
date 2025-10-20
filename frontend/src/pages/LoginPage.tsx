@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import type { LoginCredentials } from '@/types/auth';
@@ -19,20 +19,16 @@ export const LoginPage: React.FC = () => {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [rememberMe, setRememberMe] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  // Single ref as submission guard to prevent rapid re-entry
-  const submittingRef = useRef(false);
 
   // Get the intended destination
   const from = location.state?.from?.pathname || '/dashboard';
 
   const onSubmit = async (values: LoginFormValues) => {
-    // Early return if already submitting (use ref for synchronous check)
-    if (submittingRef.current) {
+    // Early return if already submitting
+    if (isSubmitting) {
       return;
     }
 
-    // Set ref immediately to prevent rapid re-entry, then update UI state
-    submittingRef.current = true;
     setIsSubmitting(true);
 
     try {
@@ -49,8 +45,6 @@ export const LoginPage: React.FC = () => {
       console.error('Login error occurred', error);
       setSubmitError(error instanceof Error ? error.message : 'Login failed');
     } finally {
-      // Clear submission guard and UI state
-      submittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -187,6 +181,7 @@ export const LoginPage: React.FC = () => {
                   setRememberMe(e.target.checked);
                 }}
                 style={{ color: 'var(--primary-600)' }}
+                data-testid="remember-me-checkbox"
               >
                 Remember me
               </Checkbox>
@@ -202,6 +197,9 @@ export const LoginPage: React.FC = () => {
                 onClose={() => {
                   setSubmitError(null);
                 }}
+                role="alert"
+                aria-live="polite"
+                aria-atomic="true"
                 style={{
                   borderRadius: '8px',
                   border: '1px solid var(--danger-300)',

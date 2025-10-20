@@ -1,8 +1,8 @@
 import React, { memo } from 'react';
 import { useFormContext, Controller } from 'react-hook-form';
+import type { RegisterOptions } from 'react-hook-form';
 import { Form, Input, InputNumber, Select, Checkbox } from 'antd';
 import type { InputNumberProps, SelectProps } from 'antd';
-import type { Rule } from 'antd/es/form';
 import type { FormItemProps } from 'antd/es/form/FormItem';
 import {
   EyeInvisibleOutlined,
@@ -17,7 +17,7 @@ interface BaseFormFieldProps {
   required?: boolean;
   placeholder?: string;
   disabled?: boolean;
-  rules?: Rule[];
+  rules?: RegisterOptions;
   help?: string;
   extra?: string;
   tooltip?: FormItemProps['tooltip'];
@@ -59,6 +59,43 @@ type FormFieldProps =
   | CheckboxFormFieldProps;
 
 /**
+ * Custom comparison function for FormField memo optimization
+ * Compares props to prevent unnecessary re-renders when objects/functions haven't changed
+ */
+const areEqual = (prevProps: FormFieldProps, nextProps: FormFieldProps): boolean => {
+  // Compare primitive props
+  if (
+    prevProps.name !== nextProps.name ||
+    prevProps.label !== nextProps.label ||
+    prevProps.required !== nextProps.required ||
+    prevProps.placeholder !== nextProps.placeholder ||
+    prevProps.disabled !== nextProps.disabled ||
+    prevProps.type !== nextProps.type ||
+    prevProps.help !== nextProps.help ||
+    prevProps.extra !== nextProps.extra ||
+    prevProps.className !== nextProps.className ||
+    prevProps.validateStatus !== nextProps.validateStatus
+  ) {
+    return false;
+  }
+
+  // Compare rules object (reference comparison for performance)
+  if (prevProps.rules !== nextProps.rules) {
+    return false;
+  }
+
+  // Compare tooltip object (reference comparison for complex tooltip objects)
+  if (prevProps.tooltip !== nextProps.tooltip) {
+    return false;
+  }
+
+  // For type-specific props, use reference comparison for performance
+  // This is a simplified approach that relies on React Hook Form's optimization
+  // and the fact that most props are passed as stable references
+  return true;
+};
+
+/**
  * Reusable form field component with React Hook Form integration and validation states
  */
 export const FormField = memo<FormFieldProps>(
@@ -84,38 +121,31 @@ export const FormField = memo<FormFieldProps>(
 
     // Determine validation status
     const status =
-      validateStatus ||
-      (() => {
-        if (fieldError && (isTouched || isSubmitted)) {
-          return 'error';
-        }
-        if (isFieldValid) {
-          return 'success';
-        }
-        return undefined;
-      })();
+      validateStatus ??
+      (fieldError && (isTouched || isSubmitted) ? 'error' : isFieldValid ? 'success' : undefined);
 
     const formItemProps: FormItemProps = {
       label,
       required,
-      help: (fieldError as { message?: string })?.message || help,
+      help: (fieldError as { message?: string }).message ?? help,
       extra,
       tooltip,
       validateStatus: status,
       className,
       hasFeedback: true,
-      children: null, // Will be set below based on type
     };
 
     // Add success icon for valid fields
     if (status === 'success') {
       formItemProps.validateStatus = 'success';
-      formItemProps.help = (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <CheckCircleOutlined style={{ color: 'var(--color-success)' }} />
-          <span style={{ color: 'var(--color-success)' }}>Valid</span>
-        </div>
-      );
+      if (help == null) {
+        formItemProps.help = (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <CheckCircleOutlined style={{ color: 'var(--color-success)' }} />
+            <span style={{ color: 'var(--color-success)' }}>Valid</span>
+          </div>
+        );
+      }
     }
 
     // Add error icon for invalid fields
@@ -130,7 +160,7 @@ export const FormField = memo<FormFieldProps>(
       );
     }
 
-    const renderField = () => {
+    const renderField = (): React.ReactNode => {
       switch (props.type) {
         case 'text':
         case 'email':
@@ -138,6 +168,7 @@ export const FormField = memo<FormFieldProps>(
             <Controller
               name={name}
               control={control}
+              rules={rules}
               defaultValue=""
               render={({ field }) => (
                 <Input
@@ -156,6 +187,7 @@ export const FormField = memo<FormFieldProps>(
             <Controller
               name={name}
               control={control}
+              rules={rules}
               defaultValue=""
               render={({ field }) => (
                 <Input.Password
@@ -173,6 +205,7 @@ export const FormField = memo<FormFieldProps>(
             <Controller
               name={name}
               control={control}
+              rules={rules}
               defaultValue=""
               render={({ field }) => (
                 <Input.TextArea
@@ -181,7 +214,7 @@ export const FormField = memo<FormFieldProps>(
                   disabled={disabled}
                   maxLength={props.maxLength}
                   showCount={props.showCount}
-                  rows={props.rows || 4}
+                  rows={props.rows ?? 4}
                 />
               )}
             />
@@ -192,14 +225,13 @@ export const FormField = memo<FormFieldProps>(
             <Controller
               name={name}
               control={control}
-              defaultValue={null}
+              rules={rules}
+              defaultValue={undefined}
               render={({ field: { onChange, value, ...field } }) => (
                 <InputNumber
                   {...field}
-                  value={value}
-                  onChange={val => {
-                    onChange(val);
-                  }}
+                  value={value as number | null}
+                  onChange={onChange}
                   placeholder={placeholder}
                   disabled={disabled}
                   min={props.min}
@@ -218,6 +250,7 @@ export const FormField = memo<FormFieldProps>(
             <Controller
               name={name}
               control={control}
+              rules={rules}
               defaultValue={undefined}
               render={({ field }) => (
                 <Select
@@ -236,33 +269,37 @@ export const FormField = memo<FormFieldProps>(
             />
           );
 
-        case 'checkbox':
+        case 'checkbox': {
+          const checkboxProps = props as CheckboxFormFieldProps;
           return (
             <Controller
               name={name}
               control={control}
+              rules={rules}
               defaultValue={false}
               render={({ field: { onChange, value, ...field } }) => (
                 <Checkbox
                   {...field}
-                  checked={value}
+                  checked={value as boolean}
                   onChange={e => {
                     onChange(e.target.checked);
                   }}
                   disabled={disabled}
                   style={{ marginLeft: 0 }}
                 >
-                  {(props as CheckboxFormFieldProps).children}
+                  {checkboxProps.children}
                 </Checkbox>
               )}
             />
           );
+        }
 
         default:
           return (
             <Controller
               name={name}
               control={control}
+              rules={rules}
               defaultValue=""
               render={({ field }) => (
                 <Input {...field} placeholder={placeholder} disabled={disabled} />
@@ -282,7 +319,8 @@ export const FormField = memo<FormFieldProps>(
     }
 
     return <Form.Item {...formItemProps}>{renderField()}</Form.Item>;
-  }
+  },
+  areEqual
 );
 
 FormField.displayName = 'FormField';

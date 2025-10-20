@@ -1,17 +1,17 @@
 import { describe, it, expect } from 'bun:test';
 import { z } from 'zod';
 import { validateAndDecode, liftResult } from '../helpers';
-import type { ValidationError } from '../../types/errors';
+import type { TypedValidationError } from '../../types/errors';
 
 // Helper function to verify validation error structure
-function expectValidationError(error: ValidationError, expectIssuesLength = true): void {
+function expectValidationError(error: TypedValidationError, expectIssuesLength = true): void {
   expect(error.type).toBe('validation');
   expect(error.details).toBeDefined();
-  if (error.details) {
+  if (error.details !== undefined) {
     expect(error.details.issues).toBeDefined();
     expect(Array.isArray(error.details.issues)).toBe(true);
     if (expectIssuesLength) {
-      expect((error.details.issues as unknown[]).length).toBeGreaterThan(0);
+      expect(error.details.issues?.length).toBeGreaterThan(0);
     }
   }
 }
@@ -20,7 +20,7 @@ function expectValidationError(error: ValidationError, expectIssuesLength = true
 const testUserSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   age: z.number().min(0, 'Age must be positive'),
-  email: z.email(),
+  email: z.email('Invalid email format'),
 });
 
 describe('validation helpers', () => {

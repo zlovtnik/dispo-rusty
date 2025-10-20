@@ -85,6 +85,29 @@ export const LoginPage: React.FC = () => {
     return undefined;
   };
 
+  const FieldHelp = ({
+    id,
+    icon,
+    color,
+    children,
+    role,
+  }: {
+    id: string;
+    icon: React.ReactElement;
+    color: string;
+    children: React.ReactNode;
+    role?: string;
+  }) => (
+    <div
+      id={id}
+      role={role}
+      style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}
+    >
+      {React.cloneElement(icon, { style: { color } })}
+      <span style={{ color, fontSize: '14px' }}>{children}</span>
+    </div>
+  );
+
   const renderFieldHelp = (fieldName: keyof LoginFormData) => {
     const error = errors[fieldName];
     const touched = touchedFields[fieldName];
@@ -92,28 +115,26 @@ export const LoginPage: React.FC = () => {
 
     if (error && (touched || isSubmitted)) {
       return (
-        <div
+        <FieldHelp
           id={`${fieldName}-help`}
+          icon={<CloseCircleOutlined />}
+          color="var(--color-danger)"
           role="alert"
-          style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}
         >
-          <CloseCircleOutlined style={{ color: 'var(--color-danger)' }} />
-          <span style={{ color: 'var(--color-danger)', fontSize: '14px' }}>
-            {typeof error.message === 'string' ? error.message : 'Invalid input'}
-          </span>
-        </div>
+          {typeof error.message === 'string' ? error.message : 'Invalid input'}
+        </FieldHelp>
       );
     }
 
     if (isFieldValid) {
       return (
-        <div
+        <FieldHelp
           id={`${fieldName}-help`}
-          style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}
+          icon={<CheckCircleOutlined />}
+          color="var(--color-success)"
         >
-          <CheckCircleOutlined style={{ color: 'var(--color-success)' }} />
-          <span style={{ color: 'var(--color-success)', fontSize: '14px' }}>Valid</span>
-        </div>
+          Valid
+        </FieldHelp>
       );
     }
 
@@ -309,7 +330,7 @@ export const LoginPage: React.FC = () => {
             htmlType="submit"
             block
             size="large"
-            loading={isLoading || isSubmitting}
+            loading={isSubmitting}
             disabled={!isValid && isSubmitted}
           >
             Sign In

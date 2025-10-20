@@ -63,13 +63,16 @@ export const parseOptionalGender = (value: unknown): Result<Option<Gender>, AppE
   return ensureGender(option.value, 'gender').map(some);
 };
 
+// Direct conversion from Gender enum to boolean (more efficient for existing Gender values)
+export const genderEnumToBoolean = (gender: Gender): Result<boolean, AppError> => {
+  if (gender === Gender.other) {
+    return err(createGenderError('Cannot convert Gender.other to boolean', { value: gender }));
+  }
+  return ok(gender === Gender.male);
+};
+
 export const genderToBoolean = (value: string): Result<boolean, AppError> =>
-  ensureGender(value, 'gender').andThen(gender => {
-    if (gender === Gender.other) {
-      return err(createGenderError('Cannot convert Gender.other to boolean', { value }));
-    }
-    return ok(gender === Gender.male);
-  });
+  ensureGender(value, 'gender').andThen(genderEnumToBoolean);
 
 export const booleanToGender = (value: boolean): Result<Gender, AppError> => {
   return ok(value ? Gender.male : Gender.female);

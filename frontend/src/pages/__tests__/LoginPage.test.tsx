@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'bun:test';
+import { describe, it, expect, beforeEach, mock } from 'bun:test';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
@@ -6,6 +6,13 @@ import { getServer } from '../../test-utils/mocks/server';
 import { renderWithoutAuth, createDeferred } from '../../test-utils/render';
 import { LoginPage } from '../LoginPage';
 import type { LoginCredentials } from '../../types/auth';
+
+// Mock react-router-dom
+const mockNavigate = mock();
+void mock.module('react-router-dom', () => ({
+  ...jest.requireActual('react-router-dom'),
+  useNavigate: () => mockNavigate,
+}));
 
 const mockLoginResponse = {
   success: true,
@@ -24,6 +31,9 @@ const mockLoginResponse = {
 
 describe('LoginPage Component', () => {
   beforeEach(() => {
+    // Clear all mocks before each test
+    mockNavigate.mockClear();
+
     // Use the global MSW server (already set up by test-utils/setup.ts)
     // Add handler for login endpoint
     getServer().use(
@@ -44,7 +54,7 @@ describe('LoginPage Component', () => {
         // Validate email format when @ is present
         if (
           body.usernameOrEmail.includes('@') &&
-          !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.exec(body.usernameOrEmail)
+          !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.usernameOrEmail)
         ) {
           return HttpResponse.json(
             {
@@ -246,7 +256,18 @@ describe('LoginPage Component', () => {
   describe('Successful Login', () => {
     it('should call login handler on successful form submission', async () => {
       const user = userEvent.setup();
-      renderWithoutAuth(<LoginPage />);
+
+      // Mock the login function to track calls
+      const mockLogin = mock(() => Promise.resolve());
+
+      renderWithoutAuth(<LoginPage />, {
+        authValue: {
+          isAuthenticated: false,
+          user: null,
+          tenant: null,
+          login: mockLogin,
+        },
+      });
 
       const usernameInput = screen.getByPlaceholderText(/username|email/i);
       const passwordInput = screen.getByPlaceholderText(/password/i);
@@ -259,15 +280,25 @@ describe('LoginPage Component', () => {
       const submitButton = screen.getByRole('button', { name: /login|sign in/i });
       await user.click(submitButton);
 
+      // Wait for login function to be called with correct credentials
       await waitFor(() => {
-        const loadingOrSuccess = screen.queryByText(/loading|welcome|dashboard/i);
-        expect(loadingOrSuccess).toBeInTheDocument();
+        expect(mockLogin).toHaveBeenCalledWith({
+          usernameOrEmail: 'testuser',
+          password: 'password123',
+          tenantId: 'tenant1',
+          rememberMe: false,
+        });
+      });
+
+      // Wait for navigation to be called with correct route
+      await waitFor(() => {
+        expect(mockNavigate).toHaveBeenCalledWith('/dashboard', { replace: true });
       });
     });
 
     it('should show loading state during submission', async () => {
       const user = userEvent.setup();
-      const deferred = createDeferred<void>();
+      const deferred = createDeferred<unknown>();
 
       renderWithoutAuth(<LoginPage />, {
         authValue: {
@@ -381,14 +412,7 @@ describe('LoginPage Component', () => {
         expect(alert).toHaveTextContent(/temporary error/i);
       });
 
-      await user.clear(usernameInput);
-      await user.clear(passwordInput);
-      await user.clear(tenantInput);
-
-      await user.type(usernameInput, 'testuser');
-      await user.type(passwordInput, 'password123');
-      await user.type(tenantInput, 'tenant1');
-
+      // Simulate realistic retry - user just clicks submit again without clearing inputs
       await user.click(submitButton);
 
       await waitFor(() => {
@@ -402,7 +426,7 @@ describe('LoginPage Component', () => {
       renderWithoutAuth(<LoginPage />);
 
       const checkbox = screen.getByRole('checkbox');
-      expect(checkbox).toBeDefined();
+      expect(checkbox).toBeInTheDocument();
     });
 
     it('should toggle remember me checkbox', async () => {
@@ -508,7 +532,7 @@ describe('LoginPage Component', () => {
 
     it('should handle rapid form submissions', async () => {
       const user = userEvent.setup();
-      const deferred = createDeferred<void>();
+      const deferred = createDeferred<unknown>();
       let loginCallCount = 0;
 
       renderWithoutAuth(<LoginPage />, {
@@ -523,7 +547,7 @@ describe('LoginPage Component', () => {
 
       const usernameInput = screen.getByPlaceholderText(/username|email/i);
       const passwordInput = screen.getByPlaceholderText(/password/i);
-      const tenantInput = screen.getByTestId('tenant-input');
+      const tenantInput = screen.getByPlaceholderText(/tenant/i);
 
       await user.type(usernameInput, 'testuser');
       await user.type(passwordInput, 'password123');

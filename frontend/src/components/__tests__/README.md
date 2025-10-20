@@ -616,8 +616,8 @@ afterEach(() => {
 For questions or issues with tests:
 
 1. Check test file comments
-2. Review test-utils/README.md
-3. Consult test-utils/mocks/handlers.ts for API mocking
+2. Review src/test-utils/README.md
+3. Consult src/test-utils/mocks/handlers.ts for API mocking
 4. Run with `--verbose` flag for debugging
 
 ---
@@ -625,4 +625,4 @@ For questions or issues with tests:
 **Last Updated:** October 19, 2025,  
 **Status:** ✅ Complete - 252 tests covering 9 components + 1 integration test (ContactManagementFlow)  
 **Coverage Target:** 90%+ - ACHIEVED ✅
-**Note:** Test total includes unit tests for individual components and integration tests; utility helper files (.test.ts) in test-utils/ are included in the comprehensive test suite
+**Note:** Test total includes unit tests for individual components and integration tests; utility helper files (.test.ts) in src/test-utils/ are included in the comprehensive test suite

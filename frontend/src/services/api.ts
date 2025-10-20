@@ -264,7 +264,7 @@ const apiResultFromResponse = <T>(response: Response): ResultAsync<ApiResponse<T
     if (response.ok && !success) {
       const error = createBusinessLogicError(
         message ?? 'Request failed',
-        body.error && typeof body.error === 'object'
+        body.error != null && typeof body.error === 'object'
           ? (body.error as Record<string, unknown>)
           : undefined,
         {
@@ -409,7 +409,7 @@ const toAuthError = (error: AppError): AuthError => {
   );
 };
 
-const toBusinessError = (error: AppError): BusinessLogicError => {
+const _toBusinessError = (error: AppError): BusinessLogicError => {
   if (error.type === 'business') {
     return error;
   }
@@ -465,9 +465,9 @@ class HttpClient implements IHttpClient {
    */
   public safeGetToken(): string | null {
     const stored = localStorage.getItem('auth_token');
-    if (!stored) return null;
+    if (stored == null || stored === '') return null;
     try {
-      const data = JSON.parse(stored);
+      const data = JSON.parse(stored) as Record<string, unknown>;
       if (
         typeof data === 'object' &&
         data !== null &&
@@ -476,7 +476,9 @@ class HttpClient implements IHttpClient {
       ) {
         return data.token;
       }
-    } catch {}
+    } catch {
+      // Ignore parsing errors
+    }
     return null;
   }
 

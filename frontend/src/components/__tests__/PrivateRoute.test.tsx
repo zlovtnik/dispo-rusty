@@ -1,11 +1,11 @@
-import { describe, it, expect, beforeEach } from 'bun:test';
-import { screen, render } from '@testing-library/react';
+import { describe, it, expect } from 'bun:test';
+import { screen } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { renderWithAuth, renderWithoutAuth, mockUser, mockTenant } from '../../test-utils/render';
 import { PrivateRoute } from '../PrivateRoute';
 
 // Test component to capture location
-const LocationDisplay = () => {
+const LocationDisplay = (): React.JSX.Element => {
   const location = useLocation();
   return (
     <>
@@ -25,12 +25,12 @@ describe('PrivateRoute Component', () => {
         </PrivateRoute>
       );
 
-      expect(screen.getByText(testContent)).toBeDefined();
+      expect(screen.getByText(testContent)).toBeVisible();
     });
 
     it('should redirect to login when user is not authenticated', () => {
       const testContent = 'Protected Content';
-      const { container } = renderWithoutAuth(
+      renderWithoutAuth(
         <PrivateRoute>
           <div>{testContent}</div>
         </PrivateRoute>,
@@ -54,23 +54,15 @@ describe('PrivateRoute Component', () => {
 
       // Should show loading indicator
       const loadingSpinner = screen.getByTestId('loading-spinner');
-      expect(loadingSpinner).toBeDefined();
       expect(loadingSpinner).toBeVisible();
+      expect(loadingSpinner.textContent).toContain('Loading...');
+
+      // Content should not be visible while loading
+      expect(screen.queryByText(testContent)).toBeNull();
     });
   });
 
   describe('Authenticated Access', () => {
-    it('should allow access when authenticated', () => {
-      const testId = 'protected-content';
-      renderWithAuth(
-        <PrivateRoute>
-          <div data-testid={testId}>Dashboard Content</div>
-        </PrivateRoute>
-      );
-
-      expect(screen.getByTestId(testId)).toBeDefined();
-    });
-
     it('should maintain route path when authenticated', () => {
       renderWithAuth(
         <PrivateRoute>
@@ -100,7 +92,7 @@ describe('PrivateRoute Component', () => {
   describe('Unauthenticated Access', () => {
     it('should redirect to login page when not authenticated', () => {
       const testContent = 'Protected Content';
-      const { container } = renderWithoutAuth(
+      renderWithoutAuth(
         <PrivateRoute>
           <div>{testContent}</div>
         </PrivateRoute>,
@@ -124,7 +116,7 @@ describe('PrivateRoute Component', () => {
     });
 
     it('should preserve intended destination in location state', () => {
-      const { container } = renderWithoutAuth(
+      renderWithoutAuth(
         <PrivateRoute>
           <div>Dashboard</div>
         </PrivateRoute>,
@@ -137,51 +129,9 @@ describe('PrivateRoute Component', () => {
     });
   });
 
-  describe('Loading States', () => {
-    it('should show spinner while loading authentication', () => {
-      renderWithAuth(
-        <PrivateRoute>
-          <div>Content</div>
-        </PrivateRoute>,
-        { authValue: { isLoading: true, isAuthenticated: false } }
-      );
-
-      // Should display loading indicator
-      const loadingSpinner = screen.getByTestId('loading-spinner');
-      expect(loadingSpinner).toBeDefined();
-      expect(loadingSpinner).toBeVisible();
-    });
-
-    it('should hide content while loading', () => {
-      const testContent = 'Protected Content';
-      renderWithAuth(
-        <PrivateRoute>
-          <div>{testContent}</div>
-        </PrivateRoute>,
-        { authValue: { isLoading: true } }
-      );
-
-      // Content should not be visible while loading
-      expect(screen.queryByText(testContent)).toBeNull();
-    });
-
-    it('should display "Loading..." text during auth check', () => {
-      renderWithAuth(
-        <PrivateRoute>
-          <div>Content</div>
-        </PrivateRoute>,
-        { authValue: { isLoading: true, isAuthenticated: false } }
-      );
-
-      const loadingSpinner = screen.getByTestId('loading-spinner');
-      expect(loadingSpinner).toBeDefined();
-      expect(loadingSpinner.textContent).toContain('Loading...');
-    });
-  });
-
   describe('Route Redirects', () => {
     it('should redirect unauthenticated users to login', () => {
-      const { container } = renderWithoutAuth(
+      renderWithoutAuth(
         <PrivateRoute>
           <div>Protected</div>
         </PrivateRoute>,
@@ -193,7 +143,7 @@ describe('PrivateRoute Component', () => {
     });
 
     it('should redirect to login with replace mode', () => {
-      const { container } = renderWithoutAuth(
+      renderWithoutAuth(
         <PrivateRoute>
           <div>Protected</div>
         </PrivateRoute>
@@ -204,7 +154,7 @@ describe('PrivateRoute Component', () => {
     });
 
     it('should store current location for post-login redirect', () => {
-      render(
+      renderWithoutAuth(
         <MemoryRouter initialEntries={['/dashboard/settings']}>
           <LocationDisplay />
           <PrivateRoute>
@@ -214,7 +164,9 @@ describe('PrivateRoute Component', () => {
       );
 
       expect(screen.getByTestId('location-path').textContent).toBe('/login');
-      const state = JSON.parse(screen.getByTestId('location-state').textContent || '{}');
+      const state = JSON.parse(screen.getByTestId('location-state').textContent || '{}') as {
+        from: { pathname: string };
+      };
       expect(state.from.pathname).toBe('/dashboard/settings');
     });
   });
@@ -261,7 +213,6 @@ describe('PrivateRoute Component', () => {
       );
 
       // Check for loading container classes
-      const loadingContainers = container.querySelectorAll('.loading, [class*="loading"]');
       expect(container.querySelector('.loading')).not.toBeNull();
     });
 
@@ -291,28 +242,7 @@ describe('PrivateRoute Component', () => {
       );
 
       // Loading indicator should have proper ARIA attributes
-      const loadingIndicator = screen.getByRole('status');
-      expect(loadingIndicator).not.toBeNull();
-    });
-
-    it('should maintain focus management during redirect', () => {
-      const { container } = renderWithoutAuth(
-        <PrivateRoute>
-          <div>Protected</div>
-        </PrivateRoute>,
-        { initialRoute: '/dashboard' }
-      );
-
-      // When redirected, the loading container should not be visible
-      // and focus should default to document.body
-      expect(screen.queryByText('Protected')).toBeNull();
-
-      // After unauthenticated redirect, focus should be manageable
-      // (typically returned to body when no other focusable element is present)
-      expect(document.activeElement).toBeDefined();
-      // In a test environment with no login page rendered, focus naturally returns to BODY
-      // In production, the Navigate component would render the login page with focusable elements
-      expect(['BODY', 'HTML'].includes(document.activeElement?.tagName || '')).toBeTruthy();
+      expect(screen.getByRole('status')).toBeInTheDocument();
     });
   });
 

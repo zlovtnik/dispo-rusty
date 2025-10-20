@@ -51,7 +51,8 @@ export const PrivateRoute: React.FC<PrivateRouteProps> = React.memo(
       console.warn(
         'PrivateRoute: Detected potential misconfiguration - login route may be incorrectly protected'
       );
-      return null;
+      // Render children anyway - login should be accessible to unauthenticated users
+      return <>{children}</>;
     }
 
     return <>{children}</>;

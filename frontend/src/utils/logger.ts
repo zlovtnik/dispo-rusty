@@ -74,7 +74,7 @@ class Logger {
     if (!this.isProduction) {
       this.logs.push(entry);
       if (level === 'warn' || level === 'error') {
-        console[level](`[${level.toUpperCase()}] ${message}`, data ?? '');
+        console[level](`[${level.toUpperCase()}] ${message}`, data);
       }
     }
 
@@ -198,13 +198,43 @@ export const logger = new Logger();
 
 // Specialized logger for address parsing that respects DEBUG_ADDRESS_PARSING env var
 export const addressParsingLogger = {
+  // Debug: For detailed tracing of address parsing steps and intermediate values
+  debug(message: string, data?: any) {
+    const isProduction = import.meta.env.PROD;
+    const debugEnabled = import.meta.env.VITE_DEBUG_ADDRESS_PARSING === 'true';
+
+    if (!isProduction || debugEnabled) {
+      logger.info(`[DEBUG] ${message}`, data);
+    }
+  },
+
+  // Info: For general information about address parsing operations and successful outcomes
+  info(message: string, data?: any) {
+    const isProduction = import.meta.env.PROD;
+    const debugEnabled = import.meta.env.VITE_DEBUG_ADDRESS_PARSING === 'true';
+
+    if (!isProduction || debugEnabled) {
+      logger.info(message, data);
+    }
+  },
+
+  // Warn: For non-critical issues during address parsing that don't prevent completion
   warn(message: string, data?: any) {
     const isProduction = import.meta.env.PROD;
     const debugEnabled = import.meta.env.VITE_DEBUG_ADDRESS_PARSING === 'true';
 
-    // Only emit warnings in non-production or when DEBUG_ADDRESS_PARSING is enabled
     if (!isProduction || debugEnabled) {
       logger.warn(message, data);
+    }
+  },
+
+  // Error: For critical failures in address parsing that prevent successful completion
+  error(message: string, data?: any) {
+    const isProduction = import.meta.env.PROD;
+    const debugEnabled = import.meta.env.VITE_DEBUG_ADDRESS_PARSING === 'true';
+
+    if (!isProduction || debugEnabled) {
+      logger.error(message, data);
     }
   },
 };

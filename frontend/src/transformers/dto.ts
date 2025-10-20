@@ -8,7 +8,12 @@ import type { Gender } from '../types/person';
 import type { User, Tenant as AuthTenant } from '../types/auth';
 import type { Tenant as TenantRecord } from '../types/tenant';
 import { asContactId, asTenantId, asUserId } from '../types/ids';
-import { booleanToGender, genderToBoolean, parseOptionalGender } from './gender';
+import {
+  booleanToGender,
+  genderToBoolean,
+  genderEnumToBoolean,
+  parseOptionalGender,
+} from './gender';
 import { parseDate, parseOptionalDate, toIsoString } from './date';
 import { addressParsingLogger } from '../utils/logger';
 
@@ -31,6 +36,96 @@ const createTransformerError = (
       cause,
     }
   );
+
+// Curated list of common country names for address parsing
+const COUNTRY_NAMES = [
+  'UNITED STATES',
+  'USA',
+  'UNITED STATES OF AMERICA',
+  'CANADA',
+  'MEXICO',
+  'UNITED KINGDOM',
+  'UK',
+  'GREAT BRITAIN',
+  'FRANCE',
+  'GERMANY',
+  'ITALY',
+  'SPAIN',
+  'PORTUGAL',
+  'AUSTRALIA',
+  'NEW ZEALAND',
+  'JAPAN',
+  'CHINA',
+  'INDIA',
+  'BRAZIL',
+  'ARGENTINA',
+  'CHILE',
+  'COLOMBIA',
+  'PERU',
+  'RUSSIA',
+  'SOUTH KOREA',
+  'NORTH KOREA',
+  'THAILAND',
+  'VIETNAM',
+  'PHILIPPINES',
+  'INDONESIA',
+  'MALAYSIA',
+  'SINGAPORE',
+];
+
+// Curated list of US state names for address parsing (normalized without spaces)
+const STATE_NAMES = [
+  'ALABAMA',
+  'ALASKA',
+  'ARIZONA',
+  'ARKANSAS',
+  'CALIFORNIA',
+  'COLORADO',
+  'CONNECTICUT',
+  'DELAWARE',
+  'FLORIDA',
+  'GEORGIA',
+  'HAWAII',
+  'IDAHO',
+  'ILLINOIS',
+  'INDIANA',
+  'IOWA',
+  'KANSAS',
+  'KENTUCKY',
+  'LOUISIANA',
+  'MAINE',
+  'MARYLAND',
+  'MASSACHUSETTS',
+  'MICHIGAN',
+  'MINNESOTA',
+  'MISSISSIPPI',
+  'MISSOURI',
+  'MONTANA',
+  'NEBRASKA',
+  'NEVADA',
+  'NEWHAMPSHIRE',
+  'NEWJERSEY',
+  'NEWMEXICO',
+  'NEWYORK',
+  'NORTHCAROLINA',
+  'NORTHDAKOTA',
+  'OHIO',
+  'OKLAHOMA',
+  'OREGON',
+  'PENNSYLVANIA',
+  'RHODEISLAND',
+  'SOUTHCAROLINA',
+  'SOUTHDAKOTA',
+  'TENNESSEE',
+  'TEXAS',
+  'UTAH',
+  'VERMONT',
+  'VIRGINIA',
+  'WASHINGTON',
+  'WESTVIRGINIA',
+  'WISCONSIN',
+  'WYOMING',
+];
 
 const wrapTransformation =
   <Value, Output>(
@@ -156,60 +251,7 @@ const looksLikeState = (segment: string): boolean => {
   if (/^[A-Z]{2}$/.test(trimmed)) return true;
 
   // Common full state names (exact match only, not substring)
-  const stateNames = [
-    'ALABAMA',
-    'ALASKA',
-    'ARIZONA',
-    'ARKANSAS',
-    'CALIFORNIA',
-    'COLORADO',
-    'CONNECTICUT',
-    'DELAWARE',
-    'FLORIDA',
-    'GEORGIA',
-    'HAWAII',
-    'IDAHO',
-    'ILLINOIS',
-    'INDIANA',
-    'IOWA',
-    'KANSAS',
-    'KENTUCKY',
-    'LOUISIANA',
-    'MAINE',
-    'MARYLAND',
-    'MASSACHUSETTS',
-    'MICHIGAN',
-    'MINNESOTA',
-    'MISSISSIPPI',
-    'MISSOURI',
-    'MONTANA',
-    'NEBRASKA',
-    'NEVADA',
-    'NEWHAMPSHIRE',
-    'NEWJERSEY',
-    'NEWMEXICO',
-    'NEWYORK',
-    'NORTHCAROLINA',
-    'NORTHDAKOTA',
-    'OHIO',
-    'OKLAHOMA',
-    'OREGON',
-    'PENNSYLVANIA',
-    'RHODEISLAND',
-    'SOUTHCAROLINA',
-    'SOUTHDAKOTA',
-    'TENNESSEE',
-    'TEXAS',
-    'UTAH',
-    'VERMONT',
-    'VIRGINIA',
-    'WASHINGTON',
-    'WESTVIRGINIA',
-    'WISCONSIN',
-    'WYOMING',
-  ];
-
-  return stateNames.includes(normalized);
+  return STATE_NAMES.includes(normalized);
 };
 
 /**
@@ -225,42 +267,7 @@ const looksLikeCountry = (segment: string): boolean => {
   if (/^[A-Z]{2,3}$/.test(trimmed)) return true;
 
   // Curated list of common country names (exact match only)
-  const countryNames = [
-    'UNITED STATES',
-    'USA',
-    'UNITED STATES OF AMERICA',
-    'CANADA',
-    'MEXICO',
-    'UNITED KINGDOM',
-    'UK',
-    'GREAT BRITAIN',
-    'FRANCE',
-    'GERMANY',
-    'ITALY',
-    'SPAIN',
-    'PORTUGAL',
-    'AUSTRALIA',
-    'NEW ZEALAND',
-    'JAPAN',
-    'CHINA',
-    'INDIA',
-    'BRAZIL',
-    'ARGENTINA',
-    'CHILE',
-    'COLOMBIA',
-    'PERU',
-    'RUSSIA',
-    'SOUTH KOREA',
-    'NORTH KOREA',
-    'THAILAND',
-    'VIETNAM',
-    'PHILIPPINES',
-    'INDONESIA',
-    'MALAYSIA',
-    'SINGAPORE',
-  ];
-
-  return countryNames.includes(normalized);
+  return COUNTRY_NAMES.includes(normalized);
 };
 
 /**
@@ -317,6 +324,12 @@ const parseAddressSegmentsWithHeuristics = (
 
   if (segments.length === 0) return result;
 
+  // State confidence scoring constants
+  const BASE_STATE_CONFIDENCE = 1;
+  const ADJACENT_ZIP_BOOST = 2;
+  const NEAR_ZIP_BOOST = 1;
+  const EARLY_POSITION_BOOST = 1;
+
   const remaining: string[] = [];
   let zipIndex = -1;
   let stateIndex = -1;
@@ -332,16 +345,16 @@ const parseAddressSegmentsWithHeuristics = (
       zipIndex = i;
     } else if (looksLikeState(segment)) {
       // Calculate confidence score for state match
-      let confidence = 1; // Base confidence
+      let confidence = BASE_STATE_CONFIDENCE; // Base confidence
 
       // Boost confidence if adjacent to ZIP
-      if (zipIndex !== -1 && Math.abs(i - zipIndex) === 1) confidence += 2;
+      if (zipIndex !== -1 && Math.abs(i - zipIndex) === 1) confidence += ADJACENT_ZIP_BOOST;
 
       // Boost confidence if near ZIP (within 2 positions)
-      if (zipIndex !== -1 && Math.abs(i - zipIndex) <= 2) confidence += 1;
+      if (zipIndex !== -1 && Math.abs(i - zipIndex) <= 2) confidence += NEAR_ZIP_BOOST;
 
       // Prefer earlier positions for states (more likely to be actual states)
-      if (i <= segments.length - 3) confidence += 1;
+      if (i <= segments.length - 3) confidence += EARLY_POSITION_BOOST;
 
       // Only accept if confidence is higher than previous match
       if (confidence > stateConfidence) {
@@ -375,17 +388,7 @@ const parseAddressSegmentsWithHeuristics = (
   const hasState = result.state.length > 0;
   const hasZip = result.zipCode.length > 0;
 
-  // Validate structure: if we have ZIP and state, ensure they're coherent
-  if (hasZip && hasState) {
-    const zipState = result.zipCode.substring(0, 2);
-    const detectedState = result.state.trim().toUpperCase();
-    // Basic validation: ZIP should start with reasonable digits for detected state
-    // This is a simple heuristic - real validation would need a ZIP database
-    if (detectedState.length === 2 && /^[A-Z]{2}$/.test(detectedState)) {
-      // For now, just ensure the structure looks reasonable
-      // Could add more sophisticated ZIP-state validation here
-    }
-  }
+  // TODO: implement ZIP-state validation with authoritative data
 
   // Post-extraction validation: warn if ZIP exists but state is missing
   if (result.zipCode && !result.state) {
@@ -529,7 +532,7 @@ export interface ContactInboundApiDTO {
   readonly phone?: string | null;
   readonly mobile?: string | null;
   /** Flexible gender input: accepts Gender enum, boolean (true=male), or string representations */
-  readonly gender?: Gender | boolean | string | null;
+  readonly gender?: boolean | string | null;
   readonly age?: number | null;
   readonly address?: string | Record<string, unknown> | null;
   readonly date_of_birth?: string | Date | null;
@@ -748,7 +751,7 @@ const contactToApi = (contact: Contact): Result<ContactOutboundApiDTO, AppError>
 
   const genderOption = fromNullable(contact.gender);
   const genderBooleanResult: Result<Option<boolean>, AppError> = isSome(genderOption)
-    ? genderToBoolean(genderOption.value).map(value => some(value))
+    ? genderEnumToBoolean(genderOption.value).map(value => some(value))
     : ok(none());
 
   if (genderBooleanResult.isErr()) {

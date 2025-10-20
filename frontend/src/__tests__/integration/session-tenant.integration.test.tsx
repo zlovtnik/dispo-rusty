@@ -8,9 +8,12 @@
  */
 
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
+
+// Test timeout constants
+const REFRESH_TIMEOUT_MS = 1000; // Token refresh should be fast
+const UI_UPDATE_TIMEOUT_MS = 3000; // UI updates may take longer
 import {
   renderWithProviders,
-  renderWithAuth,
   mockUser,
   mockTenant,
   screen,
@@ -18,15 +21,26 @@ import {
   userEvent,
   cleanup,
 } from '../../test-utils';
+import { asTenantId } from '../../types/ids';
 import { server, resetMSW } from '../../test-utils/mocks/server';
 import { http, HttpResponse } from 'msw';
 import { App } from '../../App';
-import { DashboardPage } from '../../pages/DashboardPage';
-import { TenantsPage } from '../../pages/TenantsPage';
 
 // Tenant ID constants for consistent testing
 const TENANT_1_ID = 'tenant-1';
 const TENANT_2_ID = 'tenant-2';
+
+/**
+ * Factory function to create properly typed tenant objects
+ * @param id - The tenant ID string
+ * @param name - The tenant name (optional, defaults to mockTenant name)
+ * @returns Properly typed Tenant object
+ */
+const createTenant = (id: string, name?: string): typeof mockTenant => ({
+  ...mockTenant,
+  id: asTenantId(id),
+  ...(name !== undefined && { name }),
+});
 
 // Helper function for base64url encoding
 const base64url = (str: string): string =>
@@ -62,6 +76,23 @@ function createValidToken(): string {
 }
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+
+// Helper function for tenant switching
+function switchTenant(
+  tenant: typeof mockTenant,
+  initialRoute = '/dashboard'
+): ReturnType<typeof renderWithProviders> {
+  cleanup();
+  return renderWithProviders(<App />, {
+    initialRoute,
+    authValue: {
+      isAuthenticated: true,
+      user: { ...mockUser, tenantId: tenant.id },
+      tenant,
+      isLoading: false,
+    },
+  });
+}
 
 /**
  * Session Expiration & Token Refresh Flow
@@ -130,7 +161,7 @@ describe('Session Expiration & Token Refresh Flow', () => {
       () => {
         expect(refreshCalled).toBe(true);
       },
-      { timeout: 5000 }
+      { timeout: REFRESH_TIMEOUT_MS }
     );
 
     // Verify refresh was called
@@ -293,7 +324,7 @@ describe('Session Expiration & Token Refresh Flow', () => {
       () => {
         expect(screen.getByText(/dashboard|welcome/i)).toBeInTheDocument();
       },
-      { timeout: 3000 }
+      { timeout: UI_UPDATE_TIMEOUT_MS }
     );
 
     // Verify API was called successfully
@@ -307,15 +338,8 @@ describe('Session Expiration & Token Refresh Flow', () => {
  * Scenario: Users can switch between tenants they have access to
  */
 describe('Tenant Switching Functionality', () => {
-  const tenant1 = {
-    ...mockTenant,
-    id: TENANT_1_ID as any,
-  };
-  const tenant2 = {
-    ...mockTenant,
-    id: TENANT_2_ID as any,
-    name: 'Tenant 2',
-  };
+  const tenant1 = createTenant(TENANT_1_ID);
+  const tenant2 = createTenant(TENANT_2_ID, 'Tenant 2');
 
   beforeEach(() => {
     resetMSW();
@@ -374,19 +398,10 @@ describe('Tenant Switching Functionality', () => {
     });
 
     // Clear captured headers for next check
-    capturedTenantIds.length = 0;
+    capturedTenantIds.splice(0);
 
     // Switch to tenant 2 - cleanup first render to avoid multiple mounted apps
-    cleanup();
-    renderWithProviders(<App />, {
-      initialRoute: '/dashboard',
-      authValue: {
-        isAuthenticated: true,
-        user: { ...mockUser, tenantId: tenant2.id },
-        tenant: tenant2,
-        isLoading: false,
-      },
-    });
+    switchTenant(tenant2, '/dashboard');
 
     // Wait for requests with tenant 2
     await waitFor(() => {
@@ -440,11 +455,7 @@ describe('Tenant Switching Functionality', () => {
   });
 
   test('Invalid tenant switch is handled gracefully', async () => {
-    const invalidTenant = {
-      ...mockTenant,
-      id: 'invalid-tenant' as any,
-      name: 'Invalid Tenant',
-    };
+    const invalidTenant = createTenant('invalid-tenant', 'Invalid Tenant');
 
     server.use(
       http.get(`${API_URL}/dashboard`, ({ request }) => {
@@ -522,28 +533,10 @@ describe('Tenant Switching Functionality', () => {
     });
 
     // Switch to tenant 2
-    cleanup();
-    renderWithProviders(<App />, {
-      initialRoute: '/address-book',
-      authValue: {
-        isAuthenticated: true,
-        user: { ...mockUser, tenantId: tenant2.id },
-        tenant: tenant2,
-        isLoading: false,
-      },
-    });
+    switchTenant(tenant2, '/address-book');
 
     // Switch back to tenant 1
-    cleanup();
-    renderWithProviders(<App />, {
-      initialRoute: '/dashboard',
-      authValue: {
-        isAuthenticated: true,
-        user: { ...mockUser, tenantId: tenant1.id },
-        tenant: tenant1,
-        isLoading: false,
-      },
-    });
+    switchTenant(tenant1, '/dashboard');
 
     // Verify tenant headers were sent correctly throughout
     await waitFor(() => {
@@ -593,19 +586,10 @@ describe('Tenant Switching Functionality', () => {
     });
 
     // Clear request log for next check
-    contactRequests.length = 0;
+    contactRequests.splice(0);
 
     // Switch to tenant 2
-    cleanup();
-    renderWithProviders(<App />, {
-      initialRoute: '/address-book',
-      authValue: {
-        isAuthenticated: true,
-        user: { ...mockUser, tenantId: tenant2.id },
-        tenant: tenant2,
-        isLoading: false,
-      },
-    });
+    switchTenant(tenant2, '/address-book');
 
     // Verify tenant 2 data is loaded
     await waitFor(() => {
@@ -648,10 +632,14 @@ describe('Multi-Tenant Data Isolation UI Behavior', () => {
 
   beforeEach(() => {
     resetMSW();
+    localStorage.clear();
+    sessionStorage.clear();
   });
 
   afterEach(() => {
     resetMSW();
+    localStorage.clear();
+    sessionStorage.clear();
   });
 
   test('UI displays tenant-specific contact list', async () => {
@@ -683,22 +671,8 @@ describe('Multi-Tenant Data Isolation UI Behavior', () => {
     expect(screen.queryByText('Jane Tenant2')).not.toBeInTheDocument();
 
     // Switch tenant and verify different data
-    cleanup();
-    const tenant2 = {
-      ...mockTenant,
-      id: TENANT_2_ID as any,
-      name: 'Tenant 2',
-    };
-
-    renderWithProviders(<App />, {
-      initialRoute: '/address-book',
-      authValue: {
-        isAuthenticated: true,
-        user: { ...mockUser, tenantId: tenant2.id },
-        tenant: tenant2,
-        isLoading: false,
-      },
-    });
+    const tenant2 = createTenant(TENANT_2_ID, 'Tenant 2');
+    switchTenant(tenant2, '/address-book');
 
     // Verify tenant 2 contacts are shown
     const tenant2Contact = await screen.findByText('Jane Tenant2');
@@ -706,93 +680,204 @@ describe('Multi-Tenant Data Isolation UI Behavior', () => {
     expect(screen.queryByText('John Tenant1')).not.toBeInTheDocument();
   });
 
-  test('Create operation respects tenant isolation', async () => {
-    const createdContacts: any[] = [];
+  describe('Create Operation Tenant Isolation', () => {
+    let createdContacts: {
+      id: number;
+      tenant_id: string | null;
+      first_name: string;
+      last_name: string;
+      email: string;
+      created_at: string;
+      updated_at: string;
+    }[] = [];
 
-    server.use(
-      http.get(`${API_URL}/contacts`, ({ request }) => {
-        const tenantId = request.headers.get('x-tenant-id');
-        const existingContacts = tenantId === TENANT_1_ID ? tenant1Contacts : tenant2Contacts;
-        const allContacts = [
-          ...existingContacts,
-          ...createdContacts.filter(c => c.tenant_id === tenantId),
-        ];
-        return HttpResponse.json({
-          success: true,
-          data: allContacts,
-          message: 'Success',
-        });
-      }),
-      http.post(`${API_URL}/contacts`, async ({ request }) => {
-        const body = (await request.json()) as any;
-        const tenantId = request.headers.get('x-tenant-id');
-        const newContact = {
-          id: createdContacts.length + 3, // IDs after tenant-specific contacts
-          tenant_id: tenantId,
-          first_name: body.first_name || 'New',
-          last_name: body.last_name || 'Contact',
-          email: body.email,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-        createdContacts.push(newContact);
-        return HttpResponse.json({
-          success: true,
-          data: newContact,
-          message: 'Contact created',
-        });
-      })
-    );
+    beforeEach(() => {
+      // Reset created contacts for each test
+      createdContacts = [];
 
-    // Create contact in tenant 1 context
-    renderWithProviders(<App />, {
-      initialRoute: '/address-book',
-      authValue: {
-        isAuthenticated: true,
-        user: mockUser,
-        tenant: mockTenant,
-        isLoading: false,
-      },
+      // Setup shared server handlers for create operations
+      server.use(
+        http.get(`${API_URL}/contacts`, ({ request }) => {
+          const tenantId = request.headers.get('x-tenant-id');
+          const existingContacts = tenantId === TENANT_1_ID ? tenant1Contacts : tenant2Contacts;
+          const allContacts = [
+            ...existingContacts,
+            ...createdContacts.filter(c => c.tenant_id === tenantId),
+          ];
+          return HttpResponse.json({
+            success: true,
+            data: allContacts,
+            message: 'Success',
+          });
+        }),
+        http.post(`${API_URL}/contacts`, async ({ request }) => {
+          const body = (await request.json()) as {
+            first_name?: string;
+            last_name?: string;
+            email: string;
+          };
+          const tenantId = request.headers.get('x-tenant-id');
+          const newContact = {
+            id: createdContacts.length + 3, // IDs after tenant-specific contacts
+            tenant_id: tenantId,
+            first_name: body.first_name ?? 'New',
+            last_name: body.last_name ?? 'Contact',
+            email: body.email,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          };
+          createdContacts.push(newContact);
+          return HttpResponse.json({
+            success: true,
+            data: newContact,
+            message: 'Contact created',
+          });
+        })
+      );
     });
 
-    // Should only see tenant 1 contacts initially
-    const tenant1Contact = await screen.findByText('John Tenant1');
-    expect(tenant1Contact).toBeInTheDocument();
-    expect(screen.queryByText('Jane Tenant2')).not.toBeInTheDocument();
+    test('Create operation includes correct tenant ID', async () => {
+      let capturedRequest: {
+        tenantId: string;
+        body: { first_name?: string; last_name?: string; email: string };
+      } | null = null;
 
-    // Create a new contact in tenant 1
-    const createButton = screen.getByRole('button', { name: /create|add|new contact/i });
-    await userEvent.click(createButton);
+      // Override POST handler to capture request details
+      server.use(
+        http.post(`${API_URL}/contacts`, async ({ request }) => {
+          const body = (await request.json()) as {
+            first_name?: string;
+            last_name?: string;
+            email: string;
+          };
+          const tenantId = request.headers.get('x-tenant-id');
+          capturedRequest = { tenantId: tenantId ?? '', body };
 
-    const emailInput = screen.getByLabelText(/email/i);
-    await userEvent.type(emailInput, 'newuser@tenant1.com');
+          const newContact = {
+            id: createdContacts.length + 3,
+            tenant_id: tenantId,
+            first_name: body.first_name ?? 'New',
+            last_name: body.last_name ?? 'Contact',
+            email: body.email,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          };
+          createdContacts.push(newContact);
+          return HttpResponse.json({
+            success: true,
+            data: newContact,
+            message: 'Contact created',
+          });
+        })
+      );
 
-    const saveButton = screen.getByRole('button', { name: /save|create|submit/i });
-    await userEvent.click(saveButton);
+      // Render app in tenant1 context
+      renderWithProviders(<App />, {
+        initialRoute: '/address-book',
+        authValue: {
+          isAuthenticated: true,
+          user: mockUser,
+          tenant: mockTenant, // Uses TENANT_1_ID
+          isLoading: false,
+        },
+      });
 
-    // Verify the new contact was created with tenant-1 ID
-    await waitFor(() => {
-      const createdInTenant1 = createdContacts.some(c => c.tenant_id === TENANT_1_ID);
-      expect(createdInTenant1).toBe(true);
+      // Trigger create flow
+      const createButton = screen.getByRole('button', { name: /create|add|new contact/i });
+      await userEvent.click(createButton);
+
+      const emailInput = screen.getByLabelText(/email/i);
+      await userEvent.type(emailInput, 'testuser@tenant1.com');
+
+      const saveButton = screen.getByRole('button', { name: /save|create|submit/i });
+      await userEvent.click(saveButton);
+
+      // Verify request includes correct tenant ID
+      await waitFor(() => {
+        expect(capturedRequest).not.toBeNull();
+        if (capturedRequest) {
+          expect(capturedRequest.tenantId).toBe(TENANT_1_ID);
+          expect(capturedRequest.body.email).toBe('testuser@tenant1.com');
+        }
+      });
     });
 
-    // Verify tenant-2 doesn't see the new contact by switching tenant
-    cleanup();
-    const tenant2 = { ...mockTenant, id: TENANT_2_ID as any, name: 'Tenant 2' };
-    renderWithProviders(<App />, {
-      initialRoute: '/address-book',
-      authValue: {
-        isAuthenticated: true,
-        user: { ...mockUser, tenantId: tenant2.id },
-        tenant: tenant2,
-        isLoading: false,
-      },
+    test('Newly created contacts appear in correct tenant context', async () => {
+      // Render app in tenant1 context
+      renderWithProviders(<App />, {
+        initialRoute: '/address-book',
+        authValue: {
+          isAuthenticated: true,
+          user: mockUser,
+          tenant: mockTenant, // Uses TENANT_1_ID
+          isLoading: false,
+        },
+      });
+
+      // Should only see tenant 1 contacts initially
+      const tenant1Contact = await screen.findByText('John Tenant1');
+      expect(tenant1Contact).toBeInTheDocument();
+      expect(screen.queryByText('Jane Tenant2')).not.toBeInTheDocument();
+
+      // Create a new contact in tenant 1
+      const createButton = screen.getByRole('button', { name: /create|add|new contact/i });
+      await userEvent.click(createButton);
+
+      const emailInput = screen.getByLabelText(/email/i);
+      await userEvent.type(emailInput, 'newuser@tenant1.com');
+
+      const saveButton = screen.getByRole('button', { name: /save|create|submit/i });
+      await userEvent.click(saveButton);
+
+      // Verify new contact appears in tenant1 context without switching tenants
+      await waitFor(() => {
+        expect(screen.getByText('newuser@tenant1.com')).toBeInTheDocument();
+        expect(screen.getByText('John Tenant1')).toBeInTheDocument(); // Original tenant1 contact still visible
+        expect(screen.queryByText('Jane Tenant2')).not.toBeInTheDocument(); // Tenant2 contact still not visible
+      });
     });
 
-    // Verify new contact is not visible to tenant 2
-    expect(screen.queryByText('newuser@tenant1.com')).not.toBeInTheDocument();
-    const tenant2Contact = await screen.findByText('Jane Tenant2');
-    expect(tenant2Contact).toBeInTheDocument();
+    test("Created contacts don't leak across tenants", async () => {
+      // First create a contact in tenant1 context
+      renderWithProviders(<App />, {
+        initialRoute: '/address-book',
+        authValue: {
+          isAuthenticated: true,
+          user: mockUser,
+          tenant: mockTenant, // Uses TENANT_1_ID
+          isLoading: false,
+        },
+      });
+
+      // Create a contact in tenant1
+      const createButton = screen.getByRole('button', { name: /create|add|new contact/i });
+      await userEvent.click(createButton);
+
+      const emailInput = screen.getByLabelText(/email/i);
+      await userEvent.type(emailInput, 'tenant1user@example.com');
+
+      const saveButton = screen.getByRole('button', { name: /save|create|submit/i });
+      await userEvent.click(saveButton);
+
+      // Verify contact was created in tenant1
+      await waitFor(() => {
+        expect(screen.getByText('tenant1user@example.com')).toBeInTheDocument();
+      });
+
+      // Now switch to tenant2 and verify isolation
+      const tenant2 = createTenant(TENANT_2_ID, 'Tenant 2');
+      switchTenant(tenant2, '/address-book');
+
+      // Verify tenant1 contact is not visible in tenant2
+      expect(screen.queryByText('tenant1user@example.com')).not.toBeInTheDocument();
+
+      // Verify tenant2 can see its own contacts
+      const tenant2Contact = await screen.findByText('Jane Tenant2');
+      expect(tenant2Contact).toBeInTheDocument();
+
+      // Verify tenant2 doesn't see tenant1's original contacts
+      expect(screen.queryByText('John Tenant1')).not.toBeInTheDocument();
+    });
   });
 
   test('Error states are tenant-specific', async () => {

@@ -31,7 +31,7 @@ interface AddressFormValues {
   lastName: string;
   email?: string;
   phone?: string;
-  gender?: Gender;
+  gender: Gender;
   age: number;
   street1: string;
   street2?: string;
@@ -345,7 +345,7 @@ export const AddressBookPage: React.FC = () => {
       lastName: contact.lastName,
       email: contact.email,
       phone: contact.phone,
-      gender: contact.gender,
+      gender: contact.gender || Gender.male,
       age: contact.age || 25, // Default if not available
       street1: contact.address?.street1,
       street2: contact.address?.street2,
@@ -447,6 +447,7 @@ export const AddressBookPage: React.FC = () => {
           <Button
             type="link"
             icon={<EditOutlined />}
+            data-testid={`edit-${contact.id}`}
             onClick={() => {
               handleEdit(contact);
             }}
@@ -565,6 +566,7 @@ export const AddressBookPage: React.FC = () => {
             lastName: '',
             email: '',
             phone: '',
+            gender: Gender.male,
             age: 25,
             street1: '',
             street2: '',
@@ -604,7 +606,7 @@ export const AddressBookPage: React.FC = () => {
             label="Gender"
             rules={[{ required: true, message: 'Please select gender' }]}
           >
-            <Select style={{ width: '100%' }} placeholder="Select gender" allowClear>
+            <Select style={{ width: '100%' }} placeholder="Select gender">
               <Select.Option value="male">Male</Select.Option>
               <Select.Option value="female">Female</Select.Option>
               <Select.Option value="other">Other</Select.Option>

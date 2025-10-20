@@ -1,11 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import dayjs from 'dayjs';
 import { ConfirmationModal } from '@/components/ConfirmationModal';
-import type {
-  Tenant as TenantRecord,
-  PaginatedTenantResponse,
-  CreateTenantDTO,
-} from '@/types/tenant';
+import type { Tenant as TenantRecord, CreateTenantDTO } from '@/types/tenant';
 import { isApiSuccess } from '@/types/api';
 import {
   Button,
@@ -14,24 +11,17 @@ import {
   Table,
   Modal,
   Form,
-  Alert,
   Space,
   Typography,
   Divider,
   Select,
   App,
+  DatePicker,
 } from 'antd';
-import type { TableProps } from 'antd';
 import {
   PlusOutlined,
   EditOutlined,
   DeleteOutlined,
-  SearchOutlined,
-  LeftOutlined,
-  RightOutlined,
-  DoubleLeftOutlined,
-  DoubleRightOutlined,
-  FilterOutlined,
   PlusCircleOutlined,
   MinusCircleOutlined,
 } from '@ant-design/icons';
@@ -43,7 +33,6 @@ import { tenantService } from '@/services/api';
 type TenantFormValues = Omit<CreateTenantDTO, 'id'>;
 
 export const TenantsPage: React.FC = () => {
-  const { user } = useAuth();
   const [tenants, setTenants] = useState<TenantRecord[]>([]);
   const { message } = App.useApp();
 
@@ -249,9 +238,73 @@ export const TenantsPage: React.FC = () => {
     setPowerFilters(powerFilters.filter((_, i) => i !== index));
   };
 
-  const updateFilter = (index: number, key: 'field' | 'operator' | 'value', value: string) => {
+  // Helper function to get valid operators for a field type
+  const getOperatorsForField = (field: string): string[] => {
+    const textFields = ['id', 'name', 'db_url'];
+    const dateFields = ['created_at', 'updated_at'];
+
+    if (textFields.includes(field)) {
+      return ['contains', 'equals'];
+    } else if (dateFields.includes(field)) {
+      return ['equals', 'gt', 'gte', 'lt', 'lte'];
+    }
+
+    // Default fallback
+    return ['contains', 'equals'];
+  };
+
+  // Helper function to check if a field is a date field
+  const isDateField = (field: string): boolean => {
+    const dateFields = ['created_at', 'updated_at'];
+    return dateFields.includes(field);
+  };
+
+  // Helper function to convert ISO string to dayjs object
+  const isoToDayjs = (isoString: string) => {
+    if (!isoString) return null;
+    try {
+      return dayjs(isoString);
+    } catch {
+      return null;
+    }
+  };
+
+  // Helper function to convert dayjs object to ISO string
+  const dayjsToIso = (dayjsObj: any): string => {
+    if (!dayjsObj) return '';
+    return dayjsObj.toISOString();
+  };
+
+  const updateFilter = (
+    index: number,
+    key: 'field' | 'operator' | 'value',
+    value: string
+  ): void => {
     const updated = [...powerFilters];
-    updated[index] = Object.assign({}, updated[index], { [key]: value });
+    const currentFilter = updated[index];
+
+    if (!currentFilter) {
+      return;
+    }
+
+    // If field is changing, check if current operator is still valid
+    if (key === 'field') {
+      const validOperators = getOperatorsForField(value);
+      const currentOperator = currentFilter.operator;
+
+      // If current operator is not valid for the new field, reset to first valid operator
+      if (!validOperators.includes(currentOperator)) {
+        updated[index] = Object.assign({}, currentFilter, {
+          [key]: value,
+          operator: validOperators[0],
+        });
+      } else {
+        updated[index] = Object.assign({}, currentFilter, { [key]: value });
+      }
+    } else {
+      updated[index] = Object.assign({}, currentFilter, { [key]: value });
+    }
+
     setPowerFilters(updated);
   };
 
@@ -434,49 +487,64 @@ export const TenantsPage: React.FC = () => {
       <Divider />
 
       {/* Search Filters */}
-      {process.env.NODE_ENV !== 'test' && (
-        <Card
-          title="Search Filters"
-          size="small"
-          style={{ borderRadius: '8px', marginTop: '16px' }}
-        >
-          <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-            {powerFilters.map((filter, index) => (
-              <div
-                key={index}
-                style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}
+      <Card title="Search Filters" size="small" style={{ borderRadius: '8px', marginTop: '16px' }}>
+        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+          {powerFilters.map((filter, index) => (
+            <div
+              key={index}
+              style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}
+            >
+              <Select
+                style={{ width: 150 }}
+                value={filter.field}
+                onChange={value => {
+                  updateFilter(index, 'field', value);
+                }}
+                placeholder="Field"
               >
-                <Select
-                  style={{ width: 150 }}
-                  value={filter.field}
-                  onChange={value => {
-                    updateFilter(index, 'field', value);
-                  }}
-                  placeholder="Field"
-                >
-                  <Select.Option value="id">ID</Select.Option>
-                  <Select.Option value="name">Name</Select.Option>
-                  <Select.Option value="db_url">Database URL</Select.Option>
-                  <Select.Option value="created_at">Created At</Select.Option>
-                  <Select.Option value="updated_at">Updated At</Select.Option>
-                </Select>
+                <Select.Option value="id">ID</Select.Option>
+                <Select.Option value="name">Name</Select.Option>
+                <Select.Option value="db_url">Database URL</Select.Option>
+                <Select.Option value="created_at">Created At</Select.Option>
+                <Select.Option value="updated_at">Updated At</Select.Option>
+              </Select>
 
-                <Select
-                  style={{ width: 120 }}
-                  value={filter.operator}
-                  onChange={value => {
-                    updateFilter(index, 'operator', value);
-                  }}
-                  placeholder="Operator"
-                >
-                  <Select.Option value="contains">Contains</Select.Option>
-                  <Select.Option value="equals">Equals</Select.Option>
-                  <Select.Option value="gt">Greater Than</Select.Option>
-                  <Select.Option value="gte">Greater or Equal</Select.Option>
-                  <Select.Option value="lt">Less Than</Select.Option>
-                  <Select.Option value="lte">Less or Equal</Select.Option>
-                </Select>
+              <Select
+                style={{ width: 120 }}
+                value={filter.operator}
+                onChange={value => {
+                  updateFilter(index, 'operator', value);
+                }}
+                placeholder="Operator"
+              >
+                {getOperatorsForField(filter.field).map(operator => {
+                  const operatorLabels: Record<string, string> = {
+                    contains: 'Contains',
+                    equals: 'Equals',
+                    gt: 'Greater Than',
+                    gte: 'Greater or Equal',
+                    lt: 'Less Than',
+                    lte: 'Less or Equal',
+                  };
+                  return (
+                    <Select.Option key={operator} value={operator}>
+                      {operatorLabels[operator] ?? operator}
+                    </Select.Option>
+                  );
+                })}
+              </Select>
 
+              {isDateField(filter.field) ? (
+                <DatePicker
+                  style={{ width: 200, flex: 1, minWidth: '150px' }}
+                  placeholder="Select date"
+                  showTime
+                  value={isoToDayjs(filter.value)}
+                  onChange={date => {
+                    updateFilter(index, 'value', dayjsToIso(date));
+                  }}
+                />
+              ) : (
                 <Input
                   style={{ width: 200, flex: 1, minWidth: '150px' }}
                   placeholder="Value"
@@ -485,43 +553,43 @@ export const TenantsPage: React.FC = () => {
                     updateFilter(index, 'value', e.target.value);
                   }}
                 />
+              )}
 
-                <Button
-                  type="text"
-                  danger
-                  icon={<MinusCircleOutlined />}
-                  onClick={() => {
-                    removeFilter(index);
-                  }}
-                  disabled={powerFilters.length <= 1}
-                >
-                  Remove
-                </Button>
-
-                {index === powerFilters.length - 1 && (
-                  <Button type="text" icon={<PlusCircleOutlined />} onClick={addFilter}>
-                    Add Filter
-                  </Button>
-                )}
-              </div>
-            ))}
-
-            <Divider style={{ margin: '8px 0' }} />
-
-            <Space>
-              <Button type="primary" onClick={applyFilters}>
-                Apply Filters
+              <Button
+                type="text"
+                danger
+                icon={<MinusCircleOutlined />}
+                onClick={() => {
+                  removeFilter(index);
+                }}
+                disabled={powerFilters.length <= 1}
+              >
+                Remove
               </Button>
-              <Button onClick={clearFilters}>Clear All</Button>
-            </Space>
 
-            <div style={{ fontSize: '14px', color: '#666' }}>
-              <Typography.Text strong>Note:</Typography.Text> For date fields, use ISO format (e.g.,
-              2023-12-25T10:00:00.000Z). Empty values are ignored in filtering.
+              {index === powerFilters.length - 1 && (
+                <Button type="text" icon={<PlusCircleOutlined />} onClick={addFilter}>
+                  Add Filter
+                </Button>
+              )}
             </div>
+          ))}
+
+          <Divider style={{ margin: '8px 0' }} />
+
+          <Space>
+            <Button type="primary" onClick={applyFilters}>
+              Apply Filters
+            </Button>
+            <Button onClick={clearFilters}>Clear All</Button>
           </Space>
-        </Card>
-      )}
+
+          <div style={{ fontSize: '14px', color: '#666' }}>
+            <Typography.Text strong>Note:</Typography.Text> For date fields, use ISO format (e.g.,
+            2023-12-25T10:00:00.000Z). Empty values are ignored in filtering.
+          </div>
+        </Space>
+      </Card>
 
       {/* Tenants Table */}
       <Card
@@ -613,7 +681,12 @@ export const TenantsPage: React.FC = () => {
 
           <Form.Item>
             <Space>
-              <Button type="primary" htmlType="submit" loading={isSubmitting}>
+              <Button
+                type="primary"
+                htmlType="submit"
+                loading={isSubmitting}
+                data-testid="modal-submit-button"
+              >
                 {editingTenant ? 'Update Tenant' : 'Add Tenant'}
               </Button>
               <Button

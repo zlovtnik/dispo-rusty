@@ -150,6 +150,7 @@ export class ErrorBoundary extends Component<Props, State> {
             description={error.message}
             type="error"
             showIcon
+            data-testid="network-error"
             action={
               error.retryable !== false ? (
                 <Button
@@ -187,12 +188,19 @@ export class ErrorBoundary extends Component<Props, State> {
             description={error.message}
             type="warning"
             showIcon
+            data-testid="business-error"
           />
         );
 
       case 'validation':
         return (
-          <Alert message="Validation Error" description={error.message} type="error" showIcon />
+          <Alert
+            message="Validation Error"
+            description={error.message}
+            type="error"
+            showIcon
+            data-testid="validation-error"
+          />
         );
 
       default: {

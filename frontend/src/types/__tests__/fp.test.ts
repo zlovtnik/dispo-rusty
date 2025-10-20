@@ -77,7 +77,7 @@ describe('Option utilities', () => {
 
     it('should work with type transformations', () => {
       const option = some('42');
-      const result = mapOption(option, s => parseInt(s, 10));
+      const result = mapOption<string, number>(option, s => parseInt(s, 10));
       expect(isSome(result)).toBe(true);
       if (isSome(result)) {
         expect(result.value).toBe(42);
@@ -121,7 +121,7 @@ describe('Option utilities', () => {
     });
 
     it('should handle None in chained operations', () => {
-      const result = mapOption(fromNullable<string | null>(null), s => parseInt(s, 10));
+      const result = mapOption(fromNullable<string>(null), s => parseInt(s, 10));
 
       expect(isNone(result)).toBe(true);
     });
@@ -136,7 +136,7 @@ describe('Option utilities', () => {
 
       // None case
       const noneResult = unwrapOr(
-        mapOption(none(), x => x * 2),
+        mapOption(none<number>(), x => x * 2),
         0
       );
       expect(noneResult).toBe(0);

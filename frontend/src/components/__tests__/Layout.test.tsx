@@ -1,7 +1,12 @@
 import { describe, it, expect } from 'bun:test';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { renderWithAuth, mockUser, mockTenant } from '../../test-utils/render';
+import {
+  renderWithAuth,
+  renderWithAuthAndNavigation,
+  mockUser,
+  mockTenant,
+} from '../../test-utils/render';
 import { Layout } from '../Layout';
 
 describe('Layout Component', () => {
@@ -16,8 +21,12 @@ describe('Layout Component', () => {
     it('should display user first name in header', () => {
       renderWithAuth(<Layout>Content</Layout>);
 
+      // Ensure mockUser.firstName is defined before using it
+      expect(mockUser.firstName).toBeDefined();
+      const firstName = mockUser.firstName;
+
       // User name should be visible in profile area
-      expect(screen.getByText(mockUser.firstName!)).toBeInTheDocument();
+      expect(screen.getByText(firstName)).toBeInTheDocument();
     });
 
     it('should display tenant name in layout', () => {
@@ -38,22 +47,40 @@ describe('Layout Component', () => {
       renderWithAuth(<Layout>Content</Layout>);
 
       // Address book link should be accessible
-      expect(screen.getByText(/Address Book|address|contacts/i)).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: /^(Address Book|Contacts)$/i })).toBeInTheDocument();
     });
 
     it('should render user profile avatar or trigger', () => {
       renderWithAuth(<Layout>Content</Layout>);
 
-      // User profile section should exist
-      const profileElements = screen.getAllByText(mockUser.firstName!);
-      expect(profileElements.length).toBeGreaterThan(0);
+      // Find the profile area by looking for the user's first name
+      const profileNameElement = screen.getByText(mockUser.firstName ?? '');
+
+      // Verify the profile name element is within a dropdown trigger container
+      const profileContainer =
+        profileNameElement.closest('[role="button"]') ?? profileNameElement.closest('div');
+      expect(profileContainer).toBeInTheDocument();
+
+      // Verify the avatar is present in the same container with correct initial
+      const avatar = profileContainer?.querySelector('.ant-avatar');
+      expect(avatar).toBeInTheDocument();
+      expect(avatar).toHaveTextContent((mockUser.firstName ?? '').charAt(0).toUpperCase());
+
+      // Verify the user name span contains the firstName and is visible
+      expect(profileNameElement).toBeInTheDocument();
+      expect(profileNameElement).toHaveTextContent(mockUser.firstName ?? '');
+
+      // Verify the container has the expected cursor pointer style (dropdown trigger)
+      if (profileContainer) {
+        expect(profileContainer).toHaveStyle('cursor: pointer');
+      }
     });
   });
 
   describe('Navigation', () => {
     it('should navigate to dashboard when dashboard menu item is clicked', async () => {
       const user = userEvent.setup();
-      renderWithAuth(<Layout>Content</Layout>, {
+      const { getCurrentLocation } = renderWithAuthAndNavigation(<Layout>Content</Layout>, {
         initialRoute: '/contacts',
       });
 
@@ -61,14 +88,15 @@ describe('Layout Component', () => {
       const dashboardLink = screen.getByText(/Dashboard/i);
       await user.click(dashboardLink);
 
-      // In this isolated component test, we verify the click doesn't throw
-      // Navigation testing should be done at integration level
-      expect(dashboardLink).toBeInTheDocument();
+      // Verify the navigation occurred by checking the current location
+      await waitFor(() => {
+        expect(getCurrentLocation().pathname).toBe('/dashboard');
+      });
     });
 
     it('should navigate to address book when contacts menu item is clicked', async () => {
       const user = userEvent.setup();
-      renderWithAuth(<Layout>Content</Layout>, {
+      const { getCurrentLocation } = renderWithAuthAndNavigation(<Layout>Content</Layout>, {
         initialRoute: '/dashboard',
       });
 
@@ -76,9 +104,10 @@ describe('Layout Component', () => {
       const contactsLink = screen.getByText(/Address Book|address|contacts/i);
       await user.click(contactsLink);
 
-      // In this isolated component test, we verify the click doesn't throw
-      // Navigation testing should be done at integration level
-      expect(contactsLink).toBeInTheDocument();
+      // Verify the navigation occurred by checking the current location
+      await waitFor(() => {
+        expect(getCurrentLocation().pathname).toBe('/address-book');
+      });
     });
 
     it('should have navigation menu items present', () => {
@@ -113,11 +142,16 @@ describe('Layout Component', () => {
       const userElements = screen.queryAllByText(firstName);
       expect(userElements.length).toBeGreaterThan(0);
 
-      const [firstElement] = userElements;
-      await user.click(firstElement!);
-      // Dropdown should be triggered - check for dropdown content or aria-expanded
+      // Explicit guard before destructuring
+      if (userElements.length === 0) {
+        throw new Error('No user profile elements found - test setup may be incorrect');
+      }
+
+      const firstElement = userElements[0];
+      await user.click(firstElement);
+      // Dropdown should be triggered - check for visible dropdown content
       await waitFor(() => {
-        const dropdown = screen.getByRole('menu', { hidden: true });
+        const dropdown = screen.getByRole('menu');
         expect(dropdown).toBeInTheDocument();
       });
     });
@@ -157,42 +191,39 @@ describe('Layout Component', () => {
     it('should have menu toggle button for mobile responsive', () => {
       renderWithAuth(<Layout>Content</Layout>);
 
-      // Menu toggle button should exist
-      const buttons = screen.getAllByRole('button');
-      expect(buttons.length).toBeGreaterThan(0);
+      // Find the menu toggle button by looking for the MenuOutlined icon
+      const menuToggleButton = screen.getByRole('button', {
+        name: /menu/i,
+      });
+      expect(menuToggleButton).toBeInTheDocument();
     });
 
     it('should toggle sidebar visibility on hamburger menu click', async () => {
       const user = userEvent.setup();
       const { container } = renderWithAuth(<Layout>Content</Layout>);
 
-      // Find hamburger/menu toggle button
-      const buttons = screen.getAllByRole('button');
-      const toggleButton = buttons.find(btn => {
-        const ariaExpanded = btn.getAttribute('aria-expanded');
-        const isMenuButton =
-          btn.getAttribute('aria-label')?.includes('menu') || btn.className.includes('trigger');
-        return ariaExpanded !== null || isMenuButton;
+      // Find the menu toggle button by looking for the MenuOutlined icon
+      const toggleButton = screen.getByRole('button', {
+        name: /menu/i,
       });
+      expect(toggleButton).toBeInTheDocument();
 
-      expect(toggleButton).toBeDefined();
+      // Get the sidebar element
+      const sidebar = container.querySelector('[class*="ant-layout-sider"]');
+      expect(sidebar).toBeInTheDocument();
 
-      // Record initial state
-      const initialState = toggleButton?.getAttribute('aria-expanded');
+      // Record initial collapsed state
+      const initialCollapsed = sidebar?.classList.contains('ant-layout-sider-collapsed');
 
       // Click to toggle
-      if (!toggleButton) throw new Error('Toggle button not found');
       await user.click(toggleButton);
 
-      // Verify state changed or sidebar visibility changed
+      // Verify sidebar state changed
       await waitFor(() => {
-        const newState = toggleButton.getAttribute('aria-expanded');
-        expect(newState).not.toBe(initialState);
-        const sidebar = container.querySelector('[class*="ant-layout-sider"]');
-        expect(sidebar).toBeInTheDocument();
+        const newCollapsed = sidebar?.classList.contains('ant-layout-sider-collapsed');
+        expect(newCollapsed).not.toBe(initialCollapsed);
       });
     });
-
     it('should handle sidebar collapse/expand state', () => {
       const { container } = renderWithAuth(<Layout>Content</Layout>);
 
@@ -202,40 +233,39 @@ describe('Layout Component', () => {
     });
   });
 
-  describe('Theme and Styling', () => {
-    it('should apply Ant Design layout styles', () => {
+  describe('Component Structure', () => {
+    it('should render complete layout structure with proper Ant Design components and content', () => {
       const { container } = renderWithAuth(<Layout>Content</Layout>);
 
-      // Verify ant-layout component is rendered
+      // Verify main layout container
       const layoutContainer = container.querySelector('[class*="ant-layout"]');
       expect(layoutContainer).toBeInTheDocument();
-    });
 
-    it('should render with Ant Design menu and layout components', () => {
-      const { container } = renderWithAuth(<Layout>Content</Layout>);
-
-      // Check for Ant Design layout structure
-      const antLayout = container.querySelector('[class*="ant-layout"]');
-      const antMenu = container.querySelector('[class*="ant-menu"]');
-
-      expect(antLayout).toBeInTheDocument();
-      // Menu should be present
-      expect(antMenu).toBeInTheDocument();
-    });
-
-    it('should have proper component hierarchy', () => {
-      const { container } = renderWithAuth(<Layout>Content</Layout>);
-
-      // Verify Ant Design components exist
-      const layoutElements = container.querySelectorAll('[class*="ant-layout"]');
-      expect(layoutElements.length).toBeGreaterThan(0);
-
-      // Verify header, content sections
+      // Verify all main layout sections
       const layoutHeader = container.querySelector('[class*="ant-layout-header"]');
+      const layoutSider = container.querySelector('[class*="ant-layout-sider"]');
       const layoutContent = container.querySelector('[class*="ant-layout-content"]');
 
       expect(layoutHeader).toBeInTheDocument();
+      expect(layoutSider).toBeInTheDocument();
       expect(layoutContent).toBeInTheDocument();
+
+      // Verify key content in header (user info)
+      expect(mockUser.firstName).toBeTruthy();
+      const headerText = layoutHeader?.textContent ?? '';
+      expect(headerText).toContain(mockUser.firstName!);
+
+      // Verify key content in sider (tenant info)
+      const siderText = layoutSider?.textContent ?? '';
+      expect(siderText).toContain(mockTenant.name);
+
+      // Verify menu structure
+      const menu = container.querySelector('[class*="ant-menu"]');
+      expect(menu).toBeInTheDocument();
+
+      // Verify menu items are present
+      const menuItems = container.querySelectorAll('[class*="ant-menu-item"]');
+      expect(menuItems.length).toBeGreaterThan(0);
     });
   });
 
@@ -259,19 +289,21 @@ describe('Layout Component', () => {
       // Check if menu items have proper focus management
       // Ant Design menu items may not be directly focusable via Tab
       // Instead, verify they have proper ARIA attributes and structure
-      const menu = document.querySelector('[role="menu"]');
-      expect(menu).not.toBeNull();
+      const menu = screen.getByRole('menu');
+      expect(menu).toBeInTheDocument();
 
       // Verify menu items have proper accessibility attributes
-      menuItems.forEach(item => {
+      for (let i = 0; i < menuItems.length; i++) {
+        const item = menuItems[i];
         expect(item).toHaveAttribute('role', 'menuitem');
         // Check if item is focusable (either tabIndex=0 or tabIndex=-1 but programmatically focusable)
         const tabIndex = item.getAttribute('tabindex');
         expect(['0', '-1', null]).toContain(tabIndex);
-      });
+      }
 
       // Test that menu items can receive focus programmatically
-      const firstMenuItem = menuItems[0]!;
+      expect(menuItems[0]).toBeDefined();
+      const firstMenuItem = menuItems[0];
       firstMenuItem.focus();
       expect(document.activeElement).toBe(firstMenuItem);
     });
@@ -286,11 +318,10 @@ describe('Layout Component', () => {
 
       // Check images have proper labels
       const images = container.querySelectorAll('img');
-      for (const img of images) {
-        const hasAlt = img.hasAttribute('alt');
-        const hasAriaLabel = img.hasAttribute('aria-label');
-        expect(hasAlt || hasAriaLabel).toBeTruthy();
-      }
+      images.forEach(img => {
+        expect(img.hasAttribute('alt') || img.hasAttribute('aria-label')).toBeTruthy();
+      });
+      expect(images.length).toBeGreaterThan(0); // Ensure we actually tested something
     });
   });
 
@@ -331,89 +362,40 @@ describe('Layout Component', () => {
   });
 
   describe('Content Area', () => {
-    it('should render children in main content area', () => {
+    it('should render children in main content area with dynamic updates', () => {
       const testId = 'test-content-id';
-      renderWithAuth(
+      const initialContent = 'Main Content';
+      const dynamicContent = 'Dynamic Test Content';
+
+      const { rerender } = renderWithAuth(
         <Layout>
-          <div data-testid={testId}>Main Content</div>
+          <div data-testid={testId}>{initialContent}</div>
         </Layout>
       );
 
+      // Assert testId presence and initial text
       expect(screen.getByTestId(testId)).toBeInTheDocument();
-      expect(screen.getByText('Main Content')).toBeInTheDocument();
-    });
+      expect(screen.getByText(initialContent)).toBeInTheDocument();
 
-    it('should properly display dynamic content updates', () => {
-      const dynamicContent = 'Dynamic Test Content';
-      renderWithAuth(
+      // Assert content is in the correct layout section
+      const { container } = renderWithAuth(
         <Layout>
-          <div>{dynamicContent}</div>
+          <div data-testid={testId}>{initialContent}</div>
+        </Layout>
+      );
+      const layoutContent = container.querySelector('[class*="ant-layout-content"]');
+      expect(layoutContent).toBeInTheDocument();
+      expect(layoutContent?.textContent).toContain(initialContent);
+
+      // Update with dynamic content and assert the change
+      rerender(
+        <Layout>
+          <div data-testid={testId}>{dynamicContent}</div>
         </Layout>
       );
 
       expect(screen.getByText(dynamicContent)).toBeInTheDocument();
-    });
-
-    it('should render content in proper layout section', () => {
-      const { container } = renderWithAuth(
-        <Layout>
-          <div>Test Content Area</div>
-        </Layout>
-      );
-
-      // Content should be in layout-content section
-      const layoutContent = container.querySelector('[class*="ant-layout-content"]');
-      expect(layoutContent).toBeInTheDocument();
-      expect(layoutContent?.textContent).toContain('Test Content Area');
-    });
-  });
-
-  describe('Layout Structure', () => {
-    it('should have proper ant-layout structure', () => {
-      const { container } = renderWithAuth(<Layout>Content</Layout>);
-
-      // Main layout container should exist
-      const layoutElements = container.querySelectorAll('[class*="ant-layout"]');
-      expect(layoutElements.length).toBeGreaterThan(0);
-    });
-
-    it('should render sider and content layout components', () => {
-      const { container } = renderWithAuth(<Layout>Content</Layout>);
-
-      // Check for sider component
-      const sider = container.querySelector('[class*="ant-layout-sider"]');
-      expect(sider).toBeInTheDocument();
-
-      // Check for content component
-      const content = container.querySelector('[class*="ant-layout-content"]');
-      expect(content).toBeInTheDocument();
-    });
-
-    it('should render header section with user and tenant info', () => {
-      const { container } = renderWithAuth(<Layout>Content</Layout>);
-
-      // Assert preconditions
-      expect(mockUser.firstName).toBeTruthy();
-
-      // Header should contain user information (tenant name is in the sider)
-      const header = container.querySelector('[class*="ant-layout-header"]');
-      expect(header).toBeInTheDocument();
-
-      const headerText = header?.textContent ?? '';
-      expect(headerText).toContain(mockUser.firstName!);
-      // Note: tenant name is displayed in the sider, not header
-    });
-
-    it('should render menu in sider section', () => {
-      const { container } = renderWithAuth(<Layout>Content</Layout>);
-
-      // Menu should be present in layout
-      const menu = container.querySelector('[class*="ant-menu"]');
-      expect(menu).toBeInTheDocument();
-
-      // Menu items should be present
-      const menuItems = container.querySelectorAll('[class*="ant-menu-item"]');
-      expect(menuItems.length).toBeGreaterThan(0);
+      expect(screen.queryByText(initialContent)).not.toBeInTheDocument();
     });
   });
 });

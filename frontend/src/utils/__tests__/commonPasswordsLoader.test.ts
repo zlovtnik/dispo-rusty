@@ -143,7 +143,7 @@ describe('CommonPasswordsLoader', () => {
       mockFetch = async (url: string) => {
         if (url.includes('/config/common-passwords.json')) {
           // Generate 100 test passwords
-          const passwords = Array.from({ length: 100 }, (_, i) => `password${String(i + 1)}`);
+          const passwords = Array.from({ length: 100 }, (_, i) => `password${i + 1}`);
           return {
             ok: true,
             status: 200,
@@ -175,7 +175,7 @@ describe('CommonPasswordsLoader', () => {
       expect(passwords).toHaveLength(50);
 
       // Assert that the returned passwords are the first 50 entries in order
-      const expectedPasswords = Array.from({ length: 50 }, (_, i) => `password${String(i + 1)}`);
+      const expectedPasswords = Array.from({ length: 50 }, (_, i) => `password${i + 1}`);
       expect(passwords).toEqual(expectedPasswords);
     });
   });

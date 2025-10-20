@@ -87,8 +87,9 @@ try {
 
 - **Strict mode enabled**: All strict TypeScript rules active
 - **Path aliases**: Use `@/` for src imports, `@/components/*` for component imports
-  - **Verify configuration**: Check `tsconfig.json` for `"paths": { "@/*": ["./src/*"] }` or equivalent `vite.config.ts` alias setup
-  - **Reference**: See project's `tsconfig.json` and `vite.config.ts` for canonical path mapping configuration
+  - **Source of truth**: `tsconfig.json` "paths" should be treated as the source of truth (e.g., `"@/*": ["./src/*"]`)
+  - **Vite integration**: Vite can consume those mappings (use vite-tsconfig-paths or Vite's resolver if configured) so adding equivalent aliases in `vite.config.ts` is optional/usually redundant
+  - **Configuration note**: Ensure either tsconfig paths are present or vite.config has matching aliases (not both duplicated) to avoid confusion
 - **Type imports**: Use `import type` for type-only imports
 - **No any**: Avoid `any` type, use proper type definitions
 
@@ -225,7 +226,15 @@ describe('userService', () => {
 
     const result = await userService.getUser('123');
     expect(result.isOk()).toBe(true);
-    expect(result._unsafeUnwrap()).toHaveProperty('id', '123');
+    
+    result.match(
+      (user) => {
+        expect(user).toHaveProperty('id', '123');
+      },
+      (error) => {
+        expect.fail(`Expected success but got error: ${error.message}`);
+      }
+    );
   });
 
   it('should return error on failure', async () => {
@@ -383,7 +392,7 @@ bun run test:watch
 
 ### 3. Environment Setup
 
-- Copy `.env.example` to `.env.development`
+- Copy `.env.example` to `.env.local` (note: `.env.local` is git-ignored by default)
 - Set required `VITE_API_URL` environment variable
 - Run `bun run dev` to start the development server
 

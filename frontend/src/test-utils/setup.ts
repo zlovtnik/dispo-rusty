@@ -25,8 +25,11 @@ if (!import.meta.env.PROD) {
   (import.meta.env as Record<string, boolean>).PROD =
     (process.env.NODE_ENV || 'test') === 'production';
 }
-import '@testing-library/jest-dom';
+import * as matchers from '@testing-library/jest-dom/matchers';
 import { cleanup } from '@testing-library/react';
+
+// Extend Bun's expect with jest-dom matchers
+expect.extend(matchers);
 import { afterEach, beforeAll, afterAll } from 'bun:test';
 import { setupMSW, teardownMSW, resetMSW } from './mocks/server';
 

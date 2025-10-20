@@ -14,7 +14,6 @@ import { useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import type { LoginCredentials } from '@/types/auth';
 import type { AuthFlowError } from '@/types/errors';
-import { asTenantId } from '@/types/ids';
 import { Card, Form, Input, Button, Checkbox, Typography, Alert, Flex } from 'antd';
 import { type Result, ok, err } from 'neverthrow';
 import { match } from 'ts-pattern';
@@ -32,7 +31,6 @@ import {
 import type { TenantId } from '@/types/ids';
 import {
   createFormPipeline,
-  Sanitizers,
   PipelineStates,
   isPipelineLoading,
   formatPipelineError,

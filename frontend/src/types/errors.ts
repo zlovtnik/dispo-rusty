@@ -12,6 +12,15 @@ export interface ValidationError extends BaseError {
   readonly type: 'validation';
 }
 
+export interface ValidationErrorDetails {
+  readonly issues?: unknown[];
+  readonly [key: string]: unknown;
+}
+
+export interface TypedValidationError extends Omit<ValidationError, 'details'> {
+  readonly details?: ValidationErrorDetails;
+}
+
 export interface NetworkError extends BaseError {
   readonly type: 'network';
 }
@@ -24,13 +33,13 @@ export interface BusinessLogicError extends BaseError {
   readonly type: 'business';
 }
 
-export type AppError = ValidationError | NetworkError | AuthError | BusinessLogicError;
+export type AppError = TypedValidationError | NetworkError | AuthError | BusinessLogicError;
 
 export const createValidationError = (
   message: string,
   details?: Record<string, unknown>,
   options?: { code?: string; cause?: unknown; statusCode?: number }
-): ValidationError => ({
+): TypedValidationError => ({
   type: 'validation',
   message,
   details,
@@ -276,7 +285,7 @@ export const formatStorageError = (error: StorageError): string => {
     case 'STORAGE_UNAVAILABLE':
       return `Storage unavailable: ${error.reason}`;
     case 'VERSION_MISMATCH':
-      return `Storage version mismatch for '${error.key}': expected ${String(error.expected)}, got ${String(error.got)}`;
+      return `Storage version mismatch for '${error.key}': expected ${error.expected}, got ${error.got}`;
   }
 };
 
@@ -302,15 +311,15 @@ export const formatCredentialValidationError = (error: CredentialValidationError
     case 'EMPTY_USERNAME':
       return 'Username cannot be empty';
     case 'USERNAME_TOO_SHORT':
-      return `Username must be at least ${String(error.min)} characters (got ${String(error.actual)})`;
+      return `Username must be at least ${error.min} characters (got ${error.actual})`;
     case 'USERNAME_TOO_LONG':
-      return `Username must be at most ${String(error.max)} characters (got ${String(error.actual)})`;
+      return `Username must be at most ${error.max} characters (got ${error.actual})`;
     case 'INVALID_USERNAME_FORMAT':
       return `Username format is invalid (expected: ${error.pattern})`;
     case 'EMPTY_PASSWORD':
       return 'Password cannot be empty';
     case 'PASSWORD_TOO_SHORT':
-      return `Password must be at least ${String(error.min)} characters (got ${String(error.actual)})`;
+      return `Password must be at least ${error.min} characters (got ${error.actual})`;
     case 'PASSWORD_TOO_WEAK':
       return `Password must meet requirements: ${error.requirements.join(', ')}`;
     case 'EMPTY_TENANT_ID':

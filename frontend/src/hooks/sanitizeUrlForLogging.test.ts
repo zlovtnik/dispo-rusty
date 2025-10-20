@@ -54,9 +54,6 @@ test('case-insensitive sensitive keys are removed', () => {
   expect(sanitizedToken).toBe('/api');
   expect(sanitizedTOKEN).toBe('/api');
   expect(sanitizedMixed).toBe('/api');
-  expect(sanitizedToken).not.toContain('Token=');
-  expect(sanitizedTOKEN).not.toContain('TOKEN=');
-  expect(sanitizedMixed).not.toContain('ToKeN=');
 });
 
 test('URLs with fragments preserve fragment and remove sensitive params', () => {

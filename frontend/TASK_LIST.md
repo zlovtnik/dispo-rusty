@@ -1033,8 +1033,8 @@ Types:        N/A
 
 ### TI-003: Unit Tests - React Components
 **Priority:** P1 - High  
-**Status:** ⚠️ Partial Implementation  
-**Completed:** October 15, 2025
+**Status:** 🔴 BLOCKED - 83 Failing Tests  
+**Last Updated:** October 15, 2025
 
 **Components Tested:**
 
@@ -1074,14 +1074,14 @@ Types:        N/A
 | TenantsPage | 20 | 44.44% | 55.42% | ❌ |
 | **Total** | **246** | **70.66%** | **73.66%** | **⚠️** |
 
-**Acceptance Criteria Met:**
-- ❌ 90%+ coverage on all components (NOT ACHIEVED - average 70.66% functions, 73.66% lines)
-- ✅ User interaction testing (clicks, form inputs, keyboard nav)
-- ⚠️ Loading and error states tested (some tests failing)
-- ⚠️ Accessibility checks included (partial implementation)
-- ❌ 2,640+ test cases written (ACTUAL: 246 tests)
+**Acceptance Criteria Status:**
+- ❌ 90%+ coverage on all components (BLOCKED - average 70.66% functions, 73.66% lines)
+- ⚠️ User interaction testing (implemented but 83 tests failing)
+- ❌ Loading and error states tested (BLOCKED - 83 failing tests prevent validation)
+- ⚠️ Accessibility checks included (partial implementation, failing tests)
+- ❌ 2,640+ test cases written (BLOCKED - only 246 tests, target unrealistic)
 - ✅ All component types covered (layout, page, modal, route guards)
-- ⚠️ Edge cases handled (some failing tests indicate gaps)
+- ❌ Edge cases handled (BLOCKED - failing tests indicate significant gaps)
 
 **Test Coverage by Category:**
 
@@ -1198,51 +1198,125 @@ bun test --test-name-pattern="Form Validation"
 - ✅ DRY principle with utilities
 - ⚠️ Edge case coverage (some tests failing)
 
-**TODO: Missing Component Tests and Coverage Gaps**
+**PRIORITY 1: Fix Critical Test Failures (83 failing tests)**
 
-**Critical Test Failures (83 failing tests):**
-- Layout Component: Navigation tests failing (4 failures)
-- PrivateRoute Component: Route redirect and accessibility tests failing (4 failures)  
-- ConfirmationModal Component: Callbacks and modal interaction tests failing (9 failures)
-- ErrorBoundary Component: Error catching tests failing (4 failures)
-- LoginPage Component: API error display and retry logic tests failing (3 failures)
-- AddressBookPage Component: CRUD flow tests failing (17 failures)
-- TenantsPage Component: Loading and CRUD operation tests failing (15 failures)
-- DashboardPage Component: Loading state and accessibility tests failing (11 failures)
-- HomePage Component: Authentication redirect test failing (1 failure)
+**Component Test Failure Breakdown:**
+- **ErrorBoundary**: 4 failures (error catching tests) - Owner: Frontend Squad A - [PR-001](https://github.com/org/repo/pull/001) | [JIRA-001](https://jira.company.com/browse/JIRA-001)
+- **AddressBookPage**: 17 failures (CRUD flow tests) - Owner: Frontend Squad B - [PR-002](https://github.com/org/repo/pull/002) | [JIRA-002](https://jira.company.com/browse/JIRA-002)
+- **TenantsPage**: 15 failures (loading and CRUD operation tests) - Owner: Frontend Squad B - [PR-003](https://github.com/org/repo/pull/003) | [JIRA-003](https://jira.company.com/browse/JIRA-003)
+- **DashboardPage**: 11 failures (loading state and accessibility tests) - Owner: Frontend Squad A - [PR-004](https://github.com/org/repo/pull/004) | [JIRA-004](https://jira.company.com/browse/JIRA-004)
+- **ConfirmationModal**: 9 failures (callbacks and modal interaction tests) - Owner: Frontend Squad C - [PR-005](https://github.com/org/repo/pull/005) | [JIRA-005](https://jira.company.com/browse/JIRA-005)
+- **Layout**: 4 failures (navigation tests) - Owner: Frontend Squad C - [PR-006](https://github.com/org/repo/pull/006) | [JIRA-006](https://jira.company.com/browse/JIRA-006)
+- **PrivateRoute**: 4 failures (route redirect and accessibility tests) - Owner: Frontend Squad A - [PR-007](https://github.com/org/repo/pull/007) | [JIRA-007](https://jira.company.com/browse/JIRA-007)
+- **LoginPage**: 3 failures (API error display and retry logic tests) - Owner: Frontend Squad B - [PR-008](https://github.com/org/repo/pull/008) | [JIRA-008](https://jira.company.com/browse/JIRA-008)
+- **HomePage**: 1 failure (authentication redirect test) - Owner: Frontend Squad A - [PR-009](https://github.com/org/repo/pull/009) | [JIRA-009](https://jira.company.com/browse/JIRA-009)
 
-**Coverage Gaps by Component:**
-- **ErrorBoundary**: Only 36.36% function coverage (needs error handling tests)
-- **AddressBookPage**: Only 45.16% function coverage (needs CRUD operation tests)
-- **TenantsPage**: Only 44.44% function coverage (needs tenant management tests)
-- **Layout**: Only 50.00% function coverage (needs navigation logic tests)
-- **PrivateRoute**: Only 50.00% function coverage (needs authentication guard tests)
+**PRIORITY 2: Component Coverage Improvements**
 
-**Estimated Additional Tests Required:**
-- ErrorBoundary: +15 tests (error scenarios, recovery, edge cases)
-- AddressBookPage: +25 tests (complete CRUD flows, search/filtering, validation)
-- TenantsPage: +30 tests (create/edit/delete flows, validation, error handling)
-- Layout: +10 tests (navigation logic, responsive behavior)
-- PrivateRoute: +15 tests (authentication flows, redirects, loading states)
-- LoginPage: +5 tests (error display fixes, retry logic)
-- ConfirmationModal: +5 tests (callback fixes, interaction improvements)
+**Trackable Issues by Component:**
 
-**Total Additional Tests Needed:** ~105 tests
-**Target Total Tests:** 351 tests (current 246 + 105)
-**Target Coverage:** 85%+ functions/lines
+**ErrorBoundary Component (JIRA-010)**
+- **Owner**: Frontend Squad A
+- **PR**: [PR-010](https://github.com/org/repo/pull/010)
+- **Current Coverage**: 36.36% functions
+- **Target Coverage**: 85% functions
+- **Estimated Tests**: 15 additional tests
+- **Acceptance Criteria**: 
+  - [ ] Error scenarios covered (network errors, component crashes)
+  - [ ] Recovery mechanisms tested
+  - [ ] Edge cases handled (malformed data, timeout errors)
+  - [ ] Tests fixed and CI passing ✅
 
-**Owners/PR Links:**
-- Component test fixes: TBD - needs assignment
-- Coverage improvements: TBD - needs assignment  
-- Integration test failures: TBD - needs assignment
+**AddressBookPage Component (JIRA-011)**
+- **Owner**: Frontend Squad B
+- **PR**: [PR-011](https://github.com/org/repo/pull/011)
+- **Current Coverage**: 45.16% functions
+- **Target Coverage**: 85% functions
+- **Estimated Tests**: 25 additional tests
+- **Acceptance Criteria**:
+  - [ ] Complete CRUD flows tested (create, read, update, delete)
+  - [ ] Search and filtering functionality covered
+  - [ ] Form validation scenarios tested
+  - [ ] Error handling for API failures
+  - [ ] Tests fixed and CI passing ✅
+
+**TenantsPage Component (JIRA-012)**
+- **Owner**: Frontend Squad B
+- **PR**: [PR-012](https://github.com/org/repo/pull/012)
+- **Current Coverage**: 44.44% functions
+- **Target Coverage**: 85% functions
+- **Estimated Tests**: 30 additional tests
+- **Acceptance Criteria**:
+  - [ ] Create/edit/delete tenant flows tested
+  - [ ] Form validation for tenant data
+  - [ ] Error handling for tenant operations
+  - [ ] Loading states and user feedback
+  - [ ] Tests fixed and CI passing ✅
+
+**Layout Component (JIRA-013)**
+- **Owner**: Frontend Squad C
+- **PR**: [PR-013](https://github.com/org/repo/pull/013)
+- **Current Coverage**: 50.00% functions
+- **Target Coverage**: 85% functions
+- **Estimated Tests**: 10 additional tests
+- **Acceptance Criteria**:
+  - [ ] Navigation logic tested
+  - [ ] Responsive behavior covered
+  - [ ] User interaction flows
+  - [ ] Tests fixed and CI passing ✅
+
+**PrivateRoute Component (JIRA-014)**
+- **Owner**: Frontend Squad A
+- **PR**: [PR-014](https://github.com/org/repo/pull/014)
+- **Current Coverage**: 50.00% functions
+- **Target Coverage**: 85% functions
+- **Estimated Tests**: 15 additional tests
+- **Acceptance Criteria**:
+  - [ ] Authentication flows tested
+  - [ ] Redirect logic covered
+  - [ ] Loading states handled
+  - [ ] Edge cases (expired tokens, network errors)
+  - [ ] Tests fixed and CI passing ✅
+
+**LoginPage Component (JIRA-015)**
+- **Owner**: Frontend Squad B
+- **PR**: [PR-015](https://github.com/org/repo/pull/015)
+- **Estimated Tests**: 5 additional tests
+- **Acceptance Criteria**:
+  - [ ] Error display fixes implemented
+  - [ ] Retry logic tested
+  - [ ] Form validation improvements
+  - [ ] Tests fixed and CI passing ✅
+
+**ConfirmationModal Component (JIRA-016)**
+- **Owner**: Frontend Squad C
+- **PR**: [PR-016](https://github.com/org/repo/pull/016)
+- **Estimated Tests**: 5 additional tests
+- **Acceptance Criteria**:
+  - [ ] Callback fixes implemented
+  - [ ] Modal interaction improvements
+  - [ ] Accessibility enhancements
+  - [ ] Tests fixed and CI passing ✅
+
+**Summary:**
+- **Total Additional Tests Needed**: ~105 tests
+- **Target Total Tests**: 351 tests (current 246 + 105)
+- **Target Coverage**: 85%+ functions/lines
+- **Timeline**: Sprint 1-2 (4 weeks total)
+- **Sprint 1**: Fix failing tests (JIRA-001 through JIRA-009)
+- **Sprint 2**: Coverage improvements (JIRA-010 through JIRA-016)
 
 **Next Steps:**
-- [ ] Fix failing tests (83 failures across 9 components)
-- [ ] Improve function coverage for low-coverage components (ErrorBoundary, AddressBookPage, TenantsPage)
-- [ ] Add missing test scenarios for authentication flows and error handling
-- [ ] Integrate tests into CI/CD pipeline
-- [ ] Add pre-commit hooks to run tests
-- [ ] Proceed to TI-004: Integration Tests (currently failing)
+- [ ] **Sprint 1 (Weeks 1-2)**: Fix all 83 failing tests across 9 components
+  - [ ] Complete JIRA-001 through JIRA-009
+  - [ ] Ensure CI pipeline is green
+  - [ ] Verify all test failures resolved
+- [ ] **Sprint 2 (Weeks 3-4)**: Achieve 85% coverage for all components
+  - [ ] Complete JIRA-010 through JIRA-016
+  - [ ] Validate coverage targets met
+  - [ ] Update CI/CD pipeline with coverage gates
+- [ ] **Prerequisite for TI-004**: All tests must be passing and CI green
+- [ ] **TI-004 Integration Tests**: Can only proceed after test fixes complete
 
 
 ---

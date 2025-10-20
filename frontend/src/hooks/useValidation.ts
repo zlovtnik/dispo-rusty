@@ -180,7 +180,7 @@ export function useValidation<T, E = string>(
   const selectValueFromResult = useCallback(
     (validationResult: ValidationResult<T, E>, originalValue: T | undefined): T | undefined => {
       return validationResult.isValid && validationResult.value !== null
-        ? (validationResult.value as T)
+        ? validationResult.value
         : originalValue;
     },
     []
