@@ -83,14 +83,20 @@ export const HomePage: React.FC = () => {
           </Typography.Paragraph>
 
           <Space size="large">
-            <Link to="/register">
-              <Button type="primary" size="large">
-                Get Started
-              </Button>
-            </Link>
-            <Link to="/login">
-              <Button size="large">Sign In</Button>
-            </Link>
+            <Button
+              type="primary"
+              size="large"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  // Trigger click or navigate
+                }
+              }}
+            >
+              Get Started
+            </Button>
+            <Button size="large">Sign In</Button>
           </Space>
         </div>
 

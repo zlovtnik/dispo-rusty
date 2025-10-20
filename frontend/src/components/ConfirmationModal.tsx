@@ -29,8 +29,11 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
       okText={confirmText}
       cancelText={cancelText}
       centered
+      maskClosable={true}
+      aria-labelledby="modal-title"
+      aria-describedby="modal-description"
     >
-      {message}
+      <div id="modal-description">{message}</div>
     </Modal>
   );
 };

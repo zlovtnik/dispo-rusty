@@ -102,13 +102,10 @@ describe('Address Constants', () => {
   describe('Integration', () => {
     test('should have consistent state representation', () => {
       // Verify that STATE_CODES contains codes for states in STATE_NAMES
-      const stateNames = STATE_NAMES;
-      const stateCodes = STATE_CODES;
-
       // Check a few key states
-      expect(stateCodes.has('CA')).toBe(true); // California
-      expect(stateCodes.has('NY')).toBe(true); // New York
-      expect(stateCodes.has('TX')).toBe(true); // Texas
+      expect(STATE_CODES.has('CA')).toBe(true); // California
+      expect(STATE_CODES.has('NY')).toBe(true); // New York
+      expect(STATE_CODES.has('TX')).toBe(true); // Texas
     });
 
     test('should have reasonable coverage', () => {

@@ -37,7 +37,33 @@ export class CommonPasswordsLoader {
   private cachedList: CachedPasswordList | null = null;
   private loadingPromise: Promise<readonly string[]> | null = null;
 
-  private constructor(private readonly config: CommonPasswordsConfig) {}
+  private constructor(private readonly config: CommonPasswordsConfig) {
+    // Validate isSSR config matches runtime environment
+    this.validateSSRConfig();
+  }
+
+  /**
+   * Validate isSSR config matches runtime environment
+   */
+  private validateSSRConfig(): void {
+    if (this.config.isSSR !== undefined) {
+      const runtimeIsSSR = typeof window === 'undefined';
+
+      if (!this.config.isSSR && runtimeIsSSR) {
+        throw new Error(
+          'Configuration mismatch: isSSR is set to false but window is undefined (SSR environment). ' +
+            'The isSSR config must match the actual runtime environment.'
+        );
+      }
+
+      if (this.config.isSSR && !runtimeIsSSR) {
+        throw new Error(
+          'Configuration mismatch: isSSR is set to true but window is defined (client environment). ' +
+            'The isSSR config must match the actual runtime environment.'
+        );
+      }
+    }
+  }
 
   /**
    * Validate configuration values

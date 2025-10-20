@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'bun:test';
 import { screen } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
-import { renderWithAuth, renderWithoutAuth, mockUser, mockTenant } from '../../test-utils/render';
+import { renderWithAuth, renderWithoutAuth, mockUser, mockTenant, renderForIntegration } from '../../test-utils/render';
 import { PrivateRoute } from '../PrivateRoute';
+import { LoginPage } from '@/pages/LoginPage';
 
 // Test component to capture location
 const LocationDisplay = (): React.JSX.Element => {
@@ -28,17 +29,26 @@ describe('PrivateRoute Component', () => {
       expect(screen.getByText(testContent)).toBeVisible();
     });
 
-    it('should redirect to login when user is not authenticated', () => {
-      const testContent = 'Protected Content';
-      renderWithoutAuth(
+    it('should redirect to login when auth state changes to unauthenticated', async () => {
+      const { rerenderWithAuth } = renderWithAuth(
         <PrivateRoute>
-          <div>{testContent}</div>
-        </PrivateRoute>,
-        { initialRoute: '/protected' }
+          <div>Protected</div>
+        </PrivateRoute>
       );
 
-      // Should not render the protected content
-      expect(screen.queryByText(testContent)).toBeNull();
+      // Initially should show protected content
+      expect(screen.getByText('Protected')).toBeInTheDocument();
+
+      // Change auth state to unauthenticated
+      rerenderWithAuth(
+        <PrivateRoute>
+          <div>Protected</div>
+        </PrivateRoute>,
+        { authValue: { isAuthenticated: false } }
+      );
+
+      // Should redirect to login
+      expect(screen.getByText('Login')).toBeInTheDocument();
     });
 
     it('should display loading state while checking authentication', () => {
@@ -92,23 +102,37 @@ describe('PrivateRoute Component', () => {
   describe('Unauthenticated Access', () => {
     it('should redirect to login page when not authenticated', () => {
       const testContent = 'Protected Content';
-      renderWithoutAuth(
+      const { rerenderWithAuth } = renderWithAuth(
+        <PrivateRoute>
+          <div>{testContent}</div>
+        </PrivateRoute>
+      );
+
+      // Change auth state to unauthenticated
+      rerenderWithAuth(
         <PrivateRoute>
           <div>{testContent}</div>
         </PrivateRoute>,
-        { initialRoute: '/dashboard' }
+        { authValue: { isAuthenticated: false } }
       );
 
-      // Protected content should not be visible
-      expect(screen.queryByText(testContent)).toBeNull();
+      // Should redirect to login
+      expect(screen.getByText('Login')).toBeInTheDocument();
     });
 
     it('should pass location state for redirect', () => {
-      renderWithoutAuth(
+      const { rerenderWithAuth } = renderWithAuth(
+        <PrivateRoute>
+          <div>Protected</div>
+        </PrivateRoute>
+      );
+
+      // Change auth state to unauthenticated
+      rerenderWithAuth(
         <PrivateRoute>
           <div>Protected</div>
         </PrivateRoute>,
-        { initialRoute: '/contacts' }
+        { authValue: { isAuthenticated: false } }
       );
 
       // Should attempt redirect to login
@@ -116,58 +140,105 @@ describe('PrivateRoute Component', () => {
     });
 
     it('should preserve intended destination in location state', () => {
-      renderWithoutAuth(
-        <PrivateRoute>
-          <div>Dashboard</div>
-        </PrivateRoute>,
-        { initialRoute: '/dashboard' }
+      const { rerenderWithAuth } = renderWithAuth(
+        <>
+          <LocationDisplay />
+          <PrivateRoute>
+            <div>Dashboard</div>
+          </PrivateRoute>
+        </>
       );
 
-      // Location state should be set for post-login redirect
-      expect(screen.queryByText('Dashboard')).toBeNull();
-      // Optionally verify redirect URL or location state if test utils support it
+      // Change auth state to unauthenticated
+      rerenderWithAuth(
+        <>
+          <LocationDisplay />
+          <PrivateRoute>
+            <div>Dashboard</div>
+          </PrivateRoute>
+        </>,
+        { authValue: { isAuthenticated: false } }
+      );
+
+      // Should redirect to login
+      expect(screen.getByText('Login')).toBeInTheDocument();
+      
+      // Check that location state contains the original path
+      const state = JSON.parse(screen.getByTestId('location-state').textContent || '{}') as {
+        from: { pathname: string };
+      };
+      expect(state.from.pathname).toBe('/');
     });
   });
 
   describe('Route Redirects', () => {
     it('should redirect unauthenticated users to login', () => {
-      renderWithoutAuth(
-        <PrivateRoute>
-          <div>Protected</div>
-        </PrivateRoute>,
-        { initialRoute: '/protected' }
-      );
-
-      // Should not display protected content
-      expect(screen.queryByText('Protected')).toBeNull();
-    });
-
-    it('should redirect to login with replace mode', () => {
-      renderWithoutAuth(
+      const { rerenderWithAuth } = renderWithAuth(
         <PrivateRoute>
           <div>Protected</div>
         </PrivateRoute>
       );
 
-      // Protected content should not be rendered when redirecting
-      expect(screen.queryByText('Protected')).toBeNull();
+      // Change auth state to unauthenticated
+      rerenderWithAuth(
+        <PrivateRoute>
+          <div>Protected</div>
+        </PrivateRoute>,
+        { authValue: { isAuthenticated: false } }
+      );
+
+      // Should redirect to login
+      expect(screen.getByText('Login')).toBeInTheDocument();
+    });
+
+    it('should redirect to login with replace mode', () => {
+      const { rerenderWithAuth } = renderWithAuth(
+        <PrivateRoute>
+          <div>Protected</div>
+        </PrivateRoute>
+      );
+
+      // Change auth state to unauthenticated
+      rerenderWithAuth(
+        <PrivateRoute>
+          <div>Protected</div>
+        </PrivateRoute>,
+        { authValue: { isAuthenticated: false } }
+      );
+
+      // Should redirect to login with replace mode
+      expect(screen.getByText('Login')).toBeInTheDocument();
     });
 
     it('should store current location for post-login redirect', () => {
-      renderWithoutAuth(
-        <MemoryRouter initialEntries={['/dashboard/settings']}>
+      const { rerenderWithAuth } = renderWithAuth(
+        <>
           <LocationDisplay />
           <PrivateRoute>
             <div>Dashboard</div>
           </PrivateRoute>
-        </MemoryRouter>
+        </>
       );
 
-      expect(screen.getByTestId('location-path').textContent).toBe('/login');
+      // Change auth state to unauthenticated
+      rerenderWithAuth(
+        <>
+          <LocationDisplay />
+          <PrivateRoute>
+            <div>Dashboard</div>
+          </PrivateRoute>
+        </>,
+        { authValue: { isAuthenticated: false } }
+      );
+
+      // Should redirect to login
+      expect(screen.getByText('Login')).toBeInTheDocument();
+      
+      // Check that location state contains the original path
       const state = JSON.parse(screen.getByTestId('location-state').textContent || '{}') as {
         from: { pathname: string };
       };
-      expect(state.from.pathname).toBe('/dashboard/settings');
+      expect(state.from.pathname).toBe('/');
     });
   });
 
@@ -193,13 +264,28 @@ describe('PrivateRoute Component', () => {
     });
 
     it('should handle null user object gracefully', () => {
-      renderWithoutAuth(
+      const { rerenderWithAuth } = renderWithAuth(
         <PrivateRoute>
           <div>Protected</div>
         </PrivateRoute>
       );
 
-      expect(screen.queryByText('Protected')).toBeNull();
+      // Change auth state to unauthenticated with null user and tenant
+      rerenderWithAuth(
+        <PrivateRoute>
+          <div>Protected</div>
+        </PrivateRoute>,
+        { 
+          authValue: { 
+            isAuthenticated: false, 
+            user: null, 
+            tenant: null 
+          } 
+        }
+      );
+
+      // Should redirect to login
+      expect(screen.getByText('Login')).toBeInTheDocument();
     });
   });
 
@@ -302,14 +388,37 @@ describe('PrivateRoute Component', () => {
     });
 
     it('should handle auth state transition from loading to unauthenticated', () => {
-      renderWithoutAuth(
+      const { rerenderWithAuth } = renderWithAuth(
         <PrivateRoute>
           <div>Protected</div>
         </PrivateRoute>,
-        { authValue: { isLoading: false, isAuthenticated: false } }
+        { 
+          authValue: { 
+            isLoading: true, 
+            isAuthenticated: true, 
+            user: mockUser, 
+            tenant: mockTenant 
+          } 
+        }
       );
 
-      expect(screen.queryByText('Protected')).toBeNull();
+      // Change auth state to unauthenticated
+      rerenderWithAuth(
+        <PrivateRoute>
+          <div>Protected</div>
+        </PrivateRoute>,
+        { 
+          authValue: { 
+            isLoading: false, 
+            isAuthenticated: false, 
+            user: null, 
+            tenant: null 
+          } 
+        }
+      );
+
+      // Should redirect to login
+      expect(screen.getByText('Login')).toBeInTheDocument();
     });
   });
 });

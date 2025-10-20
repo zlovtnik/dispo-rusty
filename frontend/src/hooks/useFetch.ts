@@ -58,17 +58,23 @@ const parseUrlSafely = (urlStr: string): URL => {
 export const sanitizeUrlForLogging = (urlStr: string): string => {
   try {
     const parsed = parseUrlSafely(urlStr);
-    const sensitiveKeys = SENSITIVE_QUERY_PARAMS;
+    const sensitiveKeys = SENSITIVE_QUERY_PARAMS.map(key => key.toLowerCase());
 
-    // Remove sensitive parameters
-    for (const key of sensitiveKeys) {
-      if (parsed.searchParams.has(key)) {
-        parsed.searchParams.delete(key);
+    // Remove sensitive parameters (case-insensitive)
+    // URLSearchParams keys are case-sensitive, so we need to collect keys first
+    const keysToDelete: string[] = [];
+    for (const [key] of parsed.searchParams) {
+      if (sensitiveKeys.includes(key.toLowerCase())) {
+        keysToDelete.push(key);
       }
     }
+    keysToDelete.forEach(key => parsed.searchParams.delete(key));
+
+    // Preserve fragments (URL hash)
+    const hash = urlStr.includes('#') ? '#' + urlStr.split('#')[1] : '';
 
     // Return only pathname + remaining safe query params to avoid leaking origin/protocol
-    return parsed.pathname + (parsed.search ? parsed.search : '');
+    return parsed.pathname + (parsed.search ? parsed.search : '') + hash;
   } catch {
     // If URL parsing fails, return a redacted placeholder
     return 'redacted-url';
@@ -327,7 +333,7 @@ export function useFetch<T = unknown>(
               );
             }
             // Use validated data from Zod (which ensures type safety)
-            transformedData = validationResult.data as T;
+            transformedData = validationResult.data;
           }
 
           return ok(transformedData);
@@ -437,14 +443,13 @@ type OptimisticFetchOptions<T> = RequireTransformOrValidate<T> & OptimisticProps
  * };
  * ```
  */
-export function useOptimisticFetch<T>(url: string | null, options?: OptimisticFetchOptions<T>) {
+export function useOptimisticFetch<T>(url: string | null, options: OptimisticFetchOptions<T>) {
   // Extract optimistic-specific properties from the combined options
-  const { initialData, optimisticUpdate, rollbackUpdate, ...fetchOptions } = options || {};
+  const { initialData, optimisticUpdate, rollbackUpdate, ...fetchOptions } = options;
 
-  // Create properly-typed base fetch options without explicit cast
-  // The spread operator here ensures TypeScript infers the correct type
-  const baseFetchOptions: RequireTransformOrValidate<T> =
-    fetchOptions as RequireTransformOrValidate<T>;
+  // Explicitly type baseFetchOptions for clarity and to document that it contains the required
+  // transformResponse or validateResponse from the original options (guaranteed by OptimisticFetchOptions extends RequireTransformOrValidate)
+  const baseFetchOptions: RequireTransformOrValidate<T> = fetchOptions;
   const fetchState = useFetch<T>(url, baseFetchOptions);
 
   const [optimisticResult, setOptimisticResult] = React.useState<Result<T, AppError> | null>(

@@ -6,7 +6,7 @@
  */
 
 import { http, HttpResponse } from 'msw';
-import type { _LoginCredentials, _AuthResponse } from '../../types/auth';
+import type { LoginCredentials, AuthResponse } from '../../types/auth';
 import { mockUser, mockTenant } from '../render';
 import type { Tenant as BackendTenant } from '../../types/tenant';
 import type { ContactApiDTO } from '../../transformers/dto';
@@ -103,6 +103,11 @@ function isValidFilterGroup(group: FilterGroup): group is FilterGroup & {
  * This is the single source of truth for valid tenant fields
  */
 const BACKEND_TENANT_FIELDS = ['id', 'name', 'db_url', 'created_at', 'updated_at'] as const;
+
+/**
+ * Export the tenant fields as VALID_TENANT_FIELDS for use in tests
+ */
+export const VALID_TENANT_FIELDS = BACKEND_TENANT_FIELDS;
 type TenantFilterField = (typeof BACKEND_TENANT_FIELDS)[number];
 
 /**
@@ -121,6 +126,35 @@ function isValidOperator(operator: string): operator is Operator {
 }
 
 /**
+ * Translate frontend filter operators to backend operators
+ * Frontend uses user-friendly names like 'contains', 'equals'
+ * Backend expects 'like', 'eq', etc.
+ */
+function translateOperator(frontendOp: string): Operator {
+  const operatorMap: Record<string, Operator> = {
+    contains: 'like',
+    equals: 'eq',
+    'greater than': 'gt',
+    'greater or equal': 'gte' as any, // Note: backend may need gte support
+    'less than': 'lt',
+    'less or equal': 'lte' as any, // Note: backend may need lte support
+    // Direct backend operators (already in correct format)
+    like: 'like',
+    eq: 'eq',
+    ne: 'ne',
+    gt: 'gt',
+    lt: 'lt',
+  };
+
+  const translated = operatorMap[frontendOp.toLowerCase()];
+  if (!translated) {
+    testLogger.warn(`Unknown operator "${frontendOp}", defaulting to 'like'`);
+    return 'like';
+  }
+  return translated;
+}
+
+/**
  * Parse and validate a filter group into a ParsedFilter
  * Returns null if the filter is invalid
  */
@@ -134,14 +168,12 @@ function parseFilterGroup(group: FilterGroup): ParsedFilter | null {
     return null;
   }
 
-  if (!isValidOperator(group.operator)) {
-    testLogger.warn(`Invalid filter operator: "${group.operator}"`);
-    return null;
-  }
+  // Translate frontend operator to backend operator
+  const translatedOp = translateOperator(group.operator);
 
   return {
     field: group.field,
-    operator: group.operator,
+    operator: translatedOp,
     value: group.value,
   };
 }
@@ -737,7 +769,7 @@ export function getHandlers() {
       const name = body.name?.trim() ?? '';
       const parts = name.split(/\s+/).filter(part => part.length > 0);
       const first_name = parts[0] ?? 'Unknown';
-      const last_name = parts.slice(1).join(' ') ?? 'User';
+      const last_name = parts.slice(1).join(' ') || 'User';
 
       const newContact = {
         id: Math.max(0, ...mockContacts.map(c => Number(c.id)).filter(id => !isNaN(id))) + 1,
@@ -788,7 +820,7 @@ export function getHandlers() {
         const name = body.name.trim() ?? '';
         const parts = name.split(/\s+/).filter(part => part.length > 0);
         updates.first_name = parts[0] ?? 'Unknown';
-        updates.last_name = parts.slice(1).join(' ') ?? 'User';
+        updates.last_name = parts.slice(1).join(' ') || 'User';
       }
       if (body.email !== undefined) updates.email = body.email;
       if (body.phone !== undefined) updates.phone = body.phone;

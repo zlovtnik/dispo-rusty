@@ -153,9 +153,6 @@ const areEqual = (prevProps: FormFieldProps, nextProps: FormFieldProps): boolean
   }
 
   // Compare type-specific props based on field type
-  if (prevProps.type !== nextProps.type) {
-    return false;
-  }
 
   // Text field specific props
   if (
@@ -165,46 +162,51 @@ const areEqual = (prevProps: FormFieldProps, nextProps: FormFieldProps): boolean
     prevProps.type === 'textarea'
   ) {
     if (
-      'showCount' in prevProps &&
-      'showCount' in nextProps &&
-      prevProps.showCount !== nextProps.showCount
+      (prevProps as TextFormFieldProps).showCount !==
+      (nextProps as TextFormFieldProps).showCount
     ) {
       return false;
     }
     if (
-      'maxLength' in prevProps &&
-      'maxLength' in nextProps &&
-      prevProps.maxLength !== nextProps.maxLength
+      (prevProps as TextFormFieldProps).maxLength !==
+      (nextProps as TextFormFieldProps).maxLength
     ) {
       return false;
     }
-    if ('rows' in prevProps && 'rows' in nextProps && prevProps.rows !== nextProps.rows) {
+    if ((prevProps as TextFormFieldProps).rows !== (nextProps as TextFormFieldProps).rows) {
       return false;
     }
   }
 
   // Number field specific props
   if (prevProps.type === 'number') {
-    if ('min' in prevProps && 'min' in nextProps && prevProps.min !== nextProps.min) {
-      return false;
-    }
-    if ('max' in prevProps && 'max' in nextProps && prevProps.max !== nextProps.max) {
-      return false;
-    }
-    if ('step' in prevProps && 'step' in nextProps && prevProps.step !== nextProps.step) {
-      return false;
-    }
     if (
-      'precision' in prevProps &&
-      'precision' in nextProps &&
-      prevProps.precision !== nextProps.precision
+      (prevProps as NumberFormFieldProps).min !==
+      (nextProps as NumberFormFieldProps).min
     ) {
       return false;
     }
     if (
-      'inputNumberProps' in prevProps &&
-      'inputNumberProps' in nextProps &&
-      prevProps.inputNumberProps !== nextProps.inputNumberProps
+      (prevProps as NumberFormFieldProps).max !==
+      (nextProps as NumberFormFieldProps).max
+    ) {
+      return false;
+    }
+    if (
+      (prevProps as NumberFormFieldProps).step !==
+      (nextProps as NumberFormFieldProps).step
+    ) {
+      return false;
+    }
+    if (
+      (prevProps as NumberFormFieldProps).precision !==
+      (nextProps as NumberFormFieldProps).precision
+    ) {
+      return false;
+    }
+    if (
+      (prevProps as NumberFormFieldProps).inputNumberProps !==
+      (nextProps as NumberFormFieldProps).inputNumberProps
     ) {
       return false;
     }
@@ -212,19 +214,13 @@ const areEqual = (prevProps: FormFieldProps, nextProps: FormFieldProps): boolean
 
   // Select field specific props
   if (prevProps.type === 'select') {
-    if (
-      'options' in prevProps &&
-      'options' in nextProps &&
-      (prevProps.options !== nextProps.options ||
-        prevProps.options.length !== nextProps.options.length)
-    ) {
+    const prev = prevProps as SelectFormFieldProps;
+    const next = nextProps as SelectFormFieldProps;
+    // options is required, just compare references
+    if (prev.options !== next.options) {
       return false;
     }
-    if (
-      'selectProps' in prevProps &&
-      'selectProps' in nextProps &&
-      prevProps.selectProps !== nextProps.selectProps
-    ) {
+    if (prev.selectProps !== next.selectProps) {
       return false;
     }
   }
@@ -232,9 +228,8 @@ const areEqual = (prevProps: FormFieldProps, nextProps: FormFieldProps): boolean
   // Checkbox field specific props
   if (prevProps.type === 'checkbox') {
     if (
-      'children' in prevProps &&
-      'children' in nextProps &&
-      prevProps.children !== nextProps.children
+      (prevProps as CheckboxFormFieldProps).children !==
+      (nextProps as CheckboxFormFieldProps).children
     ) {
       return false;
     }
@@ -273,7 +268,7 @@ export const FormField = memo<FormFieldProps>(
       (fieldError && (isTouched || isSubmitted) ? 'error' : isFieldValid ? 'success' : undefined);
 
     const formItemProps: FormItemProps = {
-      label,
+      label: required ? `${label} *` : label,
       required,
       help: fieldError?.message ?? help,
       extra,

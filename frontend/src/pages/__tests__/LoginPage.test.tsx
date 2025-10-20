@@ -10,7 +10,6 @@ import type { LoginCredentials } from '../../types/auth';
 // Mock react-router-dom
 const mockNavigate = mock();
 void mock.module('react-router-dom', () => ({
-  ...jest.requireActual('react-router-dom'),
   useNavigate: () => mockNavigate,
 }));
 
@@ -298,11 +297,13 @@ describe('LoginPage Component', () => {
 
     it('should show loading state during submission', async () => {
       const user = userEvent.setup();
-      const deferred = createDeferred<unknown>();
+      const deferred = createDeferred<void>();
 
       renderWithoutAuth(<LoginPage />, {
         authValue: {
-          login: () => deferred.promise,
+          login: async () => {
+            await deferred.promise;
+          },
           isLoading: false,
         },
       });
@@ -327,7 +328,7 @@ describe('LoginPage Component', () => {
         ).toBe(true);
       });
 
-      deferred.resolve();
+      deferred.resolve(undefined);
       await deferred.promise;
     });
   });
@@ -532,14 +533,14 @@ describe('LoginPage Component', () => {
 
     it('should handle rapid form submissions', async () => {
       const user = userEvent.setup();
-      const deferred = createDeferred<unknown>();
+      const deferred = createDeferred<void>();
       let loginCallCount = 0;
 
       renderWithoutAuth(<LoginPage />, {
         authValue: {
-          login: () => {
+          login: async () => {
             loginCallCount += 1;
-            return deferred.promise;
+            await deferred.promise;
           },
           isLoading: false,
         },
@@ -564,7 +565,7 @@ describe('LoginPage Component', () => {
         expect(loginCallCount).toBe(1);
       });
 
-      deferred.resolve();
+      deferred.resolve(undefined);
       await deferred.promise;
     });
 

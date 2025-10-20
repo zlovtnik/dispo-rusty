@@ -295,102 +295,63 @@ export const contactFormSchema = z
     }
   });
 
-export const tenantFormSchema = z
-  .object({
-    name: z
-      .string()
-      .min(1, 'Tenant name is required')
-      .min(3, 'Tenant name must be at least 3 characters')
-      .max(100, 'Tenant name must be less than 100 characters')
-      .regex(/^[a-zA-Z0-9\s\-_'.,()]+$/, 'Tenant name contains invalid characters'),
-    db_url: z
-      .string()
-      .min(1, 'Database URL is required')
-      .refine(value => {
-        // Try parsing as a PostgreSQL URL first
-        try {
-          const url = new URL(value);
-          if (url.protocol === 'postgres:' || url.protocol === 'postgresql:') {
-            return true;
-          }
-        } catch {
-          // Not a valid URL, try parsing as libpq connection string
+export const tenantFormSchema = z.object({
+  name: z
+    .string()
+    .min(3, 'Tenant name must be at least 3 characters')
+    .max(100, 'Tenant name must be less than 100 characters')
+    .regex(/^[a-zA-Z0-9\s\-_'.,()]+$/, 'Tenant name contains invalid characters'),
+  db_url: z
+    .string()
+    .min(1, 'Database URL is required')
+    .refine(value => {
+      // Try parsing as a PostgreSQL URL first
+      try {
+        const url = new URL(value);
+        if (url.protocol === 'postgres:' || url.protocol === 'postgresql:') {
+          return true;
         }
+        // Reject valid URLs with wrong protocol
+        return false;
+      } catch {
+        // Not a valid URL, try parsing as libpq connection string
+      }
 
-        // Parse as libpq-style connection string (key=value pairs separated by whitespace)
-        const pairs = value.trim().split(/\s+/);
-        if (pairs.length === 0) {
-          return false;
-        }
-
-        // Validate each key=value pair
-        const keyValueRegex = /^[A-Za-z_][A-Za-z0-9_]*=\S+$/;
-        return pairs.every(pair => keyValueRegex.test(pair));
-      }, 'Please enter a valid PostgreSQL URL (postgres://...) or connection string (key=value pairs)'),
-  })
-  .refine(
-    data => {
-      // Ensure tenant name doesn't contain potentially harmful database connection strings
-      const name = data.name.toLowerCase();
-      // Check for URI schemes
-      const forbiddenSchemes = ['postgres://', 'postgresql://', 'pgsql://'];
-      if (forbiddenSchemes.some(scheme => name.includes(scheme))) {
+      // Parse as libpq-style connection string (key=value pairs with optional quoting)
+      // Regex pattern matches: key=(value | 'value' | "value") with optional whitespace
+      // Groups: 1=key, 2=full value with quotes, 3=captured value (unquoted)
+      const input = value.trim();
+      
+      // Match key=value pairs where value can be:
+      // - Single-quoted: 'value with spaces'
+      // - Double-quoted: "value with spaces"
+      // - Unquoted: no_spaces
+      const pairRegex = /([A-Za-z_][A-Za-z0-9_]*)=(?:'([^']*)'|"([^"]*)"|([^\s]+))/g;
+      
+      const matches = [];
+      let match;
+      while ((match = pairRegex.exec(input)) !== null) {
+        matches.push(match);
+      }
+      
+      // Must have at least one match
+      if (matches.length === 0) {
         return false;
       }
-      // Check for common database connection parameters
-      const forbiddenParams = [
-        'host=',
-        'port=',
-        'dbname=',
-        'user=',
-        'password=',
-        'sslmode=',
-        'ssl=',
-        'service=',
-        'socket=',
-      ];
-      if (forbiddenParams.some(param => name.includes(param))) {
-        return false;
-      }
-      // Check for database connection patterns more specifically
-      // Only reject if multiple key=value pairs are present (indicating connection string)
-      // or if known database parameter keys are used
-      const dbParamKeys = [
-        'host',
-        'port',
-        'user',
-        'password',
-        'dbname',
-        'database',
-        'sslmode',
-        'ssl',
-        'service',
-        'socket',
-      ];
-      const keyValuePairs = name.match(/\b\w+=\S+/g) ?? [];
-
-      // Reject if multiple key=value pairs (likely connection string)
-      if (keyValuePairs.length > 1) {
-        return false;
-      }
-
-      // Reject if single key=value pair uses known database parameter
-      if (keyValuePairs.length === 1) {
-        const firstPair = keyValuePairs[0];
-        if (firstPair) {
-          const key = firstPair.split('=')[0]?.toLowerCase();
-          if (key && dbParamKeys.includes(key)) {
-            return false;
-          }
-        }
-      }
-      return true;
-    },
-    {
-      message: 'Tenant name cannot contain database connection strings',
-      path: ['name'],
-    }
-  );
+      
+      // Verify the entire input was consumed by concatenating all matched segments
+      // and comparing to input (normalized to single spaces between pairs)
+      const reconstructed = matches
+        .map(m => m[0]) // Get full matched string for each pair
+        .join(' ')
+        .replace(/\s+/g, ' '); // Normalize multiple spaces to single space
+      
+      const normalized = input.replace(/\s+/g, ' '); // Normalize input for comparison
+      
+      // Accept if we consumed the entire input (all key=value pairs matched)
+      return reconstructed === normalized;
+    }, 'Please enter a valid PostgreSQL URL (postgres://...) or connection string (key=value pairs)'),
+});
 
 export const searchFormSchema = z.object({
   // Note: Search terms allow most printable characters for flexibility.

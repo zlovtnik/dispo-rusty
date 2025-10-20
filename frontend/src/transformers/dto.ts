@@ -8,12 +8,8 @@ import type { Gender } from '../types/person';
 import type { User, Tenant as AuthTenant } from '../types/auth';
 import type { Tenant as TenantRecord } from '../types/tenant';
 import { asContactId, asTenantId, asUserId } from '../types/ids';
-import {
-  booleanToGender,
-  genderToBoolean,
-  genderEnumToBoolean,
-  parseOptionalGender,
-} from './gender';
+import { COUNTRY_NAMES, COUNTRY_NAMES_SET, STATE_NAMES, STATE_NAMES_SET, STATE_CODES, COUNTRY_CODES } from '../constants/address';
+import { booleanToGender, genderEnumToBoolean, parseOptionalGender } from './gender';
 import { parseDate, parseOptionalDate, toIsoString } from './date';
 import { addressParsingLogger } from '../utils/logger';
 
@@ -36,8 +32,6 @@ const createTransformerError = (
       cause,
     }
   );
-
-import { COUNTRY_NAMES, STATE_NAMES, STATE_CODES, COUNTRY_CODES } from '../constants/address';
 
 const wrapTransformation =
   <Value, Output>(
@@ -162,8 +156,8 @@ const looksLikeState = (segment: string): boolean => {
   // US state abbreviations (exactly 2 letters) - use USPS codes to avoid false positives
   if (/^[A-Z]{2}$/.test(trimmed) && STATE_CODES.has(trimmed)) return true;
 
-  // Common full state names (exact match only, not substring)
-  return STATE_NAMES.includes(normalized);
+  // Common full state names (exact match only, not substring) - O(1) lookup with Set
+  return STATE_NAMES_SET.has(normalized);
 };
 
 /**
@@ -178,8 +172,8 @@ const looksLikeCountry = (segment: string): boolean => {
   // ISO country codes (2-3 letters) - use whitelist to avoid false positives
   if (/^[A-Z]{2,3}$/.test(trimmed) && COUNTRY_CODES.has(trimmed)) return true;
 
-  // Curated list of common country names (exact match only)
-  return COUNTRY_NAMES.includes(normalized);
+  // Curated list of common country names (exact match only) - O(1) lookup with Set
+  return COUNTRY_NAMES_SET.has(normalized);
 };
 
 /**

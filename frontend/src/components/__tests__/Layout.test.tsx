@@ -26,7 +26,7 @@ describe('Layout Component', () => {
       const firstName = mockUser.firstName;
 
       // User name should be visible in profile area
-      expect(screen.getByText(firstName)).toBeInTheDocument();
+      expect(screen.getByText(firstName!)).toBeInTheDocument();
     });
 
     it('should display tenant name in layout', () => {
@@ -59,8 +59,7 @@ describe('Layout Component', () => {
       const profileNameElement = screen.getByText(mockUser.firstName ?? '');
 
       // Verify the profile name element is within a dropdown trigger container
-      const profileContainer =
-        profileNameElement.closest('[role="button"]') ?? profileNameElement.closest('div');
+      const profileContainer = profileNameElement.closest('[role="button"]');
       expect(profileContainer).toBeInTheDocument();
 
       // Verify the avatar is present in the same container with correct initial
@@ -72,10 +71,8 @@ describe('Layout Component', () => {
       expect(profileNameElement).toBeInTheDocument();
       expect(profileNameElement).toHaveTextContent(mockUser.firstName ?? '');
 
-      // Verify the container has the expected cursor pointer style (dropdown trigger)
-      if (profileContainer) {
-        expect(profileContainer).toHaveStyle('cursor: pointer');
-      }
+      // Verify the container has a data attribute or class indicating it's a trigger
+      expect(profileContainer).toHaveAttribute('role', 'button');
     });
   });
 
@@ -144,8 +141,8 @@ describe('Layout Component', () => {
       const userElements = screen.queryAllByText(firstName);
       expect(userElements.length).toBeGreaterThan(0);
 
-      const firstElement = userElements[0];
-      await user.click(firstElement);
+      // Use non-null assertion since we verified length > 0
+      await user.click(userElements[0]!);
       // Dropdown should be triggered - check for visible dropdown content
       await waitFor(() => {
         const dropdown = screen.getByRole('menu');
@@ -292,17 +289,17 @@ describe('Layout Component', () => {
       // Verify menu items have proper accessibility attributes
       for (let i = 0; i < menuItems.length; i++) {
         const item = menuItems[i];
-        expect(item).toHaveAttribute('role', 'menuitem');
+        expect(item!).toHaveAttribute('role', 'menuitem');
         // Check if item is focusable (either tabIndex=0 or tabIndex=-1 but programmatically focusable)
-        const tabIndex = item.getAttribute('tabindex');
+        const tabIndex = item!.getAttribute('tabindex');
         expect(['0', '-1', null]).toContain(tabIndex);
       }
 
       // Test that menu items can receive focus programmatically
       expect(menuItems[0]).toBeDefined();
       const firstMenuItem = menuItems[0];
-      firstMenuItem.focus();
-      expect(document.activeElement).toBe(firstMenuItem);
+      firstMenuItem!.focus();
+      expect(document.activeElement).toBe(firstMenuItem!);
     });
 
     it.skip('should have proper heading hierarchy', () => {

@@ -9,7 +9,7 @@
 
 import { type Result, ok, err } from 'neverthrow';
 import type { CredentialValidationError } from '../types/errors';
-import { ValidationErrors, _formatCredentialValidationError } from '../types/errors';
+import { ValidationErrors, formatCredentialValidationError } from '../types/errors';
 import type { TenantId } from '../types/ids';
 
 // Re-export for convenience

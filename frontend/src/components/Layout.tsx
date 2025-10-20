@@ -81,16 +81,19 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       key: '/dashboard',
       icon: <DashboardOutlined />,
       label: 'Dashboard',
+      'aria-label': 'Navigate to Dashboard',
     },
     {
       key: '/address-book',
       icon: <ContactsOutlined />,
       label: 'Address Book',
+      'aria-label': 'Navigate to Address Book',
     },
     {
       key: '/tenants',
       icon: <DatabaseOutlined />,
       label: 'Tenants',
+      'aria-label': 'Navigate to Tenants Management',
     },
   ];
 
@@ -99,6 +102,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       key: 'profile',
       icon: <UserOutlined />,
       label: 'Profile',
+      'aria-label': 'View user profile',
       disabled: true,
     },
     {
@@ -108,6 +112,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       key: 'logout',
       icon: <LogoutOutlined />,
       label: 'Logout',
+      'aria-label': 'Log out of the application',
       onClick: handleLogout,
     },
   ];
@@ -156,16 +161,16 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           <Button
             type="text"
             icon={<MenuOutlined />}
-            aria-label="Toggle menu"
+            aria-label="Toggle sidebar menu"
             onClick={() => {
               setCollapsed(!collapsed);
             }}
             style={{ fontSize: token.fontSizeLG, color: token.colorTextSecondary }}
           />
-          <Breadcrumb items={generateBreadcrumbs(location.pathname)} />
+          <Breadcrumb items={generateBreadcrumbs(location.pathname)} aria-label="Current page navigation" />
           <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
             <div style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-              <Avatar style={{ backgroundColor: token.colorPrimary }}>
+              <Avatar alt="User profile avatar" style={{ backgroundColor: token.colorPrimary }}>
                 {(user?.firstName || user?.username || 'U').charAt(0).toUpperCase()}
               </Avatar>
               <span

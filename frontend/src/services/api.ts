@@ -484,9 +484,9 @@ class HttpClient implements IHttpClient {
 
   private safeGetTenantId(): string | null {
     const stored = localStorage.getItem('tenant');
-    if (!stored) return null;
+    if (stored == null || stored === '') return null;
     try {
-      const data = JSON.parse(stored);
+      const data = JSON.parse(stored) as Record<string, unknown>;
       if (
         typeof data === 'object' &&
         data !== null &&
@@ -495,7 +495,9 @@ class HttpClient implements IHttpClient {
       ) {
         return data.id;
       }
-    } catch {}
+    } catch {
+      // Ignore parsing errors
+    }
     return null;
   }
 

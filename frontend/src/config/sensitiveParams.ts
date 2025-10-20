@@ -85,11 +85,12 @@ export interface SensitiveParamsConfig {
  */
 export function getSensitiveQueryParams(config?: SensitiveParamsConfig): readonly string[] {
   if (config?.customParams) {
-    return config.customParams;
+    return config.customParams.map(param => param.toLowerCase().trim());
   }
 
   if (config?.additionalParams) {
-    return [...SENSITIVE_QUERY_PARAMS, ...config.additionalParams];
+    const normalized = config.additionalParams.map(param => param.toLowerCase().trim());
+    return Array.from(new Set([...SENSITIVE_QUERY_PARAMS, ...normalized]));
   }
 
   return SENSITIVE_QUERY_PARAMS;

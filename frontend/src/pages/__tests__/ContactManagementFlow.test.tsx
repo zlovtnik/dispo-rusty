@@ -196,7 +196,7 @@ const server = setupServer(
     if (idx === -1)
       return HttpResponse.json({ success: false, message: 'Not found' }, { status: 404 });
 
-    const existingContact = arr[idx];
+    const existingContact = arr[idx]!; // Contact is guaranteed to exist since idx !== -1
 
     // Only update allowed fields
     arr[idx] = {
@@ -339,10 +339,7 @@ const createContactCRUDHandlers = (tenantId = 'tenant-1'): HttpHandler[] => {
       const idx = arr.findIndex(c => c.id === id);
       if (idx === -1)
         return HttpResponse.json({ success: false, message: 'Not found' }, { status: 404 });
-      const existingContact = arr[idx];
-      if (!existingContact) {
-        return HttpResponse.json({ success: false, message: 'Contact not found' }, { status: 404 });
-      }
+      const existingContact = arr[idx]!; // Contact is guaranteed to exist since idx !== -1
       const updatedContact: Contact = {
         ...existingContact,
         firstName: typeof body.firstName === 'string' ? body.firstName : existingContact.firstName,

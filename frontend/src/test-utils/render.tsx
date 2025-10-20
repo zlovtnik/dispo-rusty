@@ -210,10 +210,10 @@ export function renderWithProviders(
  *
  * @param ui - React component to render
  * @param options - Render options
- * @returns Render result
+ * @returns Render result with enhanced rerender function
  */
 export function renderWithAuth(ui: ReactElement, options?: CustomRenderOptions) {
-  return renderWithProviders(ui, {
+  const renderResult = renderWithProviders(ui, {
     ...options,
     authValue: {
       isAuthenticated: true,
@@ -222,6 +222,28 @@ export function renderWithAuth(ui: ReactElement, options?: CustomRenderOptions) 
       ...options?.authValue,
     },
   });
+
+  // Enhanced rerender function that supports updating auth values
+  const rerenderWithAuth = (newUi: ReactElement, newOptions?: CustomRenderOptions) => {
+    const mergedOptions = {
+      ...options,
+      ...newOptions,
+      authValue: {
+        isAuthenticated: true,
+        user: mockUser,
+        tenant: mockTenant,
+        ...options?.authValue,
+        ...newOptions?.authValue,
+      },
+    };
+
+    return renderWithProviders(newUi, mergedOptions);
+  };
+
+  return {
+    ...renderResult,
+    rerenderWithAuth,
+  };
 }
 
 /**
@@ -265,9 +287,9 @@ export function renderWithAuthAndNavigation(ui: ReactElement, options?: CustomRe
 
   let capturedLocation: { pathname: string } = { pathname: options?.initialRoute ?? '/' };
 
-  const handleLocationChange = React.useCallback((location: { pathname: string }) => {
+  const handleLocationChange = (location: { pathname: string }) => {
     capturedLocation = location;
-  }, []);
+  };
 
   const renderResult = renderWithProviders(
     <LocationTracker onLocationChange={handleLocationChange}>{ui}</LocationTracker>,

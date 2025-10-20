@@ -33,12 +33,19 @@ export interface CommonPasswordsConfig {
   maxCacheEntries?: number;
   /** Base URL for SSR context when resolving relative paths (defaults to http://localhost:5173) */
   ssrBaseUrl?: string;
-  /** Explicit SSR flag to override automatic detection (preferred over typeof checks) */
+  /**
+   * Explicit SSR flag to override automatic detection (preferred over typeof checks).
+   * WARNING: If provided, this value MUST match the actual runtime environment:
+   * - Set to true only when running in SSR context (window is undefined)
+   * - Set to false only when running in client context (window is defined)
+   * - Mismatched values will throw a clear error to prevent ReferenceError
+   */
   isSSR?: boolean;
 }
 
 /**
  * Default configuration for common passwords loading
+ * Note: isSSR is intentionally omitted to enable automatic SSR detection at runtime
  */
 export const DEFAULT_COMMON_PASSWORDS_CONFIG = Object.freeze({
   filePath: '/config/common-passwords.json',

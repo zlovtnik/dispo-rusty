@@ -158,7 +158,8 @@ export const AddressBookPage: React.FC = () => {
   const [form] = Form.useForm();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Load contacts from API on component mount
+  // Add pagination state
+// Remove invalid paginationState - use Table's built-in  // Load contacts from API on component mount
   // Helper function to transform backend Person to frontend Contact
   const generateFallbackContactId = () => `contact-${Math.random().toString(36).slice(2, 10)}`;
 
@@ -268,10 +269,15 @@ export const AddressBookPage: React.FC = () => {
       return;
     }
 
-    const data = apiResponse.data;
+    const data = apiResponse.data as ContactListResponse;
     const records = Array.isArray(data?.contacts) ? data.contacts : [];
     const normalizedContacts = records.map(personToContact);
     setContacts(normalizedContacts);
+    setPaginationState({
+      current: data.page || 1,
+      pageSize: data.limit || 10,
+      total: data.total || 0,
+    });
     setLoading(false);
   }, [message, tenant, personToContact]);
 
@@ -469,6 +475,61 @@ export const AddressBookPage: React.FC = () => {
     },
   ];
 
+  // Define loadContactsWithParams
+  const loadContactsWithParams = async (params: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    sortField?: string;
+    sortOrder?: 'asc' | 'desc';
+  }) => {
+    if (!tenant) {
+      setContacts([]);
+      setError(null);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    const fullParams = {
+      page: params.page || 1,
+      limit: params.limit || 10,
+      search: searchTerm,
+      ...(params.sortField && { sort: `${params.sortField},${params.sortOrder}` }),
+    };
+    const result = await addressBookService.getAll(fullParams);
+
+    if (result.isErr()) {
+      const errorMessage = result.error.message || 'Failed to load contacts';
+      setError(errorMessage);
+      message.error(errorMessage);
+      setLoading(false);
+      return;
+    }
+
+    const apiResponse = result.value;
+
+    if (!isApiSuccess(apiResponse)) {
+      const errorMessage = apiResponse.error.message || 'Failed to load contacts';
+      setError(errorMessage);
+      message.error(errorMessage);
+      setLoading(false);
+      return;
+    }
+
+    const data = apiResponse.data as ContactListResponse;
+    const records = Array.isArray(data?.contacts) ? data.contacts : [];
+    const normalizedContacts = records.map(personToContact);
+    setContacts(normalizedContacts);
+    setPaginationState({
+      current: data.page || 1,
+      pageSize: data.limit || 10,
+      total: data.total || 0,
+    });
+    setLoading(false);
+  };
+
   return (
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
       {/* Header */}
@@ -508,6 +569,11 @@ export const AddressBookPage: React.FC = () => {
           onClose={() => {
             setError(null);
           }}
+          action={
+            <Button size="small" onClick={loadContacts}>
+              Retry
+            </Button>
+          }
         />
       )}
 
@@ -524,10 +590,21 @@ export const AddressBookPage: React.FC = () => {
             dataSource={filteredContacts}
             rowKey="id"
             pagination={{
-              pageSize: 10,
-              showSizeChanger: true,
-              showQuickJumper: true,
-              showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} contacts`,
+              current: paginationState.current,
+              pageSize: paginationState.pageSize,
+              total: paginationState.total,
+              onChange: (page, pageSize) => {
+                setPaginationState({ current: page, pageSize, total: paginationState.total });
+                // Reload with new params
+                loadContactsWithParams({ page, limit: pageSize });
+              },
+              showSorterTooltip: false,
+            }}
+            onChange={(pagination, filters, sorter) => {
+              if (sorter.field && sorter.order) {
+                setSorting({ field: sorter.field as string, order: sorter.order });
+                // Reload with sorting
+              }
             }}
             locale={{
               emptyText:
