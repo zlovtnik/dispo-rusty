@@ -176,6 +176,16 @@ export function useValidation<T, E = string>(
   const [value, setValueState] = useState<T | undefined>(initialValue);
   const [validating, setValidating] = useState(false);
 
+  // Helper to select transformed value or fallback to original
+  const selectValueFromResult = useCallback(
+    (validationResult: ValidationResult<T, E>, originalValue: T | undefined): T | undefined => {
+      return validationResult.isValid && validationResult.value !== null
+        ? (validationResult.value as T)
+        : originalValue;
+    },
+    []
+  );
+
   // Validation function exposed to consumers
   const validate = useCallback(
     (newValue: T | undefined): ValidationResult<T, E> => {
@@ -183,19 +193,13 @@ export function useValidation<T, E = string>(
       try {
         const validationResult = validateValue(newValue);
         setResult(validationResult);
-        // Keep state value in sync with transformed value (if validators normalize input)
-        // Store the transformed value from validators, or the original if no transformation
-        const next =
-          validationResult.isValid && validationResult.value !== null
-            ? (validationResult.value as T)
-            : newValue;
-        setValueState(next);
+        setValueState(selectValueFromResult(validationResult, newValue));
         return validationResult;
       } finally {
         setValidating(false);
       }
     },
-    [validateValue]
+    [validateValue, selectValueFromResult]
   );
 
   // Set value conditionally triggers validation when validateOnChange is true
@@ -205,17 +209,12 @@ export function useValidation<T, E = string>(
       if (validateOnChange) {
         const validationResult = validateValue(newValue);
         setResult(validationResult);
-        // Keep state value in sync with transformed value (if validators normalize input)
-        const next =
-          validationResult.isValid && validationResult.value !== null
-            ? (validationResult.value as T)
-            : newValue;
-        setValueState(next);
+        setValueState(selectValueFromResult(validationResult, newValue));
       } else {
         setValueState(newValue);
       }
     },
-    [validateOnChange, validateValue]
+    [validateOnChange, validateValue, selectValueFromResult]
   );
 
   // Reset validation state

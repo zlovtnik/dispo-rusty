@@ -171,6 +171,7 @@ export class ErrorBoundary extends Component<Props, State> {
             status="403"
             title="Authentication Error"
             subTitle={error.message}
+            data-testid="unauthorized-message"
             extra={
               <Button type="primary" onClick={() => (window.location.href = '/login')}>
                 Go to Login

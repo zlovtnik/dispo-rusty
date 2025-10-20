@@ -1,4 +1,4 @@
-# Copilot Instructions for Actix Web REST API Frontend
+# Copilot Instructions for TypeScript/React Frontend with Vite, Bun, and Ant Design
 
 ## Project Overview
 
@@ -20,7 +20,7 @@ This is a modern TypeScript/React frontend application built with Bun, Vite, Ant
 
 ### 1. Component Structure
 
-```
+```text
 src/
 ├── components/        # Reusable UI components (Ant Design based)
 ├── contexts/         # React context providers for global state
@@ -40,9 +40,18 @@ Use Railway-oriented programming with `neverthrow` Result types:
 ```typescript
 // ✅ CORRECT: Return Result types, don't throw
 async function fetchUser(id: string): Promise<Result<User, AppError>> {
-  return okAsync(user).orElse((error) => {
-    return errAsync(createAppError('USER_NOT_FOUND', `User ${id} not found`));
-  });
+  try {
+    const response = await fetch(`/api/users/${id}`);
+    
+    if (!response.ok) {
+      return errAsync(createAppError('USER_NOT_FOUND', `User ${id} not found`));
+    }
+    
+    const userData = await response.json();
+    return okAsync(userData);
+  } catch (error) {
+    return errAsync(createAppError('NETWORK_ERROR', `Failed to fetch user ${id}`));
+  }
 }
 
 // ❌ WRONG: Don't throw exceptions
@@ -78,6 +87,8 @@ try {
 
 - **Strict mode enabled**: All strict TypeScript rules active
 - **Path aliases**: Use `@/` for src imports, `@/components/*` for component imports
+  - **Verify configuration**: Check `tsconfig.json` for `"paths": { "@/*": ["./src/*"] }` or equivalent `vite.config.ts` alias setup
+  - **Reference**: See project's `tsconfig.json` and `vite.config.ts` for canonical path mapping configuration
 - **Type imports**: Use `import type` for type-only imports
 - **No any**: Avoid `any` type, use proper type definitions
 
@@ -94,7 +105,7 @@ import { getEnv } from '../config/env'; // Use path aliases
 ### 2. Component Patterns
 
 - **Functional components** with TypeScript
-- **Ant Design components only** - never use raw HTML elements
+- **Prefer Ant Design components** for interactive UI elements and controls, but permit semantic HTML (div, section, article, header, footer, etc.) for layout, semantics, and accessibility when Ant Design lacks an appropriate component - use raw HTML sparingly and with accessibility in mind
 - **Custom hooks** for complex logic
 - **Error boundaries** for error handling
 - **Accessibility compliant** (WCAG guidelines)
@@ -180,10 +191,12 @@ const apiUrl = import.meta.env.VITE_API_URL;
 
 ### 5. Security Considerations
 
-- **JWT tokens** stored securely (localStorage with httpOnly consideration)
-- **XSS prevention** through React's built-in escaping
+- **JWT tokens** stored securely via httpOnly cookies (strongly preferred) or localStorage if necessary
+  - httpOnly flag prevents JavaScript access, mitigating XSS token theft
+  - If localStorage is necessary: document the security trade-off and enforce strict XSS prevention + Content Security Policy
+- **XSS prevention** through React's built-in escaping and input sanitization
 - **CSRF protection** handled by backend
-- **Input validation** with Zod schemas
+- **Input validation** with Zod schemas on all forms
 - **Content Security Policy** headers in production
 
 ### 6. Testing Strategy
@@ -191,21 +204,38 @@ const apiUrl = import.meta.env.VITE_API_URL;
 - **Unit tests** for utilities and hooks
 - **Integration tests** for API services
 - **Component tests** for UI interactions
+- **MSW integration** for API mocking (see handlers in `test-utils/mocks/handlers.ts`)
 - **85%+ code coverage** target
 
 ```typescript
-// ✅ CORRECT: Test with neverthrow results
+// ✅ CORRECT: Test with MSW mocking and neverthrow results
 import { describe, expect, it } from 'bun:test';
 import { err, ok } from 'neverthrow';
+import { http, HttpResponse } from 'msw';
+import { getServer } from '../../test-utils/mocks/server';
 
 describe('userService', () => {
   it('should return user on success', async () => {
+    // Setup MSW handler
+    getServer().use(
+      http.get('/api/users/123', () => {
+        return HttpResponse.json({ id: '123', name: 'Test User' });
+      })
+    );
+
     const result = await userService.getUser('123');
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap()).toHaveProperty('id', '123');
   });
 
   it('should return error on failure', async () => {
+    // Override handler for error scenario
+    getServer().use(
+      http.get('/api/users/invalid', () => {
+        return HttpResponse.json({ error: 'Not found' }, { status: 404 });
+      })
+    );
+
     const result = await userService.getUser('invalid');
     expect(result.isErr()).toBe(true);
   });
@@ -354,8 +384,8 @@ bun run test:watch
 ### 3. Environment Setup
 
 - Copy `.env.example` to `.env.development`
-- Set required `VITE_API_URL`
-- Run `bun run dev`
+- Set required `VITE_API_URL` environment variable
+- Run `bun run dev` to start the development server
 
 ## Security Checklist
 

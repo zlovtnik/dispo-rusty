@@ -7,7 +7,7 @@
 
 import React, { type ReactElement } from 'react';
 import { render, type RenderOptions } from '@testing-library/react';
-import { BrowserRouter, MemoryRouter } from 'react-router-dom';
+import { BrowserRouter, MemoryRouter, useLocation } from 'react-router-dom';
 import { App as AntApp } from 'antd';
 import type { User, LoginCredentials, Tenant } from '../types/auth';
 import { asTenantId, asUserId } from '../types/ids';
@@ -74,16 +74,32 @@ export interface MockAuthContextValue {
 /**
  * Mock AuthContext value - define functions separately to ensure stability
  */
+
+/**
+ * Fallback mock for login function. Returns a resolved promise and can be overridden
+ * by test-specific mocks. Includes debug logging for test visibility.
+ */
 const mockLogin = async () => {
-  // Intentionally empty - mock implementation
+  console.debug('mockLogin called - fallback implementation');
+  return Promise.resolve();
 };
 
+/**
+ * Fallback mock for logout function. Returns a resolved promise and can be overridden
+ * by test-specific mocks. Includes debug logging for test visibility.
+ */
 const mockLogout = async () => {
-  // Intentionally empty - mock implementation
+  console.debug('mockLogout called - fallback implementation');
+  return Promise.resolve();
 };
 
+/**
+ * Fallback mock for refreshToken function. Returns a resolved promise and can be overridden
+ * by test-specific mocks. Includes debug logging for test visibility.
+ */
 const mockRefreshToken = async () => {
-  // Intentionally empty - mock implementation
+  console.debug('mockRefreshToken called - fallback implementation');
+  return Promise.resolve();
 };
 
 export const mockAuthContextValue: MockAuthContextValue = {
@@ -138,7 +154,7 @@ const MockAuthProvider: React.FC<{
   const mergedValue = React.useMemo(() => {
     const resolvedValue = typeof value === 'function' ? value() : value;
     return { ...mockAuthContextValue, ...resolvedValue };
-  }, [JSON.stringify(value)]);
+  }, [value]);
 
   return <AuthContext.Provider value={mergedValue}>{children}</AuthContext.Provider>;
 });
@@ -176,26 +192,21 @@ export function renderWithProviders(
   const RouterComponent = useBrowserRouter ? BrowserRouter : MemoryRouter;
   const routerProps = useBrowserRouter ? {} : { initialEntries: initialRoutes, initialIndex: 0 };
 
-  // Create wrapper component factory that returns a memoized component
-  // This prevents the wrapper from being recreated on every render
-  const createWrapper = () => {
-    return React.memo<{ children: React.ReactNode }>(({ children }) => {
-      let content = (
-        <RouterComponent {...routerProps}>
-          <MockAuthProvider value={authValue}>{children}</MockAuthProvider>
-        </RouterComponent>
-      );
+  // Create a direct functional Wrapper component
+  const Wrapper = ({ children }: { children: React.ReactNode }) => {
+    let content = (
+      <RouterComponent {...routerProps}>
+        <MockAuthProvider value={authValue}>{children}</MockAuthProvider>
+      </RouterComponent>
+    );
 
-      // Optionally wrap with Ant Design App component for message, modal, notification
-      if (withAntApp) {
-        content = <AntApp>{content}</AntApp>;
-      }
+    // Optionally wrap with Ant Design App component for message, modal, notification
+    if (withAntApp) {
+      content = <AntApp>{content}</AntApp>;
+    }
 
-      return content;
-    });
+    return content;
   };
-
-  const Wrapper = createWrapper();
 
   return render(ui, { wrapper: Wrapper, ...renderOptions });
 }
@@ -239,6 +250,51 @@ export function renderWithoutAuth(ui: ReactElement, options?: CustomRenderOption
 }
 
 /**
+ * Render with authenticated user and navigation tracking
+ * Returns the current location for testing redirects
+ *
+ * @param ui - React component to render
+ * @param options - Render options
+ * @returns Render result with location tracking
+ */
+export function renderWithAuthAndNavigation(ui: ReactElement, options?: CustomRenderOptions) {
+  const LocationTracker: React.FC<{
+    children: React.ReactNode;
+    onLocationChange: (location: { pathname: string }) => void;
+  }> = ({ children, onLocationChange }) => {
+    const location = useLocation();
+    React.useEffect(() => {
+      onLocationChange(location);
+    }, [location, onLocationChange]);
+    return <>{children}</>;
+  };
+
+  let capturedLocation: { pathname: string } = { pathname: options?.initialRoute ?? '/' };
+
+  const handleLocationChange = (location: { pathname: string }) => {
+    capturedLocation = location;
+  };
+
+  const renderResult = renderWithProviders(
+    <LocationTracker onLocationChange={handleLocationChange}>{ui}</LocationTracker>,
+    {
+      ...options,
+      authValue: {
+        isAuthenticated: true,
+        user: mockUser,
+        tenant: mockTenant,
+        ...options?.authValue,
+      },
+    }
+  );
+
+  return {
+    ...renderResult,
+    getCurrentLocation: () => capturedLocation,
+  };
+}
+
+/**
  * Render for integration tests without mock auth provider
  * Allows the App's AuthProvider to work normally with mocked API calls
  *
@@ -262,11 +318,7 @@ export function renderForIntegration(
 
   // Create wrapper component without MockAuthProvider
   const Wrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    let content = (
-      <RouterComponent {...routerProps}>
-        {children}
-      </RouterComponent>
-    );
+    let content = <RouterComponent {...routerProps}>{children}</RouterComponent>;
 
     // Optionally wrap with Ant Design App component for message, modal, notification
     if (withAntApp) {

@@ -1033,23 +1033,23 @@ Types:        N/A
 
 ### TI-003: Unit Tests - React Components
 **Priority:** P1 - High  
-**Status:** ✅ Completed  
+**Status:** ⚠️ Partial Implementation  
 **Completed:** October 15, 2025
 
 **Components Tested:**
 
 **Layout Components:**
-- [x] `Layout.tsx` - Navigation rendering, responsive behavior (220+ tests)
-- [x] `PrivateRoute.tsx` - Authentication guards (250+ tests)
-- [x] `ErrorBoundary.tsx` - Error catching and display (260+ tests)
-- [x] `ConfirmationModal.tsx` - Modal interaction and callbacks (280+ tests)
+- [x] `Layout.tsx` - Navigation rendering, responsive behavior (34 tests)
+- [x] `PrivateRoute.tsx` - Authentication guards (27 tests)
+- [x] `ErrorBoundary.tsx` - Error catching and display (29 tests)
+- [x] `ConfirmationModal.tsx` - Modal interaction and callbacks (32 tests)
 
 **Page Components:**
-- [x] `LoginPage.tsx` - Form validation, submission, error display (320+ tests)
-- [x] `AddressBookPage.tsx` - CRUD operations, search, filtering (340+ tests)
-- [x] `DashboardPage.tsx` - Data rendering, loading states (260+ tests)
-- [x] `TenantsPage.tsx` - Tenant management operations (330+ tests)
-- [x] `HomePage.tsx` - Basic rendering, feature display (180+ tests)
+- [x] `LoginPage.tsx` - Form validation, submission, error display (29 tests)
+- [x] `AddressBookPage.tsx` - CRUD operations, search, filtering (23 tests)
+- [x] `DashboardPage.tsx` - Data rendering, loading states (35 tests)
+- [x] `TenantsPage.tsx` - Tenant management operations (20 tests)
+- [x] `HomePage.tsx` - Basic rendering, feature display (17 tests)
 
 **Test Utilities Created:**
 - [x] `renderWithProviders()` - Wrap with AuthContext, Router, AntD App
@@ -1061,37 +1061,37 @@ Types:        N/A
 
 **Coverage Achieved:**
 
-| Component | Tests | Coverage | Status |
-|-----------|-------|----------|--------|
-| Layout | 220+ | 90%+ | ✅ |
-| PrivateRoute | 250+ | 90%+ | ✅ |
-| ErrorBoundary | 260+ | 90%+ | ✅ |
-| ConfirmationModal | 280+ | 90%+ | ✅ |
-| LoginPage | 320+ | 90%+ | ✅ |
-| HomePage | 180+ | 90%+ | ✅ |
-| DashboardPage | 260+ | 90%+ | ✅ |
-| AddressBookPage | 340+ | 90%+ | ✅ |
-| TenantsPage | 330+ | 90%+ | ✅ |
-| **Total** | **2,640+** | **90%+** | **✅** |
+| Component | Tests | Function Coverage | Line Coverage | Status |
+|-----------|-------|-------------------|---------------|--------|
+| Layout | 34 | 50.00% | 92.50% | ⚠️ |
+| PrivateRoute | 27 | 50.00% | 86.21% | ⚠️ |
+| ErrorBoundary | 29 | 36.36% | 23.68% | ❌ |
+| ConfirmationModal | 32 | 100.00% | 100.00% | ✅ |
+| LoginPage | 29 | 80.00% | 98.50% | ⚠️ |
+| HomePage | 17 | 100.00% | 100.00% | ✅ |
+| DashboardPage | 35 | 100.00% | 100.00% | ✅ |
+| AddressBookPage | 23 | 45.16% | 62.45% | ❌ |
+| TenantsPage | 20 | 44.44% | 55.42% | ❌ |
+| **Total** | **246** | **70.66%** | **73.66%** | **⚠️** |
 
 **Acceptance Criteria Met:**
-- ✅ 90%+ coverage on all components (ACHIEVED - average 91%+ across all components)
+- ❌ 90%+ coverage on all components (NOT ACHIEVED - average 70.66% functions, 73.66% lines)
 - ✅ User interaction testing (clicks, form inputs, keyboard nav)
-- ✅ Loading and error states tested (260+ tests dedicated to states)
-- ✅ Accessibility checks included (ARIA, keyboard nav, screen reader support)
-- ✅ 2,640+ test cases written
+- ⚠️ Loading and error states tested (some tests failing)
+- ⚠️ Accessibility checks included (partial implementation)
+- ❌ 2,640+ test cases written (ACTUAL: 246 tests)
 - ✅ All component types covered (layout, page, modal, route guards)
-- ✅ Edge cases handled (empty states, long content, special characters, rapid interactions)
+- ⚠️ Edge cases handled (some failing tests indicate gaps)
 
 **Test Coverage by Category:**
 
-**Rendering Tests (300+):**
+**Rendering Tests (~80):**
 - Component visibility and content display
 - Child component rendering
 - Conditional rendering based on state
 - Proper HTML structure
 
-**User Interaction Tests (500+):**
+**User Interaction Tests (~90):**
 - Button clicks and form inputs
 - Keyboard navigation (Tab, Enter, Escape)
 - Modal interactions
@@ -1099,21 +1099,21 @@ Types:        N/A
 - Pagination controls
 - Dropdown menus
 
-**State Management Tests (400+):**
+**State Management Tests (~40):**
 - Loading states and spinners
 - Error states and boundaries
 - Authentication context integration
 - Props updates and rerenders
 - Form submission states
 
-**Error Handling Tests (350+):**
+**Error Handling Tests (~25):**
 - Error boundaries and recovery
 - Validation error display
 - API error scenarios
 - Edge cases (empty inputs, long content, special chars)
 - Graceful degradation
 
-**Accessibility Tests (400+):**
+**Accessibility Tests (~15):**
 - ARIA labels and roles
 - Keyboard navigation and focus management
 - Screen reader support
@@ -1121,7 +1121,7 @@ Types:        N/A
 - Color contrast (via component styling)
 - Form accessibility
 
-**Responsive Design Tests (250+):**
+**Responsive Design Tests (~10):**
 - Desktop, tablet, mobile layouts
 - Responsive grid systems
 - Mobile-friendly interactions
@@ -1132,17 +1132,17 @@ Types:        N/A
 ```text
 frontend/src/
 ├── components/__tests__/
-│   ├── Layout.test.tsx (220+ tests)
-│   ├── PrivateRoute.test.tsx (250+ tests)
-│   ├── ErrorBoundary.test.tsx (260+ tests)
-│   ├── ConfirmationModal.test.tsx (280+ tests)
+│   ├── Layout.test.tsx (34 tests)
+│   ├── PrivateRoute.test.tsx (27 tests)
+│   ├── ErrorBoundary.test.tsx (29 tests)
+│   ├── ConfirmationModal.test.tsx (32 tests)
 │   └── README.md (comprehensive testing guide)
 └── pages/__tests__/
-    ├── LoginPage.test.tsx (320+ tests)
-    ├── HomePage.test.tsx (180+ tests)
-    ├── DashboardPage.test.tsx (260+ tests)
-    ├── AddressBookPage.test.tsx (340+ tests)
-    └── TenantsPage.test.tsx (330+ tests)
+    ├── LoginPage.test.tsx (29 tests)
+    ├── HomePage.test.tsx (17 tests)
+    ├── DashboardPage.test.tsx (35 tests)
+    ├── AddressBookPage.test.tsx (23 tests)
+    └── TenantsPage.test.tsx (20 tests)
 ```
 
 **Test Organization:**
@@ -1191,26 +1191,58 @@ bun test --test-name-pattern="Form Validation"
 **Best Practices Implemented:**
 - ✅ No implementation details testing (user-centric)
 - ✅ Proper async handling
-- ✅ Comprehensive error scenarios
-- ✅ Accessibility-first approach
+- ⚠️ Comprehensive error scenarios (some tests failing)
+- ⚠️ Accessibility-first approach (partial implementation)
 - ✅ Clear, maintainable test code
-- ✅ Proper test isolation
+- ⚠️ Proper test isolation (some tests failing)
 - ✅ DRY principle with utilities
-- ✅ Edge case coverage
+- ⚠️ Edge case coverage (some tests failing)
 
-**Documentation:**
-- Comprehensive README in `components/__tests__/`
-- JSDoc comments on test utilities
-- Inline comments for complex test logic
-- Usage examples in README
-- Troubleshooting guide
+**TODO: Missing Component Tests and Coverage Gaps**
+
+**Critical Test Failures (83 failing tests):**
+- Layout Component: Navigation tests failing (4 failures)
+- PrivateRoute Component: Route redirect and accessibility tests failing (4 failures)  
+- ConfirmationModal Component: Callbacks and modal interaction tests failing (9 failures)
+- ErrorBoundary Component: Error catching tests failing (4 failures)
+- LoginPage Component: API error display and retry logic tests failing (3 failures)
+- AddressBookPage Component: CRUD flow tests failing (17 failures)
+- TenantsPage Component: Loading and CRUD operation tests failing (15 failures)
+- DashboardPage Component: Loading state and accessibility tests failing (11 failures)
+- HomePage Component: Authentication redirect test failing (1 failure)
+
+**Coverage Gaps by Component:**
+- **ErrorBoundary**: Only 36.36% function coverage (needs error handling tests)
+- **AddressBookPage**: Only 45.16% function coverage (needs CRUD operation tests)
+- **TenantsPage**: Only 44.44% function coverage (needs tenant management tests)
+- **Layout**: Only 50.00% function coverage (needs navigation logic tests)
+- **PrivateRoute**: Only 50.00% function coverage (needs authentication guard tests)
+
+**Estimated Additional Tests Required:**
+- ErrorBoundary: +15 tests (error scenarios, recovery, edge cases)
+- AddressBookPage: +25 tests (complete CRUD flows, search/filtering, validation)
+- TenantsPage: +30 tests (create/edit/delete flows, validation, error handling)
+- Layout: +10 tests (navigation logic, responsive behavior)
+- PrivateRoute: +15 tests (authentication flows, redirects, loading states)
+- LoginPage: +5 tests (error display fixes, retry logic)
+- ConfirmationModal: +5 tests (callback fixes, interaction improvements)
+
+**Total Additional Tests Needed:** ~105 tests
+**Target Total Tests:** 351 tests (current 246 + 105)
+**Target Coverage:** 85%+ functions/lines
+
+**Owners/PR Links:**
+- Component test fixes: TBD - needs assignment
+- Coverage improvements: TBD - needs assignment  
+- Integration test failures: TBD - needs assignment
 
 **Next Steps:**
-- [ ] Run `bun test:coverage` to verify 90%+ coverage
+- [ ] Fix failing tests (83 failures across 9 components)
+- [ ] Improve function coverage for low-coverage components (ErrorBoundary, AddressBookPage, TenantsPage)
+- [ ] Add missing test scenarios for authentication flows and error handling
 - [ ] Integrate tests into CI/CD pipeline
 - [ ] Add pre-commit hooks to run tests
-- [ ] Proceed to TI-004: Integration Tests (optional)
-- [ ] Consider E2E tests with Playwright (Phase 3)
+- [ ] Proceed to TI-004: Integration Tests (currently failing)
 
 
 ---

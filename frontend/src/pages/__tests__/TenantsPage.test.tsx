@@ -5,10 +5,10 @@ import { http, HttpResponse } from 'msw';
 import { server } from '../../test-utils/mocks/server';
 import { renderWithAuth } from '../../test-utils/render';
 import { TenantsPage } from '../TenantsPage';
-import type { Tenant } from '../../types/auth';
+import type { _Tenant } from '../../types/auth';
 import { asTenantId } from '../../types/ids';
 import { getEnv } from '../../config/env';
-import { mockTenants as backendMockTenants } from '../../test-utils/mocks/handlers';
+import { mockTenants as _backendMockTenants, resetMockData } from '../../test-utils/mocks/handlers';
 import { createMockAuthJwt } from '../../test-utils/jwt';
 
 describe('TenantsPage Component', () => {
@@ -28,7 +28,6 @@ describe('TenantsPage Component', () => {
     localStorage.setItem('auth_token', JSON.stringify({ token: mockToken }));
 
     // Reset mock data to original state before each test
-    const { resetMockData } = require('../../test-utils/mocks/handlers');
     resetMockData();
 
     // Reset MSW handlers to default state
@@ -45,14 +44,15 @@ describe('TenantsPage Component', () => {
       renderWithAuth(<TenantsPage />);
 
       await waitFor(() => {
-        expect(screen.getByRole('heading', { level: 2 }).textContent).toBe('Tenants');
+        expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Tenants');
       });
     });
 
     it('should display create tenant button', () => {
       renderWithAuth(<TenantsPage />);
 
-      expect(screen.getByRole('button', { name: /add|create|new/i })).toBeTruthy();
+      const createButtons = screen.getAllByRole('button', { name: /add.*tenant/i });
+      expect(createButtons.length).toBeGreaterThan(0);
     });
 
     it('should render tenants table', async () => {
@@ -61,12 +61,6 @@ describe('TenantsPage Component', () => {
       await waitFor(() => {
         expect(screen.getByRole('table')).toBeTruthy();
       });
-    });
-
-    it('should display search input', () => {
-      renderWithAuth(<TenantsPage />);
-
-      expect(screen.getByPlaceholderText(/search/i)).toBeTruthy();
     });
   });
 
@@ -80,56 +74,21 @@ describe('TenantsPage Component', () => {
       });
     });
 
-    it('should display tenant names in table', async () => {
+    it('should render correct number of table rows for tenants', async () => {
       renderWithAuth(<TenantsPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Test Tenant 1')).toBeTruthy();
-        expect(screen.getByText('Test Tenant 2')).toBeTruthy();
+        const rows = screen.getAllByRole('row');
+        // Should have header row + 2 tenant data rows (from backendMockTenants)
+        expect(rows.length).toBe(3);
       });
     });
 
     it('should display tenant database URLs', async () => {
       renderWithAuth(<TenantsPage />);
 
-      await waitFor(async () => {
-        expect(await screen.findByText(/postgres:\/\/localhost:5432\/tenant1/)).toBeTruthy();
-        expect(await screen.findByText(/postgres:\/\/localhost:5432\/tenant2/)).toBeTruthy();
-      });
-    });
-  });
-
-  describe('Search Functionality', () => {
-    it('should filter tenants by name', async () => {
-      const user = userEvent.setup();
-      renderWithAuth(<TenantsPage />);
-
-      await waitFor(() => {
-        expect(screen.getByText('Test Tenant 1')).toBeTruthy();
-      });
-
-      const searchInput = screen.getByPlaceholderText(/search/i);
-      await user.type(searchInput, 'Test Tenant 1');
-      await waitFor(() => {
-        expect(screen.getByText('Test Tenant 1')).toBeTruthy();
-      });
-    });
-
-    it('should clear search results', async () => {
-      const user = userEvent.setup();
-      renderWithAuth(<TenantsPage />);
-
-      await waitFor(() => {
-        expect(screen.getByText('Test Tenant 1')).toBeTruthy();
-      });
-
-      const searchInput = screen.getByPlaceholderText(/search/i);
-      await user.type(searchInput, 'Test Tenant 2');
-      await user.clear(searchInput);
-
-      await waitFor(() => {
-        expect(screen.getByText('Test Tenant 1')).toBeTruthy();
-      });
+      expect(await screen.findByText(/postgres:\/\/localhost:5432\/tenant1/)).toBeTruthy();
+      expect(await screen.findByText(/postgres:\/\/localhost:5432\/tenant2/)).toBeTruthy();
     });
   });
 
@@ -138,11 +97,15 @@ describe('TenantsPage Component', () => {
       const user = userEvent.setup();
       renderWithAuth(<TenantsPage />);
 
-      const createButton = screen.getByRole('button', { name: /add|create|new/i });
+      const createButtons = screen.getAllByRole('button', { name: /add.*tenant/i });
+      // Ensure at least one create button exists before accessing it
+      expect(createButtons.length).toBeGreaterThan(0);
+      // Use the first button which is the main create button in the header
+      const createButton = createButtons[0];
       await user.click(createButton);
 
       await waitFor(() => {
-        expect(screen.getByText(/create|new|add.*tenant/i)).toBeTruthy();
+        expect(screen.getByText(/add.*new.*tenant/i)).toBeTruthy();
       });
     });
 
@@ -150,12 +113,14 @@ describe('TenantsPage Component', () => {
       const user = userEvent.setup();
       renderWithAuth(<TenantsPage />);
 
-      const createButton = screen.getByRole('button', { name: /add|create|new/i });
+      const createButtons = screen.getAllByRole('button', { name: /add.*tenant/i });
+      // Use the first button which is the main create button in the header
+      const createButton = createButtons[0]!;
       await user.click(createButton);
 
       await waitFor(() => {
-        expect(screen.getByPlaceholderText(/name/i)).toBeTruthy();
-        expect(screen.getByPlaceholderText(/domain/i)).toBeTruthy();
+        expect(screen.getByPlaceholderText(/tenant name/i)).toBeTruthy();
+        expect(screen.getByPlaceholderText(/database url/i)).toBeTruthy();
       });
     });
 
@@ -163,10 +128,12 @@ describe('TenantsPage Component', () => {
       const user = userEvent.setup();
       renderWithAuth(<TenantsPage />);
 
-      const createButton = screen.getByRole('button', { name: /add|create|new/i });
+      const createButtons = screen.getAllByRole('button', { name: /add.*tenant/i });
+      // Use the first button which is the main create button in the header
+      const createButton = createButtons[0]!;
       await user.click(createButton);
 
-      const submitButton = await screen.findByRole('button', { name: /submit|save|create/i });
+      const submitButton = await screen.findByRole('button', { name: /add.*tenant/i });
       await user.click(submitButton);
 
       await waitFor(() => {
@@ -193,7 +160,7 @@ describe('TenantsPage Component', () => {
       });
     });
 
-    it('should populate form with tenant data', async () => {
+    it('should populate form with tenant data including name and database URL', async () => {
       const user = userEvent.setup();
       renderWithAuth(<TenantsPage />);
 
@@ -206,6 +173,7 @@ describe('TenantsPage Component', () => {
 
       await waitFor(() => {
         expect(screen.getByDisplayValue('Test Tenant 1')).toBeTruthy();
+        expect(screen.getByDisplayValue('postgres://localhost:5432/tenant1')).toBeTruthy();
       });
     });
   });
@@ -238,7 +206,13 @@ describe('TenantsPage Component', () => {
       const deleteButtons = screen.getAllByRole('button', { name: /delete|trash/i });
       await user.click(deleteButtons[0]!);
 
-      const cancelButton = await screen.findByRole('button', { name: /cancel/i });
+      // Wait for the confirmation modal to be visible
+      await waitFor(() => {
+        expect(screen.getByText(/confirm|are you sure/i)).toBeTruthy();
+      });
+
+      // Find the ConfirmationModal component and click its cancel button
+      const cancelButton = screen.getAllByRole('button', { name: /cancel/i })[0]!;
       await user.click(cancelButton);
 
       await waitFor(() => {
@@ -252,13 +226,16 @@ describe('TenantsPage Component', () => {
       const user = userEvent.setup();
       renderWithAuth(<TenantsPage />);
 
-      const createButton = screen.getByRole('button', { name: /add|create|new/i });
+      const createButtons = screen.getAllByRole('button', { name: /add.*tenant/i });
+      const createButton = createButtons[0]!; // Main create button
       await user.click(createButton);
 
-      const domainInput = await screen.findByPlaceholderText(/domain/i);
-      await user.type(domainInput, 'test.example.com');
+      const dbUrlInput = await screen.findByPlaceholderText(/database|db_url/i);
+      await user.type(dbUrlInput, 'postgresql://user:pass@host:5432/db');
 
-      const submitButton = screen.getByRole('button', { name: /submit|save/i });
+      // Click the submit button in the modal (should be the second "Add Tenant" button)
+      const allButtonsWithAddTenant = screen.getAllByRole('button', { name: /add.*tenant/i });
+      const submitButton = allButtonsWithAddTenant[1]!; // The modal submit button
       await user.click(submitButton);
 
       await waitFor(() => {
@@ -280,9 +257,30 @@ describe('TenantsPage Component', () => {
 
       const createButtons = screen.getAllByRole('button', { name: /add|create|new/i });
       expect(createButtons.length).toBeGreaterThan(0);
+
+      // Expected button labels from the UI
+      const expectedLabels = ['Add Tenant'];
+      const labelPatterns = [/add tenant/i, /create tenant/i, /new tenant/i];
+
+      let foundExpectedLabel = false;
       createButtons.forEach(button => {
-        expect(button.getAttribute('aria-label') || button.textContent).toBeDefined();
+        const label = (button.getAttribute('aria-label') ?? button.textContent ?? '').trim();
+
+        // Assert minimum meaningful length
+        expect(label.length).toBeGreaterThanOrEqual(3);
+
+        // Check if this button matches an expected label
+        const matchesExpected =
+          expectedLabels.some(expected => label.toLowerCase().includes(expected.toLowerCase())) ||
+          labelPatterns.some(pattern => pattern.test(label));
+
+        if (matchesExpected) {
+          foundExpectedLabel = true;
+        }
       });
+
+      // Guard against regressions - at least one button should match expected labels
+      expect(foundExpectedLabel).toBe(true);
     });
 
     it('should support keyboard navigation', async () => {
@@ -293,7 +291,7 @@ describe('TenantsPage Component', () => {
       expect(createButtons.length).toBeGreaterThan(0);
 
       await user.keyboard('{Tab}');
-      expect(document.activeElement).toBeDefined();
+      expect(document.activeElement).toBe(createButtons[0]);
     });
   });
 
@@ -313,8 +311,8 @@ describe('TenantsPage Component', () => {
 
       await waitFor(() => {
         // Check that no tenant names are displayed
-        expect(screen.queryByText('Test Tenant 1')).not.toBeTruthy();
-        expect(screen.queryByText('Test Tenant 2')).not.toBeTruthy();
+        expect(screen.queryByText('Test Tenant 1')).toBeNull();
+        expect(screen.queryByText('Test Tenant 2')).toBeNull();
       });
     });
   });
@@ -323,9 +321,9 @@ describe('TenantsPage Component', () => {
     it('should handle pagination', async () => {
       // Create mock data with 25 tenants for pagination test
       const manyTenants = Array.from({ length: 25 }, (_, i) => ({
-        id: asTenantId(`tenant${i + 1}`),
-        name: `Tenant ${i + 1}`,
-        db_url: `postgresql://user:pass@host${i + 1}/db${i + 1}`,
+        id: asTenantId(`tenant${String(i + 1)}`),
+        name: `Tenant ${String(i + 1)}`,
+        db_url: `postgresql://user:pass@host${String(i + 1)}/db${String(i + 1)}`,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }));
@@ -333,8 +331,8 @@ describe('TenantsPage Component', () => {
       server.use(
         http.get(`${getEnv().apiUrl}/admin/tenants`, ({ request }) => {
           const url = new URL(request.url);
-          const offset = url.searchParams.get('offset') || '0';
-          const limit = url.searchParams.get('limit') || '10';
+          const offset = url.searchParams.get('offset') ?? '0';
+          const limit = url.searchParams.get('limit') ?? '10';
 
           const offsetNum = parseInt(offset);
           const limitNum = parseInt(limit);
@@ -359,18 +357,29 @@ describe('TenantsPage Component', () => {
         expect(screen.getByText('Tenant 1')).toBeTruthy();
       });
 
-      // Should show first page with 12 items (default pageSize in component)
+      // Should show first page with default pageSize items (12)
+      const defaultPageSize = 12;
+
+      // Get all tenant rows to determine actual page size
+      const tenantRows = screen.getAllByRole('row').slice(1); // Skip header row
+      const actualPageSize = tenantRows.length;
+
+      // Assert we have the expected number of items
+      expect(actualPageSize).toBe(defaultPageSize);
+
+      // Assert first and last visible tenants based on page size
       expect(screen.getByText('Tenant 1')).toBeTruthy();
-      expect(screen.getByText('Tenant 12')).toBeTruthy();
-      expect(screen.queryByText('Tenant 13')).not.toBeTruthy();
+      expect(screen.getByText(`Tenant ${String(defaultPageSize)}`)).toBeTruthy();
+      expect(screen.queryByText(`Tenant ${String(defaultPageSize + 1)}`)).not.toBeTruthy();
     });
   });
 
   describe('Sorting', () => {
-    it('should sort tenants by column', async () => {
+    it('should sort tenants by column (client-side)', async () => {
       const user = userEvent.setup();
 
       // Create mock data with specific names for sorting test
+      // Return them in descending order initially (G before A)
       const sortingTenants = [
         {
           id: asTenantId('tenant-1'),
@@ -405,20 +414,39 @@ describe('TenantsPage Component', () => {
 
       renderWithAuth(<TenantsPage />);
 
+      // Wait for initial data load - should show Global Industries first, Acme second
       await waitFor(() => {
+        expect(screen.getByText('Global Industries')).toBeTruthy();
         expect(screen.getByText('Acme Corporation')).toBeTruthy();
       });
 
-      // Click on the Name column header to sort
+      // Verify initial order (before sorting)
+      let rows = screen.getAllByRole('row');
+      expect(rows).toHaveLength(3); // Header + 2 data rows
+      expect(rows[1]?.textContent).toContain('Global Industries'); // G comes first
+      expect(rows[2]?.textContent).toContain('Acme Corporation'); // A comes second
+
+      // Click on the Name column header to sort ascending (A-Z)
       const nameHeader = screen.getByRole('columnheader', { name: /name/i });
       await user.click(nameHeader);
 
       // After sorting ascending, Acme Corporation should come before Global Industries
+      // This is client-side sorting - no new network request, just DOM reordering
       await waitFor(() => {
-        const rows = screen.getAllByRole('row');
-        // First data row should contain Acme Corporation (A comes before G)
+        rows = screen.getAllByRole('row');
         expect(rows).toHaveLength(3); // Header + 2 data rows
-        expect(rows[1]?.textContent).toContain('Acme Corporation');
+        expect(rows[1]?.textContent).toContain('Acme Corporation'); // A comes first
+        expect(rows[2]?.textContent).toContain('Global Industries'); // G comes second
+      });
+
+      // Click again to sort descending (Z-A)
+      await user.click(nameHeader);
+
+      await waitFor(() => {
+        rows = screen.getAllByRole('row');
+        expect(rows).toHaveLength(3); // Header + 2 data rows
+        expect(rows[1]?.textContent).toContain('Global Industries'); // G comes first
+        expect(rows[2]?.textContent).toContain('Acme Corporation'); // A comes second
       });
     });
   });

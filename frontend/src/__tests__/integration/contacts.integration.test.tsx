@@ -60,7 +60,7 @@ describe('Contact CRUD Flow: Create Contact', () => {
         const body = (await request.json()) as Record<string, unknown>;
 
         const newContact: MockContact = {
-          id: (mockContacts.length || 0) + 1,
+          id: mockContacts.length + 1,
           tenant_id: mockTenant.id,
           first_name: (body.first_name as string) || '',
           last_name: (body.last_name as string) || '',
@@ -74,7 +74,12 @@ describe('Contact CRUD Flow: Create Contact', () => {
 
         mockContacts.push(newContact);
 
-        return HttpResponse.json({ success: true, data: newContact });
+        return HttpResponse.json({
+          success: true,
+          data: {
+            contacts: [newContact],
+          },
+        });
       })
     );
   });
@@ -86,63 +91,49 @@ describe('Contact CRUD Flow: Create Contact', () => {
   test('Create button is rendered', async () => {
     renderWithAuth(<AddressBookPage />);
 
-    await waitFor(() => {
-      const createBtn = screen.queryByRole('button', { name: /new|create|add/i });
-      expect(createBtn).toBeDefined();
-    });
+    const createBtn = await screen.findByRole('button', { name: /new|create|add/i });
+    expect(createBtn).toBeInTheDocument();
   });
 
   test('Form validation prevents empty submission', async () => {
     renderWithAuth(<AddressBookPage />);
 
-    const createBtn = screen.queryByRole('button', { name: /new|create|add/i });
-    if (createBtn) {
-      await userEvent.click(createBtn);
+    const createBtn = await screen.findByRole('button', { name: /new|create|add/i });
+    await userEvent.click(createBtn);
 
-      const submitBtn = screen.queryByRole('button', { name: /save|submit/i });
-      if (submitBtn) {
-        await userEvent.click(submitBtn);
+    const submitBtn = await screen.findByRole('button', { name: /save|submit/i });
+    await userEvent.click(submitBtn);
 
-        // Should show validation error
-        await waitFor(() => {
-          const error = screen.queryByText(/required|invalid/i);
-          expect(error).toBeDefined();
-        });
-      }
-    }
+    // Should show validation error
+    const error = await screen.findByText(/required|invalid/i);
+    expect(error).toBeInTheDocument();
   });
 
   test('API error on create shows message', async () => {
     server.use(
       http.post(`${API_URL}/address-book`, () =>
-        HttpResponse.json({ success: false, message: 'Validation failed' }, { status: 400 })
+        HttpResponse.json({ success: false, message: 'Validation error' }, { status: 400 })
       )
     );
 
     renderWithAuth(<AddressBookPage />);
 
-    const createBtn = screen.queryByRole('button', { name: /new|create|add/i });
-    if (createBtn) {
-      await userEvent.click(createBtn);
+    const createBtn = await screen.findByRole('button', { name: /new|create|add/i });
+    await userEvent.click(createBtn);
 
-      const firstNameInput = screen.queryByLabelText(/first.*name/i);
-      const lastNameInput = screen.queryByLabelText(/last.*name/i);
-      const emailInput = screen.queryByLabelText(/email/i);
-      const submitBtn = screen.queryByRole('button', { name: /save|submit/i });
+    const firstNameInput = await screen.findByLabelText(/first.*name/i);
+    const lastNameInput = await screen.findByLabelText(/last.*name/i);
+    const emailInput = await screen.findByLabelText(/email/i);
+    const submitBtn = await screen.findByRole('button', { name: /save|submit/i });
 
-      if (firstNameInput && lastNameInput && emailInput && submitBtn) {
-        await userEvent.type(firstNameInput, 'John');
-        await userEvent.type(lastNameInput, 'Doe');
-        await userEvent.type(emailInput, 'duplicate@example.com');
-        await userEvent.click(submitBtn);
+    await userEvent.type(firstNameInput, 'John');
+    await userEvent.type(lastNameInput, 'Doe');
+    await userEvent.type(emailInput, 'duplicate@example.com');
+    await userEvent.click(submitBtn);
 
-        // Should show API error message
-        await waitFor(() => {
-          const error = screen.queryByText(/duplicate|error/i);
-          expect(error).toBeDefined();
-        });
-      }
-    }
+    // Should show API error message
+    const error = await screen.findByText(/duplicate|error/i);
+    expect(error).toBeInTheDocument();
   });
 });
 
@@ -212,65 +203,49 @@ describe('Contact CRUD Flow: Edit Contact', () => {
     renderWithAuth(<AddressBookPage />);
 
     // Wait for contacts to load
-    await waitFor(() => {
-      expect(screen.queryByText('John Doe')).toBeDefined();
-    });
+    expect(await screen.findByText('John Doe')).toBeInTheDocument();
 
     // Find and click edit button for John Doe
-    const editBtn = screen.queryByRole('button', { name: /edit/i });
-    if (editBtn) {
-      await userEvent.click(editBtn);
+    const editBtn = screen.getByRole('button', { name: /edit/i });
+    await userEvent.click(editBtn);
 
-      // Verify form is populated with existing data
-      const firstNameInput = screen.queryByLabelText(/first.*name/i);
-      const lastNameInput = screen.queryByLabelText(/last.*name/i);
+    // Verify form is populated with existing data
+    const firstNameInput = screen.getByLabelText(/first.*name/i);
+    const lastNameInput = screen.getByLabelText(/last.*name/i);
 
-      if (firstNameInput && lastNameInput) {
-        expect((firstNameInput as HTMLInputElement).value).toBe('John');
-        expect((lastNameInput as HTMLInputElement).value).toBe('Doe');
-      }
-    }
+    expect((firstNameInput as HTMLInputElement).value).toBe('John');
+    expect((lastNameInput as HTMLInputElement).value).toBe('Doe');
   });
 
   test('User can save contact changes', async () => {
     renderWithAuth(<AddressBookPage />);
 
     // Wait for contacts to load
-    await waitFor(() => {
-      expect(screen.queryByText('John Doe')).toBeDefined();
-    });
+    expect(await screen.findByText('John Doe')).toBeInTheDocument();
 
     // Find and click edit button
-    const editBtn = screen.queryByRole('button', { name: /edit/i });
-    if (editBtn) {
-      await userEvent.click(editBtn);
+    const editBtn = screen.getByRole('button', { name: /edit/i });
+    await userEvent.click(editBtn);
 
-      // Modify contact details
-      const firstNameInput = screen.queryByLabelText(/first.*name/i);
-      const lastNameInput = screen.queryByLabelText(/last.*name/i);
-      const saveBtn = screen.queryByRole('button', { name: /save|submit/i });
+    // Modify contact details
+    const firstNameInput = screen.getByLabelText(/first.*name/i);
+    const lastNameInput = screen.getByLabelText(/last.*name/i);
+    const saveBtn = screen.getByRole('button', { name: /save|submit/i });
 
-      if (firstNameInput && lastNameInput && saveBtn) {
-        await userEvent.clear(firstNameInput);
-        await userEvent.type(firstNameInput, 'Johnny');
-        await userEvent.clear(lastNameInput);
-        await userEvent.type(lastNameInput, 'Smith');
-        await userEvent.click(saveBtn);
+    await userEvent.clear(firstNameInput);
+    await userEvent.type(firstNameInput, 'Johnny');
+    await userEvent.clear(lastNameInput);
+    await userEvent.type(lastNameInput, 'Smith');
+    await userEvent.click(saveBtn);
 
-        // Verify changes are reflected in the list
-        await waitFor(() => {
-          expect(screen.queryByText('Johnny Smith')).toBeDefined();
-        });
-      }
-    }
+    // Verify changes are reflected in the list
+    expect(await screen.findByText('Johnny Smith')).toBeInTheDocument();
   });
 
   test('Contact list displays existing contacts', async () => {
     renderWithAuth(<AddressBookPage />);
 
-    await waitFor(() => {
-      expect(screen.queryByText(/john/i)).toBeDefined();
-    });
+    expect(await screen.findByText(/john/i)).toBeInTheDocument();
   });
 });
 
@@ -333,80 +308,56 @@ describe('Contact CRUD Flow: Delete Contact', () => {
     renderWithAuth(<AddressBookPage />);
 
     // Wait for contacts to load
-    await waitFor(() => {
-      expect(screen.queryByText('John Doe')).toBeDefined();
-    });
+    expect(await screen.findByText('John Doe')).toBeInTheDocument();
 
     // Find and click delete button
-    const deleteBtn = screen.queryByRole('button', { name: /delete/i });
-    if (deleteBtn) {
-      await userEvent.click(deleteBtn);
+    const deleteBtn = screen.getByRole('button', { name: /delete/i });
+    await userEvent.click(deleteBtn);
 
-      // Confirm deletion in modal/dialog
-      const confirmBtn = screen.queryByRole('button', { name: /confirm|yes|delete/i });
-      if (confirmBtn) {
-        await userEvent.click(confirmBtn);
+    // Confirm deletion in modal/dialog
+    const confirmBtn = screen.getByRole('button', { name: /confirm|yes|delete/i });
+    await userEvent.click(confirmBtn);
 
-        // Verify contact is removed from list
-        await waitFor(() => {
-          expect(screen.queryByText('John Doe')).toBeNull();
-        });
-      }
-    }
+    // Verify contact is removed from list
+    expect(screen.queryByText('John Doe')).toBeNull();
   });
 
   test('Delete operation shows success message', async () => {
     renderWithAuth(<AddressBookPage />);
 
     // Wait for contacts to load
-    await waitFor(() => {
-      expect(screen.queryByText('John Doe')).toBeDefined();
-    });
+    expect(await screen.findByText('John Doe')).toBeInTheDocument();
 
     // Find and click delete button
-    const deleteBtn = screen.queryByRole('button', { name: /delete/i });
-    if (deleteBtn) {
-      await userEvent.click(deleteBtn);
+    const deleteBtn = screen.getByRole('button', { name: /delete/i });
+    await userEvent.click(deleteBtn);
 
-      // Confirm deletion
-      const confirmBtn = screen.queryByRole('button', { name: /confirm|yes|delete/i });
-      if (confirmBtn) {
-        await userEvent.click(confirmBtn);
+    // Confirm deletion
+    const confirmBtn = screen.getByRole('button', { name: /confirm|yes|delete/i });
+    await userEvent.click(confirmBtn);
 
-        // Verify success message appears
-        await waitFor(() => {
-          const successMsg = screen.queryByText(/deleted|success|removed/i);
-          expect(successMsg).toBeDefined();
-        });
-      }
-    }
+    // Verify success message appears
+    const successMsg = await screen.findByText(/deleted|success|removed/i);
+    expect(successMsg).toBeInTheDocument();
   });
 
   test('Cancel delete prevents removal', async () => {
     renderWithAuth(<AddressBookPage />);
 
-    await waitFor(() => {
-      expect(screen.queryByText(/john/i)).toBeDefined();
-    });
+    expect(await screen.findByText(/john/i)).toBeInTheDocument();
 
-    const deleteBtn = screen.queryByRole('button', { name: /delete/i });
-    if (deleteBtn) {
-      await userEvent.click(deleteBtn);
+    const deleteBtn = screen.getByRole('button', { name: /delete/i });
+    await userEvent.click(deleteBtn);
 
-      // Find cancel button
-      const cancelBtn = screen.queryByRole('button', { name: /cancel|no/i });
-      if (cancelBtn) {
-        await userEvent.click(cancelBtn);
+    // Find cancel button
+    const cancelBtn = screen.getByRole('button', { name: /cancel|no/i });
+    await userEvent.click(cancelBtn);
 
-        // Contact should still be visible
-        await waitFor(() => {
-          expect(screen.queryByText(/john/i)).toBeDefined();
-        });
+    // Contact should still be visible
+    expect(await screen.findByText(/john/i)).toBeInTheDocument();
 
-        // Verify delete was NOT called
-        expect(deleteAttempted).toBe(false);
-      }
-    }
+    // Verify delete was NOT called
+    expect(deleteAttempted).toBe(false);
   });
 });
 
@@ -483,11 +434,13 @@ describe('Multi-Tenant Data Isolation', () => {
     });
 
     await waitFor(() => {
-      expect(capturedTenantId !== null).toBe(true);
+      expect(capturedTenantId).not.toBeNull();
     });
 
-    const expectedId = String(mockTenant.id ?? '');
-    expect(capturedTenantId === expectedId).toBe(true);
+    const expectedId = String(mockTenant.id);
+    // Type assertion is safe here because we've already checked for null above
+    const actualTenantId = capturedTenantId as unknown as string;
+    expect(actualTenantId).toBe(expectedId);
   });
 
   test('Tenant 1 contacts are isolated from Tenant 2', async () => {
@@ -517,23 +470,15 @@ describe('Multi-Tenant Data Isolation', () => {
         user: mockUser,
         tenant: mockTenant,
         isLoading: false,
-        login: async () => {
-          // Intentionally empty - mock for testing
-        },
-        logout: async () => {
-          // Intentionally empty - mock for testing
-        },
-        refreshToken: async () => {
-          // Intentionally empty - mock for testing
-        },
+        login: () => Promise.resolve(undefined),
+        logout: () => Promise.resolve(undefined),
+        refreshToken: () => Promise.resolve(undefined),
       },
     });
 
     // Verify only tenant-1 contacts are shown
-    await waitFor(() => {
-      expect(screen.queryByText('John Doe')).toBeDefined();
-      expect(screen.queryByText('Jane Smith')).toBeNull();
-    });
+    expect(await screen.findByText('John Doe')).toBeInTheDocument();
+    expect(screen.queryByText('Jane Smith')).toBeNull();
   });
 
   test('Tenant 2 contacts are isolated from Tenant 1', async () => {
@@ -568,23 +513,16 @@ describe('Multi-Tenant Data Isolation', () => {
         isAuthenticated: true,
         user: mockUser,
         tenant: tenant2,
-        login: async () => {
-          // Intentionally empty - mock for testing
-        },
-        logout: async () => {
-          // Intentionally empty - mock for testing
-        },
-        refreshToken: async () => {
-          // Intentionally empty - mock for testing
-        },
+        isLoading: false,
+        login: () => Promise.resolve(undefined),
+        logout: () => Promise.resolve(undefined),
+        refreshToken: () => Promise.resolve(undefined),
       },
     });
 
     // Verify only tenant-2 contacts are shown
-    await waitFor(() => {
-      expect(screen.queryByText('Jane Smith')).toBeDefined();
-      expect(screen.queryByText('John Doe')).toBeNull();
-    });
+    expect(await screen.findByText('Jane Smith')).toBeInTheDocument();
+    expect(screen.queryByText('John Doe')).toBeNull();
   });
 });
 
@@ -613,36 +551,24 @@ describe('Form Validation with Backend Errors', () => {
 
     renderWithAuth(<AddressBookPage />);
 
-    const createBtn = screen.queryByRole('button', { name: /new|create|add/i });
-    if (createBtn) {
-      await userEvent.click(createBtn);
+    const createBtn = screen.getByRole('button', { name: /new|create|add/i });
+    await userEvent.click(createBtn);
 
-      // Fill form with data that will trigger validation errors
-      const firstNameInput = screen.queryByLabelText(/first name/i);
-      const emailInput = screen.queryByLabelText(/email/i);
-      const phoneInput = screen.queryByLabelText(/phone/i);
+    // Fill form with data that will trigger validation errors
+    const firstNameInput = screen.getByLabelText(/first name/i);
+    const emailInput = screen.getByLabelText(/email/i);
+    const phoneInput = screen.getByLabelText(/phone/i);
 
-      if (firstNameInput) {
-        await userEvent.type(firstNameInput, 'Test');
-      }
-      if (emailInput) {
-        await userEvent.type(emailInput, 'duplicate@example.com');
-      }
-      if (phoneInput) {
-        await userEvent.type(phoneInput, 'invalid-phone');
-      }
+    await userEvent.type(firstNameInput, 'Test');
+    await userEvent.type(emailInput, 'duplicate@example.com');
+    await userEvent.type(phoneInput, 'invalid-phone');
 
-      const submitBtn = screen.queryByRole('button', { name: /save|submit/i });
-      if (submitBtn) {
-        await userEvent.click(submitBtn);
+    const submitBtn = screen.getByRole('button', { name: /save|submit/i });
+    await userEvent.click(submitBtn);
 
-        // Verify validation errors are shown
-        await waitFor(() => {
-          expect(screen.queryByText(/email already exists/i)).toBeDefined();
-          expect(screen.queryByText(/invalid phone format/i)).toBeDefined();
-        });
-      }
-    }
+    // Verify validation errors are shown
+    expect(await screen.findByText(/email already exists/i)).toBeInTheDocument();
+    expect(await screen.findByText(/invalid phone format/i)).toBeInTheDocument();
   });
 
   test('Network errors are handled gracefully', async () => {
@@ -650,21 +576,17 @@ describe('Form Validation with Backend Errors', () => {
 
     renderWithAuth(<AddressBookPage />);
 
-    const createBtn = screen.queryByRole('button', { name: /new|create|add/i });
-    if (createBtn) {
-      await userEvent.click(createBtn);
+    const createBtn = screen.getByRole('button', { name: /new|create|add/i });
+    await userEvent.click(createBtn);
 
-      const firstNameInput = screen.getByLabelText(/first name/i);
-      await userEvent.type(firstNameInput, 'Test');
+    const firstNameInput = screen.getByLabelText(/first name/i);
+    await userEvent.type(firstNameInput, 'Test');
 
-      const submitBtn = screen.getByRole('button', { name: /save|submit/i });
-      await userEvent.click(submitBtn);
+    const submitBtn = screen.getByRole('button', { name: /save|submit/i });
+    await userEvent.click(submitBtn);
 
-      // Verify error message is shown
-      await waitFor(() => {
-        const errorMsg = screen.queryByText(/error|failed|network/i);
-        expect(errorMsg).toBeDefined();
-      });
-    }
+    // Verify error message is shown
+    const errorMsg = await screen.findByText(/error|failed|network/i);
+    expect(errorMsg).toBeInTheDocument();
   });
 });

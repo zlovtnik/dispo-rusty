@@ -56,11 +56,11 @@ class Logger {
       timestamp: new Date().toISOString(),
     };
 
-    if (this.config.captureUserAgent) {
+    if (this.config.captureUserAgent && typeof navigator !== 'undefined') {
       entry.userAgent = navigator.userAgent;
     }
 
-    if (this.config.captureUrl) {
+    if (this.config.captureUrl && typeof window !== 'undefined') {
       entry.url = this.sanitizeUrl(window.location.href);
     }
 
@@ -73,7 +73,9 @@ class Logger {
     // Store in memory for development debugging
     if (!this.isProduction) {
       this.logs.push(entry);
-      console[level](`[${level.toUpperCase()}] ${message}`, data || '');
+      if (level === 'warn' || level === 'error') {
+        console[level](`[${level.toUpperCase()}] ${message}`, data ?? '');
+      }
     }
 
     // Send to monitoring service in production
@@ -148,59 +150,80 @@ class Logger {
 // Global error handler - with reentrancy guard to prevent infinite loops
 let isLoggingError = false;
 
-window.addEventListener('error', event => {
-  if (isLoggingError) return; // Prevent reentrancy
+// Only add global error handlers if window is available (i.e., in browser environment)
+if (typeof window !== 'undefined') {
+  window.addEventListener('error', event => {
+    if (isLoggingError) return; // Prevent reentrancy
 
-  isLoggingError = true;
-  try {
-    logger.error('Global error', {
-      message: event.error?.message,
-      filename: event.filename,
-      lineno: event.lineno,
-      colno: event.colno,
-      stack: event.error?.stack,
-    });
-  } catch (loggingError) {
-    // Fallback to console if logging itself fails
-    console.error('Global error:', event.error?.message, {
-      filename: event.filename,
-      lineno: event.lineno,
-      colno: event.colno,
-    });
-  } finally {
-    isLoggingError = false;
-  }
-});
+    isLoggingError = true;
+    try {
+      logger.error('Global error', {
+        message: event.error?.message,
+        filename: event.filename,
+        lineno: event.lineno,
+        colno: event.colno,
+        stack: event.error?.stack,
+      });
+    } catch (loggingError) {
+      // Fallback to console if logging itself fails
+      console.error('Global error:', event.error?.message, {
+        filename: event.filename,
+        lineno: event.lineno,
+        colno: event.colno,
+      });
+    } finally {
+      isLoggingError = false;
+    }
+  });
 
-window.addEventListener('unhandledrejection', event => {
-  if (isLoggingError) return; // Prevent reentrancy
+  window.addEventListener('unhandledrejection', event => {
+    if (isLoggingError) return; // Prevent reentrancy
 
-  isLoggingError = true;
-  try {
-    logger.error('Unhandled promise rejection', {
-      reason: event.reason,
-      promise: event.promise,
-    });
-  } catch (loggingError) {
-    // Fallback to console if logging itself fails
-    console.error('Unhandled promise rejection:', event.reason);
-  } finally {
-    isLoggingError = false;
-  }
-});
+    isLoggingError = true;
+    try {
+      logger.error('Unhandled promise rejection', {
+        reason: event.reason,
+        promise: event.promise,
+      });
+    } catch (loggingError) {
+      // Fallback to console if logging itself fails
+      console.error('Unhandled promise rejection:', event.reason);
+    } finally {
+      isLoggingError = false;
+    }
+  });
+}
 
 export const logger = new Logger();
+
+// Specialized logger for address parsing that respects DEBUG_ADDRESS_PARSING env var
+export const addressParsingLogger = {
+  warn(message: string, data?: any) {
+    const isProduction = import.meta.env.PROD;
+    const debugEnabled = import.meta.env.VITE_DEBUG_ADDRESS_PARSING === 'true';
+
+    // Only emit warnings in non-production or when DEBUG_ADDRESS_PARSING is enabled
+    if (!isProduction || debugEnabled) {
+      logger.warn(message, data);
+    }
+  },
+};
 
 // Performance monitoring
 export const performanceMonitor = {
   mark(name: string) {
-    if ('performance' in window && performance.mark) {
+    if (typeof window !== 'undefined' && 'performance' in window && performance.mark) {
       performance.mark(name);
     }
   },
 
   measure(name: string, startMark?: string, endMark?: string) {
-    if ('performance' in window && performance.measure && performance.getEntriesByName) {
+    if (
+      typeof window !== 'undefined' &&
+      'performance' in window &&
+      performance.measure &&
+      performance.getEntriesByName
+    ) {
       try {
         const measureName = `measure-${name}`;
         performance.measure(measureName, startMark, endMark);

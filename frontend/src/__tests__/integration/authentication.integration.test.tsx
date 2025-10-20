@@ -33,6 +33,19 @@ import { asTenantId } from '../../types/ids';
 // Get API base URL at runtime
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
+// Shared empty auth mocks for testing
+const emptyAuthMocks = {
+  login: async () => {
+    // Intentionally empty - mock for testing
+  },
+  logout: async () => {
+    // Intentionally empty - mock for testing
+  },
+  refreshToken: async () => {
+    // Intentionally empty - mock for testing
+  },
+};
+
 /**
  * Authentication Flow: Login → Token Storage → Protected Route
  *
@@ -58,7 +71,7 @@ describe('Authentication Flow: Login → Token Storage → Protected Route', () 
     });
 
     // Verify login page is displayed
-    expect(screen.queryByText(/login/i)).toBeDefined();
+    expect(screen.getByText(/login/i)).toBeInTheDocument();
 
     // 2. Fill in login form
     const usernameInput = screen.getByLabelText(/email|username/i);
@@ -73,33 +86,32 @@ describe('Authentication Flow: Login → Token Storage → Protected Route', () 
     await userEvent.click(loginButton);
 
     // 4. Wait for redirect to dashboard (token stored, auth context updated)
-    await waitFor(
-      () => {
-        expect(screen.queryByText(/dashboard|welcome/i)).toBeDefined();
-      },
-      { timeout: 3000 }
-    );
+    const dashboardElement = await screen.findByText(/dashboard|welcome/i, undefined, {
+      timeout: 3000,
+    });
 
     // 5. Verify token was stored
     const storedToken = localStorage.getItem(import.meta.env.VITE_JWT_STORAGE_KEY || 'auth_token');
-    expect(storedToken).toBeDefined();
+    expect(storedToken).not.toBeNull();
+    expect(storedToken).not.toBeUndefined();
     expect(storedToken!.split('.').length).toBe(3); // Valid JWT format
 
     // 6. Verify subsequent requests include token
     // Make an API call and verify Authorization header was sent
-    const contactsLink = screen.queryByText(/contacts|address book/i);
-    if (contactsLink) {
-      await userEvent.click(contactsLink);
+    // Assert the contacts link exists and navigate to it.
+    const contactsLink = await screen.findByText(/contacts|address book/i, undefined, {
+      timeout: 3000,
+    });
+    expect(contactsLink).toBeInTheDocument();
+    await userEvent.click(contactsLink);
 
-      // Wait for contacts to load (API call should be made with token)
-      await waitFor(() => {
-        expect(screen.queryByText(/contact/i)).toBeDefined();
-      });
-    }
+    // Wait for contacts to load (API call should be made with token)
+    const contactElement = await screen.findByText(/contact/i, undefined, {
+      timeout: 3000,
+    });
+    expect(contactElement).toBeInTheDocument();
 
-    // 7. Verify user context was established
-    const userGreeting = screen.queryByText(new RegExp(mockUser.firstName || 'test', 'i'));
-    // Note: Greeting may not always be visible, but auth should be established
+    // 7. User context was established - auth token and API access confirmed above
   });
 
   test('Unauthenticated user cannot access protected routes', async () => {
@@ -112,11 +124,8 @@ describe('Authentication Flow: Login → Token Storage → Protected Route', () 
     );
 
     // 2. Should redirect to login or show error
-    await waitFor(() => {
-      const isOnLogin = screen.queryByText(/login/i) !== undefined;
-      const isOnAuth = screen.queryByText(/sign in|sign up|unauthorized/i) !== undefined;
-      expect(isOnLogin || isOnAuth).toBe(true);
-    });
+    const authElement = await screen.findByText(/login|sign in|sign up|unauthorized/i);
+    expect(authElement).toBeInTheDocument();
   });
 
   test('Login with invalid credentials shows error', async () => {
@@ -154,7 +163,7 @@ describe('Authentication Flow: Login → Token Storage → Protected Route', () 
     });
 
     // Verify no token was stored
-    const storedToken = localStorage.getItem(process.env.VITE_JWT_STORAGE_KEY || 'auth_token');
+    const storedToken = localStorage.getItem(import.meta.env.VITE_JWT_STORAGE_KEY || 'auth_token');
     expect(storedToken).toBeNull();
   });
 
@@ -179,9 +188,9 @@ describe('Authentication Flow: Login → Token Storage → Protected Route', () 
       authValue: { isAuthenticated: true, user: mockUser, tenant: mockTenant },
     });
 
-    // Wait for API call
+    // Wait for API call to populate capturedHeaders.authorization
     await waitFor(() => {
-      expect(capturedHeaders.authorization).toBeDefined();
+      expect(capturedHeaders.authorization).toBeTruthy();
     });
 
     // Verify Authorization header format
@@ -255,11 +264,8 @@ describe('Authentication Flow: Token Refresh & Session Management', () => {
 
     // Trigger a refresh-requiring action
     // Wait for redirect to login
-    await waitFor(() => {
-      const isLoggedOut =
-        screen.queryByText(/login/i) !== undefined || screen.queryByText(/sign in/i) !== undefined;
-      expect(isLoggedOut).toBe(true);
-    });
+    const loginElement = await screen.findByText(/login|sign in/i);
+    expect(loginElement).toBeInTheDocument();
 
     // Verify token was cleared
     const storedToken = localStorage.getItem(import.meta.env.VITE_JWT_STORAGE_KEY || 'auth_token');
@@ -271,7 +277,7 @@ describe('Authentication Flow: Token Refresh & Session Management', () => {
     let logoutCalled = false;
     const mockLogout = async () => {
       logoutCalled = true;
-      localStorage.removeItem(process.env.VITE_JWT_STORAGE_KEY || 'auth_token');
+      localStorage.removeItem(import.meta.env.VITE_JWT_STORAGE_KEY || 'auth_token');
     };
 
     renderWithProviders(<App />, {
@@ -296,7 +302,7 @@ describe('Authentication Flow: Token Refresh & Session Management', () => {
     expect(logoutCalled).toBe(true);
 
     // Verify token cleared from localStorage
-    const storedToken = localStorage.getItem(process.env.VITE_JWT_STORAGE_KEY || 'auth_token');
+    const storedToken = localStorage.getItem(import.meta.env.VITE_JWT_STORAGE_KEY || 'auth_token');
     expect(storedToken).toBeNull();
 
     // Since mock doesn't support state changes, we can't test the redirect
@@ -406,48 +412,38 @@ describe('Authentication Flow: Multi-Tenant Switching', () => {
         user: mockUser,
         tenant: tenant1,
         isLoading: false,
-        login: async () => {
-          // Intentionally empty - mock for testing
-        },
-        logout: async () => {
-          // Intentionally empty - mock for testing
-        },
-        refreshToken: async () => {
-          // Intentionally empty - mock for testing
-        },
+        ...emptyAuthMocks,
       },
     });
 
     // Verify initial tenant context
-    await waitFor(() => {
-      expect(screen.queryByText(/dashboard|welcome/i)).toBeDefined();
+    const initialDashboards = await screen.findAllByText(/dashboard|welcome/i, undefined, {
+      timeout: 3000,
     });
+    expect(initialDashboards.length).toBeGreaterThan(0);
+    const initialDashboard = initialDashboards[0];
+    expect(initialDashboard).toBeInTheDocument();
 
     // Simulate tenant switch by re-rendering with different tenant
     // (In real app, this would be triggered by a tenant selector component)
-    const { rerender } = renderWithProviders(<App />, {
+    renderWithProviders(<App />, {
       initialRoute: '/dashboard',
       authValue: {
         isAuthenticated: true,
         user: { ...mockUser, tenantId: tenant2.id },
         tenant: tenant2,
         isLoading: false,
-        login: async () => {
-          // Intentionally empty - mock for testing
-        },
-        logout: async () => {
-          // Intentionally empty - mock for testing
-        },
-        refreshToken: async () => {
-          // Intentionally empty - mock for testing
-        },
+        ...emptyAuthMocks,
       },
     });
 
     // Verify user remains authenticated but tenant changed
-    await waitFor(() => {
-      expect(screen.queryByText(/dashboard|welcome/i)).toBeDefined();
+    const tenantChangedDashboards = await screen.findAllByText(/dashboard|welcome/i, undefined, {
+      timeout: 3000,
     });
+    expect(tenantChangedDashboards.length).toBeGreaterThan(0);
+    const tenantChangedDashboard = tenantChangedDashboards[0];
+    expect(tenantChangedDashboard).toBeInTheDocument();
 
     // Verify tenant-specific data would be different
     // (This would be tested more thoroughly in E2E tests with actual tenant switching UI)
@@ -485,15 +481,7 @@ describe('Authentication Flow: Multi-Tenant Switching', () => {
         user: mockUser,
         tenant: tenant1,
         isLoading: false,
-        login: async () => {
-          // Intentionally empty - mock for testing
-        },
-        logout: async () => {
-          // Intentionally empty - mock for testing
-        },
-        refreshToken: async () => {
-          // Intentionally empty - mock for testing
-        },
+        ...emptyAuthMocks,
       },
     });
 
@@ -504,7 +492,7 @@ describe('Authentication Flow: Multi-Tenant Switching', () => {
     });
 
     // Clear previous calls
-    apiCalls.length = 0;
+    apiCalls.splice(0);
 
     // Switch to tenant 2 by re-rendering
     renderWithProviders(<DashboardPage />, {
@@ -514,15 +502,7 @@ describe('Authentication Flow: Multi-Tenant Switching', () => {
         user: { ...mockUser, tenantId: tenant2.id },
         tenant: tenant2,
         isLoading: false,
-        login: async () => {
-          // Intentionally empty - mock for testing
-        },
-        logout: async () => {
-          // Intentionally empty - mock for testing
-        },
-        refreshToken: async () => {
-          // Intentionally empty - mock for testing
-        },
+        ...emptyAuthMocks,
       },
     });
 
@@ -552,22 +532,17 @@ describe('Authentication Flow: Multi-Tenant Switching', () => {
         user: mockUser,
         tenant: tenant1,
         isLoading: false,
-        login: async () => {
-          // Intentionally empty - mock for testing
-        },
-        logout: async () => {
-          // Intentionally empty - mock for testing
-        },
-        refreshToken: async () => {
-          // Intentionally empty - mock for testing
-        },
+        ...emptyAuthMocks,
       },
     });
 
     // Verify initial tenant works
-    await waitFor(() => {
-      expect(screen.queryByText(/dashboard|welcome/i)).toBeDefined();
+    const initialTenantDashboards = await screen.findAllByText(/dashboard|welcome/i, undefined, {
+      timeout: 3000,
     });
+    expect(initialTenantDashboards.length).toBeGreaterThan(0);
+    const initialTenantDashboard = initialTenantDashboards[0];
+    expect(initialTenantDashboard).toBeInTheDocument();
 
     // Attempt to switch to invalid tenant
     // (In real app, this would be prevented by domain logic)
@@ -577,23 +552,17 @@ describe('Authentication Flow: Multi-Tenant Switching', () => {
         isAuthenticated: true,
         user: mockUser,
         tenant: invalidTenant,
-        login: async () => {
-          // Intentionally empty - mock for testing
-        },
-        logout: async () => {
-          // Intentionally empty - mock for testing
-        },
-        refreshToken: async () => {
-          // Intentionally empty - mock for testing
-        },
+        ...emptyAuthMocks,
       },
     });
 
     // Verify app still functions (though tenant context might be invalid)
     // In a real implementation, this would trigger error handling
-    await waitFor(() => {
-      // App should still render, but might show errors
-      expect(screen.queryByText(/dashboard|welcome|error/i)).toBeDefined();
+    const maybeElements = await screen.findAllByText(/dashboard|welcome|error/i, undefined, {
+      timeout: 3000,
     });
+    expect(maybeElements.length).toBeGreaterThan(0);
+    const maybeDashboardOrError = maybeElements[0];
+    expect(maybeDashboardOrError).toBeInTheDocument();
   });
 });

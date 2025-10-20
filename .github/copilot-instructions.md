@@ -23,8 +23,10 @@ JWT Token → Middleware extracts tenant_id → TenantPoolManager routes to tena
 - **`src/services/`**: Business logic layer, extracts pool via `web::Data<Pool>`
 - **`src/models/`**: Diesel ORM models with `Queryable`, `Insertable`, `AsChangeset` traits
 - **`src/schema.rs`**: Auto-generated Diesel schema (run `diesel migration run` after DB changes)
-- **`src/functional/`**: Functional programming patterns (iterator-based pagination, validation engines, query builders)
-- **`src/pagination.rs`**: Iterator-based pagination utilities with bounded memory usage
+- **`src/pagination.rs`**: Core iterator-based pagination utilities with bounded memory usage
+- **`src/functional/pagination.rs`**: Functional-style wrappers and higher-level patterns built on src/pagination.rs
+
+The functional pagination module delegates to the core utilities for low-level operations while providing composable, functional interfaces for complex pagination scenarios.
 
 ### Frontend (React/TypeScript/Bun)
 - **Runtime**: Use Bun for all package management and script execution
@@ -227,7 +229,8 @@ Use Bun's built-in test runner with:
 
 ## Current Development Phase
 
-**Phase 2 (In Progress)**: Backend Integration & Quality Assurance (75% Complete)
+**Phase 2 (In Progress)**: Backend Integration & Quality Assurance (Mostly Complete)
+*Last Updated: January 2025*
 
 **Completed:**
 - Full multi-tenant architecture with database isolation

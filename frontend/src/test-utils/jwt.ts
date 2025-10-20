@@ -38,19 +38,22 @@ export const createMockJwt = (payload: Record<string, unknown>): string => {
  * @param username - The username to include in the token
  * @param tenantId - The tenant ID to include in the token
  * @param expiresInSeconds - How long the token should be valid (default: 1 hour)
+ * @param roles - The roles to assign to the user (default: ['user'])
  * @returns A mock JWT token string
  */
 export const createMockAuthJwt = (
   username: string,
   tenantId: string,
-  expiresInSeconds = 3600
+  expiresInSeconds = 3600,
+  roles: string[] = ['user']
 ): string => {
   const now = Math.floor(Date.now() / 1000);
   const payload = {
-    sub: `user-${username}`, // Mock user ID
-    email: `${username}@example.com`, // Mock email
-    tenantId: tenantId,
-    roles: ['user'], // Default role
+    user: username, // User identifier - matches decodeJwtPayload expectations
+    tenant_id: tenantId, // Tenant ID in snake_case - matches decodeJwtPayload expectations
+    sub: `user-${username}`, // Mock user ID (additional field)
+    email: `${username}@example.com`, // Mock email (additional field)
+    roles, // Roles from parameter
     exp: now + expiresInSeconds,
     iat: now,
   };

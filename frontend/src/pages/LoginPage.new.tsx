@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
-import { useNavigate, useLocation, Navigate } from 'react-router-dom';
+import { useLocation, Navigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAuth } from '@/contexts/AuthContext';
 import type { LoginCredentials } from '@/types/auth';
 import { asTenantId } from '@/types/ids';
 import { loginSchema } from '@/validation/schemas';
+import { logger } from '@/utils/logger';
 import type { z } from 'zod';
-import { Card, Input, Button, Checkbox, Typography, Alert, Flex } from 'antd';
+import { Card, Input, Button, Checkbox, Typography, Alert, Flex, Spin } from 'antd';
 import {
   CheckCircleOutlined,
   CloseCircleOutlined,
@@ -19,7 +20,6 @@ type LoginFormData = z.infer<typeof loginSchema>;
 
 export const LoginPage: React.FC = () => {
   const { login, isAuthenticated, isLoading } = useAuth();
-  const navigate = useNavigate();
   const location = useLocation();
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -32,7 +32,6 @@ export const LoginPage: React.FC = () => {
     register,
     handleSubmit,
     formState: { errors, touchedFields, isSubmitted, isValid },
-    watch,
     trigger,
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
@@ -55,10 +54,25 @@ export const LoginPage: React.FC = () => {
         rememberMe,
       };
       await login(credentials);
-      navigate(from, { replace: true });
+      // Navigation will be handled by the declarative <Navigate> guard below
     } catch (error) {
-      console.error('Login failed:', error instanceof Error ? error.message : 'Unknown error');
-      setSubmitError(error instanceof Error ? error.message : 'Login failed');
+      // Log detailed error information for diagnostics (handles production vs development)
+      logger.error('Login failed', {
+        error:
+          error instanceof Error
+            ? {
+                message: error.message,
+                stack: error.stack,
+                name: error.name,
+              }
+            : error,
+        timestamp: new Date().toISOString(),
+        userAgent: navigator.userAgent,
+        url: window.location.href,
+      });
+
+      // Set user-friendly error message (no sensitive details exposed to UI)
+      setSubmitError('Login failed. Please check your credentials and try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -105,6 +119,23 @@ export const LoginPage: React.FC = () => {
 
     return null;
   };
+
+  // Show loading spinner while authentication status is being resolved
+  if (isLoading) {
+    return (
+      <Flex
+        justify="center"
+        align="center"
+        style={{
+          minHeight: '100vh',
+          background:
+            'linear-gradient(135deg, var(--color-natural-light) 0%, var(--color-healing-light) 100%)',
+        }}
+      >
+        <Spin size="large" />
+      </Flex>
+    );
+  }
 
   // Don't render if already authenticated
   if (isAuthenticated) {

@@ -114,6 +114,8 @@ export interface IHttpClient {
   put<T>(endpoint: string, data?: unknown): AsyncResult<ApiResponse<T>, AppError>;
   /** Execute DELETE request */
   delete<T>(endpoint: string): AsyncResult<ApiResponse<T>, AppError>;
+  /** Safely get authentication token from localStorage */
+  safeGetToken(): string | null;
 }
 
 const API_BASE_URL = getEnv().apiUrl;
@@ -461,7 +463,7 @@ class HttpClient implements IHttpClient {
    * - 'tenant': JSON object {id: string, name: string, ...}
    * - 'user': JSON object {id: string, email: string, ...}
    */
-  private safeGetToken(): string | null {
+  public safeGetToken(): string | null {
     const stored = localStorage.getItem('auth_token');
     if (!stored) return null;
     try {
@@ -789,10 +791,10 @@ export const authService = {
    * ```
    */
   logout(): AsyncResult<void, AuthError> {
-    // Check if there's an active authentication token
-    const authToken = localStorage.getItem('auth_token');
+    // Check if there's a valid authentication token using safe token validation
+    const authToken = apiClient.safeGetToken();
 
-    // If no token exists, logout is already complete (idempotent)
+    // If no valid token exists, logout is already complete (idempotent)
     if (!authToken) {
       return okAsync(undefined);
     }

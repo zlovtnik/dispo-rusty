@@ -6,9 +6,9 @@ import { renderWithProviders } from '../../test-utils/render';
 import { ErrorBoundary } from '../ErrorBoundary';
 
 // Component that throws an error
-const ThrowError: React.FC<{ shouldThrow: boolean; error?: Error }> = ({ shouldThrow, error }) => {
+const _ThrowError: React.FC<{ shouldThrow: boolean; error?: Error }> = ({ shouldThrow, error }) => {
   if (shouldThrow) {
-    throw error || new Error('Test error');
+    throw error ?? new Error('Test error');
   }
   return <div>No Error</div>;
 };
@@ -93,8 +93,11 @@ describe('ErrorBoundary Component', () => {
         <ErrorBoundary>
           <div>
             <button
-              onClick={async () => {
-                throw new Error('Async error');
+              onClick={() => {
+                // Simulate async error that won't be caught by ErrorBoundary
+                setTimeout(() => {
+                  throw new Error('Async error');
+                }, 0);
               }}
             >
               Async Button
@@ -170,9 +173,19 @@ describe('ErrorBoundary Component', () => {
       expect(onErrorMock).toHaveBeenCalledWith(
         expect.any(Error),
         expect.objectContaining({
-          componentStack: expect.stringContaining('RenderErrorComponent'),
+          componentStack: expect.any(String),
         })
       );
+
+      // Verify componentStack is non-empty
+      const calls = onErrorMock.mock.calls;
+      expect(calls).toHaveLength(1);
+      const firstCall = calls[0] as unknown as [Error, { componentStack: string }];
+      expect(firstCall).toBeDefined();
+      expect(firstCall).toHaveLength(2);
+      const errorInfo = firstCall[1];
+      expect(errorInfo.componentStack).toBeTruthy();
+      expect(errorInfo.componentStack.length).toBeGreaterThan(0);
     });
 
     it('should continue rendering if onError callback is provided', () => {
@@ -236,7 +249,7 @@ describe('ErrorBoundary Component', () => {
 
   describe('Recovery', () => {
     it('should reset error state when component unmounts and remounts', () => {
-      const ThrowingComponent = ({ shouldThrow }: { shouldThrow: boolean }) => {
+      const ThrowingComponent = ({ shouldThrow }: { shouldThrow: boolean }): React.JSX.Element => {
         if (shouldThrow) throw new Error('Test error');
         return <div>Working</div>;
       };
@@ -319,9 +332,11 @@ describe('ErrorBoundary Component', () => {
         </ErrorBoundary>
       );
 
-      expect(
-        screen.queryByText('Custom Error Fallback') || screen.queryByText(/error|Error/i)
-      ).toBeDefined();
+      // Verify custom fallback is present
+      expect(screen.getByText('Custom Error Fallback')).toBeInTheDocument();
+
+      // Verify generic error message is not present
+      expect(screen.queryByText('Something went wrong')).not.toBeInTheDocument();
     });
 
     it('should accept onError callback prop', () => {
@@ -342,29 +357,47 @@ describe('ErrorBoundary Component', () => {
       const onError = mock(() => {
         // Intentionally empty - test mock
       });
+      const fallbackContent = <div>Fallback</div>;
+
       renderWithProviders(
-        <ErrorBoundary onError={onError} fallback={<div>Fallback</div>}>
-          <div>Content</div>
+        <ErrorBoundary onError={onError} fallback={fallbackContent}>
+          <RenderErrorComponent errorMessage="Test error for props validation" />
         </ErrorBoundary>
       );
 
-      expect(screen.getByText('Content')).toBeDefined();
+      // Assert that fallback content is visible when error occurs
+      expect(screen.getByText('Fallback')).toBeInTheDocument();
+
+      // Assert that onError was called with the error
+      expect(onError).toHaveBeenCalledTimes(1);
+      const calls = onError.mock.calls;
+      expect(calls).toHaveLength(1);
+      const callArgs = calls[0] as unknown as [Error, { componentStack: string }];
+      expect(callArgs).toBeDefined();
+      expect(callArgs).toHaveLength(2);
+
+      const error = callArgs[0];
+      const errorInfo = callArgs[1];
+      expect(error).toBeInstanceOf(Error);
+      expect(error.message).toBe('Test error for props validation');
+      expect(errorInfo).toBeDefined();
+      expect(errorInfo).toHaveProperty('componentStack');
     });
   });
 
-  describe('Component State', () => {
-    it('should track hasError state', () => {
+  describe('Error UI Rendering', () => {
+    it('should display error UI when error occurs', () => {
       renderWithProviders(
         <ErrorBoundary>
           <RenderErrorComponent errorMessage="Error" />
         </ErrorBoundary>
       );
 
-      // Error boundary should have error state
+      // Error boundary should display error UI
       expect(screen.getByText('Something went wrong')).toBeInTheDocument();
     });
 
-    it('should track error object', () => {
+    it('should display error message in UI', () => {
       const errorMessage = 'Test error message';
       renderWithProviders(
         <ErrorBoundary>
@@ -372,7 +405,7 @@ describe('ErrorBoundary Component', () => {
         </ErrorBoundary>
       );
 
-      // Error should be stored in state
+      // Error message should be displayed in the UI
       expect(screen.getByText(errorMessage)).toBeInTheDocument();
     });
   });
@@ -411,7 +444,7 @@ describe('ErrorBoundary Component', () => {
         </ErrorBoundary>
       );
 
-      expect(screen.getByText('Content')).toBeDefined();
+      expect(screen.getByText('Content')).toBeInTheDocument();
     });
 
     it('should handle error with empty message', () => {

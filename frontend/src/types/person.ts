@@ -122,9 +122,15 @@ const asDate = (value: unknown): Date | undefined => {
   return undefined;
 };
 
+interface GenderNormalizationContext {
+  id?: string | number;
+  source?: string;
+  rawField?: unknown;
+}
+
 const normalizeGender = (
   value: unknown,
-  options?: { strict?: boolean; context?: string }
+  options?: { strict?: boolean; context?: GenderNormalizationContext }
 ): Gender | null | undefined => {
   if (value === null) {
     return null;
@@ -152,16 +158,20 @@ const normalizeGender = (
     }
 
     // Log unrecognized gender values for visibility
+    const contextInfo = options?.context ?? {};
     logger.warn('Unrecognized gender value encountered', {
       rawValue: value,
       normalizedValue: normalized,
-      context: options?.context || 'unknown',
+      recordId: contextInfo.id,
+      source: contextInfo.source ?? 'unknown',
+      rawField: contextInfo.rawField,
     });
 
     if (options?.strict) {
-      throw new Error(
-        `Invalid gender value: "${value}" in context: ${options.context || 'unknown'}`
-      );
+      const contextStr = contextInfo.id
+        ? `${contextInfo.source ?? 'unknown'} (id: ${String(contextInfo.id)})`
+        : (contextInfo.source ?? 'unknown');
+      throw new Error(`Invalid gender value: "${value}" in context: ${contextStr}`);
     }
 
     // Intentional fallback: Unrecognized gender strings default to 'other'
@@ -295,7 +305,14 @@ export const normalizePersonDTO = (raw: unknown): PersonDTO => {
     normalized.phone = phone;
   }
 
-  const genderValue = normalizeGender(pick(record, ['gender', 'gender_value', 'genderValue']));
+  const rawGenderField = pick(record, ['gender', 'gender_value', 'genderValue']);
+  const genderValue = normalizeGender(rawGenderField, {
+    context: {
+      id: record.id as string | number | undefined,
+      source: 'person',
+      rawField: rawGenderField,
+    },
+  });
   if (genderValue !== undefined) {
     normalized.gender = genderValue;
   }

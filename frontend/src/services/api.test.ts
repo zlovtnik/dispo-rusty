@@ -11,7 +11,7 @@
  * Test Coverage Target: 95%+
  */
 
-import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test';
+import { describe, test, expect, beforeEach } from 'bun:test';
 import { server } from '../test-utils/mocks/server';
 import { http, HttpResponse, delay } from 'msw';
 import {
@@ -701,7 +701,10 @@ describe('addressBookService', () => {
           let expectedGender: Gender;
           if (testCase.inputGender === Gender.male || (testCase.inputGender as unknown) === true) {
             expectedGender = Gender.male;
-          } else if (testCase.inputGender === Gender.female || (testCase.inputGender as unknown) === false) {
+          } else if (
+            testCase.inputGender === Gender.female ||
+            (testCase.inputGender as unknown) === false
+          ) {
             expectedGender = Gender.female;
           } else {
             expectedGender = testCase.inputGender as Gender;

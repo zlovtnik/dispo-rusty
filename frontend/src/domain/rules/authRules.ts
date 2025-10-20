@@ -12,6 +12,18 @@ import { getEnv } from '@/config/env';
 import { getCommonPasswords } from '@/utils/commonPasswordsLoader';
 
 /**
+ * Fallback common passwords used when the main password list is unavailable
+ */
+export const FALLBACK_COMMON_PASSWORDS = [
+  '123456',
+  'password',
+  'qwerty',
+  '111111',
+  'abc123',
+  'password1!',
+];
+
+/**
  * Password strength requirements
  */
 export interface PasswordRequirements {
@@ -150,8 +162,7 @@ export async function preloadCommonPasswords(): Promise<void> {
 export function isCommonPassword(password: string): boolean {
   if (!commonPasswordsCache) {
     // Fallback to minimal list if not preloaded
-    const fallbackPasswords = ['123456', 'password', 'qwerty', '111111', 'abc123', 'password1!'];
-    return fallbackPasswords.includes(password.toLowerCase());
+    return FALLBACK_COMMON_PASSWORDS.includes(password.toLowerCase());
   }
   return commonPasswordsCache.includes(password.toLowerCase());
 }
@@ -175,8 +186,7 @@ class PwnedPasswordChecker {
       return commonPasswords.includes(password.toLowerCase());
     } catch (error) {
       // Fallback to a minimal hardcoded list if loading fails
-      const fallbackPasswords = ['123456', 'password', 'qwerty', '111111', 'abc123', 'password1!'];
-      return fallbackPasswords.includes(password.toLowerCase());
+      return FALLBACK_COMMON_PASSWORDS.includes(password.toLowerCase());
     }
   }
 

@@ -113,7 +113,8 @@ const sessionStorageMock = (() => {
 })();
 
 // Assign mocks to global (guard against re-defining if already present)
-if (typeof (globalThis as any).localStorage === 'undefined') {
+// Using type-safe 'in' operator instead of typeof checks
+if (!('localStorage' in globalThis)) {
   Object.defineProperty(globalThis, 'localStorage', {
     value: localStorageMock,
     writable: true,
@@ -121,7 +122,7 @@ if (typeof (globalThis as any).localStorage === 'undefined') {
   });
 }
 
-if (typeof (globalThis as any).sessionStorage === 'undefined') {
+if (!('sessionStorage' in globalThis)) {
   Object.defineProperty(globalThis, 'sessionStorage', {
     value: sessionStorageMock,
     writable: true,

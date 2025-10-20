@@ -1,144 +1,183 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { describe, it, expect, beforeEach } from 'bun:test';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
-import { setupServer } from 'msw/node';
+import { server } from '../../test-utils/mocks/server';
 import { renderWithAuth } from '../../test-utils/render';
 import { AddressBookPage } from '../AddressBookPage';
-import type { Contact } from '../../types/contact';
-import { asContactId, asTenantId, asUserId } from '../../types/ids';
+import type { ContactApiDTO } from '../../transformers/dto';
+import { getEnv } from '../../config/env';
 
-// Mock data
-const mockContacts: Contact[] = [
+const API_BASE_URL = getEnv().apiUrl;
+
+// Mock data - using backend API format (snake_case)
+const mockContacts: ContactApiDTO[] = [
   {
-    id: asContactId('1'),
-    tenantId: asTenantId('tenant1'),
-    firstName: 'John',
-    lastName: 'Doe',
-    fullName: 'John Doe',
+    id: 1,
+    tenant_id: 'tenant-1',
+    first_name: 'John',
+    last_name: 'Doe',
     email: 'john@example.com',
     phone: '555-0100',
-    mobile: '555-0100',
+    age: 30,
     gender: 'male',
-    address: {
-      street1: '123 Main St',
-      city: 'Springfield',
-      state: 'IL',
-      zipCode: '62701',
-      country: 'USA',
-    },
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    createdBy: asUserId('user1'),
-    updatedBy: asUserId('user1'),
-    isActive: true,
+    address: '123 Main St, Springfield, IL 62701, USA',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
   },
   {
-    id: asContactId('2'),
-    tenantId: asTenantId('tenant1'),
-    firstName: 'Jane',
-    lastName: 'Smith',
-    fullName: 'Jane Smith',
+    id: 2,
+    tenant_id: 'tenant-1',
+    first_name: 'Jane',
+    last_name: 'Smith',
     email: 'jane@example.com',
     phone: '555-0101',
-    mobile: '555-0101',
+    age: 28,
     gender: 'female',
-    address: {
-      street1: '456 Oak Ave',
-      city: 'Shelbyville',
-      state: 'IL',
-      zipCode: '62702',
-      country: 'USA',
-    },
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    createdBy: asUserId('user1'),
-    updatedBy: asUserId('user1'),
-    isActive: true,
+    address: '456 Oak Ave, Shelbyville, IL 62702, USA',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
   },
 ];
 
-// MSW server setup
-const server = setupServer(
-  http.get('/api/contacts', () => {
-    return HttpResponse.json({
-      success: true,
-      message: 'Contacts retrieved',
-      data: mockContacts,
-    });
-  }),
-
-  http.post('/api/contacts', async ({ request }) => {
-    const body = (await request.json()) as Partial<Contact>;
-    const newContact: Contact = {
-      id: asContactId(`${mockContacts.length + 1}`),
-      tenantId: asTenantId('tenant1'),
-      firstName: body.firstName || '',
-      lastName: body.lastName || '',
-      fullName: `${body.firstName || ''} ${body.lastName || ''}`.trim(),
-      email: body.email || '',
-      phone: body.phone || '',
-      mobile: body.mobile || '',
-      gender: body.gender || 'male',
-      address: body.address || { street1: '', city: '', state: '', zipCode: '', country: '' },
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      createdBy: asUserId('user1'),
-      updatedBy: asUserId('user1'),
-      isActive: true,
-    };
-    return HttpResponse.json({
-      success: true,
-      message: 'Contact created',
-      data: newContact,
-    });
-  }),
-
-  http.put('/api/contacts/:id', async ({ request, params }) => {
-    const { id } = params;
-    const body = (await request.json()) as Partial<Contact>;
-    const contact = mockContacts.find(c => c.id === id);
-    if (!contact) {
-      return HttpResponse.json({ success: false, message: 'Contact not found' }, { status: 404 });
-    }
-    const updated = { ...contact, ...body };
-    return HttpResponse.json({
-      success: true,
-      message: 'Contact updated',
-      data: updated,
-    });
-  }),
-
-  http.delete('/api/contacts/:id', ({ params }) => {
-    const { id } = params;
-    const contact = mockContacts.find(c => c.id === id);
-    if (!contact) {
-      return HttpResponse.json({ success: false, message: 'Contact not found' }, { status: 404 });
-    }
-    return HttpResponse.json({
-      success: true,
-      message: 'Contact deleted',
-    });
-  })
-);
-
 describe('AddressBookPage Component', () => {
   beforeEach(() => {
-    server.listen();
-  });
+    // Reset mockContacts to initial state before each test
+    mockContacts.length = 0;
+    mockContacts.push(
+      {
+        id: 1,
+        tenant_id: 'tenant-1',
+        first_name: 'John',
+        last_name: 'Doe',
+        email: 'john@example.com',
+        phone: '555-0100',
+        age: 30,
+        gender: 'male',
+        address: '123 Main St, Springfield, IL 62701, USA',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      {
+        id: 2,
+        tenant_id: 'tenant-1',
+        first_name: 'Jane',
+        last_name: 'Smith',
+        email: 'jane@example.com',
+        phone: '555-0101',
+        age: 28,
+        gender: 'female',
+        address: '456 Oak Ave, Shelbyville, IL 62702, USA',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }
+    );
 
-  afterEach(() => {
-    server.resetHandlers();
-    server.close();
+    // Setup test-specific handlers using the global server
+    server.use(
+      http.get(`${API_BASE_URL}/address-book`, () => {
+        return HttpResponse.json({
+          message: 'Contacts retrieved',
+          data: {
+            contacts: mockContacts,
+            total: mockContacts.length,
+            currentPage: 1,
+            totalPages: 1,
+            limit: mockContacts.length,
+            hasNext: false,
+            hasPrev: false,
+          },
+        });
+      }),
+
+      http.post(`${API_BASE_URL}/address-book`, async ({ request }) => {
+        const body = (await request.json()) as {
+          name?: string;
+          email?: string;
+          phone?: string;
+          gender?: string;
+          age?: number;
+          address?: string;
+        };
+        const nameParts = (body.name ?? 'Unknown User').split(' ');
+        const newContact: ContactApiDTO = {
+          id: mockContacts.length + 1,
+          tenant_id: 'tenant-1',
+          first_name: nameParts[0] ?? 'Unknown',
+          last_name: nameParts.slice(1).join(' ') ?? 'User',
+          email: body.email ?? '',
+          phone: body.phone ?? '',
+          age: body.age ?? 25,
+          gender: body.gender ?? 'male',
+          address: body.address ?? '',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+        mockContacts.push(newContact);
+        return HttpResponse.json({
+          message: 'Contact created',
+          data: newContact,
+        });
+      }),
+
+      http.put(`${API_BASE_URL}/address-book/:id`, async ({ request, params }) => {
+        const contactId = Number(params.id);
+        const body = (await request.json()) as {
+          name?: string;
+          email?: string;
+          phone?: string;
+          gender?: string;
+          age?: number;
+          address?: string;
+        };
+        const contactIndex = mockContacts.findIndex(c => c.id === contactId);
+        if (contactIndex === -1) {
+          return HttpResponse.json({ message: 'Contact not found', data: null }, { status: 404 });
+        }
+
+        // Apply updates
+        const updates: Partial<ContactApiDTO> = {
+          updated_at: new Date().toISOString(),
+        };
+        if (body.name) {
+          const nameParts = body.name.split(' ');
+          updates.first_name = nameParts[0] ?? 'Unknown';
+          updates.last_name = nameParts.slice(1).join(' ') ?? 'User';
+        }
+        if (body.email !== undefined) updates.email = body.email;
+        if (body.phone !== undefined) updates.phone = body.phone;
+        if (body.age !== undefined) updates.age = body.age;
+        if (body.gender !== undefined) updates.gender = body.gender;
+        if (body.address !== undefined) updates.address = body.address;
+
+        mockContacts[contactIndex] = { ...mockContacts[contactIndex], ...updates };
+        return HttpResponse.json({
+          message: 'Contact updated',
+          data: mockContacts[contactIndex],
+        });
+      }),
+
+      http.delete(`${API_BASE_URL}/address-book/:id`, ({ params }) => {
+        const contactId = Number(params.id);
+        const contactIndex = mockContacts.findIndex(c => c.id === contactId);
+        if (contactIndex === -1) {
+          return HttpResponse.json({ message: 'Contact not found', data: null }, { status: 404 });
+        }
+        // Remove the contact from the array
+        mockContacts.splice(contactIndex, 1);
+        return HttpResponse.json({
+          message: 'Contact deleted',
+          data: null,
+        });
+      })
+    );
   });
 
   describe('Rendering', () => {
     it('should render the page title', async () => {
       renderWithAuth(<AddressBookPage />);
 
-      await waitFor(() => {
-        expect(screen.queryByText(/address book/i)).toBeDefined();
-      });
+      expect(await screen.findByText(/address book/i)).toBeInTheDocument();
     });
 
     it('should display add contact button', () => {
@@ -167,8 +206,8 @@ describe('AddressBookPage Component', () => {
       renderWithAuth(<AddressBookPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('John')).toBeInTheDocument();
-        expect(screen.getByText('Jane')).toBeInTheDocument();
+        expect(screen.getByText('John Doe')).toBeInTheDocument();
+        expect(screen.getByText('Jane Smith')).toBeInTheDocument();
       });
     });
 
@@ -204,6 +243,7 @@ describe('AddressBookPage Component', () => {
       await user.type(searchInput, 'John');
       await waitFor(() => {
         expect(screen.getByText('John Doe')).toBeInTheDocument();
+        expect(screen.queryByText('Jane Smith')).not.toBeInTheDocument();
       });
     });
 
@@ -220,6 +260,7 @@ describe('AddressBookPage Component', () => {
       await user.clear(searchInput);
       await waitFor(() => {
         expect(screen.getByText('John Doe')).toBeInTheDocument();
+        expect(screen.getByText('Jane Smith')).toBeInTheDocument();
       });
     });
   });
@@ -315,7 +356,7 @@ describe('AddressBookPage Component', () => {
       await user.click(cancelButton);
 
       await waitFor(() => {
-        expect(screen.queryByText(/confirm|are you sure/i)).toBeNull();
+        expect(screen.queryByText(/confirm|are you sure/i)).not.toBeInTheDocument();
       });
     });
   });
@@ -356,9 +397,9 @@ describe('AddressBookPage Component', () => {
   describe('Error Handling', () => {
     it('should display error when API fails', async () => {
       server.use(
-        http.get('/api/contacts', () => {
+        http.get(`${API_BASE_URL}/address-book`, () => {
           return HttpResponse.json(
-            { success: false, message: 'Failed to load contacts' },
+            { message: 'Failed to load contacts', data: null },
             { status: 500 }
           );
         })
@@ -373,8 +414,8 @@ describe('AddressBookPage Component', () => {
 
     it('should provide retry option on error', async () => {
       server.use(
-        http.get('/api/contacts', () => {
-          return HttpResponse.json({ success: false, message: 'Failed to load' }, { status: 500 });
+        http.get(`${API_BASE_URL}/address-book`, () => {
+          return HttpResponse.json({ message: 'Failed to load', data: null }, { status: 500 });
         })
       );
 
@@ -400,29 +441,61 @@ describe('AddressBookPage Component', () => {
 
       const addButton = screen.getByRole('button', { name: /add/i });
       expect(addButton).toBeInTheDocument();
-      expect(addButton.getAttribute('aria-label') || addButton.textContent).toBeTruthy();
+
+      // Get the descriptive text from aria-label or textContent
+      const ariaLabel = addButton.getAttribute('aria-label');
+      const textContent = addButton.textContent?.trim();
+      const descriptiveText = ariaLabel || textContent;
+
+      // Verify we have a descriptive string and it matches a meaningful pattern
+      expect(descriptiveText).toBeTruthy();
+      expect(descriptiveText).toMatch(/add( contact| address)?/i);
     });
 
     it('should support keyboard navigation', async () => {
       const user = userEvent.setup();
       renderWithAuth(<AddressBookPage />);
 
-      const addButton = screen.getByRole('button', { name: /add/i });
-      expect(addButton).toBeInTheDocument();
+      // Wait for the component to load
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /add contact/i })).toBeInTheDocument();
+      });
 
+      // Get the expected tabbable elements
+      const searchInput = screen.getByPlaceholderText('Search contacts...');
+      const addButton = screen.getByRole('button', { name: /add contact/i });
+
+      // Test initial tab order: Search input should be first
       await user.keyboard('{Tab}');
-      expect(document.activeElement).toBeDefined();
+      expect(document.activeElement).toBe(searchInput);
+
+      // Second tab should move to Add Contact button
+      await user.keyboard('{Tab}');
+      expect(document.activeElement).toBe(addButton);
+
+      // Third tab should move to next focusable element (if any)
+      await user.keyboard('{Tab}');
+      // Verify focus moved to a focusable element, not stuck on body
+      expect(document.activeElement).not.toBe(document.body);
+      expect(document.activeElement?.tagName).toMatch(/BUTTON|INPUT|A/);
     });
   });
 
   describe('Empty State', () => {
     it('should display empty state when no contacts exist', async () => {
       server.use(
-        http.get('/api/contacts', () => {
+        http.get(`${API_BASE_URL}/address-book`, () => {
           return HttpResponse.json({
-            success: true,
             message: 'Contacts retrieved',
-            data: [],
+            data: {
+              contacts: [],
+              total: 0,
+              currentPage: 1,
+              totalPages: 0,
+              limit: 10,
+              hasNext: false,
+              hasPrev: false,
+            },
           });
         })
       );
@@ -438,7 +511,7 @@ describe('AddressBookPage Component', () => {
   describe('Pagination', () => {
     it.skip('should handle pagination', async () => {
       // TODO: Implement pagination test after backend supports limit/offset
-      const user = userEvent.setup();
+      const _user = userEvent.setup();
       renderWithAuth(<AddressBookPage />);
       // Pagination implementation needed
     });
@@ -447,7 +520,7 @@ describe('AddressBookPage Component', () => {
   describe('Sorting', () => {
     it.skip('should sort contacts by column', async () => {
       // TODO: Implement sorting test after backend supports sort parameters
-      const user = userEvent.setup();
+      const _user = userEvent.setup();
       renderWithAuth(<AddressBookPage />);
       // Sorting implementation needed
     });

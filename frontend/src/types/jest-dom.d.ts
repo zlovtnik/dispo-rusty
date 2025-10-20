@@ -1,6 +1,6 @@
-import '@testing-library/jest-dom';
-
 // Augment Bun's test types to include jest-dom matchers
+// Note: The actual import '@testing-library/jest-dom' is in src/test-utils/setup.ts
+// which is preloaded via bunfig.toml
 declare module 'bun:test' {
   interface Matchers<T> {
     toBeInTheDocument(): T;

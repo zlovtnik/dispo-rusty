@@ -53,8 +53,9 @@ describe('PrivateRoute Component', () => {
       );
 
       // Should show loading indicator
-      const loadingIndicators = screen.queryAllByText(/Loading|loading/i);
-      expect(loadingIndicators.length).toBeGreaterThan(0);
+      const loadingSpinner = screen.getByTestId('loading-spinner');
+      expect(loadingSpinner).toBeDefined();
+      expect(loadingSpinner).toBeVisible();
     });
   });
 
@@ -146,8 +147,9 @@ describe('PrivateRoute Component', () => {
       );
 
       // Should display loading indicator
-      const loadingElements = screen.queryAllByText(/Loading/i);
-      expect(loadingElements.length).toBeGreaterThan(0);
+      const loadingSpinner = screen.getByTestId('loading-spinner');
+      expect(loadingSpinner).toBeDefined();
+      expect(loadingSpinner).toBeVisible();
     });
 
     it('should hide content while loading', () => {
@@ -171,8 +173,9 @@ describe('PrivateRoute Component', () => {
         { authValue: { isLoading: true, isAuthenticated: false } }
       );
 
-      const loadingText = screen.queryAllByText('Loading...');
-      expect(loadingText.length).toBeGreaterThan(0);
+      const loadingSpinner = screen.getByTestId('loading-spinner');
+      expect(loadingSpinner).toBeDefined();
+      expect(loadingSpinner.textContent).toContain('Loading...');
     });
   });
 
@@ -263,16 +266,18 @@ describe('PrivateRoute Component', () => {
     });
 
     it('should have flex center styling during loading', () => {
-      const { container } = renderWithAuth(
+      const { getByTestId } = renderWithAuth(
         <PrivateRoute>
           <div>Content</div>
         </PrivateRoute>,
         { authValue: { isLoading: true } }
       );
 
-      // Check for flex center classes
-      const flexContainers = container.querySelectorAll('[class*="flex"], [class*="center"]');
-      expect(flexContainers.length).toBeGreaterThan(0);
+      // Check for flex center classes on the loading container
+      const loadingContainer = getByTestId('loading-container');
+      expect(loadingContainer.className).toContain('flex');
+      expect(loadingContainer.className).toContain('items-center');
+      expect(loadingContainer.className).toContain('justify-center');
     });
   });
 
@@ -286,18 +291,28 @@ describe('PrivateRoute Component', () => {
       );
 
       // Loading indicator should have proper ARIA attributes
-      const loadingIndicator = screen.queryByRole('status') || screen.queryByLabelText(/loading/i);
-      expect(loadingIndicator).toBeDefined();
+      const loadingIndicator = screen.getByRole('status');
+      expect(loadingIndicator).not.toBeNull();
     });
 
     it('should maintain focus management during redirect', () => {
-      renderWithoutAuth(
+      const { container } = renderWithoutAuth(
         <PrivateRoute>
           <div>Protected</div>
-        </PrivateRoute>
+        </PrivateRoute>,
+        { initialRoute: '/dashboard' }
       );
 
-      // Focus should be properly managed
+      // When redirected, the loading container should not be visible
+      // and focus should default to document.body
+      expect(screen.queryByText('Protected')).toBeNull();
+
+      // After unauthenticated redirect, focus should be manageable
+      // (typically returned to body when no other focusable element is present)
+      expect(document.activeElement).toBeDefined();
+      // In a test environment with no login page rendered, focus naturally returns to BODY
+      // In production, the Navigate component would render the login page with focusable elements
+      expect(['BODY', 'HTML'].includes(document.activeElement?.tagName || '')).toBeTruthy();
     });
   });
 

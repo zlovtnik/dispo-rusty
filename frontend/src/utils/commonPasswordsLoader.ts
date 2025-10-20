@@ -10,7 +10,7 @@ import {
   COMMON_PASSWORDS_FALLBACK,
   DEFAULT_COMMON_PASSWORDS_CONFIG,
 } from '@/config/commonPasswords';
-import { getEnv } from '@/config/env';
+import { _getEnv } from '@/config/env';
 import { testLogger } from '@/test-utils/logger';
 
 interface PasswordListResponse {
@@ -46,16 +46,16 @@ export class CommonPasswordsLoader {
     if (config.maxCacheEntries !== undefined) {
       if (!Number.isInteger(config.maxCacheEntries) || config.maxCacheEntries < 1) {
         throw new Error(
-          `Invalid maxCacheEntries: must be a positive integer, got ${config.maxCacheEntries}`
+          `Invalid maxCacheEntries: must be a positive integer, got ${String(config.maxCacheEntries)}`
         );
       }
     }
     if (config.cacheTtlMs < 0) {
-      throw new Error(`Invalid cacheTtlMs: must be non-negative, got ${config.cacheTtlMs}`);
+      throw new Error(`Invalid cacheTtlMs: must be non-negative, got ${String(config.cacheTtlMs)}`);
     }
     if (config.requestTimeoutMs < 0) {
       throw new Error(
-        `Invalid requestTimeoutMs: must be non-negative, got ${config.requestTimeoutMs}`
+        `Invalid requestTimeoutMs: must be non-negative, got ${String(config.requestTimeoutMs)}`
       );
     }
   }
@@ -140,6 +140,14 @@ export class CommonPasswordsLoader {
     };
   }
 
+  /**
+   * Get the maximum number of cache entries allowed
+   * Centralized to ensure consistent behavior across the codebase
+   */
+  private getMaxCacheEntries(): number {
+    return this.config.maxCacheEntries ?? 10000;
+  }
+
   private async loadPasswords(): Promise<readonly string[]> {
     if (!this.config.enabled) {
       testLogger.debug('[CommonPasswordsLoader] Loading disabled, using fallback');
@@ -174,9 +182,15 @@ export class CommonPasswordsLoader {
         error
       );
 
-      // Cache fallback with shorter TTL
+      // Cache fallback with shorter TTL, applying maxCacheEntries limit
+      const maxEntries = this.getMaxCacheEntries();
+      const truncatedFallback =
+        maxEntries > 0 && COMMON_PASSWORDS_FALLBACK.length > maxEntries
+          ? COMMON_PASSWORDS_FALLBACK.slice(0, maxEntries)
+          : COMMON_PASSWORDS_FALLBACK;
+
       this.cachedList = {
-        passwords: Object.freeze(COMMON_PASSWORDS_FALLBACK),
+        passwords: Object.freeze(truncatedFallback),
         loadedAt: Date.now(),
         expiresAt: Date.now() + 5 * 60 * 1000, // 5 minutes
         source: 'fallback',
@@ -191,9 +205,20 @@ export class CommonPasswordsLoader {
       throw new Error('File path not configured');
     }
 
+    // Resolve URL: use absolute URLs as-is, or resolve relative paths against the appropriate base URL.
+    // For SSR (server-side rendering), we use the configured ssrBaseUrl or environment variable SSR_BASE_URL
+    // to construct the full URL. Defaults to the configured ssrBaseUrl (e.g., http://localhost:5173).
+    const ssrBase =
+      this.config.ssrBaseUrl ??
+      (typeof process !== 'undefined' ? process.env?.SSR_BASE_URL : undefined) ??
+      'http://localhost:5173';
+
     const url = this.config.filePath.startsWith('http')
       ? this.config.filePath
-      : new URL(this.config.filePath, window.location.origin).toString();
+      : new URL(
+          this.config.filePath,
+          typeof window !== 'undefined' ? window.location.origin : ssrBase
+        ).toString();
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
@@ -245,7 +270,7 @@ export class CommonPasswordsLoader {
     const uniquePasswords = [...new Set(passwords)];
 
     // Enforce maxCacheEntries limit (count-based eviction)
-    const maxEntries = this.config.maxCacheEntries ?? 10000;
+    const maxEntries = this.getMaxCacheEntries();
     if (maxEntries > 0 && uniquePasswords.length > maxEntries) {
       testLogger.warn(
         `[CommonPasswordsLoader] Password list (${uniquePasswords.length}) exceeds maxCacheEntries (${maxEntries}). ` +

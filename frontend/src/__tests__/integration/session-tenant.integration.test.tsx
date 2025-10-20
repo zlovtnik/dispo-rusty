@@ -24,15 +24,21 @@ import { App } from '../../App';
 import { DashboardPage } from '../../pages/DashboardPage';
 import { TenantsPage } from '../../pages/TenantsPage';
 
+// Tenant ID constants for consistent testing
+const TENANT_1_ID = 'tenant-1';
+const TENANT_2_ID = 'tenant-2';
+
+// Helper function for base64url encoding
+const base64url = (str: string): string =>
+  btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
 // Create mock JWT tokens for testing
 function createExpiredToken(): string {
-  const base64url = (str: string) =>
-    btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   const header = base64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
   const payload = base64url(
     JSON.stringify({
       sub: 'test-user',
-      tenant_id: 'tenant-1',
+      tenant_id: TENANT_1_ID,
       exp: Math.floor(Date.now() / 1000) - 3600, // Expired 1 hour ago
       iat: Math.floor(Date.now() / 1000) - 7200,
     })
@@ -42,13 +48,11 @@ function createExpiredToken(): string {
 }
 
 function createValidToken(): string {
-  const base64url = (str: string) =>
-    btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   const header = base64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
   const payload = base64url(
     JSON.stringify({
       sub: 'test-user',
-      tenant_id: 'tenant-1',
+      tenant_id: TENANT_1_ID,
       exp: Math.floor(Date.now() / 1000) + 3600, // Valid for 1 hour
       iat: Math.floor(Date.now() / 1000),
     })
@@ -166,22 +170,21 @@ describe('Session Expiration & Token Refresh Flow', () => {
       },
     });
 
-    // Wait for logout/redirect
-    await waitFor(
-      () => {
-        const loginElement = screen.queryByText(/login|sign in/i);
-        const unauthorizedElement = screen.queryByText(/unauthorized|access denied/i);
-        expect(loginElement || unauthorizedElement).toBeDefined();
-      },
-      { timeout: 5000 }
-    );
+    // Wait for logout/redirect - look for either login page or unauthorized message
+    try {
+      const loginForm = await screen.findByTestId('login-form');
+      expect(loginForm).toBeInTheDocument();
+    } catch {
+      // If no login form, look for unauthorized message
+      const unauthorizedElement = await screen.findByTestId('unauthorized-message');
+      expect(unauthorizedElement).toBeInTheDocument();
+    }
 
     // Verify refresh was attempted
     expect(refreshCalled).toBe(true);
 
     // Verify token was cleared
-    const storedToken = localStorage.getItem('auth_token');
-    expect(storedToken).toBeNull();
+    expect(localStorage.getItem('auth_token')).toBeNull();
   });
 
   test('User can manually log out and clear session', async () => {
@@ -199,18 +202,16 @@ describe('Session Expiration & Token Refresh Flow', () => {
     });
 
     // Verify initially authenticated
-    await waitFor(() => {
-      expect(screen.queryByText(/dashboard|welcome/i)).toBeDefined();
-    });
+    const dashboardElement = await screen.findByText(/dashboard|welcome/i);
+    expect(dashboardElement).toBeInTheDocument();
 
     // Trigger logout
     const logoutButton = screen.getByRole('button', { name: /logout|sign out/i });
     await userEvent.click(logoutButton);
 
-    await waitFor(() => {
-      expect(screen.queryByText(/login|sign in/i)).toBeDefined();
-      expect(localStorage.getItem('auth_token')).toBeNull();
-    });
+    // Verify redirect to login page
+    await screen.findByTestId('login-form');
+    expect(localStorage.getItem('auth_token')).toBeNull();
   });
 
   test('Invalid token immediately triggers logout', async () => {
@@ -238,12 +239,20 @@ describe('Session Expiration & Token Refresh Flow', () => {
       },
     });
 
-    // Should immediately detect invalid state and redirect
-    await waitFor(() => {
-      const loginElement = screen.queryByText(/login|sign in/i);
-      const errorElement = screen.queryByText(/error|invalid/i);
-      expect(loginElement || errorElement).toBeDefined();
-    });
+    // Should immediately detect invalid state and redirect to login page
+    // Wait for login form to appear (indicating successful redirect)
+    const loginForm = await screen.findByRole('form', { name: /login/i });
+    expect(loginForm).toBeInTheDocument();
+
+    // Verify that the username/email input is present (specific login UI element)
+    const usernameInput = await screen.findByLabelText(/username or email/i);
+    expect(usernameInput).toBeInTheDocument();
+
+    // Assert that the auth token has been cleared from localStorage
+    expect(localStorage.getItem('auth_token')).toBeNull();
+
+    // Assert that we've been redirected to the login route
+    expect(window.location.pathname).toBe('/login');
   });
 
   test('Session remains active with valid token', async () => {
@@ -282,7 +291,7 @@ describe('Session Expiration & Token Refresh Flow', () => {
     // Should remain on dashboard
     await waitFor(
       () => {
-        expect(screen.queryByText(/dashboard|welcome/i)).toBeDefined();
+        expect(screen.getByText(/dashboard|welcome/i)).toBeInTheDocument();
       },
       { timeout: 3000 }
     );
@@ -298,10 +307,13 @@ describe('Session Expiration & Token Refresh Flow', () => {
  * Scenario: Users can switch between tenants they have access to
  */
 describe('Tenant Switching Functionality', () => {
-  const tenant1 = mockTenant;
+  const tenant1 = {
+    ...mockTenant,
+    id: TENANT_1_ID as any,
+  };
   const tenant2 = {
     ...mockTenant,
-    id: 'tenant-2' as any,
+    id: TENANT_2_ID as any,
     name: 'Tenant 2',
   };
 
@@ -358,7 +370,7 @@ describe('Tenant Switching Functionality', () => {
 
     // Wait for initial requests with tenant 1
     await waitFor(() => {
-      expect(capturedTenantIds.some(id => id === String(tenant1.id))).toBe(true);
+      expect(capturedTenantIds.some(id => id === TENANT_1_ID)).toBe(true);
     });
 
     // Clear captured headers for next check
@@ -378,12 +390,12 @@ describe('Tenant Switching Functionality', () => {
 
     // Wait for requests with tenant 2
     await waitFor(() => {
-      expect(capturedTenantIds.some(id => id === String(tenant2.id))).toBe(true);
+      expect(capturedTenantIds.some(id => id === TENANT_2_ID)).toBe(true);
     });
 
     // Verify correct tenant headers were sent
-    const tenant1Requests = capturedTenantIds.filter(id => id === String(tenant1.id));
-    const tenant2Requests = capturedTenantIds.filter(id => id === String(tenant2.id));
+    const tenant1Requests = capturedTenantIds.filter(id => id === TENANT_1_ID);
+    const tenant2Requests = capturedTenantIds.filter(id => id === TENANT_2_ID);
 
     // After switch, should only see tenant 2 requests
     expect(tenant2Requests.length).toBeGreaterThan(0);
@@ -402,9 +414,8 @@ describe('Tenant Switching Functionality', () => {
     });
 
     // Verify initially shows dashboard
-    await waitFor(() => {
-      expect(screen.queryByText(/dashboard|welcome/i)).toBeDefined();
-    });
+    const initialDashboard = await screen.findByText(/dashboard|welcome/i);
+    expect(initialDashboard).toBeInTheDocument();
 
     // Unmount first render
     firstRender.unmount();
@@ -421,9 +432,8 @@ describe('Tenant Switching Functionality', () => {
     });
 
     // Verify still authenticated but different tenant
-    await waitFor(() => {
-      expect(screen.queryByText(/dashboard|welcome/i)).toBeDefined();
-    });
+    const dashboardAfterSwitch = await screen.findByText(/dashboard|welcome/i);
+    expect(dashboardAfterSwitch).toBeInTheDocument();
 
     // Verify tenant context changed (this would be tested e2e for UI changes)
     // In a real app, you might check for tenant-specific branding or data
@@ -462,11 +472,15 @@ describe('Tenant Switching Functionality', () => {
     });
 
     // Should handle error gracefully - either show error or fall back to valid tenant
-    await waitFor(() => {
-      const hasError = screen.queryByText(/error|invalid|forbidden/i);
-      const hasFallback = screen.queryByText(/dashboard|welcome/i);
-      expect(hasError || hasFallback).toBeDefined();
-    });
+    // Try to find either an error message or a fallback dashboard display
+    try {
+      const errorElement = await screen.findByText(/error|invalid|forbidden/i);
+      expect(errorElement).toBeInTheDocument();
+    } catch {
+      // If no error, expect fallback to dashboard
+      const fallbackElement = await screen.findByText(/dashboard|welcome/i);
+      expect(fallbackElement).toBeInTheDocument();
+    }
   });
 
   test('Multiple tenant switches maintain data consistency', async () => {
@@ -497,7 +511,7 @@ describe('Tenant Switching Functionality', () => {
     );
 
     // Navigate through different tenants and endpoints
-    const { rerender } = renderWithProviders(<App />, {
+    renderWithProviders(<App />, {
       initialRoute: '/dashboard',
       authValue: {
         isAuthenticated: true,
@@ -510,7 +524,7 @@ describe('Tenant Switching Functionality', () => {
     // Switch to tenant 2
     cleanup();
     renderWithProviders(<App />, {
-      initialRoute: '/contacts',
+      initialRoute: '/address-book',
       authValue: {
         isAuthenticated: true,
         user: { ...mockUser, tenantId: tenant2.id },
@@ -533,8 +547,8 @@ describe('Tenant Switching Functionality', () => {
 
     // Verify tenant headers were sent correctly throughout
     await waitFor(() => {
-      const tenant1Requests = capturedEndpoints.filter(req => req.tenantId === String(tenant1.id));
-      const tenant2Requests = capturedEndpoints.filter(req => req.tenantId === String(tenant2.id));
+      const tenant1Requests = capturedEndpoints.filter(req => req.tenantId === TENANT_1_ID);
+      const tenant2Requests = capturedEndpoints.filter(req => req.tenantId === TENANT_2_ID);
       expect(tenant1Requests.length).toBeGreaterThan(0);
       expect(tenant2Requests.length).toBeGreaterThan(0);
     });
@@ -547,7 +561,7 @@ describe('Tenant Switching Functionality', () => {
       http.get(`${API_URL}/contacts`, ({ request }) => {
         const tenantId = request.headers.get('x-tenant-id') || 'unknown';
         const contacts =
-          tenantId === 'tenant-1'
+          tenantId === TENANT_1_ID
             ? [{ id: 1, first_name: 'John Tenant1' }]
             : [{ id: 2, first_name: 'Jane Tenant2' }];
 
@@ -563,7 +577,7 @@ describe('Tenant Switching Functionality', () => {
 
     // Start with tenant 1 data
     renderWithProviders(<App />, {
-      initialRoute: '/contacts',
+      initialRoute: '/address-book',
       authValue: {
         isAuthenticated: true,
         user: mockUser,
@@ -574,7 +588,7 @@ describe('Tenant Switching Functionality', () => {
 
     // Wait for tenant 1 data
     await waitFor(() => {
-      const tenant1Request = contactRequests.find(req => req.tenantId === 'tenant-1');
+      const tenant1Request = contactRequests.find(req => req.tenantId === TENANT_1_ID);
       expect(tenant1Request).toBeDefined();
     });
 
@@ -584,7 +598,7 @@ describe('Tenant Switching Functionality', () => {
     // Switch to tenant 2
     cleanup();
     renderWithProviders(<App />, {
-      initialRoute: '/contacts',
+      initialRoute: '/address-book',
       authValue: {
         isAuthenticated: true,
         user: { ...mockUser, tenantId: tenant2.id },
@@ -595,7 +609,7 @@ describe('Tenant Switching Functionality', () => {
 
     // Verify tenant 2 data is loaded
     await waitFor(() => {
-      const tenant2Request = contactRequests.find(req => req.tenantId === String(tenant2.id));
+      const tenant2Request = contactRequests.find(req => req.tenantId === TENANT_2_ID);
       expect(tenant2Request).toBeDefined();
       expect(tenant2Request?.contacts[0]?.first_name).toBe('Jane Tenant2');
     });
@@ -611,7 +625,7 @@ describe('Multi-Tenant Data Isolation UI Behavior', () => {
   const tenant1Contacts = [
     {
       id: 1,
-      tenant_id: 'tenant-1',
+      tenant_id: TENANT_1_ID,
       first_name: 'John',
       last_name: 'Tenant1',
       email: 'john@tenant1.com',
@@ -623,7 +637,7 @@ describe('Multi-Tenant Data Isolation UI Behavior', () => {
   const tenant2Contacts = [
     {
       id: 2,
-      tenant_id: 'tenant-2',
+      tenant_id: TENANT_2_ID,
       first_name: 'Jane',
       last_name: 'Tenant2',
       email: 'jane@tenant2.com',
@@ -644,7 +658,7 @@ describe('Multi-Tenant Data Isolation UI Behavior', () => {
     server.use(
       http.get(`${API_URL}/contacts`, ({ request }) => {
         const tenantId = request.headers.get('x-tenant-id');
-        const data = tenantId === 'tenant-1' ? tenant1Contacts : tenant2Contacts;
+        const data = tenantId === TENANT_1_ID ? tenant1Contacts : tenant2Contacts;
         return HttpResponse.json({
           success: true,
           data,
@@ -654,7 +668,7 @@ describe('Multi-Tenant Data Isolation UI Behavior', () => {
     );
 
     renderWithProviders(<App />, {
-      initialRoute: '/contacts',
+      initialRoute: '/address-book',
       authValue: {
         isAuthenticated: true,
         user: mockUser,
@@ -664,21 +678,20 @@ describe('Multi-Tenant Data Isolation UI Behavior', () => {
     });
 
     // Verify tenant 1 contacts are shown
-    await waitFor(() => {
-      expect(screen.queryByText('John Tenant1')).toBeDefined();
-      expect(screen.queryByText('Jane Tenant2')).toBeNull();
-    });
+    const tenant1Contact = await screen.findByText('John Tenant1');
+    expect(tenant1Contact).toBeInTheDocument();
+    expect(screen.queryByText('Jane Tenant2')).not.toBeInTheDocument();
 
     // Switch tenant and verify different data
     cleanup();
     const tenant2 = {
       ...mockTenant,
-      id: 'tenant-2' as any,
+      id: TENANT_2_ID as any,
       name: 'Tenant 2',
     };
 
     renderWithProviders(<App />, {
-      initialRoute: '/contacts',
+      initialRoute: '/address-book',
       authValue: {
         isAuthenticated: true,
         user: { ...mockUser, tenantId: tenant2.id },
@@ -688,10 +701,9 @@ describe('Multi-Tenant Data Isolation UI Behavior', () => {
     });
 
     // Verify tenant 2 contacts are shown
-    await waitFor(() => {
-      expect(screen.queryByText('Jane Tenant2')).toBeDefined();
-      expect(screen.queryByText('John Tenant1')).toBeNull();
-    });
+    const tenant2Contact = await screen.findByText('Jane Tenant2');
+    expect(tenant2Contact).toBeInTheDocument();
+    expect(screen.queryByText('John Tenant1')).not.toBeInTheDocument();
   });
 
   test('Create operation respects tenant isolation', async () => {
@@ -700,7 +712,7 @@ describe('Multi-Tenant Data Isolation UI Behavior', () => {
     server.use(
       http.get(`${API_URL}/contacts`, ({ request }) => {
         const tenantId = request.headers.get('x-tenant-id');
-        const existingContacts = tenantId === 'tenant-1' ? tenant1Contacts : tenant2Contacts;
+        const existingContacts = tenantId === TENANT_1_ID ? tenant1Contacts : tenant2Contacts;
         const allContacts = [
           ...existingContacts,
           ...createdContacts.filter(c => c.tenant_id === tenantId),
@@ -734,7 +746,7 @@ describe('Multi-Tenant Data Isolation UI Behavior', () => {
 
     // Create contact in tenant 1 context
     renderWithProviders(<App />, {
-      initialRoute: '/contacts',
+      initialRoute: '/address-book',
       authValue: {
         isAuthenticated: true,
         user: mockUser,
@@ -744,10 +756,9 @@ describe('Multi-Tenant Data Isolation UI Behavior', () => {
     });
 
     // Should only see tenant 1 contacts initially
-    await waitFor(() => {
-      expect(screen.queryByText('John Tenant1')).toBeDefined();
-      expect(screen.queryByText('Jane Tenant2')).toBeNull();
-    });
+    const tenant1Contact = await screen.findByText('John Tenant1');
+    expect(tenant1Contact).toBeInTheDocument();
+    expect(screen.queryByText('Jane Tenant2')).not.toBeInTheDocument();
 
     // Create a new contact in tenant 1
     const createButton = screen.getByRole('button', { name: /create|add|new contact/i });
@@ -761,15 +772,15 @@ describe('Multi-Tenant Data Isolation UI Behavior', () => {
 
     // Verify the new contact was created with tenant-1 ID
     await waitFor(() => {
-      const createdInTenant1 = createdContacts.some(c => c.tenant_id === 'tenant-1');
+      const createdInTenant1 = createdContacts.some(c => c.tenant_id === TENANT_1_ID);
       expect(createdInTenant1).toBe(true);
     });
 
     // Verify tenant-2 doesn't see the new contact by switching tenant
     cleanup();
-    const tenant2 = { ...mockTenant, id: 'tenant-2' as any, name: 'Tenant 2' };
+    const tenant2 = { ...mockTenant, id: TENANT_2_ID as any, name: 'Tenant 2' };
     renderWithProviders(<App />, {
-      initialRoute: '/contacts',
+      initialRoute: '/address-book',
       authValue: {
         isAuthenticated: true,
         user: { ...mockUser, tenantId: tenant2.id },
@@ -778,10 +789,10 @@ describe('Multi-Tenant Data Isolation UI Behavior', () => {
       },
     });
 
-    await waitFor(() => {
-      expect(screen.queryByText('newuser@tenant1.com')).toBeNull();
-      expect(screen.queryByText('Jane Tenant2')).toBeDefined();
-    });
+    // Verify new contact is not visible to tenant 2
+    expect(screen.queryByText('newuser@tenant1.com')).not.toBeInTheDocument();
+    const tenant2Contact = await screen.findByText('Jane Tenant2');
+    expect(tenant2Contact).toBeInTheDocument();
   });
 
   test('Error states are tenant-specific', async () => {
@@ -789,7 +800,7 @@ describe('Multi-Tenant Data Isolation UI Behavior', () => {
     server.use(
       http.get(`${API_URL}/contacts`, ({ request }) => {
         const tenantId = request.headers.get('x-tenant-id');
-        if (tenantId === 'tenant-1') {
+        if (tenantId === TENANT_1_ID) {
           return HttpResponse.json(
             {
               success: false,
@@ -807,7 +818,7 @@ describe('Multi-Tenant Data Isolation UI Behavior', () => {
     );
 
     renderWithProviders(<App />, {
-      initialRoute: '/contacts',
+      initialRoute: '/address-book',
       authValue: {
         isAuthenticated: true,
         user: mockUser,
@@ -817,8 +828,7 @@ describe('Multi-Tenant Data Isolation UI Behavior', () => {
     });
 
     // Should show error for tenant 1
-    await waitFor(() => {
-      expect(screen.queryByText(/database connection failed|error/i)).toBeDefined();
-    });
+    const errorElement = await screen.findByText(/database connection failed|error/i);
+    expect(errorElement).toBeInTheDocument();
   });
 });

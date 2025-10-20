@@ -6,16 +6,57 @@
  */
 
 import { http, HttpResponse } from 'msw';
-import type { LoginCredentials, AuthResponse } from '../../types/auth';
-import { mockUser, mockTenant } from '../render';
+import type { _LoginCredentials, _AuthResponse } from '../../types/auth';
+import { _mockUser, _mockTenant } from '../render';
 import type { Tenant as BackendTenant } from '../../types/tenant';
 import type { ContactApiDTO } from '../../transformers/dto';
 import { asTenantId } from '../../types/ids';
 import { createMockAuthJwt } from '../jwt';
 import { testLogger } from '../logger';
 
+/**
+ * Request interfaces for type safety in mock handlers
+ */
+export interface CreateContactRequest {
+  readonly name?: string;
+  readonly email?: string;
+  readonly phone?: string;
+  readonly age?: number;
+  readonly gender?: string;
+  readonly address?: string;
+}
+
+export interface UpdateContactRequest {
+  readonly name?: string;
+  readonly email?: string;
+  readonly phone?: string;
+  readonly age?: number;
+  readonly gender?: string;
+  readonly address?: string;
+}
+
 // Get API base URL from environment (delay until runtime to ensure env vars are loaded)
 import { getEnv } from '../../config/env';
+
+/**
+ * Custom error classes for better error handling
+ */
+export class HttpError extends Error {
+  constructor(
+    message: string,
+    public statusCode: number
+  ) {
+    super(message);
+    this.name = 'HttpError';
+  }
+}
+
+export class AuthError extends HttpError {
+  constructor(message: string, statusCode = 401) {
+    super(message, statusCode);
+    this.name = 'AuthError';
+  }
+}
 
 // Create a function to get the base URL at runtime instead of module load time
 function getApiBaseUrl(): string {
@@ -28,6 +69,87 @@ function getApiBaseUrl(): string {
     throw new Error('Missing required environment variable: VITE_API_URL');
   }
   return apiUrl;
+}
+
+/**
+ * Interface for filter group parsed from query parameters
+ */
+interface FilterGroup {
+  field?: string;
+  operator?: string;
+  value?: string;
+}
+
+/**
+ * Type-safe parsed filter with validated field and operator
+ */
+interface ParsedFilter {
+  field: keyof BackendTenant;
+  operator: Operator;
+  value: string;
+}
+
+/**
+ * Allowed filter operators
+ */
+type Operator = 'eq' | 'ne' | 'like' | 'gt' | 'lt';
+
+/**
+ * Valid tenant field names that can be filtered
+ */
+type TenantFilterField = keyof BackendTenant;
+
+/**
+ * Type guard to validate if a filter group can be converted to a ParsedFilter
+ */
+function isValidFilterGroup(group: FilterGroup): group is FilterGroup & {
+  field: string;
+  operator: string;
+  value: string;
+} {
+  return !!(group.field && group.operator && group.value !== undefined);
+}
+
+/**
+ * Type guard to validate if a field is a valid tenant field
+ */
+function isValidTenantField(field: string): field is TenantFilterField {
+  const validFields: TenantFilterField[] = ['id', 'name', 'db_url', 'created_at', 'updated_at'];
+  return validFields.includes(field as TenantFilterField);
+}
+
+/**
+ * Type guard to validate if an operator is a valid operator
+ */
+function isValidOperator(operator: string): operator is Operator {
+  const validOperators: Operator[] = ['eq', 'ne', 'like', 'gt', 'lt'];
+  return validOperators.includes(operator as Operator);
+}
+
+/**
+ * Parse and validate a filter group into a ParsedFilter
+ * Returns null if the filter is invalid
+ */
+function parseFilterGroup(group: FilterGroup): ParsedFilter | null {
+  if (!isValidFilterGroup(group)) {
+    return null;
+  }
+
+  if (!isValidTenantField(group.field)) {
+    testLogger.warn(`Invalid tenant field in filter: "${group.field}"`);
+    return null;
+  }
+
+  if (!isValidOperator(group.operator)) {
+    testLogger.warn(`Invalid filter operator: "${group.operator}"`);
+    return null;
+  }
+
+  return {
+    field: group.field,
+    operator: group.operator,
+    value: group.value,
+  };
 }
 
 /**
@@ -70,7 +192,7 @@ function createMockTenants(): BackendTenant[] {
     {
       id: asTenantId('tenant-1'),
       name: 'Test Tenant 1',
-      db_url: 'postgres://localhost:5432/tenant1',
+      db_url: 'postgres://localhost:5432/tenant-1',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     },
@@ -101,7 +223,7 @@ export let mockTenants: BackendTenant[] = createMockTenants();
 function getTenantIdFromHeaders(request: Request): string {
   const tenantId = request.headers.get('x-tenant-id');
   if (!tenantId) {
-    throw new Error('Missing required x-tenant-id header');
+    throw new HttpError('Missing required x-tenant-id header', 400);
   }
   return tenantId;
 }
@@ -113,7 +235,7 @@ function getTenantIdFromHeaders(request: Request): string {
 function getAuthorizationFromHeaders(request: Request): string {
   const auth = request.headers.get('authorization');
   if (!auth) {
-    throw new Error('Missing required Authorization header');
+    throw new AuthError('Missing required Authorization header', 401);
   }
   return auth;
 }
@@ -150,7 +272,7 @@ export function getHandlers() {
       // Create a valid mock JWT token
       const mockJwt = createMockAuthJwt(
         credentials.username_or_email,
-        credentials.tenant_id || 'tenant1'
+        credentials.tenant_id || 'tenant-1'
       );
 
       // Simulate successful login - backend returns TokenBodyResponse
@@ -200,7 +322,7 @@ export function getHandlers() {
       }
 
       // Create a valid mock JWT token for refresh
-      const mockJwt = createMockAuthJwt('refreshed-user', 'tenant1');
+      const mockJwt = createMockAuthJwt('refreshed-user', 'tenant-1');
 
       return HttpResponse.json(
         {
@@ -283,35 +405,33 @@ export function getHandlers() {
         const pageSize = parseInt(url.searchParams.get('page_size') || '10');
 
         // Parse filters from query parameters (qs.stringify with arrayFormat: 'indices')
-        const filters: any[] = [];
+        const filters: ParsedFilter[] = [];
         const filterKeys = Array.from(url.searchParams.keys()).filter(key =>
           key.startsWith('filters[')
         );
 
         // Group filter parameters by index
-        const filterGroups: Record<string, any> = {};
+        const filterGroups: Record<string, FilterGroup> = {};
         filterKeys.forEach(key => {
           const match = /^filters\[(\d+)\]\[(\w+)\]$/.exec(key);
           if (match) {
             const [, indexStr, field] = match;
             const value = url.searchParams.get(key);
-            const index = indexStr!;
-            if (!(filterGroups as any)[index]) {
-              (filterGroups as any)[index] = {};
+            const index = indexStr;
+            if (index && field) {
+              if (!filterGroups[index]) {
+                filterGroups[index] = {};
+              }
+              filterGroups[index][field as keyof FilterGroup] = value || undefined;
             }
-            // @ts-expect-error - Dynamic property access
-            (filterGroups as any)[index][field] = value;
           }
         });
 
-        // Convert to array
+        // Convert to array with type-safe validation
         Object.values(filterGroups).forEach(group => {
-          if (group.field && group.operator && group.value !== undefined) {
-            filters.push({
-              field: group.field,
-              operator: group.operator,
-              value: group.value,
-            });
+          const parsedFilter = parseFilterGroup(group);
+          if (parsedFilter) {
+            filters.push(parsedFilter);
           }
         });
 
@@ -320,9 +440,9 @@ export function getHandlers() {
         // Apply filters
         if (filters.length > 0) {
           filteredTenants = mockTenants.filter(tenant => {
-            return filters.every((filter: any) => {
+            return filters.every((filter: ParsedFilter) => {
               const { field, operator, value } = filter;
-              const tenantValue = (tenant as any)[field];
+              const tenantValue = tenant[field];
 
               switch (operator) {
                 case 'eq':
@@ -339,7 +459,11 @@ export function getHandlers() {
                 case 'lt':
                   return typeof tenantValue === 'number' && tenantValue < Number(value);
                 default:
-                  return true; // Unknown operator, include item
+                  // This should never happen due to type guards, but keeping for safety
+                  throw new Error(
+                    `Invalid filter operator in mock handler: "${operator}" for field "${field}" with value "${value}". ` +
+                      `Supported operators: eq, ne, like, gt, lt`
+                  );
               }
             });
           });
@@ -464,16 +588,7 @@ export function getHandlers() {
         );
       }
 
-      const existingTenant = mockTenants[tenantIndex];
-      if (!existingTenant) {
-        return HttpResponse.json(
-          {
-            message: 'Tenant not found',
-            data: null,
-          },
-          { status: 404 }
-        );
-      }
+      const existingTenant = mockTenants[tenantIndex]!;
 
       const updatedTenant: BackendTenant = {
         id: existingTenant.id,
@@ -540,7 +655,7 @@ export function getHandlers() {
         getAuthorizationFromHeaders(request);
         getTenantIdFromHeaders(request);
       } catch (e) {
-        const status = (e as Error).message.includes('Authorization') ? 401 : 400;
+        const status = e instanceof HttpError ? e.statusCode : 500;
         return HttpResponse.json({ message: (e as Error).message, data: null }, { status });
       }
 
@@ -582,10 +697,16 @@ export function getHandlers() {
       );
     }),
 
-    /**
-     * GET /address-book/:id - Get contact by ID
-     */
-    http.get(`${API_BASE_URL}/address-book/:id`, ({ params }) => {
+    http.get(`${API_BASE_URL}/address-book/:id`, ({ params, request }) => {
+      // Validate required headers for authenticated operation
+      try {
+        getAuthorizationFromHeaders(request);
+        getTenantIdFromHeaders(request);
+      } catch (e) {
+        const status = e instanceof HttpError ? e.statusCode : 500;
+        return HttpResponse.json({ message: (e as Error).message, data: null }, { status });
+      }
+
       const id = Number(params.id);
       const contact = mockContacts.find(c => c.id === id);
 
@@ -612,7 +733,7 @@ export function getHandlers() {
      * POST /address-book - Create contact
      */
     http.post(`${API_BASE_URL}/address-book`, async ({ request }) => {
-      const body = (await request.json()) as any;
+      const body = (await request.json()) as CreateContactRequest;
 
       // Safely parse name into first and last name parts
       const name =
@@ -623,7 +744,7 @@ export function getHandlers() {
 
       const newContact = {
         id: Math.max(0, ...mockContacts.map(c => Number(c.id))) + 1,
-        tenant_id: 'tenant1', // Mock tenant ID
+        tenant_id: 'tenant-1', // Mock tenant ID
         first_name,
         last_name,
         email: body.email,
@@ -651,7 +772,7 @@ export function getHandlers() {
      */
     http.put(`${API_BASE_URL}/address-book/:id`, async ({ params, request }) => {
       const id = Number(params.id);
-      const body = (await request.json()) as any; // API request format
+      const body = (await request.json()) as UpdateContactRequest;
       const contactIndex = mockContacts.findIndex(c => c.id === id);
 
       if (contactIndex === -1) {
@@ -664,7 +785,7 @@ export function getHandlers() {
         );
       }
 
-      // Convert API request format to ContactApiDTO format
+      // Convert API request format to ContactApiDTO format using typed body
       const updates: Record<string, unknown> = {};
       if (body.name) {
         const nameParts = body.name.split(' ');
@@ -695,7 +816,16 @@ export function getHandlers() {
     /**
      * DELETE /address-book/:id - Delete contact
      */
-    http.delete(`${API_BASE_URL}/address-book/:id`, ({ params }) => {
+    http.delete(`${API_BASE_URL}/address-book/:id`, ({ params, request }) => {
+      // Validate required headers for authenticated operation
+      try {
+        getAuthorizationFromHeaders(request);
+        getTenantIdFromHeaders(request);
+      } catch (e) {
+        const status = e instanceof HttpError ? e.statusCode : 500;
+        return HttpResponse.json({ message: (e as Error).message, data: null }, { status });
+      }
+
       const id = Number(params.id);
       const contactIndex = mockContacts.findIndex(c => c.id === id);
 

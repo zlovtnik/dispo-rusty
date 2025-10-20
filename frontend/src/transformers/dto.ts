@@ -10,6 +10,7 @@ import type { Tenant as TenantRecord } from '../types/tenant';
 import { asContactId, asTenantId, asUserId } from '../types/ids';
 import { booleanToGender, genderToBoolean, parseOptionalGender } from './gender';
 import { parseDate, parseOptionalDate, toIsoString } from './date';
+import { addressParsingLogger } from '../utils/logger';
 
 interface TransformerContext {
   readonly entity: string;
@@ -223,9 +224,6 @@ const looksLikeCountry = (segment: string): boolean => {
   // ISO country codes (2-3 letters)
   if (/^[A-Z]{2,3}$/.test(trimmed)) return true;
 
-  // Single token countries (no spaces)
-  if (!trimmed.includes(' ')) return true;
-
   // Curated list of common country names (exact match only)
   const countryNames = [
     'UNITED STATES',
@@ -266,8 +264,6 @@ const looksLikeCountry = (segment: string): boolean => {
 };
 
 /**
- * Parse address string with intelligent field heuristics
- *
  * Improves upon simple comma-split parsing by detecting and placing ZIP codes,
  * states, and country codes dynamically. Falls back to positional assignment
  * if format doesn't match expected patterns.
@@ -393,7 +389,7 @@ const parseAddressSegmentsWithHeuristics = (
 
   // Post-extraction validation: warn if ZIP exists but state is missing
   if (result.zipCode && !result.state) {
-    console.warn(
+    addressParsingLogger.warn(
       '[Address Parser] ZIP code detected but no state found; address may be incomplete or misidentified.',
       { zipCode: result.zipCode, remainingSegments: remaining }
     );
@@ -401,11 +397,14 @@ const parseAddressSegmentsWithHeuristics = (
 
   // Additional validation: warn about low-confidence state matches
   if (result.state && stateConfidence < 2) {
-    console.warn('[Address Parser] Low confidence state match detected; verify address accuracy.', {
-      state: result.state,
-      confidence: stateConfidence,
-      context: segments,
-    });
+    addressParsingLogger.warn(
+      '[Address Parser] Low confidence state match detected; verify address accuracy.',
+      {
+        state: result.state,
+        confidence: stateConfidence,
+        context: segments,
+      }
+    );
   }
 
   // Positional assignment for remaining segments with improved defensiveness
@@ -417,7 +416,7 @@ const parseAddressSegmentsWithHeuristics = (
       seg => looksLikeState(seg) || looksLikeZipCode(seg) || looksLikeCountry(seg)
     );
     if (additionalMatches.length > 0) {
-      console.warn(
+      addressParsingLogger.warn(
         '[Address Parser] Detected potential unprocessed city/state/ZIP patterns in remaining segments',
         {
           additionalMatches,
@@ -428,8 +427,8 @@ const parseAddressSegmentsWithHeuristics = (
 
     result.street1 = remaining[0] || '';
   }
-  if (remaining.length > 1) result.city = remaining[1] || '';
-  if (remaining.length > 2) result.street2 = remaining[2];
+  if (remaining.length > 1) result.street2 = remaining[1];
+  if (remaining.length > 2) result.city = remaining[2] || '';
 
   return result;
 };

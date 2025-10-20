@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { describe, it, expect, beforeEach } from 'bun:test';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
-import { setupServer } from 'msw/node';
-import { renderWithoutAuth } from '../../test-utils/render';
+import { getServer } from '../../test-utils/mocks/server';
+import { renderWithoutAuth, createDeferred } from '../../test-utils/render';
 import { LoginPage } from '../LoginPage';
 import type { LoginCredentials } from '../../types/auth';
 
@@ -22,51 +22,59 @@ const mockLoginResponse = {
   },
 };
 
-// MSW server setup
-const server = setupServer(
-  http.post('/api/auth/login', async ({ request }) => {
-    const body = (await request.json()) as LoginCredentials;
-
-    // Simulate validation
-    if (!body.usernameOrEmail || !body.password || !body.tenantId) {
-      return HttpResponse.json(
-        {
-          success: false,
-          message: 'Missing required fields',
-        },
-        { status: 400 }
-      );
-    }
-
-    if (body.usernameOrEmail === 'failuser') {
-      return HttpResponse.json(
-        {
-          success: false,
-          message: 'Invalid credentials',
-        },
-        { status: 401 }
-      );
-    }
-
-    return HttpResponse.json(mockLoginResponse);
-  })
-);
-
 describe('LoginPage Component', () => {
   beforeEach(() => {
-    server.listen();
-  });
+    // Use the global MSW server (already set up by test-utils/setup.ts)
+    // Add handler for login endpoint
+    getServer().use(
+      http.post('/api/auth/login', async ({ request }) => {
+        const body = (await request.json()) as LoginCredentials;
 
-  afterEach(() => {
-    server.resetHandlers();
-    server.close();
+        // Simulate validation
+        if (!body.usernameOrEmail || !body.password || !body.tenantId) {
+          return HttpResponse.json(
+            {
+              success: false,
+              message: 'Missing required fields',
+            },
+            { status: 400 }
+          );
+        }
+
+        // Validate email format when @ is present
+        if (
+          body.usernameOrEmail.includes('@') &&
+          !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.exec(body.usernameOrEmail)
+        ) {
+          return HttpResponse.json(
+            {
+              success: false,
+              message: 'Invalid email format',
+            },
+            { status: 400 }
+          );
+        }
+
+        if (body.usernameOrEmail === 'failuser') {
+          return HttpResponse.json(
+            {
+              success: false,
+              message: 'Invalid credentials',
+            },
+            { status: 401 }
+          );
+        }
+
+        return HttpResponse.json(mockLoginResponse);
+      })
+    );
   });
 
   describe('Rendering', () => {
     it('should render login form with title', () => {
       renderWithoutAuth(<LoginPage />);
 
-      expect(screen.getByText('Welcome Back')).not.toBeNull();
+      expect(screen.getByText('Welcome Back')).toBeInTheDocument();
     });
 
     it('should render username/email input field', () => {
@@ -128,8 +136,8 @@ describe('LoginPage Component', () => {
       await user.click(submitButton);
 
       await waitFor(() => {
-        const errorMsg = screen.queryByText(/username|email.*required/i);
-        expect(errorMsg).not.toBeNull();
+        const errorMsg = screen.queryByText(/username.*email.*required/i);
+        expect(errorMsg).toBeInTheDocument();
       });
     });
 
@@ -148,7 +156,7 @@ describe('LoginPage Component', () => {
 
       await waitFor(() => {
         const errorMsg = screen.queryByText(/password.*required/i);
-        expect(errorMsg).toBeDefined();
+        expect(errorMsg).toBeInTheDocument();
       });
     });
 
@@ -167,7 +175,7 @@ describe('LoginPage Component', () => {
 
       await waitFor(() => {
         const errorMsg = screen.queryByText(/tenant.*required/i);
-        expect(errorMsg).toBeDefined();
+        expect(errorMsg).toBeInTheDocument();
       });
     });
   });
@@ -190,7 +198,7 @@ describe('LoginPage Component', () => {
 
       await waitFor(() => {
         const errorMsg = screen.queryByText(/email|format|invalid/i);
-        expect(errorMsg).toBeDefined();
+        expect(errorMsg).toBeInTheDocument();
       });
     });
   });
@@ -205,16 +213,32 @@ describe('LoginPage Component', () => {
       await user.click(submitButton);
 
       await waitFor(() => {
-        expect(screen.queryByText(/required/i)).toBeDefined();
+        const errorMsgs = screen.queryAllByText(/required/i);
+        expect(errorMsgs.length).toBeGreaterThan(0);
       });
 
-      // Type in field and error should clear
+      // Get the input fields
       const usernameInput = screen.getByPlaceholderText(/username|email/i);
-      await user.type(usernameInput, 'test@example.com');
+      const passwordInput = screen.getByPlaceholderText(/password/i);
 
+      // Type into the username/email field
+      await user.type(usernameInput, 'testuser@example.com');
+
+      // Wait for the error to be cleared for the username field
       await waitFor(() => {
-        const errorMsg = screen.queryByText(/username.*required/i);
-        expect(errorMsg).toBeNull();
+        const errorMsgs = screen.queryAllByText(/required/i);
+        // Should have fewer errors now (at least one field is filled)
+        expect(errorMsgs.length).toBeLessThan(3); // Originally had errors for username, password, and tenant
+      });
+
+      // Type into the password field
+      await user.type(passwordInput, 'password123');
+
+      // Wait for the password error to be cleared as well
+      await waitFor(() => {
+        const errorMsgs = screen.queryAllByText(/required/i);
+        // Should have even fewer errors now (username and password are filled)
+        expect(errorMsgs.length).toBeLessThan(2);
       });
     });
   });
@@ -237,13 +261,20 @@ describe('LoginPage Component', () => {
 
       await waitFor(() => {
         const loadingOrSuccess = screen.queryByText(/loading|welcome|dashboard/i);
-        expect(loadingOrSuccess).toBeDefined();
+        expect(loadingOrSuccess).toBeInTheDocument();
       });
     });
 
     it('should show loading state during submission', async () => {
       const user = userEvent.setup();
-      renderWithoutAuth(<LoginPage />);
+      const deferred = createDeferred<void>();
+
+      renderWithoutAuth(<LoginPage />, {
+        authValue: {
+          login: () => deferred.promise,
+          isLoading: false,
+        },
+      });
 
       const usernameInput = screen.getByPlaceholderText(/username|email/i);
       const passwordInput = screen.getByPlaceholderText(/password/i);
@@ -256,12 +287,17 @@ describe('LoginPage Component', () => {
       const submitButton = screen.getByRole('button', { name: /login|sign in/i });
       await user.click(submitButton);
 
-      // Button should be disabled during submission
+      // Button should show loading state during submission
       await waitFor(() => {
+        const buttonClasses = submitButton.className || '';
         expect(
-          submitButton.getAttribute('disabled') !== null || submitButton.hasAttribute('aria-busy')
+          buttonClasses.includes('ant-btn-loading') ||
+            submitButton.getAttribute('aria-busy') === 'true'
         ).toBe(true);
       });
+
+      deferred.resolve();
+      await deferred.promise;
     });
   });
 
@@ -282,20 +318,20 @@ describe('LoginPage Component', () => {
       await user.click(submitButton);
 
       await waitFor(() => {
-        const errorMsg = screen.queryByText(/invalid|failed|error|credentials/i);
-        expect(errorMsg).toBeDefined();
+        const errorMsg = screen.getByText(/invalid|failed|error|credentials/i);
+        expect(errorMsg).toBeInTheDocument();
       });
     });
 
     it('should display alert on API error', async () => {
-      server.use(
-        http.post('/api/auth/login', () => {
-          return HttpResponse.json({ success: false, message: 'Server error' }, { status: 500 });
-        })
-      );
-
       const user = userEvent.setup();
-      renderWithoutAuth(<LoginPage />);
+      renderWithoutAuth(<LoginPage />, {
+        authValue: {
+          login: async () => {
+            throw new Error('Server error');
+          },
+        },
+      });
 
       const usernameInput = screen.getByPlaceholderText(/username|email/i);
       const passwordInput = screen.getByPlaceholderText(/password/i);
@@ -309,22 +345,25 @@ describe('LoginPage Component', () => {
       await user.click(submitButton);
 
       await waitFor(() => {
-        const alert = screen.queryByRole('alert');
-        expect(alert).toBeDefined();
+        const alert = screen.getByRole('alert');
+        expect(alert).toHaveTextContent(/server error/i);
       });
     });
 
     it('should allow user to retry after error', async () => {
       const user = userEvent.setup();
+      let attempt = 0;
 
-      // First render with error
-      server.use(
-        http.post('/api/auth/login', () => {
-          return HttpResponse.json({ success: false, message: 'Temporary error' }, { status: 500 });
-        })
-      );
-
-      renderWithoutAuth(<LoginPage />);
+      renderWithoutAuth(<LoginPage />, {
+        authValue: {
+          login: async () => {
+            attempt += 1;
+            if (attempt === 1) {
+              throw new Error('Temporary error');
+            }
+          },
+        },
+      });
 
       const usernameInput = screen.getByPlaceholderText(/username|email/i);
       const passwordInput = screen.getByPlaceholderText(/password/i);
@@ -338,17 +377,10 @@ describe('LoginPage Component', () => {
       await user.click(submitButton);
 
       await waitFor(() => {
-        expect(screen.queryByText(/error|failed/i)).toBeDefined();
+        const alert = screen.getByRole('alert');
+        expect(alert).toHaveTextContent(/temporary error/i);
       });
 
-      // Now use successful handler and retry
-      server.use(
-        http.post('/api/auth/login', () => {
-          return HttpResponse.json(mockLoginResponse);
-        })
-      );
-
-      // Clear form and try again
       await user.clear(usernameInput);
       await user.clear(passwordInput);
       await user.clear(tenantInput);
@@ -360,14 +392,12 @@ describe('LoginPage Component', () => {
       await user.click(submitButton);
 
       await waitFor(() => {
-        const hasSuccess = screen.queryByText(/success|welcome|dashboard/i);
-        const hasError = screen.queryByText(/error/i);
-        expect(hasSuccess !== null || hasError === null).toBe(true);
+        expect(screen.queryByRole('alert')).toBeNull();
       });
     });
   });
 
-  describe('Remember Me', () => {
+  describe('Remember Me Checkbox', () => {
     it('should have remember me checkbox', () => {
       renderWithoutAuth(<LoginPage />);
 
@@ -379,7 +409,7 @@ describe('LoginPage Component', () => {
       const user = userEvent.setup();
       renderWithoutAuth(<LoginPage />);
 
-      const checkbox = screen.getByRole('checkbox') as HTMLInputElement;
+      const checkbox = screen.getByRole('checkbox');
       const initialState = checkbox.checked;
 
       await user.click(checkbox);
@@ -393,7 +423,7 @@ describe('LoginPage Component', () => {
       const user = userEvent.setup();
       renderWithoutAuth(<LoginPage />);
 
-      const input = screen.getByPlaceholderText(/username|email/i) as HTMLInputElement;
+      const input = screen.getByPlaceholderText(/username|email/i);
       await user.type(input, 'testuser');
 
       expect(input.value).toBe('testuser');
@@ -403,7 +433,7 @@ describe('LoginPage Component', () => {
       const user = userEvent.setup();
       renderWithoutAuth(<LoginPage />);
 
-      const input = screen.getByPlaceholderText(/password/i) as HTMLInputElement;
+      const input = screen.getByPlaceholderText(/password/i);
       await user.type(input, 'password123');
 
       expect(input.value).toBe('password123');
@@ -413,7 +443,7 @@ describe('LoginPage Component', () => {
       const user = userEvent.setup();
       renderWithoutAuth(<LoginPage />);
 
-      const input = screen.getByPlaceholderText(/tenant/i) as HTMLInputElement;
+      const input = screen.getByPlaceholderText(/tenant/i);
       await user.type(input, 'tenant1');
 
       expect(input.value).toBe('tenant1');
@@ -422,11 +452,14 @@ describe('LoginPage Component', () => {
     it('should have form labels', () => {
       renderWithoutAuth(<LoginPage />);
 
-      // Check that inputs have associated labels via aria-label or aria-labelledby
-      const usernameInput = screen.getByPlaceholderText(/username|email/i);
-      expect(
-        usernameInput.getAttribute('aria-label') || usernameInput.getAttribute('aria-labelledby')
-      ).not.toBeNull();
+      // Check that inputs are properly associated with their labels using accessible queries
+      const usernameInput = screen.getByLabelText('Username or Email');
+      const passwordInput = screen.getByLabelText('Password');
+      const tenantInput = screen.getByLabelText('Tenant ID');
+
+      expect(usernameInput).toBeInTheDocument();
+      expect(passwordInput).toBeInTheDocument();
+      expect(tenantInput).toBeInTheDocument();
     });
 
     it('should be keyboard navigable', async () => {
@@ -438,14 +471,14 @@ describe('LoginPage Component', () => {
 
       await user.keyboard('{Tab}');
       const activeElement = document.activeElement;
-      expect(activeElement).toBeDefined();
+      expect(activeElement).toBeInTheDocument();
     });
 
     it('should have proper heading hierarchy', () => {
       renderWithoutAuth(<LoginPage />);
 
       const heading = screen.getByText('Welcome Back');
-      expect(heading).toBeDefined();
+      expect(heading).toBeInTheDocument();
     });
 
     it('should announce validation errors to screen readers', async () => {
@@ -475,11 +508,22 @@ describe('LoginPage Component', () => {
 
     it('should handle rapid form submissions', async () => {
       const user = userEvent.setup();
-      renderWithoutAuth(<LoginPage />);
+      const deferred = createDeferred<void>();
+      let loginCallCount = 0;
+
+      renderWithoutAuth(<LoginPage />, {
+        authValue: {
+          login: () => {
+            loginCallCount += 1;
+            return deferred.promise;
+          },
+          isLoading: false,
+        },
+      });
 
       const usernameInput = screen.getByPlaceholderText(/username|email/i);
       const passwordInput = screen.getByPlaceholderText(/password/i);
-      const tenantInput = screen.getByPlaceholderText(/tenant/i);
+      const tenantInput = screen.getByTestId('tenant-input');
 
       await user.type(usernameInput, 'testuser');
       await user.type(passwordInput, 'password123');
@@ -487,25 +531,28 @@ describe('LoginPage Component', () => {
 
       const submitButton = screen.getByRole('button', { name: /login|sign in/i });
 
-      // Click multiple times rapidly
+      // Click the button multiple times rapidly while the first submission is pending
+      await user.click(submitButton);
       await user.click(submitButton);
       await user.click(submitButton);
 
-      // Should only submit once or handle gracefully
       await waitFor(() => {
-        expect(screen.getByText(/welcome back|loading|success|error/i)).toBeDefined();
+        expect(loginCallCount).toBe(1);
       });
+
+      deferred.resolve();
+      await deferred.promise;
     });
 
     it('should handle very long input', async () => {
       const user = userEvent.setup();
       renderWithoutAuth(<LoginPage />);
 
-      const usernameInput = screen.getByPlaceholderText(/username|email/i) as HTMLInputElement;
-      const longText = 'x'.repeat(1000);
+      const usernameInput = screen.getByPlaceholderText(/username|email/i);
+      const longText = 'x'.repeat(300); // Type more than the 254 character limit
       await user.type(usernameInput, longText);
 
-      expect(usernameInput.value.length).toBeLessThanOrEqual(1000);
+      expect(usernameInput.value.length).toBe(254); // Should be truncated to the enforced maximum
     });
   });
 });

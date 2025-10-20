@@ -583,12 +583,38 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({
 /**
  * Hook to use auth context
  *
- * @throws Error if used outside AuthProvider
+ * Returns a safe fallback when used outside AuthProvider to prevent crashes.
+ * This allows components to gracefully handle missing provider by showing
+ * unauthenticated state and redirecting as needed.
  */
 export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    // Return a safe fallback instead of throwing
+    // This allows components to gracefully handle missing provider
+    console.warn('useAuth called outside AuthProvider - returning fallback auth state');
+    return {
+      user: null,
+      tenant: null,
+      isAuthenticated: false,
+      isLoading: false,
+      error: null,
+      login: async () => {
+        console.warn('login called outside AuthProvider');
+        return err(AuthFlowErrors.initFailed('AuthProvider not available'));
+      },
+      logout: async () => {
+        console.warn('logout called outside AuthProvider');
+        return err(AuthFlowErrors.logoutFailed('AuthProvider not available'));
+      },
+      refreshToken: async () => {
+        console.warn('refreshToken called outside AuthProvider');
+        return err(AuthFlowErrors.tokenRefreshFailed('AuthProvider not available'));
+      },
+      clearError: () => {
+        console.warn('clearError called outside AuthProvider');
+      },
+    };
   }
   return context;
 };

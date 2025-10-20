@@ -3,7 +3,7 @@ import { asContactId, asTenantId, asUserId } from '../types/ids';
 
 const nonEmptyString = z.string().min(1, 'Value is required');
 
-const parseDate = (value: string | Date): Date => {
+const _parseDate = (value: string | Date): Date => {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) {
     throw new Error('Invalid date value');
@@ -100,7 +100,7 @@ export const userSchema = z.object({
     .string()
     .min(1)
     .transform((value: string) => asUserId(value)),
-  email: z.string().email(),
+  email: z.email(),
   username: z.string().min(1),
   firstName: z.string().optional(),
   lastName: z.string().optional(),
@@ -130,7 +130,7 @@ const emergencyContactSchema = z.object({
   name: z.string().min(1),
   relationship: z.string().min(1),
   phone: z.string().min(1),
-  email: z.string().email().optional(),
+  email: z.email().optional(),
 });
 
 export const contactSchema = z
@@ -149,7 +149,7 @@ export const contactSchema = z
     preferredName: z.string().optional(),
     title: z.string().optional(),
     suffix: z.string().optional(),
-    email: z.string().email().optional(),
+    email: z.email().optional(),
     phone: z.string().optional(),
     mobile: z.string().optional(),
     fax: z.string().optional(),
@@ -234,14 +234,14 @@ export const loginRequestSchema = z.object({
 
 export const createTenantSchema = z.object({
   name: z.string().min(1),
-  db_url: z.string().url(),
+  db_url: z.url(),
 });
 
 export const updateTenantSchema = createTenantSchema.partial();
 
 export const contactMutationSchema = z.object({
   name: z.string().min(1),
-  email: z.string().email(),
+  email: z.email(),
   gender: z.boolean(),
   age: z.number().int().nonnegative(),
   address: z.string().min(1),
@@ -252,12 +252,10 @@ export const contactMutationSchema = z.object({
 export const loginSchema = z.object({
   usernameOrEmail: z
     .string()
-    .min(1, 'Username or email is required')
-    .min(3, 'Must be at least 3 characters')
+    .min(3, 'Username or email is required (minimum 3 characters)')
     .max(254, 'Must be less than 254 characters'),
   password: z
     .string()
-    .min(1, 'Password is required')
     .min(8, 'Password must be at least 8 characters long')
     .max(128, 'Password must be less than 128 characters'),
   tenantId: z.string().min(1, 'Tenant ID is required'),
@@ -274,17 +272,14 @@ export const contactFormSchema = z
       .string()
       .min(1, 'Last name is required')
       .max(50, 'Last name must be less than 50 characters'),
-    email: z.string().email('Please enter a valid email address').optional().or(z.literal('')),
+    email: z.email('Please enter a valid email address').optional().or(z.literal('')),
     phone: z
       .string()
       .regex(/^\+?[1-9]\d{6,14}$/, 'Please enter a valid phone number')
       .optional()
       .or(z.literal('')),
     gender: z.enum(['male', 'female', 'other']).catch('other'),
-    age: z
-      .number()
-      .min(1, 'Age must be at least 1')
-      .max(120, 'Age must be at most 120'),
+    age: z.number().min(1, 'Age must be at least 1').max(120, 'Age must be at most 120'),
     street1: z.string().min(1, 'Street address is required'),
     street2: z.string().optional().or(z.literal('')),
     city: z.string().min(1, 'City is required'),
@@ -292,32 +287,21 @@ export const contactFormSchema = z
     zipCode: z.string().min(1, 'ZIP code is required'),
     country: z.string().min(1, 'Country is required'),
   })
-  .refine(
-    data => {
-      // Cross-field validation: email or phone must be provided
-      if (!data.email && !data.phone) {
-        return false;
-      }
-      return true;
-    },
-    {
-      message: 'Either email or phone number is required',
-      path: ['email'], // Attach error to email field
+  .superRefine((data, ctx) => {
+    // Cross-field validation: email or phone must be provided
+    if (!data.email && !data.phone) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Either email or phone number is required',
+        path: ['email'],
+      });
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Either email or phone number is required',
+        path: ['phone'],
+      });
     }
-  )
-  .refine(
-    data => {
-      // Cross-field validation: email or phone must be provided
-      if (!data.email && !data.phone) {
-        return false;
-      }
-      return true;
-    },
-    {
-      message: 'Either email or phone number is required',
-      path: ['phone'], // Attach error to phone field
-    }
-  );
+  });
 
 export const tenantFormSchema = z
   .object({

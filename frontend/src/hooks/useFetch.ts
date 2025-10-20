@@ -6,6 +6,7 @@ import { ok, err } from 'neverthrow';
 import type { AppError, NetworkError } from '../types/errors';
 import { createBusinessLogicError, createNetworkError } from '../types/errors';
 import type { z } from 'zod';
+import { SENSITIVE_QUERY_PARAMS } from '../config/sensitiveParams';
 
 /**
  * Sanitizes a URL by removing or redacting sensitive query parameters
@@ -14,37 +15,60 @@ import type { z } from 'zod';
  * @param urlStr - The URL string to sanitize
  * @returns URL with sensitive query parameters removed/redacted, or just origin+path
  */
-const sanitizeUrlForLogging = (urlStr: string): string => {
+export const sanitizeUrlForLogging = (urlStr: string): string => {
   try {
-    // If it's just a path (no protocol), return it as-is (already safe)
-    if (!urlStr.includes('://')) {
-      return urlStr;
-    }
-
-    const url = new URL(urlStr);
-    const sensitiveKeys = [
-      'token',
-      'auth',
-      'apikey',
-      'api_key',
-      'session',
-      'sessionid',
-      'pwd',
-      'password',
-    ];
-
-    // Remove sensitive parameters
-    for (const key of sensitiveKeys) {
-      if (url.searchParams.has(key)) {
-        url.searchParams.delete(key);
+    // Determine a safe base for parsing relative URLs so we can use the URL API
+    let safeBase = 'http://localhost';
+    if (typeof window !== 'undefined' && typeof window.location !== 'undefined') {
+      const origin = window.location.origin;
+      // Only accept well-formed http(s) origins. Some test environments set
+      // origin to non-URL values like the string 'null' which we must ignore.
+      if (typeof origin === 'string' && /^https?:\/\//i.test(origin)) {
+        safeBase = origin;
       }
     }
 
-    // Return origin + pathname + any remaining safe query params
-    return url.origin + url.pathname + (url.search ? url.search : '');
+    // If it's a bare protocol+host URL or an absolute URL, use as-is.
+    // Otherwise treat as relative and parse with a safe base so we can strip params.
+    // Try parsing as an absolute URL first; if it fails, parse as relative using safeBase.
+    let parsed: URL;
+    try {
+      parsed = new URL(urlStr);
+    } catch (absErr) {
+      // If the input looks like an absolute URL (has a scheme), don't try to
+      // treat it as relative — it's malformed and should be considered invalid.
+      const looksLikeAbsolute = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(urlStr);
+      if (looksLikeAbsolute) {
+        throw absErr;
+      }
+
+      // Otherwise, try building an absolute URL by concatenating the safe
+      // base and the relative path. Some test environments may not support
+      // the URL(url, base) overload reliably.
+      try {
+        const base = safeBase.replace(/\/$/, '');
+        const candidate = urlStr.startsWith('/') ? `${base}${urlStr}` : `${base}/${urlStr}`;
+        parsed = new URL(candidate);
+      } catch (relErr) {
+        // Rethrow original error to be caught by outer try/catch and return redacted placeholder
+        throw absErr;
+      }
+    }
+
+    const sensitiveKeys = SENSITIVE_QUERY_PARAMS;
+
+    // Remove sensitive parameters
+    for (const key of sensitiveKeys) {
+      if (parsed.searchParams.has(key)) {
+        parsed.searchParams.delete(key);
+      }
+    }
+
+    // Return only pathname + remaining safe query params to avoid leaking origin/protocol
+    return parsed.pathname + (parsed.search ? parsed.search : '');
   } catch {
-    // If URL parsing fails, return just the origin (safest fallback)
-    return 'unknown-url';
+    // If URL parsing fails, return a redacted placeholder
+    return 'redacted-url';
   }
 };
 
@@ -75,6 +99,27 @@ const globalFetchCache = new Map<string, CacheEntry<unknown>>();
 
 /**
  * Configuration options for fetch operations
+ *
+ * IMPORTANT: For type safety, you MUST provide either `transformResponse` or `validateResponse`.
+ * Without either, the response data will be unsafely cast to type T, which can lead to runtime errors.
+ *
+ * @example
+ * // Good: Using transformResponse
+ * useFetch<User>('/api/user', {
+ *   transformResponse: (data) => data as User
+ * });
+ *
+ * @example
+ * // Good: Using validateResponse with Zod
+ * useFetch<User>('/api/user', {
+ *   validateResponse: UserSchema
+ * });
+ *
+ * @example
+ * // Bad: Neither provided - will log warning in dev mode
+ * useFetch<User>('/api/user', {
+ *   // Missing transformResponse or validateResponse!
+ * });
  */
 export interface FetchOptions<T = unknown> extends RequestInit {
   /** Timeout in milliseconds */
@@ -89,8 +134,8 @@ export interface FetchOptions<T = unknown> extends RequestInit {
   baseURL?: string;
   /** Transform response data before returning */
   transformResponse?: (data: unknown) => T;
-  /** Validate transformed response data (Zod schema) - must match response type T */
-  validateResponse?: z.ZodType<T>;
+  /** Validate transformed response data (Zod schema or transform) */
+  validateResponse?: z.ZodType<any>;
   /** Transform error before returning */
   transformError?: (error: AppError) => AppError;
   /** When true, the request will only run when refetch is called */
@@ -121,22 +166,33 @@ export interface FetchState<T> {
  * Provides automatic error handling, retry logic, and payload transformation using
  * railway-oriented programming patterns.
  *
+ * **IMPORTANT**: For type safety, always provide either `transformResponse` or `validateResponse`
+ * in the options. Without either, response data will be unsafely cast to type T, triggering
+ * a warning in development mode and potentially throwing in strict mode.
+ *
  * @template T The expected response data type
  * @param url URL to fetch (pass `null` to pause requests)
  * @param options Optional configuration including retries, timeout, and transformers
  * @returns Fetch state with data, loading, error flags, and a refetch trigger
  * @example
  * ```typescript
- * const { data, loading, error, refetch } = useFetch<ContactDTO[]>(
+ * // Recommended: Use validateResponse with Zod schema for full type safety
+ * const { data, loading, error } = useFetch<ContactDTO[]>(
  *   '/contacts',
- *   { baseURL: apiBase }
+ *   {
+ *     baseURL: apiBase,
+ *     validateResponse: ContactDTOArraySchema
+ *   }
  * );
  *
- * useEffect(() => {
- *   if (!loading && error) {
- *     notification.error({ message: error.message });
+ * // Alternative: Use transformResponse for custom transformation
+ * const { data } = useFetch<ContactDTO[]>(
+ *   '/contacts',
+ *   {
+ *     baseURL: apiBase,
+ *     transformResponse: (data) => data as ContactDTO[]
  *   }
- * }, [loading, error]);
+ * );
  * ```
  */
 export function useFetch<T = unknown>(
@@ -214,10 +270,42 @@ export function useFetch<T = unknown>(
             data = await response.text();
           }
 
-          // Transform response if needed
-          const transformedData: T = transformResponse ? transformResponse(data) : (data as T);
+          // Runtime type safety check: Enforce that either transformResponse or validateResponse is provided
+          // This prevents unsafe blind casting of response data to type T
+          if (!transformResponse && !validateResponse) {
+            const warningMessage =
+              `[useFetch] Type safety warning: No transformResponse or validateResponse provided for ${sanitizeUrlForLogging(fullUrl)}. ` +
+              `Response data will be unsafely cast to type T. This can lead to runtime errors. ` +
+              `Please provide either transformResponse or validateResponse to ensure type safety.`;
+
+            // In development mode, log a warning to alert developers
+            if (import.meta.env.DEV) {
+              console.warn(warningMessage);
+            }
+
+            // Optionally throw in strict mode (controlled by environment variable)
+            if (import.meta.env.VITE_STRICT_TYPE_SAFETY === 'true') {
+              return err(
+                createBusinessLogicError(
+                  'Type safety violation: transformResponse or validateResponse required',
+                  { url: sanitizeUrlForLogging(fullUrl) }
+                )
+              );
+            }
+          }
+
+          // Transform response if transformResponse is provided
+          let transformedData: T;
+          if (transformResponse) {
+            transformedData = transformResponse(data);
+          } else {
+            // If no transformResponse, we'll validate first (if validateResponse exists)
+            // or cast as a last resort (with warning already logged above)
+            transformedData = data as T;
+          }
 
           // Validate transformed data if schema provided
+          // This runs AFTER transformation to validate the final shape
           if (validateResponse) {
             const validationResult = validateResponse.safeParse(transformedData);
             if (!validationResult.success) {
@@ -246,6 +334,8 @@ export function useFetch<T = unknown>(
                 )
               );
             }
+            // Use validated data from Zod (which ensures type safety)
+            transformedData = validationResult.data as T;
           }
 
           return ok(transformedData);

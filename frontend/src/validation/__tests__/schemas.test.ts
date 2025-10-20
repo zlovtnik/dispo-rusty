@@ -907,7 +907,7 @@ describe('validation schemas', () => {
       });
 
       it('should reject invalid gender values', () => {
-        const contact = { ...validContactBase, gender: 'other' as any };
+        const contact = { ...validContactBase, gender: 'invalid' as any };
         const result = contactSchema.safeParse(contact);
         expect(result.success).toBe(false);
 

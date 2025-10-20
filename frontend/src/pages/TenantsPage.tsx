@@ -525,7 +525,7 @@ export const TenantsPage: React.FC = () => {
 
       {/* Tenants Table */}
       <Card
-        title={`Tenants (${tenants?.length ?? 0})`}
+        title={`Tenants (${tenants.length})`}
         style={{ borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}
       >
         <Table
@@ -537,7 +537,7 @@ export const TenantsPage: React.FC = () => {
           pagination={tablePagination}
           locale={{
             emptyText:
-              (tenants?.length ?? 0) === 0 ? (
+              tenants.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '48px' }}>
                   <Typography.Text style={{ fontSize: '16px', color: '#999' }}>
                     No tenants yet. Add your first tenant!

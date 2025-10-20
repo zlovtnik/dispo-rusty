@@ -76,18 +76,11 @@ export const FormField = memo<FormFieldProps>(
     className,
     ...props
   }) => {
-    const {
-      control,
-      formState: { errors, touchedFields, isSubmitted, dirtyFields },
-      watch,
-    } = useFormContext();
+    const { control, formState, getFieldState } = useFormContext();
 
-    const fieldError = errors[name];
-    const isTouched = touchedFields[name];
-    const isDirty = dirtyFields[name];
+    const { error: fieldError, isTouched } = getFieldState(name, formState);
     const isFieldValid = !fieldError && isTouched;
-    const currentValue = watch(name);
-    const hasValue = currentValue !== undefined && currentValue !== '' && currentValue !== null;
+    const { isSubmitted } = formState;
 
     // Determine validation status
     const status =
@@ -170,11 +163,6 @@ export const FormField = memo<FormFieldProps>(
                   placeholder={placeholder}
                   disabled={disabled}
                   iconRender={visible => (visible ? <EyeTwoTone /> : <EyeInvisibleOutlined />)}
-                  suffix={
-                    status === 'success' ? (
-                      <CheckCircleOutlined style={{ color: 'var(--color-success)' }} />
-                    ) : null
-                  }
                 />
               )}
             />
@@ -287,7 +275,7 @@ export const FormField = memo<FormFieldProps>(
     // For checkbox, we need to handle layout differently
     if (props.type === 'checkbox') {
       return (
-        <Form.Item {...formItemProps} valuePropName="checked">
+        <Form.Item {...formItemProps} hasFeedback={false}>
           {renderField()}
         </Form.Item>
       );

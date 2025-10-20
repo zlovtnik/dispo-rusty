@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'bun:test';
+import { describe, it, expect } from 'bun:test';
 import {
   decodeJwtPayload,
   checkTokenExpiry,
@@ -8,7 +8,7 @@ import {
   updateTenantFromJwt,
   verifyDataMatchesToken,
 } from '../parsing';
-import type { User, Tenant } from '../../types/auth';
+import type { _User, _Tenant } from '../../types/auth';
 import { mockUser, mockTenant } from '../../test-utils/render';
 import { asTenantId } from '../../types/ids';
 

@@ -31,6 +31,8 @@ export interface CommonPasswordsConfig {
   requestTimeoutMs: number;
   /** Maximum number of password entries to keep in cache (count-based limit to prevent unbounded memory growth) */
   maxCacheEntries?: number;
+  /** Base URL for SSR context when resolving relative paths (defaults to http://localhost:5173) */
+  ssrBaseUrl?: string;
 }
 
 /**
@@ -42,4 +44,5 @@ export const DEFAULT_COMMON_PASSWORDS_CONFIG = Object.freeze({
   cacheTtlMs: 24 * 60 * 60 * 1000, // 24 hours
   requestTimeoutMs: 5000,
   maxCacheEntries: 10000, // Default to 10,000 entries (count-based limit)
+  ssrBaseUrl: 'http://localhost:5173', // Default Vite dev server for SSR
 } satisfies CommonPasswordsConfig);

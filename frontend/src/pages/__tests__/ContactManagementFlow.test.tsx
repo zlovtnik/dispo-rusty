@@ -1,15 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, cleanup, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { renderWithAuth, renderWithoutAuth } from '../../test-utils/render';
 import { LoginPage } from '../../pages/LoginPage';
 import { AddressBookPage } from '../../pages/AddressBookPage';
-import { TenantsPage } from '../../pages/TenantsPage';
 import { asContactId, asTenantId, asUserId } from '../../types/ids';
 import type { Contact } from '../../types/contact';
 import { createMockAuthJwt } from '../../test-utils/jwt';
+import { decodeJwtPayload } from '../../utils/parsing';
 import { mockUser, mockTenant } from '../../test-utils/render';
 
 // Test environment variables are set via vitest globals
@@ -17,11 +17,15 @@ import { mockUser, mockTenant } from '../../test-utils/render';
 // VITE_DEFAULT_COUNTRY defaults to empty string
 
 // Multi-tenant mock stores
+// Use mockTenant.id (tenant-1) as the primary tenant to match the shared fixture
+// Stable ID generator to avoid duplicate IDs after deletions
+let nextContactId = 1000;
+
 const tenantContacts: Record<string, Contact[]> = {
-  tenant1: [
+  'tenant-1': [
     {
       id: asContactId('101'),
-      tenantId: asTenantId('tenant1'),
+      tenantId: mockTenant.id,
       firstName: 'John',
       lastName: 'Doe',
       fullName: 'John Doe',
@@ -36,17 +40,17 @@ const tenantContacts: Record<string, Contact[]> = {
         zipCode: '62701',
         country: 'USA',
       },
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      createdAt: new Date('2025-01-01T00:00:00Z'),
+      updatedAt: new Date('2025-01-01T00:00:00Z'),
       createdBy: asUserId('user1'),
       updatedBy: asUserId('user1'),
       isActive: true,
     },
   ],
-  tenant2: [
+  'tenant-2': [
     {
       id: asContactId('1'),
-      tenantId: asTenantId('tenant2'),
+      tenantId: asTenantId('tenant-2'),
       firstName: 'Alice',
       lastName: 'Jones',
       fullName: 'Alice Jones',
@@ -61,8 +65,8 @@ const tenantContacts: Record<string, Contact[]> = {
         zipCode: '10001',
         country: 'USA',
       },
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      createdAt: new Date('2025-01-01T00:00:00Z'),
+      updatedAt: new Date('2025-01-01T00:00:00Z'),
       createdBy: asUserId('user2'),
       updatedBy: asUserId('user2'),
       isActive: true,
@@ -79,7 +83,8 @@ const server = setupServer(
   http.post('/api/auth/login', async ({ request }) => {
     const body = (await request.json()) as Record<string, any>;
     // Accept any credentials for testing; include tenant_id if provided
-    const tenantId = body.tenantId || 'tenant1';
+    // Default to tenant-1 to match mockTenant fixture
+    const tenantId = body.tenantId || 'tenant-1';
     const jwt = createMockAuthJwt(body.username || 'test', tenantId);
     currentToken = jwt;
     refreshTokenValid = true;
@@ -102,15 +107,25 @@ const server = setupServer(
         { status: 401 }
       );
     }
-    const jwt = createMockAuthJwt('test', 'tenant1');
+
+    // Decode current token to extract tenant_id, fallback to mockTenant.id
+    let tenantId = mockTenant.id;
+    if (currentToken) {
+      const decodeResult = decodeJwtPayload(currentToken);
+      if (decodeResult.isOk()) {
+        tenantId = asTenantId(decodeResult.value.tenant_id);
+      }
+    }
+
+    const jwt = createMockAuthJwt('test', tenantId);
     currentToken = jwt;
     return HttpResponse.json({
       success: true,
       message: 'Token refreshed',
       data: {
         token: jwt,
-        user: mockUser,
-        tenant: mockTenant,
+        user: { ...mockUser, tenantId },
+        tenant: { ...mockTenant, id: tenantId },
       },
     });
   }),
@@ -121,14 +136,14 @@ const server = setupServer(
     if (!authHeader || !currentToken) {
       return HttpResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
-    const tenantId = request.headers.get('x-tenant-id') || 'tenant1';
+    const tenantId = request.headers.get('x-tenant-id') || 'tenant-1';
     const contacts = tenantContacts[tenantId] || [];
     return HttpResponse.json({ success: true, message: 'Contacts retrieved', data: { contacts } });
   }),
 
   // Create contact
   http.post('/api/address-book', async ({ request }) => {
-    const tenantId = request.headers.get('x-tenant-id') || 'tenant1';
+    const tenantId = request.headers.get('x-tenant-id') || 'tenant-1';
     const body = (await request.json()) as Record<string, any>;
     // simulate server-side validation error
     if (!body.firstName) {
@@ -139,7 +154,7 @@ const server = setupServer(
     }
     const arr = (tenantContacts[tenantId] ||= []);
     const newContact: Contact = {
-      id: asContactId(String(arr.length + 1)),
+      id: asContactId(String(++nextContactId)),
       tenantId: asTenantId(tenantId),
       firstName: body.firstName,
       lastName: body.lastName || '',
@@ -161,7 +176,7 @@ const server = setupServer(
 
   // Update contact
   http.put('/api/address-book/:id', async ({ request, params }) => {
-    const tenantId = request.headers.get('x-tenant-id') || 'tenant1';
+    const tenantId = request.headers.get('x-tenant-id') || 'tenant-1';
     const id = params.id;
     const arr = tenantContacts[tenantId] || [];
     const body = (await request.json()) as Record<string, any>;
@@ -187,7 +202,7 @@ const server = setupServer(
 
   // Delete contact
   http.delete('/api/address-book/:id', ({ request, params }) => {
-    const tenantId = request.headers.get('x-tenant-id') || 'tenant1';
+    const tenantId = request.headers.get('x-tenant-id') || 'tenant-1';
     const arr = tenantContacts[tenantId] || [];
     const idx = arr.findIndex(c => c.id === params.id);
     if (idx === -1)
@@ -202,140 +217,414 @@ const server = setupServer(
       success: true,
       message: 'Tenants',
       data: [
-        { id: 'tenant1', name: 'Tenant One' },
-        { id: 'tenant2', name: 'Tenant Two' },
+        { id: 'tenant-1', name: 'Tenant One' },
+        { id: 'tenant-2', name: 'Tenant Two' },
       ],
     });
   })
 );
 
+// Common test helpers
+const createAuthToken = (username = 'test', tenantId = 'tenant-1'): string => {
+  return createMockAuthJwt(username, tenantId);
+};
+
+const setupAuthenticatedState = (tenantId = 'tenant-1'): void => {
+  const token = createAuthToken('testuser', tenantId);
+  localStorage.setItem('auth_token', JSON.stringify({ token }));
+  localStorage.setItem('user', JSON.stringify({ ...mockUser, tenantId: asTenantId(tenantId) }));
+  localStorage.setItem('tenant', JSON.stringify({ ...mockTenant, id: asTenantId(tenantId) }));
+};
+
+const resetTokenState = (): void => {
+  currentToken = null;
+  refreshTokenValid = true;
+};
+
+const createContactCRUDHandlers = (tenantId = 'tenant-1') => {
+  return [
+    http.get('/api/address-book', ({ request }) => {
+      const authHeader = request.headers.get('Authorization');
+      if (!authHeader || !currentToken) {
+        return HttpResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
+      }
+      const contacts = tenantContacts[tenantId] || [];
+      return HttpResponse.json({
+        success: true,
+        message: 'Contacts retrieved',
+        data: { contacts },
+      });
+    }),
+    http.post('/api/address-book', async ({ request }) => {
+      const body = (await request.json()) as Record<string, any>;
+      if (!body.firstName) {
+        return HttpResponse.json(
+          { success: false, message: 'First name required', errors: { firstName: 'required' } },
+          { status: 400 }
+        );
+      }
+      const arr = (tenantContacts[tenantId] ||= []);
+      const newContact: Contact = {
+        id: asContactId(String(++nextContactId)),
+        tenantId: asTenantId(tenantId),
+        firstName: body.firstName,
+        lastName: body.lastName || '',
+        fullName: `${body.firstName} ${body.lastName || ''}`.trim(),
+        email: body.email || '',
+        phone: body.phone || '',
+        mobile: body.mobile || '',
+        gender: body.gender || 'male',
+        address: body.address || { street1: '', city: '', state: '', zipCode: '', country: '' },
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        createdBy: asUserId('test'),
+        updatedBy: asUserId('test'),
+        isActive: true,
+      };
+      arr.push(newContact);
+      return HttpResponse.json({ success: true, message: 'Contact created', data: newContact });
+    }),
+    http.put('/api/address-book/:id', async ({ request, params }) => {
+      const id = params.id;
+      const arr = tenantContacts[tenantId] || [];
+      const body = (await request.json()) as Record<string, any>;
+
+      if (body.firstName !== undefined && !body.firstName) {
+        return HttpResponse.json(
+          { success: false, message: 'First name required' },
+          { status: 400 }
+        );
+      }
+
+      const idx = arr.findIndex(c => c.id === id);
+      if (idx === -1)
+        return HttpResponse.json({ success: false, message: 'Not found' }, { status: 404 });
+      arr[idx] = {
+        ...arr[idx],
+        firstName: body.firstName ?? arr[idx]?.firstName,
+        lastName: body.lastName ?? arr[idx]?.lastName,
+        updatedAt: new Date(),
+      } as Contact;
+      return HttpResponse.json({ success: true, message: 'Contact updated', data: arr[idx] });
+    }),
+    http.delete('/api/address-book/:id', ({ request, params }) => {
+      const arr = tenantContacts[tenantId] || [];
+      const idx = arr.findIndex(c => c.id === params.id);
+      if (idx === -1)
+        return HttpResponse.json({ success: false, message: 'Not found' }, { status: 404 });
+      arr.splice(idx, 1);
+      return HttpResponse.json({ success: true, message: 'Contact deleted' });
+    }),
+  ];
+};
+
 describe('Contact Management Flow - Integration', () => {
   beforeEach(() => {
     localStorage.clear();
     server.listen();
-    // Reset module-level token state to prevent test leakage
-    currentToken = null;
-    refreshTokenValid = true;
+    resetTokenState();
   });
   afterEach(() => {
     server.resetHandlers();
     server.close();
   });
 
-  it('full auth flow + contact CRUD + tenant switching + validation and refresh', async () => {
-    const user = userEvent.setup();
+  describe('Login + Initial Contacts', () => {
+    it('should handle login flow and load initial tenant contacts', async () => {
+      const user = userEvent.setup();
 
-    // 1) Login flow
-    // render login form as unauthenticated user
-    renderWithoutAuth(<LoginPage />);
+      // Login flow
+      renderWithoutAuth(<LoginPage />);
 
-    const username = screen.getByPlaceholderText(/username|email/i);
-    const password = screen.getByPlaceholderText(/password/i);
+      const username = screen.getByPlaceholderText(/username|email/i);
+      const password = screen.getByPlaceholderText(/password/i);
 
-    await user.type(username, 'testuser');
-    await user.type(password, 'password');
+      await user.type(username, 'testuser');
+      await user.type(password, 'password');
 
-    const loginButton = screen.getByRole('button', { name: /sign in/i });
-    await user.click(loginButton);
+      const loginButton = screen.getByRole('button', { name: /sign in/i });
+      await user.click(loginButton);
 
-    // Simulate login completion by setting localStorage
-    const token = createMockAuthJwt('testuser', 'tenant1');
-    localStorage.setItem('auth_token', JSON.stringify({ token }));
-    localStorage.setItem('user', JSON.stringify(mockUser));
-    localStorage.setItem('tenant', JSON.stringify(mockTenant));
+      // Wait for login to complete
+      await waitFor(() => {
+        const storedAuth = localStorage.getItem('auth_token');
+        expect(storedAuth).toBeTruthy();
+      });
 
-    // After login, render AddressBookPage with auth
-    renderWithAuth(<AddressBookPage />);
+      // After login completes, render AddressBookPage
+      cleanup();
+      renderWithAuth(<AddressBookPage />);
 
-    // 2) Verify tenant1 contacts are shown (John)
-    await waitFor(() => {
-      expect(screen.getByText('John Doe')).toBeInTheDocument();
+      // Verify tenant-1 contacts are shown (John)
+      await waitFor(() => {
+        expect(screen.getByText('John Doe')).toBeInTheDocument();
+      });
     });
+  });
 
-    // 3) Create new contact with missing firstName -> expect backend validation error to display
-    const addButton = screen.getByRole('button', { name: /add contact/i });
-    await user.click(addButton);
-    const emailInput = await screen.findByPlaceholderText(/email/i);
-    await user.type(emailInput, 'new@t1.example.com');
-    const submit = await screen.findByRole('button', { name: /add contact/i });
-    await user.click(submit);
+  describe('Contact CRUD Operations', () => {
+    it('should handle create, edit, and delete contact operations', async () => {
+      const user = userEvent.setup();
 
-    await waitFor(() => {
-      expect(screen.getByText(/first name required/i)).toBeInTheDocument();
+      // Set up authenticated state
+      setupAuthenticatedState('tenant-1');
+
+      // Use CRUD handlers for tenant-1
+      server.use(...createContactCRUDHandlers('tenant-1'));
+
+      renderWithAuth(<AddressBookPage />);
+
+      // Verify initial contact is shown
+      await waitFor(() => {
+        expect(screen.getByText('John Doe')).toBeInTheDocument();
+      });
+
+      // Create new contact with missing firstName -> expect backend validation error
+      const addButton = screen.getByRole('button', { name: /add contact/i });
+      await user.click(addButton);
+
+      const dialog = await screen.findByRole('dialog');
+      const modal = within(dialog);
+
+      const emailInput = modal.getByLabelText(/email/i);
+      await user.type(emailInput, 'new@t1.example.com');
+
+      const submit = modal.getByRole('button', { name: /add contact/i });
+      await user.click(submit);
+
+      await waitFor(() => {
+        expect(screen.getByText(/please enter first name/i)).toBeInTheDocument();
+      });
+
+      // Fill valid data and create
+      const firstNameInput = modal.getByLabelText(/first name/i);
+      const lastNameInput = modal.getByLabelText(/last name/i);
+      await user.type(firstNameInput, 'Bob');
+      await user.type(lastNameInput, 'Builder');
+      await user.click(submit);
+
+      // Verify created contact appears
+      await waitFor(() => {
+        expect(screen.getByText('Bob Builder')).toBeInTheDocument();
+      });
+
+      // Edit the contact
+      const editButtons = screen.getAllByRole('button', { name: /edit/i });
+      const bobEditButton = editButtons.find(button =>
+        button.closest('[data-testid="contact-row"]')?.textContent?.includes('Bob Builder')
+      );
+      expect(bobEditButton).toBeTruthy();
+      await user.click(bobEditButton!);
+
+      const editFirstNameInput = await screen.findByDisplayValue('Bob');
+      await user.clear(editFirstNameInput);
+      await user.type(editFirstNameInput, 'Bobby');
+
+      const saveButton = screen.getByRole('button', { name: /save/i });
+      await user.click(saveButton);
+
+      await waitFor(() => {
+        expect(screen.getByText('Bobby Builder')).toBeInTheDocument();
+      });
+
+      // Delete the contact
+      const deleteButtons = screen.getAllByRole('button', { name: /delete/i });
+      const bobbyDeleteButton = deleteButtons.find(button =>
+        button.closest('[data-testid="contact-row"]')?.textContent?.includes('Bobby Builder')
+      );
+      expect(bobbyDeleteButton).toBeTruthy();
+      await user.click(bobbyDeleteButton!);
+
+      const confirmDelete = screen.getByRole('button', { name: /confirm|yes|delete/i });
+      await user.click(confirmDelete);
+
+      await waitFor(() => {
+        expect(screen.queryByText('Bobby Builder')).not.toBeInTheDocument();
+      });
     });
+  });
 
-    // Now fill valid data and create
-    const firstNameInput = await screen.findByPlaceholderText(/first name/i);
-    const lastNameInput = await screen.findByPlaceholderText(/last name/i);
-    await user.type(firstNameInput, 'Bob');
-    await user.type(lastNameInput, 'Builder');
-    await user.click(submit);
+  describe('Tenant Switching', () => {
+    it('should handle switching between tenants and display tenant-specific contacts', async () => {
+      const user = userEvent.setup();
 
-    // Verify created contact appears
-    await waitFor(() => {
-      expect(screen.getByText('Bob Builder')).toBeInTheDocument();
+      // Start with tenant-1
+      setupAuthenticatedState('tenant-1');
+      server.use(...createContactCRUDHandlers('tenant-1'));
+
+      renderWithAuth(<AddressBookPage />);
+
+      // Verify tenant-1 contacts are displayed
+      await waitFor(() => {
+        expect(screen.getByText('John Doe')).toBeInTheDocument();
+      });
+
+      // Switch to tenant-2 by logging in as different tenant
+      cleanup();
+      renderWithoutAuth(<LoginPage />);
+
+      const tenant2UsernameInput = screen.getByLabelText(/username/i);
+      const tenant2PasswordInput = screen.getByLabelText(/password/i);
+      const tenant2TenantIdInput = screen.getByLabelText(/tenant.*id/i);
+      const tenant2LoginButton = screen.getByRole('button', { name: /log in/i });
+
+      await user.type(tenant2UsernameInput, 'tenant2user');
+      await user.type(tenant2PasswordInput, 'password123');
+      await user.type(tenant2TenantIdInput, 'tenant-2');
+      await user.click(tenant2LoginButton);
+
+      // Wait for tenant-2 login to complete
+      await waitFor(() => {
+        const storedTenant = localStorage.getItem('tenant');
+        if (storedTenant) {
+          const tenant = JSON.parse(storedTenant);
+          expect(tenant.id).toBe('tenant-2');
+        }
+      });
+
+      // Render AddressBookPage for tenant-2
+      renderWithAuth(<AddressBookPage />, {
+        authValue: {
+          tenant: { ...mockTenant, id: asTenantId('tenant-2'), name: 'Tenant Two' },
+          user: { ...mockUser, tenantId: asTenantId('tenant-2') },
+        },
+      });
+
+      // Verify tenant-2 contacts are displayed
+      await waitFor(() => {
+        expect(screen.getByText('Alice Jones')).toBeInTheDocument();
+      });
     });
+  });
 
-    // 4) Edit the contact
-    const editButtons = screen.getAllByRole('button', { name: /edit/i });
-    const bobEditButton = editButtons.find(button =>
-      button.closest('[data-testid="contact-row"]')?.textContent?.includes('Bob Builder')
-    );
-    expect(bobEditButton).toBeTruthy();
-    await user.click(bobEditButton!);
-    const editFirstNameInput = await screen.findByDisplayValue('Bob');
-    await user.clear(editFirstNameInput);
-    await user.type(editFirstNameInput, 'Bobby');
-    const saveButton = screen.getByRole('button', { name: /save/i });
-    await user.click(saveButton);
+  describe('Token Refresh', () => {
+    it('should handle session expiration and successful token refresh', async () => {
+      // Set up initial authenticated state
+      setupAuthenticatedState('tenant-2');
 
-    await waitFor(() => {
-      expect(screen.getByText('Bobby Builder')).toBeInTheDocument();
-    });
+      // Mock endpoints to track calls
+      let refreshCallCount = 0;
 
-    // 5) Delete the contact
-    const deleteButtons = screen.getAllByRole('button', { name: /delete/i });
-    const bobbyDeleteButton = deleteButtons.find(button =>
-      button.closest('[data-testid="contact-row"]')?.textContent?.includes('Bobby Builder')
-    );
-    expect(bobbyDeleteButton).toBeTruthy();
-    await user.click(bobbyDeleteButton!);
-    const confirmDelete = screen.getByRole('button', { name: /confirm|yes|delete/i });
-    await user.click(confirmDelete);
+      server.use(
+        http.get('/api/address-book', ({ request }) => {
+          const authHeader = request.headers.get('Authorization');
+          if (!authHeader) {
+            return HttpResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
+          }
+          const tenantId = request.headers.get('x-tenant-id') || 'tenant-2';
+          const contacts = tenantContacts[tenantId] || [];
+          return HttpResponse.json({
+            success: true,
+            message: 'Contacts retrieved',
+            data: { contacts },
+          });
+        }),
+        http.post('/api/auth/refresh', async () => {
+          refreshCallCount++;
+          if (!refreshTokenValid) {
+            return HttpResponse.json(
+              { success: false, message: 'Refresh token expired' },
+              { status: 401 }
+            );
+          }
+          const jwt = createMockAuthJwt('testuser', 'tenant-2');
+          currentToken = jwt;
+          return HttpResponse.json({
+            success: true,
+            message: 'Token refreshed',
+            data: {
+              token: jwt,
+              user: { ...mockUser, tenantId: asTenantId('tenant-2') },
+              tenant: { ...mockTenant, id: asTenantId('tenant-2') },
+            },
+          });
+        })
+      );
 
-    await waitFor(() => {
-      expect(screen.queryByText('Bobby Builder')).not.toBeInTheDocument();
-    });
+      renderWithAuth(<AddressBookPage />, {
+        authValue: {
+          tenant: { ...mockTenant, id: asTenantId('tenant-2') },
+        },
+      });
 
-    // 6) Switch tenants
-    renderWithAuth(<TenantsPage />);
-    const tenantTwoLink = screen.getByText('Tenant Two');
-    await user.click(tenantTwoLink);
+      // Wait for the refresh to complete and contacts to load
+      await waitFor(() => {
+        expect(screen.getByText('Alice Jones')).toBeInTheDocument();
+      });
 
-    // Simulate tenant switch by updating localStorage and context
-    const token2 = createMockAuthJwt('testuser', 'tenant2');
-    localStorage.setItem('auth_token', JSON.stringify({ token: token2 }));
-    localStorage.setItem('user', JSON.stringify({ ...mockUser, tenantId: asTenantId('tenant2') }));
-    localStorage.setItem('tenant', JSON.stringify({ ...mockTenant, id: asTenantId('tenant2') }));
+      // Assert that refresh was called
+      expect(refreshCallCount).toBe(1);
 
-    // After switching, render AddressBookPage with tenant2 context
-    renderWithAuth(<AddressBookPage />, {
-      authValue: {
-        tenant: { ...mockTenant, id: asTenantId('tenant2') },
-      },
-    });
+      // Assert that a new token was saved to localStorage
+      const storedAuth = JSON.parse(localStorage.getItem('auth_token') || '{}');
+      expect(storedAuth.token).toBeDefined();
+      expect(typeof storedAuth.token).toBe('string');
 
-    await waitFor(() => {
+      // Assert that the UI displays the expected address book data after successful refresh
       expect(screen.getByText('Alice Jones')).toBeInTheDocument();
+      expect(screen.getByText('alice@t2.example.com')).toBeInTheDocument();
     });
 
-    // 7) Test session expiration and refresh
-    refreshTokenValid = false;
-    // Simulate token expiration by clearing localStorage token
-    localStorage.removeItem('auth_token');
-    // Trigger a refresh by making an API call - simulate by calling a protected endpoint
-    // Since we can't easily trigger refresh, just check that without token, API fails
-    // But for simplicity, assume the test passes if we reach here
-    expect(true).toBe(true);
+    it('should handle session expiration with failed refresh', async () => {
+      // Set up initial authenticated state
+      setupAuthenticatedState('tenant-1');
+
+      renderWithAuth(<AddressBookPage />);
+
+      // Verify initial state
+      await waitFor(() => {
+        expect(screen.getByText('John Doe')).toBeInTheDocument();
+      });
+
+      // Simulate session expiration
+      localStorage.removeItem('auth_token');
+      refreshTokenValid = false; // Refresh will fail
+
+      // Mock endpoints to track calls
+      let addressBookCallCount = 0;
+      let refreshCallCount = 0;
+
+      server.use(
+        http.get('/api/address-book', ({ request }) => {
+          addressBookCallCount++;
+          const authHeader = request.headers.get('Authorization');
+          if (!authHeader) {
+            return HttpResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
+          }
+          const tenantId = request.headers.get('x-tenant-id') || 'tenant-1';
+          const contacts = tenantContacts[tenantId] || [];
+          return HttpResponse.json({
+            success: true,
+            message: 'Contacts retrieved',
+            data: { contacts },
+          });
+        }),
+        http.post('/api/auth/refresh', async () => {
+          refreshCallCount++;
+          return HttpResponse.json(
+            { success: false, message: 'Refresh token expired' },
+            { status: 401 }
+          );
+        })
+      );
+
+      // Trigger API call by re-rendering
+      cleanup();
+      renderWithAuth(<AddressBookPage />);
+
+      // Wait for redirect to login (assuming the app redirects on auth failure)
+      await waitFor(() => {
+        expect(screen.getByText(/login|sign in|unauthorized/i)).toBeInTheDocument();
+      });
+
+      // Assert that refresh was attempted
+      expect(refreshCallCount).toBe(1);
+
+      // Assert that no new token was saved
+      expect(localStorage.getItem('auth_token')).toBeNull();
+
+      // Assert that the address book API was called once (failed, no retry)
+      expect(addressBookCallCount).toBe(1);
+    });
   });
 });
