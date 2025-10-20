@@ -60,7 +60,7 @@ export const testLogger = {
  */
 function shouldLog(level: LogLevel): boolean {
   // Check for DEBUG_TEST_LOGS environment variable
-  const debugLogs = process.env.DEBUG_TEST_LOGS;
+  const debugLogs = typeof process !== 'undefined' && process.env ? process.env.DEBUG_TEST_LOGS : undefined;
 
   if (!debugLogs) {
     return false;

@@ -57,7 +57,9 @@ function getApiBaseUrl(): string {
   // In tests, prioritize process.env which Bun loads from .env files
   // Fall back to import.meta.env for browser/build time
   const apiUrl =
-    process.env.VITE_API_URL || import.meta.env?.VITE_API_URL || 'http://localhost:8000/api';
+    (typeof process !== 'undefined' && process.env ? process.env.VITE_API_URL : undefined) || 
+    import.meta.env?.VITE_API_URL || 
+    'http://localhost:8000/api';
 
   return apiUrl;
 }

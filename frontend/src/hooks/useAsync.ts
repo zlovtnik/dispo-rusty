@@ -54,7 +54,7 @@ export function useAsync<T, E>(
   const asyncFnRef = useRef(asyncFn);
 
   useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.DEV) {
       if (asyncFnRef.current !== asyncFn) {
         console.warn(
           'useAsync: asyncFn reference changed. This can cause infinite re-renders. ' +

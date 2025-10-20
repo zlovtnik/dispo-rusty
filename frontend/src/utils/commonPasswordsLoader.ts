@@ -213,7 +213,7 @@ export class CommonPasswordsLoader {
 
     const ssrBase =
       this.config.ssrBaseUrl ??
-      (typeof process !== 'undefined' ? process.env?.SSR_BASE_URL : undefined) ??
+      (typeof process !== 'undefined' && process.env ? process.env.SSR_BASE_URL : undefined) ??
       'http://localhost:5173';
 
     const url = this.config.filePath.startsWith('http')
