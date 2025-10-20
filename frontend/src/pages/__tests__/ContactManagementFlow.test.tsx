@@ -184,7 +184,10 @@ const server = setupServer(
     const body = (await request.json()) as Record<string, unknown>;
 
     // Validate required fields
-    if (body.firstName !== undefined && (body.firstName === null || body.firstName === '' || body.firstName === false)) {
+    if (
+      body.firstName !== undefined &&
+      (body.firstName === null || body.firstName === '' || body.firstName === false)
+    ) {
       return HttpResponse.json({ success: false, message: 'First name required' }, { status: 400 });
     }
 
@@ -295,7 +298,13 @@ const createContactCRUDHandlers = (tenantId = 'tenant-1') => {
         phone: (body.phone as string) ?? '',
         mobile: (body.mobile as string) ?? '',
         gender: ((body.gender as string) ?? 'male') as Gender,
-        address: (body.address as Address) ?? { street1: '', city: '', state: '', zipCode: '', country: '' },
+        address: (body.address as Address) ?? {
+          street1: '',
+          city: '',
+          state: '',
+          zipCode: '',
+          country: '',
+        },
         createdAt: new Date(),
         updatedAt: new Date(),
         createdBy: asUserId('test'),
@@ -313,7 +322,10 @@ const createContactCRUDHandlers = (tenantId = 'tenant-1') => {
       const arr = authResult.contacts;
       const body = (await request.json()) as Record<string, unknown>;
 
-      if (body.firstName !== undefined && (body.firstName === null || body.firstName === '' || body.firstName === false)) {
+      if (
+        body.firstName !== undefined &&
+        (body.firstName === null || body.firstName === '' || body.firstName === false)
+      ) {
         return HttpResponse.json(
           { success: false, message: 'First name required' },
           { status: 400 }
