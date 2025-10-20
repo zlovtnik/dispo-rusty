@@ -85,7 +85,9 @@ describe('DashboardPage Component', () => {
         tenant: mockTenant,
       };
 
-      const { rerender, unmount } = renderWithAuth(<DashboardPage />, { authValue: initialAuthValue });
+      const { rerender, unmount } = renderWithAuth(<DashboardPage />, {
+        authValue: initialAuthValue,
+      });
 
       // Verify initial greeting
       expect(

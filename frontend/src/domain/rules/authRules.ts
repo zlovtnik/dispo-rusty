@@ -13,7 +13,7 @@ import { getCommonPasswords } from '@/utils/commonPasswordsLoader';
 
 /**
  * Fallback common passwords used when the main password list is unavailable
- * Curated list of realistic frequent/common passwords (6-12 chars) from real-world breach data
+ * Curated list of realistic frequent/common passwords (3-12 chars) from real-world breach data
  * Note: This fallback is manually curated to common real-world breaches, while the primary
  * list is sourced from external breach databases
  */

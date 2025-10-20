@@ -197,9 +197,6 @@ const server = setupServer(
       return HttpResponse.json({ success: false, message: 'Not found' }, { status: 404 });
 
     const existingContact = arr[idx];
-    if (!existingContact) {
-      return HttpResponse.json({ success: false, message: 'Contact not found' }, { status: 404 });
-    }
 
     // Only update allowed fields
     arr[idx] = {

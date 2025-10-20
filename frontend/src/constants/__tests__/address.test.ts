@@ -1,6 +1,6 @@
 /**
  * Tests for address constants
- * 
+ *
  * Ensures constants are properly defined and contain expected values
  */
 
@@ -104,7 +104,7 @@ describe('Address Constants', () => {
       // Verify that STATE_CODES contains codes for states in STATE_NAMES
       const stateNames = STATE_NAMES;
       const stateCodes = STATE_CODES;
-      
+
       // Check a few key states
       expect(stateCodes.has('CA')).toBe(true); // California
       expect(stateCodes.has('NY')).toBe(true); // New York

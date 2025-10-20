@@ -47,7 +47,9 @@ describe('Layout Component', () => {
       renderWithAuth(<Layout>Content</Layout>);
 
       // Address book link should be accessible
-      expect(screen.getByRole('menuitem', { name: /^(Address Book|Contacts)$/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole('menuitem', { name: /^(Address Book|Contacts)$/i })
+      ).toBeInTheDocument();
     });
 
     it('should render user profile avatar or trigger', () => {

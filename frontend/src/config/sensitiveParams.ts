@@ -85,19 +85,11 @@ export interface SensitiveParamsConfig {
  */
 export function getSensitiveQueryParams(config?: SensitiveParamsConfig): readonly string[] {
   if (config?.customParams) {
-    // Normalize customParams to lowercase and trim whitespace
-    const normalizedCustomParams = config.customParams.map(param => param.toLowerCase().trim());
-    return normalizedCustomParams;
+    return config.customParams;
   }
 
   if (config?.additionalParams) {
-    // Normalize additionalParams to lowercase and trim whitespace, then deduplicate
-    const normalizedAdditionalParams = config.additionalParams.map(param =>
-      param.toLowerCase().trim()
-    );
-    const combinedParams = [...SENSITIVE_QUERY_PARAMS, ...normalizedAdditionalParams];
-    const uniqueParams = Array.from(new Set(combinedParams));
-    return uniqueParams;
+    return [...SENSITIVE_QUERY_PARAMS, ...config.additionalParams];
   }
 
   return SENSITIVE_QUERY_PARAMS;

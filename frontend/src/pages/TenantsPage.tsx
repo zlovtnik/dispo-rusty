@@ -301,7 +301,7 @@ export const TenantsPage: React.FC = () => {
           value: shouldClearValue ? '' : currentFilter.value,
         });
       } else {
-        updated[index] = Object.assign({}, currentFilter, { 
+        updated[index] = Object.assign({}, currentFilter, {
           [key]: value,
           value: shouldClearValue ? '' : currentFilter.value,
         });
@@ -603,11 +603,14 @@ export const TenantsPage: React.FC = () => {
             <Button type="primary" onClick={applyFilters} disabled={loading}>
               Apply Filters
             </Button>
-            <Button onClick={clearFilters} disabled={loading}>Clear All</Button>
+            <Button onClick={clearFilters} disabled={loading}>
+              Clear All
+            </Button>
           </Space>
 
           <div style={{ fontSize: '14px', color: '#666' }}>
-            <Typography.Text strong>Note:</Typography.Text> Pick a date/time; it's sent as ISO-8601 (UTC). Empty values are ignored.
+            <Typography.Text strong>Note:</Typography.Text> Pick a date/time; it's sent as ISO-8601
+            (UTC). Empty values are ignored.
           </div>
         </Space>
       </Card>

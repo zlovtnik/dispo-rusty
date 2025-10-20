@@ -1,6 +1,6 @@
 /**
  * Address parsing constants
- * 
+ *
  * Curated lists of country and state names for address parsing and validation.
  * These constants are used to improve address parsing accuracy and reduce false positives.
  */
@@ -106,9 +106,57 @@ export const STATE_NAMES = [
  * Used to avoid false positives from generic 2-letter patterns
  */
 export const STATE_CODES = new Set([
-  'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA', 'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD',
-  'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ', 'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC',
-  'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY', 'DC'
+  'AL',
+  'AK',
+  'AZ',
+  'AR',
+  'CA',
+  'CO',
+  'CT',
+  'DE',
+  'FL',
+  'GA',
+  'HI',
+  'ID',
+  'IL',
+  'IN',
+  'IA',
+  'KS',
+  'KY',
+  'LA',
+  'ME',
+  'MD',
+  'MA',
+  'MI',
+  'MN',
+  'MS',
+  'MO',
+  'MT',
+  'NE',
+  'NV',
+  'NH',
+  'NJ',
+  'NM',
+  'NY',
+  'NC',
+  'ND',
+  'OH',
+  'OK',
+  'OR',
+  'PA',
+  'RI',
+  'SC',
+  'SD',
+  'TN',
+  'TX',
+  'UT',
+  'VT',
+  'VA',
+  'WA',
+  'WV',
+  'WI',
+  'WY',
+  'DC',
 ]);
 
 /**
@@ -116,6 +164,32 @@ export const STATE_CODES = new Set([
  * Used to avoid false positives from generic 2-3 letter patterns
  */
 export const COUNTRY_CODES = new Set([
-  'US', 'CA', 'MX', 'GB', 'FR', 'DE', 'IT', 'ES', 'PT', 'AU', 'NZ', 'JP', 'CN', 'IN', 'BR', 'AR', 'CL', 'CO', 'PE', 'RU',
-  'KR', 'KP', 'TH', 'VN', 'PH', 'ID', 'MY', 'SG'
+  'US',
+  'CA',
+  'MX',
+  'GB',
+  'FR',
+  'DE',
+  'IT',
+  'ES',
+  'PT',
+  'AU',
+  'NZ',
+  'JP',
+  'CN',
+  'IN',
+  'BR',
+  'AR',
+  'CL',
+  'CO',
+  'PE',
+  'RU',
+  'KR',
+  'KP',
+  'TH',
+  'VN',
+  'PH',
+  'ID',
+  'MY',
+  'SG',
 ]);

@@ -11,6 +11,45 @@ import {
   CloseCircleOutlined,
 } from '@ant-design/icons';
 
+/**
+ * Performs shallow equality comparison between two objects
+ * @param obj1 - First object to compare
+ * @param obj2 - Second object to compare
+ * @returns true if objects are shallowly equal, false otherwise
+ */
+function shallowEqual(obj1: unknown, obj2: unknown): boolean {
+  // Handle null/undefined cases
+  if (obj1 === obj2) return true;
+  if (obj1 == null || obj2 == null) return obj1 === obj2;
+
+  // Handle non-object types (strings, numbers, booleans, etc.)
+  if (typeof obj1 !== 'object' || typeof obj2 !== 'object') {
+    return obj1 === obj2;
+  }
+
+  // Handle arrays
+  if (Array.isArray(obj1) && Array.isArray(obj2)) {
+    if (obj1.length !== obj2.length) return false;
+    return obj1.every((item, index) => item === obj2[index]);
+  }
+
+  // Handle objects (shallow comparison)
+  if (typeof obj1 === 'object' && typeof obj2 === 'object') {
+    const keys1 = Object.keys(obj1);
+    const keys2 = Object.keys(obj2);
+
+    if (keys1.length !== keys2.length) return false;
+
+    return keys1.every(
+      key =>
+        key in obj2 &&
+        (obj1 as Record<string, unknown>)[key] === (obj2 as Record<string, unknown>)[key]
+    );
+  }
+
+  return false;
+}
+
 interface BaseFormFieldProps {
   name: string;
   label: string;
@@ -61,6 +100,28 @@ type FormFieldProps =
 /**
  * Custom comparison function for FormField memo optimization
  * Compares props to prevent unnecessary re-renders when objects/functions haven't changed
+ *
+ * @param prevProps - Previous props object
+ * @param nextProps - Next props object
+ * @returns true if props are equal (no re-render needed), false otherwise
+ *
+ * @note For optimal performance, consumers should memoize complex props like rules and tooltip
+ * using useMemo to prevent unnecessary re-renders when parent components recreate these objects.
+ *
+ * @example
+ * ```tsx
+ * const memoizedRules = useMemo(() => ({
+ *   required: 'This field is required',
+ *   minLength: { value: 3, message: 'Minimum 3 characters' }
+ * }), []);
+ *
+ * const memoizedTooltip = useMemo(() => ({
+ *   title: 'This is a helpful tooltip',
+ *   placement: 'top'
+ * }), []);
+ *
+ * <FormField rules={memoizedRules} tooltip={memoizedTooltip} ... />
+ * ```
  */
 const areEqual = (prevProps: FormFieldProps, nextProps: FormFieldProps): boolean => {
   // Compare primitive props
@@ -79,13 +140,15 @@ const areEqual = (prevProps: FormFieldProps, nextProps: FormFieldProps): boolean
     return false;
   }
 
-  // Compare rules object (reference comparison for performance)
-  if (prevProps.rules !== nextProps.rules) {
+  // Compare rules object using shallow equality to prevent spurious re-renders
+  // when parent components recreate the rules object with the same content
+  if (!shallowEqual(prevProps.rules, nextProps.rules)) {
     return false;
   }
 
-  // Compare tooltip object (reference comparison for complex tooltip objects)
-  if (prevProps.tooltip !== nextProps.tooltip) {
+  // Compare tooltip object using shallow equality to prevent spurious re-renders
+  // when parent components recreate the tooltip object with the same content
+  if (!shallowEqual(prevProps.tooltip, nextProps.tooltip)) {
     return false;
   }
 
@@ -95,30 +158,53 @@ const areEqual = (prevProps: FormFieldProps, nextProps: FormFieldProps): boolean
   }
 
   // Text field specific props
-  if (prevProps.type === 'text' || prevProps.type === 'email' || prevProps.type === 'password' || prevProps.type === 'textarea') {
-    const prevText = prevProps as TextFormFieldProps;
-    const nextText = nextProps as TextFormFieldProps;
-    
+  if (
+    prevProps.type === 'text' ||
+    prevProps.type === 'email' ||
+    prevProps.type === 'password' ||
+    prevProps.type === 'textarea'
+  ) {
     if (
-      prevText.showCount !== nextText.showCount ||
-      prevText.maxLength !== nextText.maxLength ||
-      prevText.rows !== nextText.rows
+      'showCount' in prevProps &&
+      'showCount' in nextProps &&
+      prevProps.showCount !== nextProps.showCount
     ) {
+      return false;
+    }
+    if (
+      'maxLength' in prevProps &&
+      'maxLength' in nextProps &&
+      prevProps.maxLength !== nextProps.maxLength
+    ) {
+      return false;
+    }
+    if ('rows' in prevProps && 'rows' in nextProps && prevProps.rows !== nextProps.rows) {
       return false;
     }
   }
 
   // Number field specific props
   if (prevProps.type === 'number') {
-    const prevNumber = prevProps as NumberFormFieldProps;
-    const nextNumber = nextProps as NumberFormFieldProps;
-    
+    if ('min' in prevProps && 'min' in nextProps && prevProps.min !== nextProps.min) {
+      return false;
+    }
+    if ('max' in prevProps && 'max' in nextProps && prevProps.max !== nextProps.max) {
+      return false;
+    }
+    if ('step' in prevProps && 'step' in nextProps && prevProps.step !== nextProps.step) {
+      return false;
+    }
     if (
-      prevNumber.min !== nextNumber.min ||
-      prevNumber.max !== nextNumber.max ||
-      prevNumber.step !== nextNumber.step ||
-      prevNumber.precision !== nextNumber.precision ||
-      prevNumber.inputNumberProps !== nextNumber.inputNumberProps
+      'precision' in prevProps &&
+      'precision' in nextProps &&
+      prevProps.precision !== nextProps.precision
+    ) {
+      return false;
+    }
+    if (
+      'inputNumberProps' in prevProps &&
+      'inputNumberProps' in nextProps &&
+      prevProps.inputNumberProps !== nextProps.inputNumberProps
     ) {
       return false;
     }
@@ -126,27 +212,30 @@ const areEqual = (prevProps: FormFieldProps, nextProps: FormFieldProps): boolean
 
   // Select field specific props
   if (prevProps.type === 'select') {
-    const prevSelect = prevProps as SelectFormFieldProps;
-    const nextSelect = nextProps as SelectFormFieldProps;
-    
-    // Compare options array (reference and length)
-    if (prevSelect.options !== nextSelect.options || prevSelect.options.length !== nextSelect.options.length) {
+    if (
+      'options' in prevProps &&
+      'options' in nextProps &&
+      (prevProps.options !== nextProps.options ||
+        prevProps.options.length !== nextProps.options.length)
+    ) {
       return false;
     }
-    
-    // Compare selectProps
-    if (prevSelect.selectProps !== nextSelect.selectProps) {
+    if (
+      'selectProps' in prevProps &&
+      'selectProps' in nextProps &&
+      prevProps.selectProps !== nextProps.selectProps
+    ) {
       return false;
     }
   }
 
   // Checkbox field specific props
   if (prevProps.type === 'checkbox') {
-    const prevCheckbox = prevProps as CheckboxFormFieldProps;
-    const nextCheckbox = nextProps as CheckboxFormFieldProps;
-    
-    // Compare children (reference comparison)
-    if (prevCheckbox.children !== nextCheckbox.children) {
+    if (
+      'children' in prevProps &&
+      'children' in nextProps &&
+      prevProps.children !== nextProps.children
+    ) {
       return false;
     }
   }

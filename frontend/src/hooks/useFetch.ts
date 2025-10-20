@@ -260,9 +260,10 @@ export function useFetch<T = unknown>(
 
             if (isRetryable) {
               const ra = response.headers.get('retry-after');
-              const ms = ra && /^\d+$/.test(ra)
-                ? parseInt(ra, 10) * 1000
-                : retryDelay * Math.pow(2, attempt);
+              const ms =
+                ra && /^\d+$/.test(ra)
+                  ? parseInt(ra, 10) * 1000
+                  : retryDelay * Math.pow(2, attempt);
               await new Promise(resolve => setTimeout(resolve, ms));
               continue;
             }

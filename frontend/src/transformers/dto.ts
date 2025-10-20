@@ -263,7 +263,7 @@ const parseAddressSegmentsWithHeuristics = (
        * - ADJACENT_ZIP_BOOST (2): State adjacent to ZIP code
        * - NEAR_ZIP_BOOST (1): State within 2 positions of ZIP
        * - EARLY_POSITION_BOOST (1): State in early position (more likely actual state)
-       * 
+       *
        * Higher confidence indicates more reliable state detection
        */
       let confidence = BASE_STATE_CONFIDENCE; // Base confidence

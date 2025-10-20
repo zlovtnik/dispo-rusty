@@ -57,8 +57,8 @@ function getApiBaseUrl(): string {
   // In tests, prioritize process.env which Bun loads from .env files
   // Fall back to import.meta.env for browser/build time
   const apiUrl =
-    (typeof process !== 'undefined' && process.env ? process.env.VITE_API_URL : undefined) || 
-    import.meta.env?.VITE_API_URL || 
+    (typeof process !== 'undefined' && process.env ? process.env.VITE_API_URL : undefined) ||
+    import.meta.env?.VITE_API_URL ||
     'http://localhost:8000/api';
 
   return apiUrl;
@@ -86,7 +86,6 @@ interface ParsedFilter {
  * Allowed filter operators
  */
 type Operator = 'eq' | 'ne' | 'like' | 'gt' | 'lt';
-
 
 /**
  * Type guard to validate if a filter group can be converted to a ParsedFilter
@@ -891,4 +890,3 @@ export function resetMockData(): void {
   mockContacts = createMockContacts();
   mockTenants = createMockTenants();
 }
-

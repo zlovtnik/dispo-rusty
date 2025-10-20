@@ -31,9 +31,11 @@ The services layer centralizes communication with external systems such as the A
 ## Files
 
 ### `api.ts`
+
 Core HTTP client and all API services with comprehensive JSDoc documentation.
 
 **Exports:**
+
 - `authService` - Authentication operations (login, logout, refresh)
 - `tenantService` - Tenant CRUD operations
 - `addressBookService` - Contact management
@@ -43,11 +45,13 @@ Core HTTP client and all API services with comprehensive JSDoc documentation.
 - `apiClient` - Default HTTP client instance
 
 ### `StorageService.ts`
+
 Result-based wrapper around `localStorage` with versioned payload support for type-safe storage operations.
 
 ## HttpClient Features
 
 ### 1. Automatic Authentication
+
 Automatically includes JWT tokens in the `Authorization` header for all requests.
 
 ```typescript
@@ -56,6 +60,7 @@ const result = await apiClient.get('/api/protected-resource');
 ```
 
 ### 2. Tenant Context Injection
+
 Automatically includes `X-Tenant-ID` header for multi-tenant routing.
 
 ```typescript
@@ -65,9 +70,11 @@ const result = await addressBookService.getAll();
 ```
 
 ### 3. Retry with Exponential Backoff
+
 Automatically retries failed requests with exponential backoff.
 
 **Default Configuration:**
+
 - Max attempts: 3
 - Base delay: 1 second
 - Max delay: 10 seconds
@@ -78,18 +85,22 @@ const result = await apiClient.get('/api/data');
 ```
 
 ### 4. Circuit Breaker Pattern
+
 Prevents cascading failures by opening the circuit after repeated failures.
 
 **Default Configuration:**
+
 - Failure threshold: 5 consecutive failures
 - Reset timeout: 60 seconds (1 minute)
 
 **States:**
+
 - **Closed** - Normal operation, requests pass through
 - **Open** - Too many failures, requests fail immediately
 - **Half-Open** - Testing if service recovered
 
 ### 5. Request Timeout
+
 All requests timeout after a configurable duration.
 
 **Default:** 30 seconds
@@ -106,17 +117,17 @@ const result = await authService.login({
   usernameOrEmail: 'user@example.com',
   password: 'password123',
   tenantId: 'tenant1',
-  rememberMe: true
+  rememberMe: true,
 });
 
 result.match(
-  (auth) => {
+  auth => {
     // Success: auth.token, auth.user, auth.tenant, auth.expiresIn
     localStorage.setItem('auth_token', JSON.stringify({ token: auth.token }));
     localStorage.setItem('user', JSON.stringify(auth.user));
     localStorage.setItem('tenant', JSON.stringify(auth.tenant));
   },
-  (error) => {
+  error => {
     // Error: error.message, error.type, error.statusCode
     console.error('Login failed:', error.message);
   }
@@ -142,14 +153,12 @@ const tenants = await tenantService.getAll();
 // Get with pagination
 const paginated = await tenantService.getAllWithPagination({
   offset: 0,
-  limit: 20
+  limit: 20,
 });
 // Filter tenants
 const active = await tenantService.filter({
-  filters: [
-    { field: 'status', operator: 'eq', value: 'active' }
-  ],
-  page_size: 20
+  filters: [{ field: 'status', operator: 'eq', value: 'active' }],
+  page_size: 20,
 });
 
 // Get single tenant
@@ -158,12 +167,12 @@ const tenant = await tenantService.getById('tenant-123');
 // Create tenant
 const newTenant = await tenantService.create({
   name: 'New Company',
-  db_url: 'postgresql://localhost/tenant_db'
+  db_url: 'postgresql://localhost/tenant_db',
 });
 
 // Update tenant
 const updated = await tenantService.update('tenant-123', {
-  name: 'Updated Name'
+  name: 'Updated Name',
 });
 
 // Delete tenant
@@ -179,18 +188,18 @@ import { addressBookService } from './services/api';
 const contacts = await addressBookService.getAll({
   page: 1,
   limit: 20,
-  search: 'john'
+  search: 'john',
 });
 
 contacts.match(
-  (response) => {
+  response => {
     if (response.status === 'success') {
       console.log('Contacts:', response.data.contacts);
       console.log('Total:', response.data.total);
       console.log('Current Page:', response.data.currentPage);
     }
   },
-  (error) => console.error(error)
+  error => console.error(error)
 );
 
 // Create contact
@@ -200,7 +209,7 @@ const contact = await addressBookService.create({
   phone: '+1234567890',
   address: '123 Main St',
   age: 30,
-  gender: true // true = male, false = female
+  gender: true, // true = male, false = female
 });
 
 // Update contact
@@ -209,7 +218,7 @@ const updated = await addressBookService.update('contact-123', {
   email: 'jane@example.com',
   phone: '+1234567890',
   address: '456 Oak Ave',
-  age: 28
+  age: 28,
 });
 
 // Delete contact
@@ -226,11 +235,11 @@ All services return `AsyncResult<T, E>` which is a `ResultAsync` from the `never
 const result = await authService.login(credentials);
 
 result.match(
-  (success) => {
+  success => {
     // Handle success case
     console.log('Success:', success);
   },
-  (error) => {
+  error => {
     // Handle error case
     console.error('Error:', error.message);
   }
@@ -240,13 +249,14 @@ result.match(
 ### Using `.andThen()` for Chaining
 
 ```typescript
-const user = await authService.login(credentials)
-  .andThen((auth) => {
+const user = await authService
+  .login(credentials)
+  .andThen(auth => {
     // Save to localStorage
     localStorage.setItem('auth_token', JSON.stringify({ token: auth.token }));
     return okAsync(auth.user);
   })
-  .andThen((user) => {
+  .andThen(user => {
     // Fetch user profile
     return fetchUserProfile(user.id);
   });
@@ -255,16 +265,13 @@ const user = await authService.login(credentials)
 ### Using `.mapErr()` for Error Transformation
 
 ```typescript
-const result = await authService.login(credentials)
-  .mapErr((error) => {
-    // Transform error for display
-    return {
-      ...error,
-      displayMessage: error.type === 'auth' 
-        ? 'Invalid credentials' 
-        : 'Login failed'
-    };
-  });
+const result = await authService.login(credentials).mapErr(error => {
+  // Transform error for display
+  return {
+    ...error,
+    displayMessage: error.type === 'auth' ? 'Invalid credentials' : 'Login failed',
+  };
+});
 ```
 
 ### Error Types
@@ -285,14 +292,14 @@ interface AppError {
 
 **Error Type Matrix:**
 
-| HTTP Status | Error Type | Retryable | Description |
-|------------|------------|-----------|-------------|
-| 401, 403 | `auth` | No | Authentication/authorization failure |
-| 400, 422 | `validation` | No | Invalid request data |
-| 500-599 | `network` | Yes | Server error |
-| Timeout | `network` | Yes | Request timeout |
-| Network failure | `network` | Yes | No connection to server |
-| Other | `business` | No | Business logic error |
+| HTTP Status     | Error Type   | Retryable | Description                          |
+| --------------- | ------------ | --------- | ------------------------------------ |
+| 401, 403        | `auth`       | No        | Authentication/authorization failure |
+| 400, 422        | `validation` | No        | Invalid request data                 |
+| 500-599         | `network`    | Yes       | Server error                         |
+| Timeout         | `network`    | Yes       | Request timeout                      |
+| Network failure | `network`    | Yes       | No connection to server              |
+| Other           | `business`   | No        | Business logic error                 |
 
 ## Custom Configuration
 
@@ -306,12 +313,12 @@ const fastClient = createHttpClient({
   retry: {
     maxAttempts: 2,
     baseDelay: 500,
-    maxDelay: 5000
+    maxDelay: 5000,
   },
   circuitBreaker: {
     failureThreshold: 3,
-    resetTimeout: 30000
-  }
+    resetTimeout: 30000,
+  },
 });
 
 // Use custom client
@@ -336,24 +343,33 @@ The HttpClient expects specific storage formats for authentication:
 
 ```typescript
 // auth_token: JWT token
-localStorage.setItem('auth_token', JSON.stringify({ 
-  token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' 
-}));
+localStorage.setItem(
+  'auth_token',
+  JSON.stringify({
+    token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+  })
+);
 
 // tenant: Current tenant context
-localStorage.setItem('tenant', JSON.stringify({ 
-  id: 'tenant1',
-  name: 'Company Name',
-  // ... other tenant fields
-}));
+localStorage.setItem(
+  'tenant',
+  JSON.stringify({
+    id: 'tenant1',
+    name: 'Company Name',
+    // ... other tenant fields
+  })
+);
 
 // user: Current user data
-localStorage.setItem('user', JSON.stringify({ 
-  id: 'user1',
-  email: 'user@example.com',
-  username: 'johndoe',
-  // ... other user fields
-}));
+localStorage.setItem(
+  'user',
+  JSON.stringify({
+    id: 'user1',
+    email: 'user@example.com',
+    username: 'johndoe',
+    // ... other user fields
+  })
+);
 ```
 
 ## Conventions
@@ -379,12 +395,12 @@ localStorage.setItem('user', JSON.stringify({
 
 ### Example Service Template
 
-```typescript
+````typescript
 /**
  * Widget Management Service
- * 
+ *
  * Provides CRUD operations for managing widgets.
- * 
+ *
  * @example
  * ```typescript
  * const widgets = await widgetService.getAll({ page: 1, limit: 10 });
@@ -397,10 +413,10 @@ localStorage.setItem('user', JSON.stringify({
 export const widgetService = {
   /**
    * Retrieves all widgets with optional pagination
-   * 
+   *
    * @param params - Query parameters (page, limit)
    * @returns AsyncResult with widget list or AppError
-   * 
+   *
    * @example
    * ```typescript
    * const widgets = await widgetService.getAll({ page: 1, limit: 20 });
@@ -410,14 +426,14 @@ export const widgetService = {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.set('page', params.page.toString());
     if (params?.limit) queryParams.set('limit', params.limit.toString());
-    
+
     const query = queryParams.toString();
     return apiClient.get<Widget[]>(query ? `/widgets?${query}` : '/widgets');
   },
-  
+
   // ... other methods
 };
-```
+````
 
 ## Best Practices
 
@@ -427,8 +443,8 @@ export const widgetService = {
 // ✅ Good
 const result = await authService.login(credentials);
 result.match(
-  (auth) => handleSuccess(auth),
-  (error) => handleError(error)
+  auth => handleSuccess(auth),
+  error => handleError(error)
 );
 
 // ❌ Bad - doesn't handle errors
@@ -442,9 +458,10 @@ if (result.isOk()) {
 
 ```typescript
 // ✅ Good - chain operations
-const profile = await authService.login(credentials)
-  .andThen((auth) => saveToStorage(auth))
-  .andThen((auth) => fetchProfile(auth.user.id));
+const profile = await authService
+  .login(credentials)
+  .andThen(auth => saveToStorage(auth))
+  .andThen(auth => fetchProfile(auth.user.id));
 
 // ❌ Bad - nested callbacks
 const loginResult = await authService.login(credentials);
@@ -461,11 +478,10 @@ if (loginResult.isOk()) {
 
 ```typescript
 // ✅ Good - user-friendly messages
-const result = await authService.login(credentials)
-  .mapErr((error) => ({
-    ...error,
-    displayMessage: getDisplayMessage(error)
-  }));
+const result = await authService.login(credentials).mapErr(error => ({
+  ...error,
+  displayMessage: getDisplayMessage(error),
+}));
 
 // ❌ Bad - expose technical details
 const result = await authService.login(credentials);
@@ -480,8 +496,8 @@ if (result.isErr()) {
 // ✅ Good - use .match() or .mapErr()
 const result = await authService.login(credentials);
 result.match(
-  (auth) => console.log(auth),
-  (error) => console.error(error)
+  auth => console.log(auth),
+  error => console.error(error)
 );
 
 // ❌ Bad - Result types don't throw
@@ -504,7 +520,7 @@ Exponential backoff prevents overwhelming a recovering service with retry reques
 
 ```typescript
 const quickClient = createHttpClient({
-  retry: { maxAttempts: 1, baseDelay: 0, maxDelay: 0 }
+  retry: { maxAttempts: 1, baseDelay: 0, maxDelay: 0 },
 });
 ```
 
@@ -565,4 +581,3 @@ API returned non-JSON content. Check API endpoint and ensure proper Content-Type
 - [Error Handling](../types/errors.ts) - Error type definitions
 - [Functional Programming](../types/fp.ts) - Result and AsyncResult types
 - [StorageService](./StorageService.ts) - Type-safe localStorage wrapper
-
