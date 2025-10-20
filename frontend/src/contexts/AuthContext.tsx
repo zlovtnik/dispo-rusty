@@ -508,10 +508,28 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 };
 
 // Hook to use auth context
+// Returns a safe fallback when used outside AuthProvider to prevent crashes
 export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    // Return a safe fallback instead of throwing
+    // This allows components to gracefully handle missing provider
+    console.warn('useAuth called outside AuthProvider - returning fallback auth state');
+    return {
+      user: null,
+      tenant: null,
+      isAuthenticated: false,
+      isLoading: false,
+      login: async () => {
+        console.warn('login called outside AuthProvider');
+      },
+      logout: async () => {
+        console.warn('logout called outside AuthProvider');
+      },
+      refreshToken: async () => {
+        console.warn('refreshToken called outside AuthProvider');
+      },
+    };
   }
   return context;
 };

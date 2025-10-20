@@ -117,16 +117,24 @@ export function useValidation<T, E = string>(
 
       // Run all validators in sequence
       for (const validator of memoizedValidators) {
-        const result = validator(currentValue);
-        if (result.isErr()) {
-          errors.push(result.error);
-          // Break early if shortCircuit is enabled
+        try {
+          const result = validator(currentValue);
+          if (result.isErr()) {
+            errors.push(result.error);
+            // Break early if shortCircuit is enabled
+            if (shortCircuit) {
+              break;
+            }
+          } else {
+            // Update value if transformed by validator
+            currentValue = result.value;
+          }
+        } catch (e) {
+          // Convert thrown errors to validation errors
+          errors.push(e as E);
           if (shortCircuit) {
             break;
           }
-        } else {
-          // Update value if transformed by validator
-          currentValue = result.value;
         }
       }
 
@@ -168,6 +176,16 @@ export function useValidation<T, E = string>(
   const [value, setValueState] = useState<T | undefined>(initialValue);
   const [validating, setValidating] = useState(false);
 
+  // Helper to select transformed value or fallback to original
+  const selectValueFromResult = useCallback(
+    (validationResult: ValidationResult<T, E>, originalValue: T | undefined): T | undefined => {
+      return validationResult.isValid && validationResult.value !== null
+        ? (validationResult.value as T)
+        : originalValue;
+    },
+    []
+  );
+
   // Validation function exposed to consumers
   const validate = useCallback(
     (newValue: T | undefined): ValidationResult<T, E> => {
@@ -175,26 +193,28 @@ export function useValidation<T, E = string>(
       try {
         const validationResult = validateValue(newValue);
         setResult(validationResult);
-        setValueState(newValue);
+        setValueState(selectValueFromResult(validationResult, newValue));
         return validationResult;
       } finally {
         setValidating(false);
       }
     },
-    [validateValue]
+    [validateValue, selectValueFromResult]
   );
 
   // Set value conditionally triggers validation when validateOnChange is true
   // Clearing a field (undefined/null) will run validation so consumers know required-field errors may appear immediately
   const setValue = useCallback(
     (newValue: T | undefined) => {
-      setValueState(newValue);
       if (validateOnChange) {
         const validationResult = validateValue(newValue);
         setResult(validationResult);
+        setValueState(selectValueFromResult(validationResult, newValue));
+      } else {
+        setValueState(newValue);
       }
     },
-    [validateOnChange, validateValue]
+    [validateOnChange, validateValue, selectValueFromResult]
   );
 
   // Reset validation state

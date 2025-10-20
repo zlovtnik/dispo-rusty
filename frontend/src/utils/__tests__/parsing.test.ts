@@ -1,6 +1,14 @@
-import { describe, it, expect, beforeEach } from 'bun:test';
-import { decodeJwtPayload, checkTokenExpiry, parseStoredUser, parseStoredTenant, updateUserFromJwt, updateTenantFromJwt, verifyDataMatchesToken } from '../parsing';
-import type { User, Tenant } from '../../types/auth';
+import { describe, it, expect } from 'bun:test';
+import {
+  decodeJwtPayload,
+  checkTokenExpiry,
+  parseStoredUser,
+  parseStoredTenant,
+  updateUserFromJwt,
+  updateTenantFromJwt,
+  verifyDataMatchesToken,
+} from '../parsing';
+import type { _User, _Tenant } from '../../types/auth';
 import { mockUser, mockTenant } from '../../test-utils/render';
 import { asTenantId } from '../../types/ids';
 
@@ -88,13 +96,21 @@ describe('parsing utilities', () => {
 
   describe('checkTokenExpiry', () => {
     it('should return ok for non-expired token', () => {
-      const validPayload = { user: 'test', tenant_id: 'test', exp: Math.floor(Date.now() / 1000) + 3600 };
+      const validPayload = {
+        user: 'test',
+        tenant_id: 'test',
+        exp: Math.floor(Date.now() / 1000) + 3600,
+      };
       const result = checkTokenExpiry(validPayload);
       expect(result.isOk()).toBe(true);
     });
 
     it('should return error for expired token', () => {
-      const expiredPayload = { user: 'test', tenant_id: 'test', exp: Math.floor(Date.now() / 1000) - 100 };
+      const expiredPayload = {
+        user: 'test',
+        tenant_id: 'test',
+        exp: Math.floor(Date.now() / 1000) - 100,
+      };
       const result = checkTokenExpiry(expiredPayload);
       expect(result.isErr()).toBe(true);
     });
@@ -175,8 +191,8 @@ describe('parsing utilities', () => {
       expect(result.isErr()).toBe(true);
     });
 
-    it('should reject tenant with invalid ID format', () => {
-      const invalidTenant = { id: 'invalid-id', name: 'Test Tenant' };
+    it('should reject tenant missing settings and subscription', () => {
+      const invalidTenant = { id: asTenantId('tenant-1'), name: 'Test Tenant' }; // missing settings and subscription
       const json = JSON.stringify(invalidTenant);
       const result = parseStoredTenant(json);
       expect(result.isErr()).toBe(true);
@@ -233,7 +249,7 @@ describe('parsing utilities', () => {
       const payload = {
         user: user.username,
         tenant_id: String(tenant.id), // Convert branded type to string
-        exp: 1234567890
+        exp: 1234567890,
       };
 
       const result = verifyDataMatchesToken(user, tenant, payload);
@@ -246,7 +262,7 @@ describe('parsing utilities', () => {
       const payload = {
         user: 'different-username',
         tenant_id: String(tenant.id),
-        exp: 1234567890
+        exp: 1234567890,
       };
 
       const result = verifyDataMatchesToken(user, tenant, payload);
@@ -259,7 +275,7 @@ describe('parsing utilities', () => {
       const payload = {
         user: user.username,
         tenant_id: 'different-tenant-id',
-        exp: 1234567890
+        exp: 1234567890,
       };
 
       const result = verifyDataMatchesToken(user, tenant, payload);
@@ -272,7 +288,7 @@ describe('parsing utilities', () => {
       const payload = {
         user: 'different-username',
         tenant_id: 'different-tenant-id',
-        exp: 1234567890
+        exp: 1234567890,
       };
 
       const result = verifyDataMatchesToken(user, tenant, payload);

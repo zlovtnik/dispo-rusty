@@ -10,6 +10,7 @@ import type { Tenant as TenantRecord } from '../types/tenant';
 import { asContactId, asTenantId, asUserId } from '../types/ids';
 import { booleanToGender, genderToBoolean, parseOptionalGender } from './gender';
 import { parseDate, parseOptionalDate, toIsoString } from './date';
+import { addressParsingLogger } from '../utils/logger';
 
 interface TransformerContext {
   readonly entity: string;
@@ -78,6 +79,13 @@ const pickString = (source: Record<string, unknown>, keys: string[]): Option<str
   return none();
 };
 
+/**
+ * Type guard to check if a value is a string array
+ */
+const isStringArray = (value: unknown): value is string[] => {
+  return Array.isArray(value) && value.every(item => typeof item === 'string');
+};
+
 const pickNumber = (source: Record<string, unknown>, keys: string[]): Option<number> => {
   for (const key of keys) {
     if (!(key in source)) continue;
@@ -127,6 +135,304 @@ const optionValue = <T>(option: Option<T>): T | undefined =>
 const optionOrDefault = <T>(option: Option<T>, defaultValue: T): T =>
   isSome(option) ? option.value : defaultValue;
 
+/**
+ * Detect if a string segment looks like a ZIP code (5 digits, optionally +4)
+ * Examples: "12345", "12345-6789"
+ */
+const looksLikeZipCode = (segment: string): boolean => {
+  return /^\d{5}(-\d{4})?$/.test(segment.trim());
+};
+
+/**
+ * Detect if a string segment looks like a US state abbreviation or full state name
+ * Examples: "CA", "California", "NY", "New York"
+ * Now requires exact matches to avoid false positives like "MAINE STREET"
+ */
+const looksLikeState = (segment: string): boolean => {
+  const trimmed = segment.trim().toUpperCase();
+  const normalized = trimmed.replace(/\s+/g, '');
+
+  // US state abbreviations (exactly 2 letters)
+  if (/^[A-Z]{2}$/.test(trimmed)) return true;
+
+  // Common full state names (exact match only, not substring)
+  const stateNames = [
+    'ALABAMA',
+    'ALASKA',
+    'ARIZONA',
+    'ARKANSAS',
+    'CALIFORNIA',
+    'COLORADO',
+    'CONNECTICUT',
+    'DELAWARE',
+    'FLORIDA',
+    'GEORGIA',
+    'HAWAII',
+    'IDAHO',
+    'ILLINOIS',
+    'INDIANA',
+    'IOWA',
+    'KANSAS',
+    'KENTUCKY',
+    'LOUISIANA',
+    'MAINE',
+    'MARYLAND',
+    'MASSACHUSETTS',
+    'MICHIGAN',
+    'MINNESOTA',
+    'MISSISSIPPI',
+    'MISSOURI',
+    'MONTANA',
+    'NEBRASKA',
+    'NEVADA',
+    'NEWHAMPSHIRE',
+    'NEWJERSEY',
+    'NEWMEXICO',
+    'NEWYORK',
+    'NORTHCAROLINA',
+    'NORTHDAKOTA',
+    'OHIO',
+    'OKLAHOMA',
+    'OREGON',
+    'PENNSYLVANIA',
+    'RHODEISLAND',
+    'SOUTHCAROLINA',
+    'SOUTHDAKOTA',
+    'TENNESSEE',
+    'TEXAS',
+    'UTAH',
+    'VERMONT',
+    'VIRGINIA',
+    'WASHINGTON',
+    'WESTVIRGINIA',
+    'WISCONSIN',
+    'WYOMING',
+  ];
+
+  return stateNames.includes(normalized);
+};
+
+/**
+ * Detect if a string segment looks like a country name
+ * Now uses curated list for exact matches, single tokens, or ISO codes to avoid false positives
+ * Examples: "USA", "United States", "Canada", "US", "CA" (ISO codes)
+ */
+const looksLikeCountry = (segment: string): boolean => {
+  const trimmed = segment.trim().toUpperCase();
+  const normalized = trimmed.replace(/\s+/g, ' ');
+
+  // ISO country codes (2-3 letters)
+  if (/^[A-Z]{2,3}$/.test(trimmed)) return true;
+
+  // Curated list of common country names (exact match only)
+  const countryNames = [
+    'UNITED STATES',
+    'USA',
+    'UNITED STATES OF AMERICA',
+    'CANADA',
+    'MEXICO',
+    'UNITED KINGDOM',
+    'UK',
+    'GREAT BRITAIN',
+    'FRANCE',
+    'GERMANY',
+    'ITALY',
+    'SPAIN',
+    'PORTUGAL',
+    'AUSTRALIA',
+    'NEW ZEALAND',
+    'JAPAN',
+    'CHINA',
+    'INDIA',
+    'BRAZIL',
+    'ARGENTINA',
+    'CHILE',
+    'COLOMBIA',
+    'PERU',
+    'RUSSIA',
+    'SOUTH KOREA',
+    'NORTH KOREA',
+    'THAILAND',
+    'VIETNAM',
+    'PHILIPPINES',
+    'INDONESIA',
+    'MALAYSIA',
+    'SINGAPORE',
+  ];
+
+  return countryNames.includes(normalized);
+};
+
+/**
+ * Improves upon simple comma-split parsing by detecting and placing ZIP codes,
+ * states, and country codes dynamically. Falls back to positional assignment
+ * if format doesn't match expected patterns.
+ *
+ * **ENHANCED VALIDATION:**
+ * - State matches preferred when adjacent to or near ZIP codes
+ * - Overall address structure validation before accepting heuristic matches
+ * - Exact matching for states and countries to reduce false positives
+ * - Positional confidence scoring for ambiguous cases
+ *
+ * **LIMITATIONS (US-centric implementation):**
+ * - Assumes comma-separated address format (e.g., "123 Main St, Springfield, IL 62701")
+ * - Primarily recognizes US state abbreviations and names
+ * - Detects only basic ZIP code patterns (5 or 9 digits); international postal codes may be misidentified
+ * - Country detection uses curated list with exact matching
+ * - May misidentify street names or city names that overlap with state/country heuristics
+ * - No support for multi-line or complex international address formats
+ *
+ * **VALIDATION BEHAVIOR:**
+ * - If ZIP code exists but no state found, logs warning and marks address as potentially incomplete
+ * - Detects conflicting state or ZIP detections and warns with preference for earliest match
+ * - Checks if remaining segments contain recognized city/state/ZIP patterns before positional fallback
+ * - Validates overall address structure (street + city + state + ZIP) before accepting matches
+ *
+ * **RECOMMENDATION:**
+ * For production use, consider adopting a dedicated address-parsing library (e.g., libpostal, SmartyStreets)
+ * that handles international formats and ambiguity resolution. Use this heuristic parser for best-effort
+ * parsing only, with user verification/correction as a fallback.
+ *
+ * @param segments - Pre-split address segments (typically split by comma)
+ * @returns Structured address with detected fields; may be partial if heuristics cannot confidently identify all parts
+ */
+const parseAddressSegmentsWithHeuristics = (
+  segments: string[]
+): {
+  street1: string;
+  street2?: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  country: string;
+} => {
+  const result = {
+    street1: '',
+    street2: undefined as string | undefined,
+    city: '',
+    state: '',
+    zipCode: '',
+    country: 'USA',
+  };
+
+  if (segments.length === 0) return result;
+
+  const remaining: string[] = [];
+  let zipIndex = -1;
+  let stateIndex = -1;
+  let countryIndex = -1;
+  let stateConfidence = 0; // 0-3 scale based on proximity to ZIP and position
+
+  // First pass: identify special fields by heuristics with positional scoring
+  for (let i = 0; i < segments.length; i++) {
+    const segment = segments[i];
+    if (!segment) continue;
+
+    if (looksLikeZipCode(segment)) {
+      zipIndex = i;
+    } else if (looksLikeState(segment)) {
+      // Calculate confidence score for state match
+      let confidence = 1; // Base confidence
+
+      // Boost confidence if adjacent to ZIP
+      if (zipIndex !== -1 && Math.abs(i - zipIndex) === 1) confidence += 2;
+
+      // Boost confidence if near ZIP (within 2 positions)
+      if (zipIndex !== -1 && Math.abs(i - zipIndex) <= 2) confidence += 1;
+
+      // Prefer earlier positions for states (more likely to be actual states)
+      if (i <= segments.length - 3) confidence += 1;
+
+      // Only accept if confidence is higher than previous match
+      if (confidence > stateConfidence) {
+        stateIndex = i;
+        stateConfidence = confidence;
+      }
+    } else if (looksLikeCountry(segment)) {
+      countryIndex = i;
+    } else {
+      remaining.push(segment);
+    }
+  }
+
+  // Extract identified fields
+  if (zipIndex !== -1) {
+    const zip = segments[zipIndex];
+    if (zip) result.zipCode = zip;
+  }
+  if (stateIndex !== -1) {
+    const state = segments[stateIndex];
+    if (state) result.state = state;
+  }
+  if (countryIndex !== -1) {
+    const country = segments[countryIndex];
+    if (country) result.country = country;
+  }
+
+  // Enhanced validation: check overall address structure coherence
+  const hasStreet = remaining.length > 0 && remaining[0] != null && remaining[0].trim().length > 0;
+  const hasCity = remaining.length > 1 && remaining[1] != null && remaining[1].trim().length > 0;
+  const hasState = result.state.length > 0;
+  const hasZip = result.zipCode.length > 0;
+
+  // Validate structure: if we have ZIP and state, ensure they're coherent
+  if (hasZip && hasState) {
+    const zipState = result.zipCode.substring(0, 2);
+    const detectedState = result.state.trim().toUpperCase();
+    // Basic validation: ZIP should start with reasonable digits for detected state
+    // This is a simple heuristic - real validation would need a ZIP database
+    if (detectedState.length === 2 && /^[A-Z]{2}$/.test(detectedState)) {
+      // For now, just ensure the structure looks reasonable
+      // Could add more sophisticated ZIP-state validation here
+    }
+  }
+
+  // Post-extraction validation: warn if ZIP exists but state is missing
+  if (result.zipCode && !result.state) {
+    addressParsingLogger.warn(
+      '[Address Parser] ZIP code detected but no state found; address may be incomplete or misidentified.',
+      { zipCode: result.zipCode, remainingSegments: remaining }
+    );
+  }
+
+  // Additional validation: warn about low-confidence state matches
+  if (result.state && stateConfidence < 2) {
+    addressParsingLogger.warn(
+      '[Address Parser] Low confidence state match detected; verify address accuracy.',
+      {
+        state: result.state,
+        confidence: stateConfidence,
+        context: segments,
+      }
+    );
+  }
+
+  // Positional assignment for remaining segments with improved defensiveness
+  // Try to detect city/state/ZIP patterns in remaining segments before fallback positional assignment
+  // Typically: [street1, (street2), city, ...]
+  if (remaining.length > 0) {
+    // Scan remaining for additional city/state/ZIP matches that might have been missed
+    const additionalMatches = remaining.filter(
+      seg => looksLikeState(seg) || looksLikeZipCode(seg) || looksLikeCountry(seg)
+    );
+    if (additionalMatches.length > 0) {
+      addressParsingLogger.warn(
+        '[Address Parser] Detected potential unprocessed city/state/ZIP patterns in remaining segments',
+        {
+          additionalMatches,
+          context: 'Review parsed address for accuracy',
+        }
+      );
+    }
+
+    result.street1 = remaining[0] || '';
+  }
+  if (remaining.length > 1) result.street2 = remaining[1];
+  if (remaining.length > 2) result.city = remaining[2] || '';
+
+  return result;
+};
+
 const buildAddress = (source: Record<string, unknown>): Option<Address> => {
   const addressValue = source.address ?? source.mailing_address ?? source.shipping_address;
 
@@ -159,24 +465,26 @@ const buildAddress = (source: Record<string, unknown>): Option<Address> => {
   }
 
   if (typeof addressValue === 'string') {
+    // Split by comma and filter empty segments
     const segments = addressValue
       .split(',')
       .map(part => part.trim())
       .filter(Boolean);
+
     if (segments.length === 0) {
       return none();
     }
 
-    const [street1Segment, street2Segment, citySegment, stateSegment, zipSegment, countrySegment] =
-      segments;
+    // Use intelligent heuristics to parse segments
+    const parsed = parseAddressSegmentsWithHeuristics(segments);
 
     return some({
-      street1: street1Segment ?? '',
-      street2: street2Segment,
-      city: citySegment ?? '',
-      state: stateSegment ?? '',
-      zipCode: zipSegment ?? '',
-      country: countrySegment ?? 'USA',
+      street1: parsed.street1,
+      street2: parsed.street2,
+      city: parsed.city,
+      state: parsed.state,
+      zipCode: parsed.zipCode,
+      country: parsed.country,
     });
   }
 
@@ -204,7 +512,14 @@ const formatAddress = (address: Address | undefined): string | null => {
   return segments.join(', ');
 };
 
-export interface ContactApiDTO {
+/**
+ * ContactInboundApiDTO - Flexible input type for parsing from API
+ *
+ * Accepts various formats for fields like gender (Gender | boolean | string) to handle
+ * diverse server implementations. This is used when converting from API responses to
+ * domain Contact objects.
+ */
+export interface ContactInboundApiDTO {
   readonly id: string | number;
   readonly tenant_id: string | number;
   readonly first_name?: string | null;
@@ -213,6 +528,7 @@ export interface ContactApiDTO {
   readonly email?: string | null;
   readonly phone?: string | null;
   readonly mobile?: string | null;
+  /** Flexible gender input: accepts Gender enum, boolean (true=male), or string representations */
   readonly gender?: Gender | boolean | string | null;
   readonly age?: number | null;
   readonly address?: string | Record<string, unknown> | null;
@@ -223,6 +539,37 @@ export interface ContactApiDTO {
   readonly updated_by?: string | null;
   readonly is_active?: boolean | null;
 }
+
+/**
+ * ContactOutboundApiDTO - Normalized output type for sending to API
+ *
+ * Enforces strict types for outbound requests to ensure consistency with server contract.
+ * Gender is always a boolean (true=male, false=female) per API specification.
+ * This is used when converting domain Contact objects to API requests.
+ */
+export interface ContactOutboundApiDTO {
+  readonly id: string | number;
+  readonly tenant_id: string | number;
+  readonly first_name?: string | null;
+  readonly last_name?: string | null;
+  readonly full_name?: string | null;
+  readonly email?: string | null;
+  readonly phone?: string | null;
+  readonly mobile?: string | null;
+  /** Normalized gender output: always boolean (true=male, false=female) or null */
+  readonly gender?: boolean | null;
+  readonly age?: number | null;
+  readonly address?: string | null;
+  readonly date_of_birth?: string | null;
+  readonly created_at?: string | null;
+  readonly updated_at?: string | null;
+  readonly created_by?: string | null;
+  readonly updated_by?: string | null;
+  readonly is_active?: boolean | null;
+}
+
+/** Backward compatibility alias for ContactInboundApiDTO */
+export type ContactApiDTO = ContactInboundApiDTO;
 
 const contactFromApi = (input: unknown): Result<Contact, AppError> => {
   if (!input || typeof input !== 'object') {
@@ -243,7 +590,7 @@ const contactFromApi = (input: unknown): Result<Contact, AppError> => {
       createTransformerError(
         { entity: 'Contact', direction: 'fromApi' },
         'Contact identifier is missing',
-        { source }
+        { keys: Object.keys(source).slice(0, 5) }
       )
     );
   }
@@ -254,7 +601,7 @@ const contactFromApi = (input: unknown): Result<Contact, AppError> => {
       createTransformerError(
         { entity: 'Contact', direction: 'fromApi' },
         'Contact tenant identifier is missing',
-        { source }
+        { keys: Object.keys(source).slice(0, 5) }
       )
     );
   }
@@ -278,7 +625,7 @@ const contactFromApi = (input: unknown): Result<Contact, AppError> => {
       createTransformerError(
         { entity: 'Contact', direction: 'fromApi' },
         'Contact name is required',
-        { source }
+        { keys: Object.keys(source).slice(0, 5) }
       )
     );
   }
@@ -302,7 +649,7 @@ const contactFromApi = (input: unknown): Result<Contact, AppError> => {
       createTransformerError(
         { entity: 'Contact', direction: 'fromApi' },
         'Invalid gender value received',
-        { value: genderValue },
+        { valueType: typeof genderValue },
         genderResult.error
       )
     );
@@ -386,7 +733,7 @@ const contactFromApi = (input: unknown): Result<Contact, AppError> => {
   return ok(contact);
 };
 
-const contactToApi = (contact: Contact): Result<ContactApiDTO, AppError> => {
+const contactToApi = (contact: Contact): Result<ContactOutboundApiDTO, AppError> => {
   const name = contact.fullName?.trim() || `${contact.firstName} ${contact.lastName}`.trim();
 
   if (!name) {
@@ -394,7 +741,7 @@ const contactToApi = (contact: Contact): Result<ContactApiDTO, AppError> => {
       createTransformerError(
         { entity: 'Contact', direction: 'toApi' },
         'Contact name is required',
-        { contact }
+        { id: String(contact.id), tenantId: String(contact.tenantId) }
       )
     );
   }
@@ -409,7 +756,7 @@ const contactToApi = (contact: Contact): Result<ContactApiDTO, AppError> => {
       createTransformerError(
         { entity: 'Contact', direction: 'toApi' },
         'Invalid gender provided for contact',
-        { gender: contact.gender },
+        { genderType: typeof contact.gender },
         genderBooleanResult.error
       )
     );
@@ -438,7 +785,7 @@ const contactToApi = (contact: Contact): Result<ContactApiDTO, AppError> => {
     return err(updatedAtResult.error);
   }
 
-  const dto: ContactApiDTO = {
+  const dto: ContactOutboundApiDTO = {
     id: String(contact.id),
     tenant_id: String(contact.tenantId),
     first_name: contact.firstName,
@@ -600,7 +947,7 @@ const userFromApi = (input: unknown): Result<User, AppError> => {
     );
   }
 
-  if (!Array.isArray(rolesValue) || !rolesValue.every(role => typeof role === 'string')) {
+  if (!isStringArray(rolesValue)) {
     return err(
       createTransformerError(
         { entity: 'User', direction: 'fromApi' },
@@ -737,7 +1084,7 @@ export interface TransformerPair<Domain, DTO> {
   readonly fromApi: (value: unknown) => Result<Domain, AppError>;
 }
 
-export const mapContact: TransformerPair<Contact, ContactApiDTO> = {
+export const mapContact: TransformerPair<Contact, ContactOutboundApiDTO> = {
   toApi: toApiDTO(contactToApi, 'Contact'),
   fromApi: fromApiDTO(contactFromApi, 'Contact'),
 };

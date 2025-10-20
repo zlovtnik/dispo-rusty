@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { resultCache, invalidateEntity, CacheKeys } from '@/utils/cache';
+import { resultCache, invalidateEntity, _CacheKeys } from '@/utils/cache';
 
 describe('cache', () => {
   beforeEach(() => {
@@ -367,11 +367,11 @@ describe('cache', () => {
       it('should complete quickly even with many cache entries', () => {
         // Setup: Add many entries
         for (let i = 0; i < 1000; i++) {
-          resultCache.set(`user-${i}`, { id: i }, 5000);
+          resultCache.set(`user-${String(i)}`, { id: i }, 5000);
         }
 
         for (let i = 0; i < 100; i++) {
-          resultCache.set(`contact-${i}`, { id: i }, 5000);
+          resultCache.set(`contact-${String(i)}`, { id: i }, 5000);
         }
 
         // Execute: Should complete quickly

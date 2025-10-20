@@ -114,6 +114,8 @@ export interface IHttpClient {
   put<T>(endpoint: string, data?: unknown): AsyncResult<ApiResponse<T>, AppError>;
   /** Execute DELETE request */
   delete<T>(endpoint: string): AsyncResult<ApiResponse<T>, AppError>;
+  /** Safely get authentication token from localStorage */
+  safeGetToken(): string | null;
 }
 
 const API_BASE_URL = getEnv().apiUrl;
@@ -461,7 +463,7 @@ class HttpClient implements IHttpClient {
    * - 'tenant': JSON object {id: string, name: string, ...}
    * - 'user': JSON object {id: string, email: string, ...}
    */
-  private safeGetToken(): string | null {
+  public safeGetToken(): string | null {
     const stored = localStorage.getItem('auth_token');
     if (!stored) return null;
     try {
@@ -746,11 +748,11 @@ export const authService = {
    */
   login(credentials: LoginCredentials, client?: IHttpClient): AsyncResult<AuthResponse, AuthError> {
     const httpClient = client || apiClient;
-    
+
     const validation = validateAndDecode<LoginRequestSchema>(loginRequestSchema, {
       usernameOrEmail: credentials.usernameOrEmail,
       password: credentials.password,
-      tenantId: String(credentials.tenantId),
+      tenantId: credentials.tenantId,
       rememberMe: credentials.rememberMe,
     });
 
@@ -772,6 +774,7 @@ export const authService = {
 
   /**
    * Logs out the current user and invalidates the session
+   * This operation is idempotent - succeeds even if not authenticated
    *
    * @returns AsyncResult<void, AuthError> - Success with no data, or auth error
    *
@@ -788,6 +791,14 @@ export const authService = {
    * ```
    */
   logout(): AsyncResult<void, AuthError> {
+    // Check if there's a valid authentication token using safe token validation
+    const authToken = apiClient.safeGetToken();
+
+    // If no valid token exists, logout is already complete (idempotent)
+    if (!authToken) {
+      return okAsync(undefined);
+    }
+
     return handleSuccessResponse(
       apiClient.post<Record<string, unknown>>('/auth/logout'),
       emptyObjectSchema

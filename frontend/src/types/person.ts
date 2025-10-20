@@ -1,9 +1,4 @@
-/**
- * Backend API Person DTO Types
- *
- * These types represent the data structures returned from the backend API.
- * They may differ from the frontend Contact types and require transformation.
- */
+import { logger } from '../utils/logger';
 
 export const Gender = {
   male: 'male',
@@ -49,6 +44,14 @@ export interface CreatePersonDTO {
   phone?: string;
   gender?: Gender;
   age?: number;
+  /**
+   * Address handling note: This field accepts a string representation for API compatibility.
+   * Backend may store addresses as a single string or convert structured address objects.
+   * The PersonDTO normalizes this to a structured PersonAddressDTO for frontend use.
+   * If your backend API expects a structured address object instead, update this to:
+   * address?: PersonAddressDTO;
+   * and adjust transformations accordingly.
+   */
   address?: string;
   tenant_id: string;
 }
@@ -60,6 +63,10 @@ export interface UpdatePersonDTO {
   phone?: string;
   gender?: Gender;
   age?: number;
+  /**
+   * Address handling note: This field accepts a string representation for API compatibility.
+   * See CreatePersonDTO.address for details about API contract verification.
+   */
   address?: string;
 }
 
@@ -115,14 +122,22 @@ const asDate = (value: unknown): Date | undefined => {
   return undefined;
 };
 
-const normalizeGender = (value: unknown): Gender | null | undefined => {
+interface GenderNormalizationContext {
+  id?: string | number;
+  source?: string;
+  rawField?: unknown;
+}
+
+const normalizeGender = (
+  value: unknown,
+  options?: { strict?: boolean; context?: GenderNormalizationContext }
+): Gender | null | undefined => {
   if (value === null) {
     return null;
   }
 
-  if (typeof value === 'boolean') {
-    return value ? Gender.male : Gender.female;
-  }
+  // Note: boolean values are not normalized - they're invalid input types.
+  // If your backend sends boolean gender values, validate them server-side.
 
   if (typeof value === 'string') {
     const normalized = value.trim().toLowerCase();
@@ -142,6 +157,27 @@ const normalizeGender = (value: unknown): Gender | null | undefined => {
       return Gender.other;
     }
 
+    // Log unrecognized gender values for visibility
+    const contextInfo = options?.context ?? {};
+    logger.warn('Unrecognized gender value encountered', {
+      rawValue: value,
+      normalizedValue: normalized,
+      recordId: contextInfo.id,
+      source: contextInfo.source ?? 'unknown',
+      rawField: contextInfo.rawField,
+    });
+
+    if (options?.strict) {
+      const contextStr = contextInfo.id
+        ? `${contextInfo.source ?? 'unknown'} (id: ${String(contextInfo.id)})`
+        : (contextInfo.source ?? 'unknown');
+      throw new Error(`Invalid gender value: "${value}" in context: ${contextStr}`);
+    }
+
+    // Intentional fallback: Unrecognized gender strings default to 'other'
+    // rather than being rejected. This allows frontend to gracefully handle
+    // new gender values introduced by the backend without breaking.
+    // If stricter validation is needed, use a schema validator at the service boundary.
     return Gender.other;
   }
 
@@ -269,7 +305,14 @@ export const normalizePersonDTO = (raw: unknown): PersonDTO => {
     normalized.phone = phone;
   }
 
-  const genderValue = normalizeGender(pick(record, ['gender', 'gender_value', 'genderValue']));
+  const rawGenderField = pick(record, ['gender', 'gender_value', 'genderValue']);
+  const genderValue = normalizeGender(rawGenderField, {
+    context: {
+      id: record.id as string | number | undefined,
+      source: 'person',
+      rawField: rawGenderField,
+    },
+  });
   if (genderValue !== undefined) {
     normalized.gender = genderValue;
   }

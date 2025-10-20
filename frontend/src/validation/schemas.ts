@@ -3,7 +3,7 @@ import { asContactId, asTenantId, asUserId } from '../types/ids';
 
 const nonEmptyString = z.string().min(1, 'Value is required');
 
-const parseDate = (value: string | Date): Date => {
+const _parseDate = (value: string | Date): Date => {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) {
     throw new Error('Invalid date value');
@@ -25,7 +25,7 @@ const dateSchema = z
     }
     return value;
   })
-  .refine((date) => !Number.isNaN(date.getTime()), 'Invalid date format');
+  .refine(date => !Number.isNaN(date.getTime()), 'Invalid date format');
 
 const optionalDateSchema = z
   .union([nonEmptyString, z.date()])
@@ -41,10 +41,7 @@ const optionalDateSchema = z
     }
     return value;
   })
-  .refine(
-    (date) => date === undefined || !Number.isNaN(date.getTime()),
-    'Invalid date format'
-  );
+  .refine(date => date === undefined || !Number.isNaN(date.getTime()), 'Invalid date format');
 
 const tenantBrandingSchema = z.object({
   primaryColor: z.string().min(1),
@@ -103,7 +100,7 @@ export const userSchema = z.object({
     .string()
     .min(1)
     .transform((value: string) => asUserId(value)),
-  email: z.string().email(),
+  email: z.email(),
   username: z.string().min(1),
   firstName: z.string().optional(),
   lastName: z.string().optional(),
@@ -133,7 +130,7 @@ const emergencyContactSchema = z.object({
   name: z.string().min(1),
   relationship: z.string().min(1),
   phone: z.string().min(1),
-  email: z.string().email().optional(),
+  email: z.email().optional(),
 });
 
 export const contactSchema = z
@@ -152,7 +149,7 @@ export const contactSchema = z
     preferredName: z.string().optional(),
     title: z.string().optional(),
     suffix: z.string().optional(),
-    email: z.string().email().optional(),
+    email: z.email().optional(),
     phone: z.string().optional(),
     mobile: z.string().optional(),
     fax: z.string().optional(),
@@ -163,7 +160,7 @@ export const contactSchema = z
     jobTitle: z.string().optional(),
     department: z.string().optional(),
     dateOfBirth: optionalDateSchema,
-    gender: z.enum(['male', 'female']).optional(),
+    gender: z.enum(['male', 'female', 'other']).optional(),
     age: z.number().optional(),
     allergies: z.array(z.string()).optional(),
     medications: z.array(z.string()).optional(),
@@ -237,18 +234,153 @@ export const loginRequestSchema = z.object({
 
 export const createTenantSchema = z.object({
   name: z.string().min(1),
-  db_url: z.string().url(),
+  db_url: z.url(),
 });
 
 export const updateTenantSchema = createTenantSchema.partial();
 
 export const contactMutationSchema = z.object({
   name: z.string().min(1),
-  email: z.string().email(),
+  email: z.email(),
   gender: z.boolean(),
   age: z.number().int().nonnegative(),
   address: z.string().min(1),
   phone: z.string().min(1),
+});
+
+// Form validation schemas using Zod for React Hook Form
+export const loginSchema = z.object({
+  usernameOrEmail: z
+    .string()
+    .min(3, 'Username or email is required (minimum 3 characters)')
+    .max(254, 'Must be less than 254 characters'),
+  password: z
+    .string()
+    .min(8, 'Password must be at least 8 characters long')
+    .max(128, 'Password must be less than 128 characters'),
+  tenantId: z.string().min(1, 'Tenant ID is required'),
+  rememberMe: z.boolean().optional(),
+});
+
+export const contactFormSchema = z
+  .object({
+    firstName: z
+      .string()
+      .min(1, 'First name is required')
+      .max(50, 'First name must be less than 50 characters'),
+    lastName: z
+      .string()
+      .min(1, 'Last name is required')
+      .max(50, 'Last name must be less than 50 characters'),
+    email: z.email('Please enter a valid email address').optional().or(z.literal('')),
+    phone: z
+      .string()
+      .regex(/^\+?[1-9]\d{6,14}$/, 'Please enter a valid phone number')
+      .optional()
+      .or(z.literal('')),
+    gender: z.enum(['male', 'female', 'other']).catch('other'),
+    age: z.number().min(1, 'Age must be at least 1').max(120, 'Age must be at most 120'),
+    street1: z.string().min(1, 'Street address is required'),
+    street2: z.string().optional().or(z.literal('')),
+    city: z.string().min(1, 'City is required'),
+    state: z.string().min(1, 'State is required'),
+    zipCode: z.string().min(1, 'ZIP code is required'),
+    country: z.string().min(1, 'Country is required'),
+  })
+  .superRefine((data, ctx) => {
+    // Cross-field validation: email or phone must be provided
+    if (!data.email && !data.phone) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Either email or phone number is required',
+        path: ['email'],
+      });
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Either email or phone number is required',
+        path: ['phone'],
+      });
+    }
+  });
+
+export const tenantFormSchema = z
+  .object({
+    name: z
+      .string()
+      .min(1, 'Tenant name is required')
+      .min(3, 'Tenant name must be at least 3 characters')
+      .max(100, 'Tenant name must be less than 100 characters')
+      .regex(/^[a-zA-Z0-9\s\-_'.,()]+$/, 'Tenant name contains invalid characters'),
+    db_url: z
+      .string()
+      .min(1, 'Database URL is required')
+      .refine(value => {
+        // Try parsing as a PostgreSQL URL first
+        try {
+          const url = new URL(value);
+          if (url.protocol === 'postgres:' || url.protocol === 'postgresql:') {
+            return true;
+          }
+        } catch {
+          // Not a valid URL, try parsing as libpq connection string
+        }
+
+        // Parse as libpq-style connection string (key=value pairs separated by whitespace)
+        const pairs = value.trim().split(/\s+/);
+        if (pairs.length === 0) {
+          return false;
+        }
+
+        // Validate each key=value pair
+        const keyValueRegex = /^[A-Za-z_][A-Za-z0-9_]*=\S+$/;
+        return pairs.every(pair => keyValueRegex.test(pair));
+      }, 'Please enter a valid PostgreSQL URL (postgres://...) or connection string (key=value pairs)'),
+  })
+  .refine(
+    data => {
+      // Ensure tenant name doesn't contain potentially harmful database connection strings
+      const name = data.name.toLowerCase();
+      // Check for URI schemes
+      const forbiddenSchemes = ['postgres://', 'postgresql://', 'pgsql://'];
+      if (forbiddenSchemes.some(scheme => name.includes(scheme))) {
+        return false;
+      }
+      // Check for common database connection parameters
+      const forbiddenParams = [
+        'host=',
+        'port=',
+        'dbname=',
+        'user=',
+        'password=',
+        'sslmode=',
+        'ssl=',
+        'service=',
+        'socket=',
+      ];
+      if (forbiddenParams.some(param => name.includes(param))) {
+        return false;
+      }
+      // Check for generic key=value patterns (word boundary to avoid false positives)
+      const keyValueRegex = /\b\w+=\S+/;
+      if (keyValueRegex.test(name)) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message: 'Tenant name cannot contain database connection strings',
+      path: ['name'],
+    }
+  );
+
+export const searchFormSchema = z.object({
+  // Note: Search terms allow most printable characters for flexibility.
+  // Security should be handled via server-side parameterized queries
+  // or proper input escaping to prevent injection attacks.
+  searchTerm: z
+    .string()
+    .min(1, 'Search term is required')
+    .max(255, 'Search term must be less than 255 characters'),
 });
 
 export type UserSchema = z.infer<typeof userSchema>;
@@ -260,3 +392,9 @@ export type ContactListResponseSchema = z.infer<typeof contactListResponseSchema
 export type PaginatedTenantResponseSchema = z.infer<typeof paginatedTenantResponseSchema>;
 export type ApiErrorSchema = z.infer<typeof apiErrorSchema>;
 export type LoginRequestSchema = z.infer<typeof loginRequestSchema>;
+
+// Form schema TypeScript inference types
+export type LoginSchema = z.infer<typeof loginSchema>;
+export type ContactFormSchema = z.infer<typeof contactFormSchema>;
+export type TenantFormSchema = z.infer<typeof tenantFormSchema>;
+export type SearchFormSchema = z.infer<typeof searchFormSchema>;

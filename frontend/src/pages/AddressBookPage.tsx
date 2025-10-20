@@ -9,6 +9,7 @@ import { getEnv } from '@/config/env';
 import {
   Button,
   Input,
+  InputNumber,
   Card,
   Table,
   Modal,
@@ -30,7 +31,7 @@ interface AddressFormValues {
   lastName: string;
   email?: string;
   phone?: string;
-  gender: Gender;
+  gender?: Gender;
   age: number;
   street1: string;
   street2?: string;
@@ -46,7 +47,8 @@ function getDefaultCountry(): string {
   if (cachedDefaultCountry === null) {
     try {
       const value = getEnv().defaultCountry;
-      cachedDefaultCountry = typeof value === 'string' && value.trim().length > 0 ? value.trim() : '';
+      cachedDefaultCountry =
+        typeof value === 'string' && value.trim().length > 0 ? value.trim() : '';
     } catch {
       // Fallback if environment not available during tests
       cachedDefaultCountry = '';
@@ -59,13 +61,12 @@ const DEFAULT_COUNTRY = getDefaultCountry();
 
 /**
  * Resolve the contact identifier from a backend person payload.
+ * Expects a normalized PersonDTO - do not call normalizePersonDTO again.
  */
 export const resolveContactId = (
-  person: PersonDTO,
+  normalized: PersonDTO,
   fallback: () => Contact['id']
 ): Contact['id'] => {
-  const normalized = normalizePersonDTO(person);
-
   if (typeof normalized.id === 'string' && normalized.id.trim()) {
     return asContactId(normalized.id.trim());
   }
@@ -79,12 +80,11 @@ export const resolveContactId = (
 
 /**
  * Parse the most complete name representation available from the person payload.
+ * Expects a normalized PersonDTO - do not call normalizePersonDTO again.
  */
 export const parseContactName = (
-  person: PersonDTO
+  normalized: PersonDTO
 ): { rawName: string; firstName: string; lastName: string } => {
-  const normalized = normalizePersonDTO(person);
-
   const computedFullName =
     normalized.fullName ??
     [normalized.firstName, normalized.lastName]
@@ -102,17 +102,11 @@ export const parseContactName = (
 
 /**
  * Resolve gender from multiple potential backend encodings.
+ * Expects a normalized PersonDTO - do not call normalizePersonDTO again.
  */
-export const resolveContactGender = (person: PersonDTO): Gender | undefined => {
-  const normalized = normalizePersonDTO(person);
-
+export const resolveContactGender = (normalized: PersonDTO): Gender | undefined => {
   if (normalized.gender === null || normalized.gender === undefined) {
     return undefined;
-  }
-
-  // Handle boolean values (true -> male, false -> female)
-  if (typeof normalized.gender === 'boolean') {
-    return normalized.gender ? Gender.male : Gender.female;
   }
 
   if (
@@ -128,12 +122,12 @@ export const resolveContactGender = (person: PersonDTO): Gender | undefined => {
 
 /**
  * Normalise address information into the Contact schema.
+ * Expects a normalized PersonDTO - do not call normalizePersonDTO again.
  */
 export const normalizeContactAddress = (
-  person: PersonDTO,
+  normalized: PersonDTO,
   defaultCountry: string
 ): Contact['address'] | undefined => {
-  const normalized = normalizePersonDTO(person);
   const address = normalized.address;
 
   if (!address) {
@@ -351,7 +345,7 @@ export const AddressBookPage: React.FC = () => {
       lastName: contact.lastName,
       email: contact.email,
       phone: contact.phone,
-      gender: contact.gender ?? Gender.male,
+      gender: contact.gender,
       age: contact.age || 25, // Default if not available
       street1: contact.address?.street1,
       street2: contact.address?.street2,
@@ -571,7 +565,6 @@ export const AddressBookPage: React.FC = () => {
             lastName: '',
             email: '',
             phone: '',
-            gender: Gender.male,
             age: 25,
             street1: '',
             street2: '',
@@ -611,9 +604,10 @@ export const AddressBookPage: React.FC = () => {
             label="Gender"
             rules={[{ required: true, message: 'Please select gender' }]}
           >
-            <Select style={{ width: '100%' }}>
+            <Select style={{ width: '100%' }} placeholder="Select gender" allowClear>
               <Select.Option value="male">Male</Select.Option>
               <Select.Option value="female">Female</Select.Option>
+              <Select.Option value="other">Other</Select.Option>
             </Select>
           </Form.Item>
 
@@ -625,7 +619,7 @@ export const AddressBookPage: React.FC = () => {
               { type: 'number', min: 1, max: 120, message: 'Age must be between 1 and 120' },
             ]}
           >
-            <Input type="number" min={1} max={120} />
+            <InputNumber min={1} max={120} style={{ width: '100%' }} />
           </Form.Item>
 
           <Divider>Address</Divider>

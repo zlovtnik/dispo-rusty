@@ -16,13 +16,13 @@ const createPerson = (overrides: Record<string, unknown> = {}): PersonDTO => {
     email: 'test@example.com',
     is_active: true,
   };
-  
+
   // Only add default names if not explicitly overriding with fullName
   if (!overrides.full_name && !overrides.fullName) {
     defaults.first_name = 'Test';
     defaults.last_name = 'User';
   }
-  
+
   return normalizePersonDTO({
     ...defaults,
     ...overrides,
@@ -77,15 +77,28 @@ describe('AddressBook helper functions', () => {
       expect(resolveContactGender(createPerson({ gender: Gender.female }))).toBe(Gender.female);
     });
 
-    it('uses boolean gender representations', () => {
+    it('does not normalize boolean gender values (invalid input type)', () => {
+      // Note: normalizeGender intentionally does not support boolean values
+      // per the design decision in src/types/person.ts
       const personTrue = createPerson({ gender: true });
       const personFalse = createPerson({ gender: false });
-      expect(resolveContactGender(personTrue)).toBe(Gender.male);
-      expect(resolveContactGender(personFalse)).toBe(Gender.female);
+      expect(resolveContactGender(personTrue)).toBe(undefined);
+      expect(resolveContactGender(personFalse)).toBe(undefined);
     });
 
-    it('maps other representations to Gender.other when possible', () => {
+    it('resolves non-binary gender to Gender.other', () => {
       const person = createPerson({ gender: 'non-binary' });
+      // normalizeGender maps 'non-binary' to Gender.other
+      expect(resolveContactGender(person)).toBe(Gender.other);
+    });
+
+    it('resolves nonbinary variant to Gender.other', () => {
+      const person = createPerson({ gender: 'nonbinary' });
+      expect(resolveContactGender(person)).toBe(Gender.other);
+    });
+
+    it('resolves nb abbreviation to Gender.other', () => {
+      const person = createPerson({ gender: 'nb' });
       expect(resolveContactGender(person)).toBe(Gender.other);
     });
 

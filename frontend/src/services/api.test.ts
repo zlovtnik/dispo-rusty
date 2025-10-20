@@ -11,9 +11,9 @@
  * Test Coverage Target: 95%+
  */
 
-import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test';
+import { describe, test, expect, beforeEach } from 'bun:test';
 import { server } from '../test-utils/mocks/server';
-import { http, HttpResponse } from 'msw';
+import { http, HttpResponse, delay } from 'msw';
 import {
   authService,
   tenantService,
@@ -125,10 +125,11 @@ describe('authService', () => {
 
     test('should handle network timeout', async () => {
       // Override handler to simulate timeout (delay > client timeout)
+      // Use MSW delay helper for fast, deterministic timeout testing
       server.use(
         http.post(`${API_BASE_URL}/auth/login`, async () => {
-          // Simulate long delay (longer than default timeout)
-          await new Promise(resolve => setTimeout(resolve, 35000));
+          // Delay longer than client timeout (100ms) for deterministic test
+          await delay(200);
           return HttpResponse.json({ success: true });
         })
       );
@@ -151,7 +152,7 @@ describe('authService', () => {
         const error = result.error;
         expect(error.type).toBe('auth');
         // Timeout errors are converted to auth errors but preserve the original code
-        const details = error.details as Record<string, unknown> | undefined;
+        const details = error.details;
         expect(details?.originalType === 'network' || error.code === 'TIMEOUT').toBe(true);
       }
     }, 40000); // Extended timeout for this test
@@ -217,6 +218,9 @@ describe('authService', () => {
     });
 
     test('should handle server error during logout', async () => {
+      // Set up authenticated state with a token
+      localStorage.setItem('auth_token', JSON.stringify({ token: 'mock-token' }));
+
       server.use(
         http.post(`${API_BASE_URL}/auth/logout`, () => {
           return HttpResponse.json({ message: 'Internal server error' }, { status: 500 });
@@ -634,6 +638,122 @@ describe('addressBookService', () => {
   });
 
   describe('create', () => {
+    // ============ Gender Round-Trip Tests (Data-Driven) ============
+    // Data-driven test cases for gender values
+    const genderTestCases = [
+      {
+        label: 'Gender.male',
+        inputGender: Gender.male,
+        name: 'John Male',
+        email: 'john.male@example.com',
+        address: '123 Main St',
+      },
+      {
+        label: 'Gender.female',
+        inputGender: Gender.female,
+        name: 'Jane Female',
+        email: 'jane.female@example.com',
+        address: '456 Oak Ave',
+      },
+      {
+        label: 'Gender.other',
+        inputGender: Gender.other,
+        name: 'Other Gender',
+        email: 'other@example.com',
+        address: '789 Elm St',
+      },
+      {
+        label: 'boolean true (maps to male)',
+        inputGender: true as unknown as Gender,
+        name: 'Boolean Male',
+        email: 'bool.male@example.com',
+        address: '123 Main St',
+      },
+      {
+        label: 'boolean false (maps to female)',
+        inputGender: false as unknown as Gender,
+        name: 'Boolean Female',
+        email: 'bool.female@example.com',
+        address: '456 Oak Ave',
+      },
+    ];
+
+    genderTestCases.forEach(testCase => {
+      test(`should handle ${testCase.label} round-trip through boolean conversion`, async () => {
+        const newContact = {
+          name: testCase.name,
+          email: testCase.email,
+          phone: '+1234567890',
+          address: testCase.address,
+          age: 30,
+          gender: testCase.inputGender,
+        };
+
+        const result = await addressBookService.create(newContact);
+
+        expect(result.isOk()).toBe(true);
+
+        if (result.isOk()) {
+          const response = result.value;
+          expect(response.status).toBe('success');
+
+          // Map expected gender based on input
+          let expectedGender: Gender;
+          if (testCase.inputGender === Gender.male || (testCase.inputGender as unknown) === true) {
+            expectedGender = Gender.male;
+          } else if (
+            testCase.inputGender === Gender.female ||
+            (testCase.inputGender as unknown) === false
+          ) {
+            expectedGender = Gender.female;
+          } else {
+            expectedGender = testCase.inputGender as Gender;
+          }
+
+          if (response.status === 'success') {
+            // Verify gender is properly converted and persisted
+            expect(response.data.gender).toBeDefined();
+            expect(response.data.gender).toBe(expectedGender);
+          }
+        }
+      });
+    });
+
+    test('should reject invalid gender string values with helpful error message', async () => {
+      server.use(
+        http.post(`${API_BASE_URL}/address-book`, () => {
+          return HttpResponse.json(
+            {
+              message: 'Invalid gender value received',
+              data: null,
+            },
+            { status: 400 }
+          );
+        })
+      );
+
+      const invalidContact = {
+        name: 'Invalid Gender',
+        email: 'invalid.gender@example.com',
+        phone: '+1234567890',
+        address: '123 Main St',
+        age: 25,
+        gender: 'unknown-gender' as unknown as Gender,
+      };
+
+      const result = await addressBookService.create(invalidContact);
+
+      // Assert that the result is an error
+      expect(result.isErr()).toBe(true);
+
+      // Should have an appropriate error message
+      if (result.isErr()) {
+        const error = result.error;
+        expect(error.message).toContain('gender');
+      }
+    });
+
+    // ============ Original Tests ============
     test('should create new contact with all fields', async () => {
       const newContact = {
         name: 'John Doe',

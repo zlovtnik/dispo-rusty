@@ -6,6 +6,71 @@ import { ok, err } from 'neverthrow';
 import type { AppError, NetworkError } from '../types/errors';
 import { createBusinessLogicError, createNetworkError } from '../types/errors';
 import type { z } from 'zod';
+import { SENSITIVE_QUERY_PARAMS } from '../config/sensitiveParams';
+
+/**
+ * Sanitizes a URL by removing or redacting sensitive query parameters
+ * to prevent exposing tokens, sessions, auth keys, etc. in error logs
+ *
+ * @param urlStr - The URL string to sanitize
+ * @returns URL with sensitive query parameters removed/redacted, or just origin+path
+ */
+export const sanitizeUrlForLogging = (urlStr: string): string => {
+  try {
+    // Determine a safe base for parsing relative URLs so we can use the URL API
+    let safeBase = 'http://localhost';
+    if (typeof window !== 'undefined' && typeof window.location !== 'undefined') {
+      const origin = window.location.origin;
+      // Only accept well-formed http(s) origins. Some test environments set
+      // origin to non-URL values like the string 'null' which we must ignore.
+      if (typeof origin === 'string' && /^https?:\/\//i.test(origin)) {
+        safeBase = origin;
+      }
+    }
+
+    // If it's a bare protocol+host URL or an absolute URL, use as-is.
+    // Otherwise treat as relative and parse with a safe base so we can strip params.
+    // Try parsing as an absolute URL first; if it fails, parse as relative using safeBase.
+    let parsed: URL;
+    try {
+      parsed = new URL(urlStr);
+    } catch (absErr) {
+      // If the input looks like an absolute URL (has a scheme), don't try to
+      // treat it as relative — it's malformed and should be considered invalid.
+      const looksLikeAbsolute = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(urlStr);
+      if (looksLikeAbsolute) {
+        throw absErr;
+      }
+
+      // Otherwise, try building an absolute URL by concatenating the safe
+      // base and the relative path. Some test environments may not support
+      // the URL(url, base) overload reliably.
+      try {
+        const base = safeBase.replace(/\/$/, '');
+        const candidate = urlStr.startsWith('/') ? `${base}${urlStr}` : `${base}/${urlStr}`;
+        parsed = new URL(candidate);
+      } catch (relErr) {
+        // Rethrow original error to be caught by outer try/catch and return redacted placeholder
+        throw absErr;
+      }
+    }
+
+    const sensitiveKeys = SENSITIVE_QUERY_PARAMS;
+
+    // Remove sensitive parameters
+    for (const key of sensitiveKeys) {
+      if (parsed.searchParams.has(key)) {
+        parsed.searchParams.delete(key);
+      }
+    }
+
+    // Return only pathname + remaining safe query params to avoid leaking origin/protocol
+    return parsed.pathname + (parsed.search ? parsed.search : '');
+  } catch {
+    // If URL parsing fails, return a redacted placeholder
+    return 'redacted-url';
+  }
+};
 
 /**
  * Module-level cache for useCachedFetch to persist across component lifecycles
@@ -26,24 +91,37 @@ const CACHE_VERSION = 1;
 
 const globalFetchCache = new Map<string, CacheEntry<unknown>>();
 
-// Module-scoped flag to ensure cache migration runs only once per session
-let cacheMigrated = false;
-
-// Migrate old cache entries on first module import (runs once per session)
-// This migration can be removed when all clients have upgraded past CACHE_VERSION
-if (!cacheMigrated) {
-  for (const [key, entry] of globalFetchCache) {
-    if (entry.version === undefined || entry.version !== CACHE_VERSION) {
-      globalFetchCache.delete(key);
-    }
-  }
-  cacheMigrated = true;
-}
+/**
+ * Note: In-memory cache has no persistence layer (localStorage/IndexedDB).
+ * Cache is cleared on module reload. Versioning exists for future migration
+ * if persisted storage is added later.
+ */
 
 /**
  * Configuration options for fetch operations
+ *
+ * IMPORTANT: For type safety, you MUST provide either `transformResponse` or `validateResponse`.
+ * Without either, the response data will be unsafely cast to type T, which can lead to runtime errors.
+ *
+ * @example
+ * // Good: Using transformResponse
+ * useFetch<User>('/api/user', {
+ *   transformResponse: (data) => data as User
+ * });
+ *
+ * @example
+ * // Good: Using validateResponse with Zod
+ * useFetch<User>('/api/user', {
+ *   validateResponse: UserSchema
+ * });
+ *
+ * @example
+ * // Bad: Neither provided - will log warning in dev mode
+ * useFetch<User>('/api/user', {
+ *   // Missing transformResponse or validateResponse!
+ * });
  */
-export interface FetchOptions extends RequestInit {
+export interface FetchOptions<T = unknown> extends RequestInit {
   /** Timeout in milliseconds */
   timeout?: number;
   /** Number of retries on failure */
@@ -55,9 +133,9 @@ export interface FetchOptions extends RequestInit {
   /** Base URL to prepend to the endpoint */
   baseURL?: string;
   /** Transform response data before returning */
-  transformResponse?: <T>(data: unknown) => T;
-  /** Validate transformed response data (Zod schema) */
-  validateResponse?: z.ZodSchema;
+  transformResponse?: (data: unknown) => T;
+  /** Validate transformed response data (Zod schema or transform) */
+  validateResponse?: z.ZodType<any>;
   /** Transform error before returning */
   transformError?: (error: AppError) => AppError;
   /** When true, the request will only run when refetch is called */
@@ -88,27 +166,38 @@ export interface FetchState<T> {
  * Provides automatic error handling, retry logic, and payload transformation using
  * railway-oriented programming patterns.
  *
+ * **IMPORTANT**: For type safety, always provide either `transformResponse` or `validateResponse`
+ * in the options. Without either, response data will be unsafely cast to type T, triggering
+ * a warning in development mode and potentially throwing in strict mode.
+ *
  * @template T The expected response data type
  * @param url URL to fetch (pass `null` to pause requests)
  * @param options Optional configuration including retries, timeout, and transformers
  * @returns Fetch state with data, loading, error flags, and a refetch trigger
  * @example
  * ```typescript
- * const { data, loading, error, refetch } = useFetch<ContactDTO[]>(
+ * // Recommended: Use validateResponse with Zod schema for full type safety
+ * const { data, loading, error } = useFetch<ContactDTO[]>(
  *   '/contacts',
- *   { baseURL: apiBase }
+ *   {
+ *     baseURL: apiBase,
+ *     validateResponse: ContactDTOArraySchema
+ *   }
  * );
  *
- * useEffect(() => {
- *   if (!loading && error) {
- *     notification.error({ message: error.message });
+ * // Alternative: Use transformResponse for custom transformation
+ * const { data } = useFetch<ContactDTO[]>(
+ *   '/contacts',
+ *   {
+ *     baseURL: apiBase,
+ *     transformResponse: (data) => data as ContactDTO[]
  *   }
- * }, [loading, error]);
+ * );
  * ```
  */
 export function useFetch<T = unknown>(
   url: string | null,
-  options: FetchOptions = {}
+  options: FetchOptions<T> = {}
 ): FetchState<T> {
   // Destructure options for stable dependencies
   const {
@@ -181,18 +270,72 @@ export function useFetch<T = unknown>(
             data = await response.text();
           }
 
-          // Transform response if needed
-          const transformedData: T = transformResponse ? transformResponse<T>(data) : (data as T);
+          // Runtime type safety check: Enforce that either transformResponse or validateResponse is provided
+          // This prevents unsafe blind casting of response data to type T
+          if (!transformResponse && !validateResponse) {
+            const warningMessage =
+              `[useFetch] Type safety warning: No transformResponse or validateResponse provided for ${sanitizeUrlForLogging(fullUrl)}. ` +
+              `Response data will be unsafely cast to type T. This can lead to runtime errors. ` +
+              `Please provide either transformResponse or validateResponse to ensure type safety.`;
+
+            // In development mode, log a warning to alert developers
+            if (import.meta.env.DEV) {
+              console.warn(warningMessage);
+            }
+
+            // Optionally throw in strict mode (controlled by environment variable)
+            if (import.meta.env.VITE_STRICT_TYPE_SAFETY === 'true') {
+              return err(
+                createBusinessLogicError(
+                  'Type safety violation: transformResponse or validateResponse required',
+                  { url: sanitizeUrlForLogging(fullUrl) }
+                )
+              );
+            }
+          }
+
+          // Transform response if transformResponse is provided
+          let transformedData: T;
+          if (transformResponse) {
+            transformedData = transformResponse(data);
+          } else {
+            // If no transformResponse, we'll validate first (if validateResponse exists)
+            // or cast as a last resort (with warning already logged above)
+            transformedData = data as T;
+          }
 
           // Validate transformed data if schema provided
+          // This runs AFTER transformation to validate the final shape
           if (validateResponse) {
             const validationResult = validateResponse.safeParse(transformedData);
             if (!validationResult.success) {
-              return err(createBusinessLogicError(
-                `Response validation failed: ${validationResult.error.message}`,
-                { validationErrors: validationResult.error.issues }
-              ));
+              // Extract validation paths and schema information for better diagnostics
+              const validationPaths = validationResult.error.issues.map(issue => ({
+                path: issue.path.join('.'),
+                code: issue.code,
+                message: issue.message,
+              }));
+
+              // Determine response shape for diagnostics
+              const responseShape =
+                typeof transformedData === 'object' && transformedData !== null
+                  ? Object.keys(transformedData as Record<string, unknown>)
+                  : typeof transformedData;
+
+              return err(
+                createBusinessLogicError(
+                  `Response validation failed: ${validationResult.error.message}`,
+                  {
+                    validationPaths,
+                    responseShape,
+                    // Use sanitized URL to prevent leaking sensitive query parameters
+                    url: sanitizeUrlForLogging(fullUrl),
+                  }
+                )
+              );
             }
+            // Use validated data from Zod (which ensures type safety)
+            transformedData = validationResult.data as T;
           }
 
           return ok(transformedData);
@@ -264,6 +407,21 @@ export function useFetch<T = unknown>(
 }
 
 /**
+ * Helper type to extract optimistic-specific options from combined options
+ * This allows better separation of concerns and avoids type casting
+ */
+interface OptimisticProps<T> {
+  initialData?: T;
+  optimisticUpdate?: (currentData: T | null) => Result<T, AppError>;
+  rollbackUpdate?: (optimisticData: T, error: AppError) => Result<T, AppError>;
+}
+
+/**
+ * Combined options for useOptimisticFetch combining base fetch and optimistic props
+ */
+type OptimisticFetchOptions<T> = FetchOptions<T> & OptimisticProps<T>;
+
+/**
  * Adds optimistic update helpers on top of `useFetch` for latency-sensitive flows.
  *
  * @template T Response data type
@@ -287,19 +445,14 @@ export function useFetch<T = unknown>(
  * };
  * ```
  */
-export function useOptimisticFetch<T>(
-  url: string | null,
-  options: FetchOptions & {
-    /** Initial data to show while loading */
-    initialData?: T;
-    /** Function to update data optimistically before the request */
-    optimisticUpdate?: (currentData: T | null) => Result<T, AppError>;
-    /** Function to rollback optimistic update on error */
-    rollbackUpdate?: (optimisticData: T, error: AppError) => Result<T, AppError>;
-  } = {}
-) {
-  const fetchState = useFetch<T>(url, options);
-  const { initialData, optimisticUpdate, rollbackUpdate } = options;
+export function useOptimisticFetch<T>(url: string | null, options: OptimisticFetchOptions<T> = {}) {
+  // Extract optimistic-specific properties from the combined options
+  const { initialData, optimisticUpdate, rollbackUpdate, ...fetchOptions } = options;
+
+  // Create properly-typed base fetch options without explicit cast
+  // The spread operator here ensures TypeScript infers the correct type
+  const baseFetchOptions: FetchOptions<T> = fetchOptions as FetchOptions<T>;
+  const fetchState = useFetch<T>(url, baseFetchOptions);
 
   const [optimisticResult, setOptimisticResult] = React.useState<Result<T, AppError> | null>(
     initialData !== undefined ? ok(initialData) : null
@@ -460,8 +613,8 @@ export function useOptimisticFetch<T>(
  */
 export function useCachedFetch<T>(
   url: string | null,
-  options: FetchOptions & {
-    /** Cache key */
+  options: FetchOptions<T> & {
+    /** Cache key - required when url is null to avoid collisions across consumers */
     cacheKey?: string;
     /** Cache duration in milliseconds */
     cacheTime?: number;
@@ -472,12 +625,20 @@ export function useCachedFetch<T>(
   } = {}
 ) {
   const {
-    cacheKey = url || '',
+    cacheKey: providedCacheKey,
     cacheTime = 5 * 60 * 1000, // 5 minutes
     refetchOnWindowFocus = false,
     staleTime = 0,
     ...fetchOptions
   } = options;
+
+  // Require explicit cacheKey when url is null to prevent accidental collisions
+  const cacheKey = providedCacheKey ?? url;
+  if (!cacheKey) {
+    throw new Error(
+      'useCachedFetch requires either a url or an explicit cacheKey to prevent cache collisions'
+    );
+  }
 
   const [cacheVersion, setCacheVersion] = React.useState(0);
 
@@ -488,7 +649,7 @@ export function useCachedFetch<T>(
   const shouldUseCache = isCacheValid && !isCacheStale;
 
   const fetchState = useFetch<T>(url, {
-    ...fetchOptions,
+    ...(fetchOptions as FetchOptions<T>),
     manual: shouldUseCache && !isCacheStale,
   });
 

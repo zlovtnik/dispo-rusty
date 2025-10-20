@@ -12,7 +12,7 @@ import type { ParseError } from '../types/errors';
 import { ParseErrors } from '../types/errors';
 import type { User, Tenant } from '../types/auth';
 import { asTenantId, asUserId } from '../types/ids';
-import type { TenantId, UserId } from '../types/ids';
+import type { _TenantId, _UserId } from '../types/ids';
 
 /**
  * JWT Payload interface

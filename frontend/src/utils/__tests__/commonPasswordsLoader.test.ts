@@ -24,8 +24,8 @@ beforeEach(() => {
           description: 'Test passwords',
           lastUpdated: '2025-01-01',
           source: 'test',
-          passwords: ['test1', 'test2', 'test3']
-        })
+          passwords: ['test1', 'test2', 'test3'],
+        }),
       };
     }
     // For any other URLs, use the original fetch
@@ -77,11 +77,11 @@ describe('CommonPasswordsLoader', () => {
   });
 
   describe('getCommonPasswords', () => {
-    it('should load passwords from valid JSON response', async () => {
-      // Use a custom config that points to a non-existent URL to force fallback
+    it('should fallback to built-in list when file is missing or invalid', async () => {
+      // Use a custom config that points to a non-existent file to force fallback
       const loader = CommonPasswordsLoader.getInstance({
         filePath: '/non-existent-test-file.json',
-        enabled: true
+        enabled: true,
       });
       const passwords = await loader.getCommonPasswords();
 
@@ -92,7 +92,7 @@ describe('CommonPasswordsLoader', () => {
     it('should return cached passwords on subsequent calls', async () => {
       const loader = CommonPasswordsLoader.getInstance({
         filePath: '/non-existent-test-file.json',
-        enabled: true
+        enabled: true,
       });
 
       // First call
@@ -112,7 +112,9 @@ describe('CommonPasswordsLoader', () => {
     });
 
     it('should fallback to built-in list when fetch fails', async () => {
-      mockFetch = async () => { throw new Error('Network error'); };
+      mockFetch = async () => {
+        throw new Error('Network error');
+      };
       global.fetch = mockFetch;
 
       const loader = CommonPasswordsLoader.getInstance();
@@ -126,7 +128,7 @@ describe('CommonPasswordsLoader', () => {
         ok: true,
         status: 200,
         statusText: 'OK',
-        json: async () => ({ invalid: 'response' })
+        json: async () => ({ invalid: 'response' }),
       });
       global.fetch = mockFetch;
 
@@ -136,21 +138,46 @@ describe('CommonPasswordsLoader', () => {
       expect(passwords).toEqual(COMMON_PASSWORDS_FALLBACK);
     });
 
-    it('should enforce maxCacheEntries limit when loading', () => {
-    // Create a test by directly checking the truncation logic
-    // The implementation already has the limit, this test verifies configuration works
-    const loader = CommonPasswordsLoader.getInstance({
-      filePath: '/config/common-passwords.json',
-      enabled: true,
-      maxCacheEntries: 50
+    it('should enforce maxCacheEntries limit when loading', async () => {
+      // Mock fetch to return 100 passwords
+      mockFetch = async (url: string) => {
+        if (url.includes('/config/common-passwords.json')) {
+          // Generate 100 test passwords
+          const passwords = Array.from({ length: 100 }, (_, i) => `password${String(i + 1)}`);
+          return {
+            ok: true,
+            status: 200,
+            statusText: 'OK',
+            json: async () => ({
+              version: '1.0.0',
+              description: 'Test passwords with 100 entries',
+              lastUpdated: '2025-01-01',
+              source: 'test',
+              passwords,
+            }),
+          };
+        }
+        return originalFetch(url);
+      };
+      global.fetch = mockFetch;
+
+      // Instantiate loader with maxCacheEntries: 50
+      const loader = CommonPasswordsLoader.getInstance({
+        filePath: '/config/common-passwords.json',
+        enabled: true,
+        maxCacheEntries: 50,
+      });
+
+      // Load passwords
+      const passwords = await loader.getCommonPasswords();
+
+      // Assert that only 50 passwords are returned (truncated to maxCacheEntries)
+      expect(passwords).toHaveLength(50);
+
+      // Assert that the returned passwords are the first 50 entries in order
+      const expectedPasswords = Array.from({ length: 50 }, (_, i) => `password${String(i + 1)}`);
+      expect(passwords).toEqual(expectedPasswords);
     });
-    
-    // Verify the configuration is accepted without errors
-    expect(() => {
-      // Getting cache status should work with configured limits
-      loader.getCacheStatus();
-    }).not.toThrow();
-  });
   });
 
   describe('getCacheStatus', () => {

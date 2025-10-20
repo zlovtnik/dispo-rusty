@@ -50,6 +50,9 @@ const mapTokenErrorToAuthFlowError = (error: TokenError): AuthFlowError => {
  * The hook keeps the original context state intact while providing railway-oriented helpers
  * (e.g., `requireRole`, `requireTenantAccess`) that can be composed without throwing.
  *
+ * Note: useAuthContext now returns a safe fallback when called outside AuthProvider,
+ * so this hook will always return a valid object (with unauthenticated state as fallback).
+ *
  * @returns Auth state plus Result-based helpers for validating auth, roles, and tenant access
  * @example
  * ```typescript

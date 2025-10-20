@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import type { LoginCredentials } from '@/types/auth';
 import { asTenantId } from '@/types/ids';
-import { Card, Form, Input, Button, Checkbox, Typography, Alert, Flex } from 'antd';
+import { Card, Form, Button, Checkbox, Typography, Alert, Flex, Input } from 'antd';
 
 interface LoginFormValues {
   usernameOrEmail: string;
@@ -17,14 +17,24 @@ export const LoginPage: React.FC = () => {
   const location = useLocation();
   const [form] = Form.useForm();
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  // Single ref as submission guard to prevent rapid re-entry
+  const submittingRef = useRef(false);
 
   // Get the intended destination
   const from = location.state?.from?.pathname || '/dashboard';
 
   const onSubmit = async (values: LoginFormValues) => {
+    // Early return if already submitting (use ref for synchronous check)
+    if (submittingRef.current) {
+      return;
+    }
+
+    // Set ref immediately to prevent rapid re-entry, then update UI state
+    submittingRef.current = true;
     setIsSubmitting(true);
+
     try {
       setSubmitError(null);
       const credentials: LoginCredentials = {
@@ -39,6 +49,8 @@ export const LoginPage: React.FC = () => {
       console.error('Login error occurred', error);
       setSubmitError(error instanceof Error ? error.message : 'Login failed');
     } finally {
+      // Clear submission guard and UI state
+      submittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -107,7 +119,13 @@ export const LoginPage: React.FC = () => {
           Access your multi-tenant application
         </Typography.Text>
 
-        <Form form={form} onFinish={onSubmit} size="large" layout="vertical">
+        <Form
+          form={form}
+          onFinish={onSubmit}
+          size="large"
+          layout="vertical"
+          data-testid="login-form"
+        >
           <Form.Item
             label={
               <span style={{ color: 'var(--primary-700)', fontWeight: 600 }}>
@@ -117,7 +135,13 @@ export const LoginPage: React.FC = () => {
             name="usernameOrEmail"
             rules={[{ required: true, message: 'Username or email is required' }]}
           >
-            <Input placeholder="Enter your username or email" className="login-input" />
+            <Input
+              placeholder="Enter your username or email"
+              className="login-input"
+              aria-label="Username or Email"
+              data-testid="username-input"
+              maxLength={254}
+            />
           </Form.Item>
 
           <Form.Item
@@ -125,7 +149,13 @@ export const LoginPage: React.FC = () => {
             name="password"
             rules={[{ required: true, message: 'Password is required' }]}
           >
-            <Input.Password placeholder="Enter your password" className="login-input" />
+            <Input.Password
+              placeholder="Enter your password"
+              className="login-input"
+              aria-label="Password"
+              data-testid="password-input"
+              maxLength={128}
+            />
           </Form.Item>
 
           <Form.Item
@@ -133,7 +163,13 @@ export const LoginPage: React.FC = () => {
             name="tenantId"
             rules={[{ required: true, message: 'Tenant ID is required' }]}
           >
-            <Input placeholder="Enter your tenant ID" className="login-input" />
+            <Input
+              placeholder="Enter your tenant ID"
+              className="login-input"
+              aria-label="Tenant ID"
+              data-testid="tenant-input"
+              maxLength={64}
+            />
           </Form.Item>
 
           <Form.Item>
@@ -181,7 +217,9 @@ export const LoginPage: React.FC = () => {
               htmlType="submit"
               block
               loading={isLoading || isSubmitting}
+              disabled={isLoading || isSubmitting}
               className="login-submit-button"
+              data-testid="submit-button"
             >
               Sign In
             </Button>
