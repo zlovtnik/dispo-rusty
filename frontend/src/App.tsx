@@ -22,6 +22,9 @@ const AddressBookPage = lazy(() =>
 const TenantsPage = lazy(() =>
   import('./pages/TenantsPage').then(module => ({ default: module.TenantsPage }))
 );
+const NotFoundPage = lazy(() =>
+  import('./pages/NotFoundPage').then(module => ({ default: module.NotFoundPage }))
+);
 
 // Validate environment configuration at module load time
 let envError: Error | null = null;
@@ -78,6 +81,7 @@ export const App: React.FC = () => {
                   </PrivateRoute>
                 }
               />
+              <Route path="*" element={<NotFoundPage />} />
             </Routes>
           </Suspense>
         </AuthProvider>

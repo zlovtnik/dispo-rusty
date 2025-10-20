@@ -430,9 +430,7 @@ describe('Multi-Tenant Data Isolation', () => {
     });
 
     const expectedId = String(mockTenant.id);
-    // Type assertion is safe here because we've already checked for null above
-    expect(capturedTenantId).not.toBeNull();
-    expect(capturedTenantId as unknown as string).toBe(expectedId);
+    expect(capturedTenantId!).toBe(expectedId);
   });
 
   test('Tenant 1 contacts are isolated from Tenant 2', async () => {

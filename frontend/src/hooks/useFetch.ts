@@ -16,6 +16,7 @@ import { SENSITIVE_QUERY_PARAMS } from '../config/sensitiveParams';
  * @throws Error if the URL cannot be parsed
  */
 const parseUrlSafely = (urlStr: string): URL => {
+  const input = urlStr.trim();
   // Determine a safe base for parsing relative URLs
   let safeBase = 'http://localhost';
   if (typeof window !== 'undefined' && typeof window.location !== 'undefined') {
@@ -29,11 +30,11 @@ const parseUrlSafely = (urlStr: string): URL => {
 
   // Try parsing as an absolute URL first
   try {
-    return new URL(urlStr);
+    return new URL(input);
   } catch (absErr) {
     // If the input looks like an absolute URL (has a scheme), don't try to
     // treat it as relative — it's malformed and should be considered invalid.
-    const looksLikeAbsolute = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(urlStr);
+    const looksLikeAbsolute = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(input);
     if (looksLikeAbsolute) {
       throw absErr;
     }
@@ -42,7 +43,7 @@ const parseUrlSafely = (urlStr: string): URL => {
     // base and the relative path. Some test environments may not support
     // the URL(url, base) overload reliably.
     const base = safeBase.replace(/\/$/, '');
-    const candidate = urlStr.startsWith('/') ? `${base}${urlStr}` : `${base}/${urlStr}`;
+    const candidate = input.startsWith('/') ? `${base}${input}` : `${base}/${input}`;
     return new URL(candidate);
   }
 };
@@ -126,7 +127,7 @@ interface FetchOptionsWithTransform<T = unknown> extends FetchOptionsBase<T> {
   /** Transform response data before returning */
   transformResponse: (data: unknown) => T;
   /** Validate transformed response data (Zod schema or transform) */
-  validateResponse?: z.ZodType<any>;
+  validateResponse?: z.ZodType<T>;
 }
 
 /**
@@ -136,7 +137,7 @@ interface FetchOptionsWithValidate<T = unknown> extends FetchOptionsBase<T> {
   /** Transform response data before returning */
   transformResponse?: (data: unknown) => T;
   /** Validate transformed response data (Zod schema or transform) */
-  validateResponse: z.ZodType<any>;
+  validateResponse: z.ZodType<T>;
 }
 
 /**
@@ -231,7 +232,7 @@ export function useFetch<T = unknown>(
     }
 
     return async (): Promise<Result<T, AppError>> => {
-      const fullUrl = baseURL ? `${baseURL}${url}` : url;
+      const fullUrl = baseURL ? new URL(url, baseURL).toString() : url;
 
       for (let attempt = 0; attempt <= retries; attempt++) {
         let timeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -258,8 +259,11 @@ export function useFetch<T = unknown>(
               (response.status >= 500 || response.status === 408 || response.status === 429);
 
             if (isRetryable) {
-              // Wait before retry
-              await new Promise(resolve => setTimeout(resolve, retryDelay * Math.pow(2, attempt)));
+              const ra = response.headers.get('retry-after');
+              const ms = ra && /^\d+$/.test(ra)
+                ? parseInt(ra, 10) * 1000
+                : retryDelay * Math.pow(2, attempt);
+              await new Promise(resolve => setTimeout(resolve, ms));
               continue;
             }
 
@@ -272,10 +276,10 @@ export function useFetch<T = unknown>(
           }
 
           // Parse response
-          const contentType = response.headers.get('content-type');
+          const contentType = response.headers.get('content-type')?.toLowerCase() ?? '';
           let data: unknown;
 
-          if (contentType?.includes('application/json')) {
+          if (contentType.includes('json')) {
             data = (await response.json()) as unknown;
           } else {
             data = await response.text();

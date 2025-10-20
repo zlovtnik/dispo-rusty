@@ -47,7 +47,7 @@ describe('Layout Component', () => {
       renderWithAuth(<Layout>Content</Layout>);
 
       // Address book link should be accessible
-      expect(screen.getByRole('link', { name: /^(Address Book|Contacts)$/i })).toBeInTheDocument();
+      expect(screen.getByRole('menuitem', { name: /^(Address Book|Contacts)$/i })).toBeInTheDocument();
     });
 
     it('should render user profile avatar or trigger', () => {
@@ -142,11 +142,6 @@ describe('Layout Component', () => {
       const userElements = screen.queryAllByText(firstName);
       expect(userElements.length).toBeGreaterThan(0);
 
-      // Explicit guard before destructuring
-      if (userElements.length === 0) {
-        throw new Error('No user profile elements found - test setup may be incorrect');
-      }
-
       const firstElement = userElements[0];
       await user.click(firstElement);
       // Dropdown should be triggered - check for visible dropdown content
@@ -193,7 +188,7 @@ describe('Layout Component', () => {
 
       // Find the menu toggle button by looking for the MenuOutlined icon
       const menuToggleButton = screen.getByRole('button', {
-        name: /menu/i,
+        name: /toggle menu/i,
       });
       expect(menuToggleButton).toBeInTheDocument();
     });
@@ -204,7 +199,7 @@ describe('Layout Component', () => {
 
       // Find the menu toggle button by looking for the MenuOutlined icon
       const toggleButton = screen.getByRole('button', {
-        name: /menu/i,
+        name: /toggle menu/i,
       });
       expect(toggleButton).toBeInTheDocument();
 
@@ -367,7 +362,7 @@ describe('Layout Component', () => {
       const initialContent = 'Main Content';
       const dynamicContent = 'Dynamic Test Content';
 
-      const { rerender } = renderWithAuth(
+      const { rerender, container } = renderWithAuth(
         <Layout>
           <div data-testid={testId}>{initialContent}</div>
         </Layout>
@@ -378,11 +373,6 @@ describe('Layout Component', () => {
       expect(screen.getByText(initialContent)).toBeInTheDocument();
 
       // Assert content is in the correct layout section
-      const { container } = renderWithAuth(
-        <Layout>
-          <div data-testid={testId}>{initialContent}</div>
-        </Layout>
-      );
       const layoutContent = container.querySelector('[class*="ant-layout-content"]');
       expect(layoutContent).toBeInTheDocument();
       expect(layoutContent?.textContent).toContain(initialContent);

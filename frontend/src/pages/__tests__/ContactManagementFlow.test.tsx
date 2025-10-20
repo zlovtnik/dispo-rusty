@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { screen, waitFor, cleanup, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
+import type { HttpHandler } from 'msw';
 import { setupServer } from 'msw/node';
 import { renderWithAuth, renderWithoutAuth } from '../../test-utils/render';
 import { LoginPage } from '../../pages/LoginPage';
@@ -269,7 +270,7 @@ const validateAuthAndGetTenantContacts = (
   return { contacts: tenantContacts[tenantId] || [] };
 };
 
-const createContactCRUDHandlers = (tenantId = 'tenant-1'): ReturnType<typeof http.get>[] => {
+const createContactCRUDHandlers = (tenantId = 'tenant-1'): HttpHandler[] => {
   return [
     http.get('/api/address-book', ({ request }) => {
       const authResult = validateAuthAndGetTenantContacts(request, tenantId);

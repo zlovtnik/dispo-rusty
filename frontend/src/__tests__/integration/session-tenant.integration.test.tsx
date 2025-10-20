@@ -282,8 +282,8 @@ describe('Session Expiration & Token Refresh Flow', () => {
     // Assert that the auth token has been cleared from localStorage
     expect(localStorage.getItem('auth_token')).toBeNull();
 
-    // Assert that we've been redirected to the login route
-    expect(window.location.pathname).toBe('/login');
+    // Assert that we've been redirected to the login route by checking for login form
+    expect(screen.getByRole('button', { name: /sign in|log in/i })).toBeInTheDocument();
   });
 
   test('Session remains active with valid token', async () => {

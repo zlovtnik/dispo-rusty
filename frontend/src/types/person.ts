@@ -156,7 +156,9 @@ const normalizeGender = (
       return Gender.female;
     }
 
-    if (['other', 'non-binary', 'nonbinary', 'nb'].includes(normalized)) {
+    if (
+      ['other', 'non-binary', 'nonbinary', 'non binary', 'nb', 'genderqueer'].includes(normalized)
+    ) {
       return Gender.other;
     }
 

@@ -71,7 +71,7 @@ describe('PrivateRoute Component', () => {
         { initialRoute: '/dashboard' }
       );
 
-      expect(screen.getByText('Content')).toBeDefined();
+      expect(screen.getByText('Content')).toBeInTheDocument();
     });
 
     it('should render nested components', () => {
@@ -84,8 +84,8 @@ describe('PrivateRoute Component', () => {
         </PrivateRoute>
       );
 
-      expect(screen.getByText('Title')).toBeDefined();
-      expect(screen.getByText('Paragraph')).toBeDefined();
+      expect(screen.getByText('Title')).toBeInTheDocument();
+      expect(screen.getByText('Paragraph')).toBeInTheDocument();
     });
   });
 
@@ -179,7 +179,7 @@ describe('PrivateRoute Component', () => {
         </PrivateRoute>
       );
 
-      expect(screen.getByText(/Content for/i)).toBeDefined();
+      expect(screen.getByText(/Content for/i)).toBeInTheDocument();
     });
 
     it('should work with tenant information', () => {
@@ -189,7 +189,7 @@ describe('PrivateRoute Component', () => {
         </PrivateRoute>
       );
 
-      expect(screen.getByText(/Tenant:/i)).toBeDefined();
+      expect(screen.getByText(/Tenant:/i)).toBeInTheDocument();
     });
 
     it('should handle null user object gracefully', () => {
@@ -256,9 +256,9 @@ describe('PrivateRoute Component', () => {
         </PrivateRoute>
       );
 
-      expect(screen.getByText('Child 1')).toBeDefined();
-      expect(screen.getByText('Child 2')).toBeDefined();
-      expect(screen.getByText('Child 3')).toBeDefined();
+      expect(screen.getByText('Child 1')).toBeInTheDocument();
+      expect(screen.getByText('Child 2')).toBeInTheDocument();
+      expect(screen.getByText('Child 3')).toBeInTheDocument();
     });
 
     it('should render complex nested components', () => {
@@ -273,8 +273,8 @@ describe('PrivateRoute Component', () => {
         </PrivateRoute>
       );
 
-      expect(screen.getByText('Heading')).toBeDefined();
-      expect(screen.getByText('Paragraph')).toBeDefined();
+      expect(screen.getByText('Heading')).toBeInTheDocument();
+      expect(screen.getByText('Paragraph')).toBeInTheDocument();
     });
   });
 
@@ -287,7 +287,7 @@ describe('PrivateRoute Component', () => {
         { authValue: { isLoading: false, isAuthenticated: true } }
       );
 
-      expect(screen.getByText('Content')).toBeDefined();
+      expect(screen.getByText('Content')).toBeInTheDocument();
     });
 
     it('should handle auth state transition from loading to authenticated', () => {
@@ -298,7 +298,7 @@ describe('PrivateRoute Component', () => {
         { authValue: { isLoading: false, isAuthenticated: true } }
       );
 
-      expect(screen.getByText('Content')).toBeDefined();
+      expect(screen.getByText('Content')).toBeInTheDocument();
     });
 
     it('should handle auth state transition from loading to unauthenticated', () => {

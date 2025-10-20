@@ -56,7 +56,7 @@ const attemptTokenRefresh = async (
 ): Promise<{ user: User; tenant: Tenant; token: string } | null> => {
   try {
     if (signal?.aborted) {
-      console.warn('Token refresh cancelled');
+      console.log('Token refresh cancelled');
       return null;
     }
 
@@ -68,29 +68,29 @@ const attemptTokenRefresh = async (
 
     const refreshedAuth = refreshResult.value;
     if (!refreshedAuth.success) {
-      console.warn('Token refresh response did not indicate success');
+      console.error('Token refresh response did not indicate success');
       return null;
     }
 
     const newToken = refreshedAuth.token;
     if (!newToken) {
-      console.warn('No token received from refresh');
+      console.error('No token received from refresh');
       return null;
     }
 
     if (signal?.aborted) {
-      console.warn('Token refresh cancelled after API call');
+      console.log('Token refresh cancelled after API call');
       return null;
     }
 
     const newPayload = decodeJwtPayload(newToken);
     if (!newPayload || typeof newPayload !== 'object') {
-      console.warn('Failed to decode refreshed JWT token');
+      console.error('Failed to decode refreshed JWT token');
       return null;
     }
 
     if (!newPayload.user?.trim() || !newPayload.tenant_id?.trim()) {
-      console.warn(
+      console.error(
         'JWT payload validation failed: missing or invalid user/tenant_id in refreshed token'
       );
       return null;
@@ -412,7 +412,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (logoutResult.isErr()) {
         console.error('Server-side logout failed, clearing local data anyway:', logoutResult.error);
       } else {
-        console.warn('Server-side logout successful');
+        console.log('Server-side logout successful');
       }
     } catch (error) {
       console.error('Server-side logout failed, clearing local data anyway:', error);
@@ -434,19 +434,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         const error = refreshResult.error;
 
         if (error.statusCode === 401 || error.statusCode === 403) {
-          console.warn('Authentication failed during refresh, logging out');
+          console.error('Authentication failed during refresh, logging out');
           await logout();
           throw new Error('Authentication expired');
         }
 
-        console.warn('Token refresh failed due to transient error:', error);
+        console.error('Token refresh failed due to transient error:', error);
         throw new Error('Token refresh failed - please check your connection');
       }
 
       const refreshResponse = refreshResult.value;
 
       if (!refreshResponse.success) {
-        console.warn('Token refresh failed due to API response:', refreshResponse.message);
+        console.error('Token refresh failed due to API response:', refreshResponse.message);
         throw new Error(refreshResponse.message || 'Token refresh failed');
       }
 
@@ -478,18 +478,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setTenant(updatedTenant);
       localStorage.setItem('user', JSON.stringify(updatedUser));
       localStorage.setItem('tenant', JSON.stringify(updatedTenant));
-      console.warn('Token refresh successful');
+      console.log('Token refresh successful');
     } catch (error) {
       if (error instanceof Error) {
         if (error.message === 'Authentication expired') {
           throw error;
         }
 
-        console.warn('Token refresh failed:', error);
+        console.error('Token refresh failed:', error);
         throw error;
       }
 
-      console.warn('Token refresh failed due to unknown error:', error);
+      console.error('Token refresh failed due to unknown error:', error);
       throw new Error('Token refresh failed');
     }
   };

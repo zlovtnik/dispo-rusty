@@ -89,9 +89,68 @@ const areEqual = (prevProps: FormFieldProps, nextProps: FormFieldProps): boolean
     return false;
   }
 
-  // For type-specific props, use reference comparison for performance
-  // This is a simplified approach that relies on React Hook Form's optimization
-  // and the fact that most props are passed as stable references
+  // Compare type-specific props based on field type
+  if (prevProps.type !== nextProps.type) {
+    return false;
+  }
+
+  // Text field specific props
+  if (prevProps.type === 'text' || prevProps.type === 'email' || prevProps.type === 'password' || prevProps.type === 'textarea') {
+    const prevText = prevProps as TextFormFieldProps;
+    const nextText = nextProps as TextFormFieldProps;
+    
+    if (
+      prevText.showCount !== nextText.showCount ||
+      prevText.maxLength !== nextText.maxLength ||
+      prevText.rows !== nextText.rows
+    ) {
+      return false;
+    }
+  }
+
+  // Number field specific props
+  if (prevProps.type === 'number') {
+    const prevNumber = prevProps as NumberFormFieldProps;
+    const nextNumber = nextProps as NumberFormFieldProps;
+    
+    if (
+      prevNumber.min !== nextNumber.min ||
+      prevNumber.max !== nextNumber.max ||
+      prevNumber.step !== nextNumber.step ||
+      prevNumber.precision !== nextNumber.precision ||
+      prevNumber.inputNumberProps !== nextNumber.inputNumberProps
+    ) {
+      return false;
+    }
+  }
+
+  // Select field specific props
+  if (prevProps.type === 'select') {
+    const prevSelect = prevProps as SelectFormFieldProps;
+    const nextSelect = nextProps as SelectFormFieldProps;
+    
+    // Compare options array (reference and length)
+    if (prevSelect.options !== nextSelect.options || prevSelect.options.length !== nextSelect.options.length) {
+      return false;
+    }
+    
+    // Compare selectProps
+    if (prevSelect.selectProps !== nextSelect.selectProps) {
+      return false;
+    }
+  }
+
+  // Checkbox field specific props
+  if (prevProps.type === 'checkbox') {
+    const prevCheckbox = prevProps as CheckboxFormFieldProps;
+    const nextCheckbox = nextProps as CheckboxFormFieldProps;
+    
+    // Compare children (reference comparison)
+    if (prevCheckbox.children !== nextCheckbox.children) {
+      return false;
+    }
+  }
+
   return true;
 };
 
@@ -127,7 +186,7 @@ export const FormField = memo<FormFieldProps>(
     const formItemProps: FormItemProps = {
       label,
       required,
-      help: (fieldError as { message?: string }).message ?? help,
+      help: fieldError?.message ?? help,
       extra,
       tooltip,
       validateStatus: status,

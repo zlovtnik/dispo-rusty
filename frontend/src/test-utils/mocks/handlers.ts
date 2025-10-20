@@ -87,10 +87,6 @@ interface ParsedFilter {
  */
 type Operator = 'eq' | 'ne' | 'like' | 'gt' | 'lt';
 
-/**
- * Valid tenant field names that can be filtered
- */
-type TenantFilterField = keyof BackendTenant;
 
 /**
  * Type guard to validate if a filter group can be converted to a ParsedFilter
@@ -104,15 +100,17 @@ function isValidFilterGroup(group: FilterGroup): group is FilterGroup & {
 }
 
 /**
+ * Centralized tenant field definitions to avoid duplication
+ * This is the single source of truth for valid tenant fields
+ */
+const BACKEND_TENANT_FIELDS = ['id', 'name', 'db_url', 'created_at', 'updated_at'] as const;
+type TenantFilterField = (typeof BACKEND_TENANT_FIELDS)[number];
+
+/**
  * Type guard to validate if a field is a valid tenant field
- *
- * IMPORTANT: The validFields array below must be kept in sync with the keys of the BackendTenant type.
- * BackendTenant is defined as `Tenant` in src/types/tenant.ts (lines 3-9).
- * If the Tenant interface changes, this array must be updated accordingly.
  */
 function isValidTenantField(field: string): field is TenantFilterField {
-  const validFields: TenantFilterField[] = ['id', 'name', 'db_url', 'created_at', 'updated_at'];
-  return validFields.includes(field as TenantFilterField);
+  return (BACKEND_TENANT_FIELDS as readonly string[]).includes(field);
 }
 
 /**
@@ -894,35 +892,3 @@ export function resetMockData(): void {
   mockTenants = createMockTenants();
 }
 
-/**
- * Runtime validation to ensure tenant filter fields match BackendTenant keys
- * This will throw an error if the hardcoded validFields array doesn't match
- * the actual keys of the BackendTenant type.
- */
-function validateTenantFilterFieldsSync(): void {
-  const validFields: TenantFilterField[] = ['id', 'name', 'db_url', 'created_at', 'updated_at'];
-  const backendTenantKeys: (keyof BackendTenant)[] = [
-    'id',
-    'name',
-    'db_url',
-    'created_at',
-    'updated_at',
-  ];
-
-  // Check that all valid fields are present in BackendTenant
-  for (const field of validFields) {
-    if (!backendTenantKeys.includes(field)) {
-      throw new Error(`Field '${field}' is not a valid BackendTenant key`);
-    }
-  }
-
-  // Check that all BackendTenant keys are present in valid fields
-  for (const key of backendTenantKeys) {
-    if (!validFields.includes(key)) {
-      throw new Error(`BackendTenant key '${key}' is missing from validFields array`);
-    }
-  }
-}
-
-// Run validation on module load to catch mismatches early
-validateTenantFilterFieldsSync();

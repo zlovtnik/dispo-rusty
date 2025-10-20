@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import dayjs from 'dayjs';
+import type { Dayjs } from 'dayjs';
 import { ConfirmationModal } from '@/components/ConfirmationModal';
 import type { Tenant as TenantRecord, CreateTenantDTO } from '@/types/tenant';
 import { isApiSuccess } from '@/types/api';
@@ -31,6 +32,10 @@ import { tenantService } from '@/services/api';
  * Form values for tenant creation (excluding id which is auto-generated)
  */
 type TenantFormValues = Omit<CreateTenantDTO, 'id'>;
+
+// Field type constants to avoid duplication
+const TEXT_FIELDS = ['id', 'name', 'db_url'] as const;
+const DATE_FIELDS = ['created_at', 'updated_at'] as const;
 
 export const TenantsPage: React.FC = () => {
   const [tenants, setTenants] = useState<TenantRecord[]>([]);
@@ -240,12 +245,9 @@ export const TenantsPage: React.FC = () => {
 
   // Helper function to get valid operators for a field type
   const getOperatorsForField = (field: string): string[] => {
-    const textFields = ['id', 'name', 'db_url'];
-    const dateFields = ['created_at', 'updated_at'];
-
-    if (textFields.includes(field)) {
+    if (TEXT_FIELDS.includes(field as any)) {
       return ['contains', 'equals'];
-    } else if (dateFields.includes(field)) {
+    } else if (DATE_FIELDS.includes(field as any)) {
       return ['equals', 'gt', 'gte', 'lt', 'lte'];
     }
 
@@ -254,19 +256,13 @@ export const TenantsPage: React.FC = () => {
   };
 
   // Helper function to check if a field is a date field
-  const isDateField = (field: string): boolean => {
-    const dateFields = ['created_at', 'updated_at'];
-    return dateFields.includes(field);
-  };
+  const isDateField = (field: string): boolean => DATE_FIELDS.includes(field as any);
 
   // Helper function to convert ISO string to dayjs object
-  const isoToDayjs = (isoString: string) => {
+  const isoToDayjs = (isoString: string): Dayjs | null => {
     if (!isoString) return null;
-    try {
-      return dayjs(isoString);
-    } catch {
-      return null;
-    }
+    const d = dayjs(isoString);
+    return d.isValid() ? d : null;
   };
 
   // Helper function to convert dayjs object to ISO string
@@ -287,19 +283,28 @@ export const TenantsPage: React.FC = () => {
       return;
     }
 
-    // If field is changing, check if current operator is still valid
+    // If field is changing, check if current operator is still valid and clear stale values
     if (key === 'field') {
       const validOperators = getOperatorsForField(value);
       const currentOperator = currentFilter.operator;
+      const isDateField = isDateField(value);
+      const wasDateField = isDateField(currentFilter.field);
+
+      // If field type changed (date <-> text), clear the value
+      const shouldClearValue = isDateField !== wasDateField;
 
       // If current operator is not valid for the new field, reset to first valid operator
       if (!validOperators.includes(currentOperator)) {
         updated[index] = Object.assign({}, currentFilter, {
           [key]: value,
           operator: validOperators[0],
+          value: shouldClearValue ? '' : currentFilter.value,
         });
       } else {
-        updated[index] = Object.assign({}, currentFilter, { [key]: value });
+        updated[index] = Object.assign({}, currentFilter, { 
+          [key]: value,
+          value: shouldClearValue ? '' : currentFilter.value,
+        });
       }
     } else {
       updated[index] = Object.assign({}, currentFilter, { [key]: value });
@@ -319,8 +324,24 @@ export const TenantsPage: React.FC = () => {
         return;
       }
 
+      // Validate date fields before sending
+      const validatedFilters = validFilters.map(filter => {
+        if (isDateField(filter.field)) {
+          // Validate date format for date fields
+          const dateValue = new Date(filter.value);
+          if (isNaN(dateValue.getTime())) {
+            throw new Error(`Invalid date format for field ${filter.field}: ${filter.value}`);
+          }
+          return {
+            ...filter,
+            value: dateValue.toISOString(),
+          };
+        }
+        return filter;
+      });
+
       const response = await tenantService.filter({
-        filters: validFilters,
+        filters: validatedFilters,
         page_size: pagination.pageSize, // Use current page size for filtered results
       });
 
@@ -539,6 +560,7 @@ export const TenantsPage: React.FC = () => {
                   style={{ width: 200, flex: 1, minWidth: '150px' }}
                   placeholder="Select date"
                   showTime
+                  allowClear
                   value={isoToDayjs(filter.value)}
                   onChange={date => {
                     updateFilter(index, 'value', dayjsToIso(date));
@@ -578,15 +600,14 @@ export const TenantsPage: React.FC = () => {
           <Divider style={{ margin: '8px 0' }} />
 
           <Space>
-            <Button type="primary" onClick={applyFilters}>
+            <Button type="primary" onClick={applyFilters} disabled={loading}>
               Apply Filters
             </Button>
-            <Button onClick={clearFilters}>Clear All</Button>
+            <Button onClick={clearFilters} disabled={loading}>Clear All</Button>
           </Space>
 
           <div style={{ fontSize: '14px', color: '#666' }}>
-            <Typography.Text strong>Note:</Typography.Text> For date fields, use ISO format (e.g.,
-            2023-12-25T10:00:00.000Z). Empty values are ignored in filtering.
+            <Typography.Text strong>Note:</Typography.Text> Pick a date/time; it's sent as ISO-8601 (UTC). Empty values are ignored.
           </div>
         </Space>
       </Card>

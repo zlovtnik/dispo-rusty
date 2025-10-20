@@ -291,11 +291,13 @@ describe('ErrorBoundary Component', () => {
       },
     ];
 
-    it.each(errorTestCases)('should handle $label', ({ componentFactory }) => {
-      renderWithProviders(<ErrorBoundary>{componentFactory()}</ErrorBoundary>);
+    for (const { label, componentFactory } of errorTestCases) {
+      it(`should handle ${label}`, () => {
+        renderWithProviders(<ErrorBoundary>{componentFactory()}</ErrorBoundary>);
 
-      expect(screen.getByText('Something went wrong')).toBeInTheDocument();
-    });
+        expect(screen.getByText('Something went wrong')).toBeInTheDocument();
+      });
+    }
   });
 
   describe('Props', () => {

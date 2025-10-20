@@ -196,7 +196,7 @@ if (typeof window !== 'undefined') {
 
 export const logger = new Logger();
 
-// Specialized logger for address parsing that respects DEBUG_ADDRESS_PARSING env var
+// Specialized logger for address parsing that respects VITE_DEBUG_ADDRESS_PARSING env var
 export const addressParsingLogger = {
   // Debug: For detailed tracing of address parsing steps and intermediate values
   debug(message: string, data?: any) {

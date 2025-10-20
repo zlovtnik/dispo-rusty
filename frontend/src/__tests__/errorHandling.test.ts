@@ -15,17 +15,19 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { server } from '../test-utils/mocks/server';
 import { http, HttpResponse } from 'msw';
 import { authService, tenantService, addressBookService } from '../services/api';
+import { getEnv } from '../config/env';
 import type { LoginCredentials } from '../types/auth';
 import { asTenantId } from '../types/ids';
 import { Gender } from '../types/person';
 
 // Get API base URL from environment
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+const API_BASE_URL = getEnv().apiUrl;
 
 /**
  * Setup and teardown for each test
  */
 beforeEach(() => {
+  server.resetHandlers();
   // Clear localStorage before each test
   localStorage.clear();
   sessionStorage.clear();
@@ -548,7 +550,7 @@ describe('Network Error Handling', () => {
 
     test('should handle connection refused', async () => {
       server.use(
-        http.get(`${API_BASE_URL}/ping`, () => {
+        http.get(`${API_BASE_URL}/admin/tenants`, () => {
           return HttpResponse.error();
         })
       );
@@ -646,7 +648,7 @@ describe('Error Recovery and Fallback', () => {
 
     test('should handle circuit breaker pattern', async () => {
       server.use(
-        http.get(`${API_BASE_URL}/ping`, () => {
+        http.get(`${API_BASE_URL}/admin/tenants`, () => {
           return HttpResponse.json({ message: 'Service unavailable' }, { status: 503 });
         })
       );
@@ -987,7 +989,6 @@ describe('Error Handling Integration', () => {
     test('should handle token refresh failure and logout', async () => {
       // Set up authenticated state
       localStorage.setItem('auth_token', JSON.stringify({ token: 'expired-token' }));
-      localStorage.setItem('refresh_token', 'expired-refresh-token');
 
       server.use(
         http.post(`${API_BASE_URL}/auth/refresh`, () => {

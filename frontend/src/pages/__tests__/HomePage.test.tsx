@@ -29,7 +29,6 @@ void mock.module('react-router-dom', () => ({
     );
   },
   Navigate: ({ to }: { to: string }) => <div data-testid="navigate" data-to={to} />,
-  useAuth: () => ({ isAuthenticated: false }),
 }));
 
 describe('HomePage Component', () => {

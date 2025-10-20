@@ -37,95 +37,7 @@ const createTransformerError = (
     }
   );
 
-// Curated list of common country names for address parsing
-const COUNTRY_NAMES = [
-  'UNITED STATES',
-  'USA',
-  'UNITED STATES OF AMERICA',
-  'CANADA',
-  'MEXICO',
-  'UNITED KINGDOM',
-  'UK',
-  'GREAT BRITAIN',
-  'FRANCE',
-  'GERMANY',
-  'ITALY',
-  'SPAIN',
-  'PORTUGAL',
-  'AUSTRALIA',
-  'NEW ZEALAND',
-  'JAPAN',
-  'CHINA',
-  'INDIA',
-  'BRAZIL',
-  'ARGENTINA',
-  'CHILE',
-  'COLOMBIA',
-  'PERU',
-  'RUSSIA',
-  'SOUTH KOREA',
-  'NORTH KOREA',
-  'THAILAND',
-  'VIETNAM',
-  'PHILIPPINES',
-  'INDONESIA',
-  'MALAYSIA',
-  'SINGAPORE',
-];
-
-// Curated list of US state names for address parsing (normalized without spaces)
-const STATE_NAMES = [
-  'ALABAMA',
-  'ALASKA',
-  'ARIZONA',
-  'ARKANSAS',
-  'CALIFORNIA',
-  'COLORADO',
-  'CONNECTICUT',
-  'DELAWARE',
-  'FLORIDA',
-  'GEORGIA',
-  'HAWAII',
-  'IDAHO',
-  'ILLINOIS',
-  'INDIANA',
-  'IOWA',
-  'KANSAS',
-  'KENTUCKY',
-  'LOUISIANA',
-  'MAINE',
-  'MARYLAND',
-  'MASSACHUSETTS',
-  'MICHIGAN',
-  'MINNESOTA',
-  'MISSISSIPPI',
-  'MISSOURI',
-  'MONTANA',
-  'NEBRASKA',
-  'NEVADA',
-  'NEWHAMPSHIRE',
-  'NEWJERSEY',
-  'NEWMEXICO',
-  'NEWYORK',
-  'NORTHCAROLINA',
-  'NORTHDAKOTA',
-  'OHIO',
-  'OKLAHOMA',
-  'OREGON',
-  'PENNSYLVANIA',
-  'RHODEISLAND',
-  'SOUTHCAROLINA',
-  'SOUTHDAKOTA',
-  'TENNESSEE',
-  'TEXAS',
-  'UTAH',
-  'VERMONT',
-  'VIRGINIA',
-  'WASHINGTON',
-  'WESTVIRGINIA',
-  'WISCONSIN',
-  'WYOMING',
-];
+import { COUNTRY_NAMES, STATE_NAMES, STATE_CODES, COUNTRY_CODES } from '../constants/address';
 
 const wrapTransformation =
   <Value, Output>(
@@ -247,8 +159,8 @@ const looksLikeState = (segment: string): boolean => {
   const trimmed = segment.trim().toUpperCase();
   const normalized = trimmed.replace(/\s+/g, '');
 
-  // US state abbreviations (exactly 2 letters)
-  if (/^[A-Z]{2}$/.test(trimmed)) return true;
+  // US state abbreviations (exactly 2 letters) - use USPS codes to avoid false positives
+  if (/^[A-Z]{2}$/.test(trimmed) && STATE_CODES.has(trimmed)) return true;
 
   // Common full state names (exact match only, not substring)
   return STATE_NAMES.includes(normalized);
@@ -263,8 +175,8 @@ const looksLikeCountry = (segment: string): boolean => {
   const trimmed = segment.trim().toUpperCase();
   const normalized = trimmed.replace(/\s+/g, ' ');
 
-  // ISO country codes (2-3 letters)
-  if (/^[A-Z]{2,3}$/.test(trimmed)) return true;
+  // ISO country codes (2-3 letters) - use whitelist to avoid false positives
+  if (/^[A-Z]{2,3}$/.test(trimmed) && COUNTRY_CODES.has(trimmed)) return true;
 
   // Curated list of common country names (exact match only)
   return COUNTRY_NAMES.includes(normalized);
@@ -344,7 +256,16 @@ const parseAddressSegmentsWithHeuristics = (
     if (looksLikeZipCode(segment)) {
       zipIndex = i;
     } else if (looksLikeState(segment)) {
-      // Calculate confidence score for state match
+      /**
+       * Calculate confidence score for state match
+       * Scale: 0-4 (BASE_STATE_CONFIDENCE + boosts)
+       * - BASE_STATE_CONFIDENCE (1): Basic state match
+       * - ADJACENT_ZIP_BOOST (2): State adjacent to ZIP code
+       * - NEAR_ZIP_BOOST (1): State within 2 positions of ZIP
+       * - EARLY_POSITION_BOOST (1): State in early position (more likely actual state)
+       * 
+       * Higher confidence indicates more reliable state detection
+       */
       let confidence = BASE_STATE_CONFIDENCE; // Base confidence
 
       // Boost confidence if adjacent to ZIP
@@ -750,19 +671,25 @@ const contactToApi = (contact: Contact): Result<ContactOutboundApiDTO, AppError>
   }
 
   const genderOption = fromNullable(contact.gender);
-  const genderBooleanResult: Result<Option<boolean>, AppError> = isSome(genderOption)
+  let genderBooleanResult: Result<Option<boolean>, AppError> = isSome(genderOption)
     ? genderEnumToBoolean(genderOption.value).map(value => some(value))
     : ok(none());
 
   if (genderBooleanResult.isErr()) {
-    return err(
-      createTransformerError(
-        { entity: 'Contact', direction: 'toApi' },
-        'Invalid gender provided for contact',
-        { genderType: typeof contact.gender },
-        genderBooleanResult.error
-      )
-    );
+    const error = genderBooleanResult.error;
+    if (error.message.includes('Gender.other should be omitted')) {
+      // For Gender.other, omit the field by setting it to none()
+      genderBooleanResult = ok(none());
+    } else {
+      return err(
+        createTransformerError(
+          { entity: 'Contact', direction: 'toApi' },
+          'Invalid gender provided for contact',
+          { genderType: typeof contact.gender },
+          error
+        )
+      );
+    }
   }
 
   const dateOfBirthOption = fromNullable(contact.dateOfBirth);
