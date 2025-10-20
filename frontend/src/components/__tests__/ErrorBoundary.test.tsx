@@ -5,14 +5,6 @@ import '@testing-library/jest-dom';
 import { renderWithProviders } from '../../test-utils/render';
 import { ErrorBoundary } from '../ErrorBoundary';
 
-// Component that throws an error
-const _ThrowError: React.FC<{ shouldThrow: boolean; error?: Error }> = ({ shouldThrow, error }) => {
-  if (shouldThrow) {
-    throw error ?? new Error('Test error');
-  }
-  return <div>No Error</div>;
-};
-
 // Component that throws during render
 const RenderErrorComponent: React.FC<{ errorMessage: string }> = ({ errorMessage }) => {
   throw new Error(errorMessage);
@@ -173,19 +165,9 @@ describe('ErrorBoundary Component', () => {
       expect(onErrorMock).toHaveBeenCalledWith(
         expect.any(Error),
         expect.objectContaining({
-          componentStack: expect.any(String),
+          componentStack: expect.stringMatching(/.+/),
         })
       );
-
-      // Verify componentStack is non-empty
-      const calls = onErrorMock.mock.calls;
-      expect(calls).toHaveLength(1);
-      const firstCall = calls[0] as unknown as [Error, { componentStack: string }];
-      expect(firstCall).toBeDefined();
-      expect(firstCall).toHaveLength(2);
-      const errorInfo = firstCall[1];
-      expect(errorInfo.componentStack).toBeTruthy();
-      expect(errorInfo.componentStack.length).toBeGreaterThan(0);
     });
 
     it('should continue rendering if onError callback is provided', () => {
@@ -284,43 +266,38 @@ describe('ErrorBoundary Component', () => {
   });
 
   describe('Error Types', () => {
-    it('should handle JavaScript errors', () => {
-      renderWithProviders(
-        <ErrorBoundary>
-          <RenderErrorComponent errorMessage="JavaScript error" />
-        </ErrorBoundary>
-      );
+    const errorTestCases = [
+      {
+        label: 'JavaScript errors',
+        componentFactory: () => <RenderErrorComponent errorMessage="JavaScript error" />,
+      },
+      {
+        label: 'TypeError',
+        componentFactory: () => {
+          const TypeErrorComponent: React.FC = () => {
+            throw new TypeError('Cannot read property of null');
+          };
+          return <TypeErrorComponent />;
+        },
+      },
+      {
+        label: 'ReferenceError',
+        componentFactory: () => {
+          const ReferenceErrorComponent: React.FC = () => {
+            throw new ReferenceError('undefinedVariable is not defined');
+          };
+          return <ReferenceErrorComponent />;
+        },
+      },
+    ];
 
-      expect(screen.getByText('Something went wrong')).toBeInTheDocument();
-    });
+    for (const { label, componentFactory } of errorTestCases) {
+      it(`should handle ${label}`, () => {
+        renderWithProviders(<ErrorBoundary>{componentFactory()}</ErrorBoundary>);
 
-    it('should handle TypeError', () => {
-      const TypeErrorComponent: React.FC = () => {
-        throw new TypeError('Cannot read property of null');
-      };
-
-      renderWithProviders(
-        <ErrorBoundary>
-          <TypeErrorComponent />
-        </ErrorBoundary>
-      );
-
-      expect(screen.getByText('Something went wrong')).toBeInTheDocument();
-    });
-
-    it('should handle ReferenceError', () => {
-      const ReferenceErrorComponent: React.FC = () => {
-        throw new ReferenceError('undefinedVariable is not defined');
-      };
-
-      renderWithProviders(
-        <ErrorBoundary>
-          <ReferenceErrorComponent />
-        </ErrorBoundary>
-      );
-
-      expect(screen.getByText('Something went wrong')).toBeInTheDocument();
-    });
+        expect(screen.getByText('Something went wrong')).toBeInTheDocument();
+      });
+    }
   });
 
   describe('Props', () => {
@@ -385,31 +362,6 @@ describe('ErrorBoundary Component', () => {
     });
   });
 
-  describe('Error UI Rendering', () => {
-    it('should display error UI when error occurs', () => {
-      renderWithProviders(
-        <ErrorBoundary>
-          <RenderErrorComponent errorMessage="Error" />
-        </ErrorBoundary>
-      );
-
-      // Error boundary should display error UI
-      expect(screen.getByText('Something went wrong')).toBeInTheDocument();
-    });
-
-    it('should display error message in UI', () => {
-      const errorMessage = 'Test error message';
-      renderWithProviders(
-        <ErrorBoundary>
-          <RenderErrorComponent errorMessage={errorMessage} />
-        </ErrorBoundary>
-      );
-
-      // Error message should be displayed in the UI
-      expect(screen.getByText(errorMessage)).toBeInTheDocument();
-    });
-  });
-
   describe('Accessibility', () => {
     it('should have accessible error message', () => {
       renderWithProviders(
@@ -436,15 +388,41 @@ describe('ErrorBoundary Component', () => {
 
   describe('Edge Cases', () => {
     it('should handle errors in multiple nested components', () => {
+      // Create a deeply nested component tree where the innermost component throws
+      const DeeplyNestedErrorComponent: React.FC = () => {
+        throw new Error('Error in deeply nested component');
+      };
+
+      const MiddleComponent: React.FC = () => (
+        <div>
+          <section>
+            <article>
+              <DeeplyNestedErrorComponent />
+            </article>
+          </section>
+        </div>
+      );
+
+      const OuterComponent: React.FC = () => (
+        <div>
+          <header>Header content</header>
+          <MiddleComponent />
+          <footer>Footer content</footer>
+        </div>
+      );
+
       renderWithProviders(
         <ErrorBoundary>
-          <div>
-            <section>Content</section>
-          </div>
+          <OuterComponent />
         </ErrorBoundary>
       );
 
-      expect(screen.getByText('Content')).toBeInTheDocument();
+      // Error boundary should catch the error from deeply nested component
+      expect(screen.getByText('Something went wrong')).toBeInTheDocument();
+
+      // Original content should not be displayed
+      expect(screen.queryByText('Header content')).not.toBeInTheDocument();
+      expect(screen.queryByText('Footer content')).not.toBeInTheDocument();
     });
 
     it('should handle error with empty message', () => {

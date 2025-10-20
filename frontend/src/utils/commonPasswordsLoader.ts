@@ -10,7 +10,7 @@ import {
   COMMON_PASSWORDS_FALLBACK,
   DEFAULT_COMMON_PASSWORDS_CONFIG,
 } from '@/config/commonPasswords';
-import { _getEnv } from '@/config/env';
+
 import { testLogger } from '@/test-utils/logger';
 
 interface PasswordListResponse {
@@ -208,17 +208,17 @@ export class CommonPasswordsLoader {
     // Resolve URL: use absolute URLs as-is, or resolve relative paths against the appropriate base URL.
     // For SSR (server-side rendering), we use the configured ssrBaseUrl or environment variable SSR_BASE_URL
     // to construct the full URL. Defaults to the configured ssrBaseUrl (e.g., http://localhost:5173).
+    // Use explicit isSSR flag if provided, otherwise fall back to typeof checks for detection.
+    const isSSR = this.config.isSSR ?? typeof window === 'undefined';
+
     const ssrBase =
       this.config.ssrBaseUrl ??
-      (typeof process !== 'undefined' ? process.env?.SSR_BASE_URL : undefined) ??
+      (typeof process !== 'undefined' && process.env ? process.env.SSR_BASE_URL : undefined) ??
       'http://localhost:5173';
 
     const url = this.config.filePath.startsWith('http')
       ? this.config.filePath
-      : new URL(
-          this.config.filePath,
-          typeof window !== 'undefined' ? window.location.origin : ssrBase
-        ).toString();
+      : new URL(this.config.filePath, isSSR ? ssrBase : window.location.origin).toString();
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {

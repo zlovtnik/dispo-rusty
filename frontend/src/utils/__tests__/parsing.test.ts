@@ -8,7 +8,6 @@ import {
   updateTenantFromJwt,
   verifyDataMatchesToken,
 } from '../parsing';
-import type { _User, _Tenant } from '../../types/auth';
 import { mockUser, mockTenant } from '../../test-utils/render';
 import { asTenantId } from '../../types/ids';
 

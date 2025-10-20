@@ -170,7 +170,10 @@ Backend uses iterator-based pagination with `Pagination` struct in `src/paginati
 - `src/functional/pagination.rs`: Functional programming patterns for pagination
 
 **Frontend Types:**
-- `PaginatedTenantResponse` in `src/types/tenant.ts`: Contains `data[]`, `total`, `offset?`, `limit?`
+- Each resource defines its own paginated response type in `src/types/` (e.g., `PaginatedTenantResponse` in `src/types/tenant.ts`, `ContactListResponse` in `src/types/contact.ts`)
+- **Tenant pagination pattern**: `PaginatedTenantResponse` contains `data[]`, `total`, `offset?`, `limit?` 
+- **Contact pagination pattern**: `ContactListResponse` contains `contacts[]`, `total`, `page`, `limit`, `totalPages`, `hasNext`, `hasPrev`
+- **Developer guidance**: When adding pagination to a new resource, follow the tenant pattern for offset-based pagination or the contact pattern for page-based pagination depending on backend API design
 - Validation schemas in `src/validation/schemas.ts` ensure proper response structure
 
 **Frontend Usage:**

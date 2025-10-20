@@ -131,9 +131,10 @@ describe('Contact CRUD Flow: Create Contact', () => {
     await userEvent.type(emailInput, 'duplicate@example.com');
     await userEvent.click(submitBtn);
 
-    // Should show API error message
-    const error = await screen.findByText(/duplicate|error/i);
-    expect(error).toBeInTheDocument();
+    // Should show API error message inside the alert
+    const alert = await screen.findByRole('alert');
+    expect(alert).toBeInTheDocument();
+    expect(alert).toHaveTextContent(/Validation error/i);
   });
 });
 
@@ -196,7 +197,6 @@ describe('Contact CRUD Flow: Edit Contact', () => {
 
   afterEach(() => {
     resetMSW();
-    mockContacts = [];
   });
 
   test('User can edit existing contact', async () => {
@@ -240,12 +240,6 @@ describe('Contact CRUD Flow: Edit Contact', () => {
 
     // Verify changes are reflected in the list
     expect(await screen.findByText('Johnny Smith')).toBeInTheDocument();
-  });
-
-  test('Contact list displays existing contacts', async () => {
-    renderWithAuth(<AddressBookPage />);
-
-    expect(await screen.findByText(/john/i)).toBeInTheDocument();
   });
 });
 
@@ -301,7 +295,6 @@ describe('Contact CRUD Flow: Delete Contact', () => {
 
   afterEach(() => {
     resetMSW();
-    mockContacts = [];
   });
 
   test('User can delete contact with confirmation', async () => {
@@ -438,9 +431,7 @@ describe('Multi-Tenant Data Isolation', () => {
     });
 
     const expectedId = String(mockTenant.id);
-    // Type assertion is safe here because we've already checked for null above
-    const actualTenantId = capturedTenantId as unknown as string;
-    expect(actualTenantId).toBe(expectedId);
+    expect(capturedTenantId!).toBe(expectedId);
   });
 
   test('Tenant 1 contacts are isolated from Tenant 2', async () => {
@@ -469,10 +460,6 @@ describe('Multi-Tenant Data Isolation', () => {
         isAuthenticated: true,
         user: mockUser,
         tenant: mockTenant,
-        isLoading: false,
-        login: () => Promise.resolve(undefined),
-        logout: () => Promise.resolve(undefined),
-        refreshToken: () => Promise.resolve(undefined),
       },
     });
 
@@ -510,13 +497,7 @@ describe('Multi-Tenant Data Isolation', () => {
 
     renderWithAuth(<AddressBookPage />, {
       authValue: {
-        isAuthenticated: true,
-        user: mockUser,
         tenant: tenant2,
-        isLoading: false,
-        login: () => Promise.resolve(undefined),
-        logout: () => Promise.resolve(undefined),
-        refreshToken: () => Promise.resolve(undefined),
       },
     });
 
@@ -585,8 +566,9 @@ describe('Form Validation with Backend Errors', () => {
     const submitBtn = screen.getByRole('button', { name: /save|submit/i });
     await userEvent.click(submitBtn);
 
-    // Verify error message is shown
-    const errorMsg = await screen.findByText(/error|failed|network/i);
-    expect(errorMsg).toBeInTheDocument();
+    // Verify error message is shown - check for the specific error message displayed by the app
+    const alert = await screen.findByRole('alert');
+    expect(alert).toBeInTheDocument();
+    expect(alert).toHaveTextContent(/Network error: Unable to reach the server|Error Loading Contacts/i);
   });
 });

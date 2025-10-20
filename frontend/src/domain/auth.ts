@@ -290,7 +290,7 @@ export function validateSession(session: Session): Result<Session, SessionError>
  * @returns Result containing tenant ID or TokenError
  */
 export function extractTenantId(token: string): Result<string, TokenError> {
-  return verifyToken(token).map(payload => payload.tenant_id);
+  return verifyToken(token).map(payload => payload.tenantId);
 }
 
 /**

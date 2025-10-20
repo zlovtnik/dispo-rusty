@@ -14,7 +14,11 @@ export const getEnvVar = (key: string): string | undefined => {
   try {
     // Check if import.meta.env exists (browser/Vite)
     if (typeof import.meta !== 'undefined' && import.meta.env && key in import.meta.env) {
-      return String(import.meta.env[key]);
+      const raw = import.meta.env[key];
+      if (raw !== undefined && raw !== null) {
+        return String(raw);
+      }
+      return undefined;
     }
   } catch {
     // import.meta not available, continue to process.env

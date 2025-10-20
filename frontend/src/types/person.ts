@@ -138,6 +138,9 @@ const normalizeGender = (
 
   // Note: boolean values are not normalized - they're invalid input types.
   // If your backend sends boolean gender values, validate them server-side.
+  if (typeof value === 'boolean') {
+    return undefined;
+  }
 
   if (typeof value === 'string') {
     const normalized = value.trim().toLowerCase();
@@ -153,7 +156,9 @@ const normalizeGender = (
       return Gender.female;
     }
 
-    if (['other', 'non-binary', 'nonbinary', 'nb'].includes(normalized)) {
+    if (
+      ['other', 'non-binary', 'nonbinary', 'non binary', 'nb', 'genderqueer'].includes(normalized)
+    ) {
       return Gender.other;
     }
 
@@ -308,7 +313,7 @@ export const normalizePersonDTO = (raw: unknown): PersonDTO => {
   const rawGenderField = pick(record, ['gender', 'gender_value', 'genderValue']);
   const genderValue = normalizeGender(rawGenderField, {
     context: {
-      id: record.id as string | number | undefined,
+      id: idValue,
       source: 'person',
       rawField: rawGenderField,
     },

@@ -1,5 +1,5 @@
 import React, { Suspense, lazy } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { PrivateRoute } from './components/PrivateRoute';
 import { Layout } from './components/Layout';
@@ -21,6 +21,9 @@ const AddressBookPage = lazy(() =>
 );
 const TenantsPage = lazy(() =>
   import('./pages/TenantsPage').then(module => ({ default: module.TenantsPage }))
+);
+const NotFoundPage = lazy(() =>
+  import('./pages/NotFoundPage').then(module => ({ default: module.NotFoundPage }))
 );
 
 // Validate environment configuration at module load time
@@ -78,6 +81,7 @@ export const App: React.FC = () => {
                   </PrivateRoute>
                 }
               />
+              <Route path="*" element={<NotFoundPage />} />
             </Routes>
           </Suspense>
         </AuthProvider>

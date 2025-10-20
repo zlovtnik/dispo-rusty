@@ -162,7 +162,7 @@ Thumbs.db
 # End of https://www.toptal.com/developers/gitignore/api/rust,visualstudiocode,intellij+iml
 backend.pid
 
-# Temporary documentation files
+# Documentation - Temporary files
 CODE_QUALITY_*.md
 IMPLEMENTATION_TASK_LIST.md
 MASTER_TASK_LIST.md
@@ -172,12 +172,12 @@ TESTING_STRATEGY_IMPLEMENTATION.md
 .copilot-instructions.md
 frontend/.copilot-instructions.md
 
-# Node modules in root (if any)
+# Dependencies - Node.js
 node_modules/
 
-# NPM lock file (using bun instead)
+# Dependencies - Package managers
 package-lock.json
 
-# GitHub directory (if temporary)
+# GitHub - Temporary directories
 .github/temp/
 frontend/.github/temp/

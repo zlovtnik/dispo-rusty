@@ -33,6 +33,8 @@ export interface CommonPasswordsConfig {
   maxCacheEntries?: number;
   /** Base URL for SSR context when resolving relative paths (defaults to http://localhost:5173) */
   ssrBaseUrl?: string;
+  /** Explicit SSR flag to override automatic detection (preferred over typeof checks) */
+  isSSR?: boolean;
 }
 
 /**

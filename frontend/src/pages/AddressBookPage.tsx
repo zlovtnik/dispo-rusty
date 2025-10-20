@@ -447,6 +447,7 @@ export const AddressBookPage: React.FC = () => {
           <Button
             type="link"
             icon={<EditOutlined />}
+            data-testid={`edit-${contact.id}`}
             onClick={() => {
               handleEdit(contact);
             }}
@@ -565,6 +566,7 @@ export const AddressBookPage: React.FC = () => {
             lastName: '',
             email: '',
             phone: '',
+            gender: undefined,
             age: 25,
             street1: '',
             street2: '',

@@ -7,7 +7,7 @@
 
 import { http, HttpResponse } from 'msw';
 import type { _LoginCredentials, _AuthResponse } from '../../types/auth';
-import { _mockUser, _mockTenant } from '../render';
+import { mockUser, mockTenant } from '../render';
 import type { Tenant as BackendTenant } from '../../types/tenant';
 import type { ContactApiDTO } from '../../transformers/dto';
 import { asTenantId } from '../../types/ids';
@@ -17,7 +17,7 @@ import { testLogger } from '../logger';
 /**
  * Request interfaces for type safety in mock handlers
  */
-export interface CreateContactRequest {
+interface ContactRequestBase {
   readonly name?: string;
   readonly email?: string;
   readonly phone?: string;
@@ -26,14 +26,8 @@ export interface CreateContactRequest {
   readonly address?: string;
 }
 
-export interface UpdateContactRequest {
-  readonly name?: string;
-  readonly email?: string;
-  readonly phone?: string;
-  readonly age?: number;
-  readonly gender?: string;
-  readonly address?: string;
-}
+export type CreateContactRequest = ContactRequestBase;
+export type UpdateContactRequest = ContactRequestBase;
 
 // Get API base URL from environment (delay until runtime to ensure env vars are loaded)
 import { getEnv } from '../../config/env';
@@ -63,11 +57,10 @@ function getApiBaseUrl(): string {
   // In tests, prioritize process.env which Bun loads from .env files
   // Fall back to import.meta.env for browser/build time
   const apiUrl =
-    process.env.VITE_API_URL || import.meta.env?.VITE_API_URL || 'http://localhost:8000/api';
+    (typeof process !== 'undefined' && process.env ? process.env.VITE_API_URL : undefined) || 
+    import.meta.env?.VITE_API_URL || 
+    'http://localhost:8000/api';
 
-  if (!apiUrl) {
-    throw new Error('Missing required environment variable: VITE_API_URL');
-  }
   return apiUrl;
 }
 
@@ -94,10 +87,6 @@ interface ParsedFilter {
  */
 type Operator = 'eq' | 'ne' | 'like' | 'gt' | 'lt';
 
-/**
- * Valid tenant field names that can be filtered
- */
-type TenantFilterField = keyof BackendTenant;
 
 /**
  * Type guard to validate if a filter group can be converted to a ParsedFilter
@@ -111,11 +100,17 @@ function isValidFilterGroup(group: FilterGroup): group is FilterGroup & {
 }
 
 /**
+ * Centralized tenant field definitions to avoid duplication
+ * This is the single source of truth for valid tenant fields
+ */
+const BACKEND_TENANT_FIELDS = ['id', 'name', 'db_url', 'created_at', 'updated_at'] as const;
+type TenantFilterField = (typeof BACKEND_TENANT_FIELDS)[number];
+
+/**
  * Type guard to validate if a field is a valid tenant field
  */
 function isValidTenantField(field: string): field is TenantFilterField {
-  const validFields: TenantFilterField[] = ['id', 'name', 'db_url', 'created_at', 'updated_at'];
-  return validFields.includes(field as TenantFilterField);
+  return (BACKEND_TENANT_FIELDS as readonly string[]).includes(field);
 }
 
 /**
@@ -155,7 +150,9 @@ function parseFilterGroup(group: FilterGroup): ParsedFilter | null {
 /**
  * Factory function for mock contacts
  */
-function createMockContacts(): ContactApiDTO[] {
+function createMockContacts(baseDate: Date | string = '2024-01-15T10:30:00.000Z'): ContactApiDTO[] {
+  const timestamp = new Date(baseDate).toISOString();
+
   return [
     {
       id: 1,
@@ -166,8 +163,8 @@ function createMockContacts(): ContactApiDTO[] {
       phone: '+1234567890',
       age: 30,
       gender: 'male',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      created_at: timestamp,
+      updated_at: timestamp,
     },
     {
       id: 2,
@@ -178,8 +175,8 @@ function createMockContacts(): ContactApiDTO[] {
       phone: '+0987654321',
       age: 28,
       gender: 'female',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      created_at: timestamp,
+      updated_at: timestamp,
     },
   ];
 }
@@ -187,21 +184,23 @@ function createMockContacts(): ContactApiDTO[] {
 /**
  * Factory function for mock tenants
  */
-function createMockTenants(): BackendTenant[] {
+function createMockTenants(baseDate: Date | string = '2024-01-15T10:30:00.000Z'): BackendTenant[] {
+  const timestamp = new Date(baseDate).toISOString();
+
   return [
     {
       id: asTenantId('tenant-1'),
       name: 'Test Tenant 1',
       db_url: 'postgres://localhost:5432/tenant-1',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      created_at: timestamp,
+      updated_at: timestamp,
     },
     {
       id: asTenantId('tenant-2'),
       name: 'Test Tenant 2',
       db_url: 'postgres://localhost:5432/tenant2',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      created_at: timestamp,
+      updated_at: timestamp,
     },
   ];
 }
@@ -736,14 +735,13 @@ export function getHandlers() {
       const body = (await request.json()) as CreateContactRequest;
 
       // Safely parse name into first and last name parts
-      const name =
-        body.name && typeof body.name === 'string' && body.name.trim() ? body.name.trim() : '';
-      const parts = name ? name.split(/\s+/) : [];
-      const first_name = parts[0] || 'Unknown';
-      const last_name = parts.slice(1).join(' ') || 'User';
+      const name = body.name?.trim() ?? '';
+      const parts = name.split(/\s+/).filter(part => part.length > 0);
+      const first_name = parts[0] ?? 'Unknown';
+      const last_name = parts.slice(1).join(' ') ?? 'User';
 
       const newContact = {
-        id: Math.max(0, ...mockContacts.map(c => Number(c.id))) + 1,
+        id: Math.max(0, ...mockContacts.map(c => Number(c.id)).filter(id => !isNaN(id))) + 1,
         tenant_id: 'tenant-1', // Mock tenant ID
         first_name,
         last_name,
@@ -788,9 +786,10 @@ export function getHandlers() {
       // Convert API request format to ContactApiDTO format using typed body
       const updates: Record<string, unknown> = {};
       if (body.name) {
-        const nameParts = body.name.split(' ');
-        updates.first_name = nameParts[0] || 'Unknown';
-        updates.last_name = nameParts.slice(1).join(' ') || 'User';
+        const name = body.name.trim() ?? '';
+        const parts = name.split(/\s+/).filter(part => part.length > 0);
+        updates.first_name = parts[0] ?? 'Unknown';
+        updates.last_name = parts.slice(1).join(' ') ?? 'User';
       }
       if (body.email !== undefined) updates.email = body.email;
       if (body.phone !== undefined) updates.phone = body.phone;
@@ -892,3 +891,4 @@ export function resetMockData(): void {
   mockContacts = createMockContacts();
   mockTenants = createMockTenants();
 }
+

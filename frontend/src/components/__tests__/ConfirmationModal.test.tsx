@@ -188,9 +188,7 @@ describe('ConfirmationModal Component', () => {
   describe('Callbacks', () => {
     it('should call onConfirm when confirm button is clicked', async () => {
       const user = userEvent.setup();
-      const onConfirm = mock(() => {
-        // Intentionally empty - test mock
-      });
+      const onConfirm = mock(() => {});
 
       renderWithProviders(
         <ConfirmationModal
@@ -198,9 +196,7 @@ describe('ConfirmationModal Component', () => {
           message="Confirm?"
           confirmText="Yes"
           onConfirm={onConfirm}
-          onCancel={() => {
-            // Intentionally empty - test mock
-          }}
+          onCancel={() => {}}
         />
       );
 
@@ -212,18 +208,14 @@ describe('ConfirmationModal Component', () => {
 
     it('should call onCancel when cancel button is clicked', async () => {
       const user = userEvent.setup();
-      const onCancel = mock(() => {
-        // Intentionally empty - test mock
-      });
+      const onCancel = mock(() => {});
 
       renderWithProviders(
         <ConfirmationModal
           isOpen={true}
           message="Confirm?"
           cancelText="No"
-          onConfirm={() => {
-            // Intentionally empty - test mock
-          }}
+          onConfirm={() => {}}
           onCancel={onCancel}
         />
       );
@@ -253,9 +245,8 @@ describe('ConfirmationModal Component', () => {
 
       // Click the modal backdrop (mask) to test maskClosable behavior
       const backdrop = document.body.querySelector('.ant-modal-mask');
-      if (backdrop) {
-        await user.click(backdrop as HTMLElement);
-      }
+      expect(backdrop).not.toBeNull();
+      await user.click(backdrop as HTMLElement);
       expect(onCancel.mock.calls.length).toBe(1);
     });
 

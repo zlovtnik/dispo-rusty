@@ -43,7 +43,7 @@ const decodeJwtPayload = (token: string): JwtPayload | null => {
 
     return payload;
   } catch (error) {
-    console.error('Failed to decode JWT:', error);
+    console.warn('Failed to decode JWT:', error);
     return null;
   }
 };
@@ -62,19 +62,19 @@ const attemptTokenRefresh = async (
 
     const refreshResult = await authService.refreshToken();
     if (refreshResult.isErr()) {
-      console.log('Token refresh failed during initialization:', refreshResult.error);
+      console.error('Token refresh failed during initialization:', refreshResult.error);
       return null;
     }
 
     const refreshedAuth = refreshResult.value;
     if (!refreshedAuth.success) {
-      console.log('Token refresh response did not indicate success');
+      console.error('Token refresh response did not indicate success');
       return null;
     }
 
     const newToken = refreshedAuth.token;
     if (!newToken) {
-      console.log('No token received from refresh');
+      console.error('No token received from refresh');
       return null;
     }
 
@@ -85,12 +85,12 @@ const attemptTokenRefresh = async (
 
     const newPayload = decodeJwtPayload(newToken);
     if (!newPayload || typeof newPayload !== 'object') {
-      console.log('Failed to decode refreshed JWT token');
+      console.error('Failed to decode refreshed JWT token');
       return null;
     }
 
     if (!newPayload.user?.trim() || !newPayload.tenant_id?.trim()) {
-      console.log(
+      console.error(
         'JWT payload validation failed: missing or invalid user/tenant_id in refreshed token'
       );
       return null;
@@ -137,7 +137,7 @@ const attemptTokenRefresh = async (
           };
         }
       } catch (parseError) {
-        console.log('Failed to parse stored user data:', parseError);
+        console.warn('Failed to parse stored user data:', parseError);
       }
     }
 
@@ -160,22 +160,22 @@ const attemptTokenRefresh = async (
           } as Tenant;
         }
       } catch (parseError) {
-        console.log('Failed to parse stored tenant data:', parseError);
+        console.warn('Failed to parse stored tenant data:', parseError);
       }
     }
 
     if (refreshedUser && refreshedTenant) {
       return { user: refreshedUser, tenant: refreshedTenant, token: newToken };
     } else {
-      console.log('Stored user/tenant data validation failed after token refresh');
+      console.warn('Stored user/tenant data validation failed after token refresh');
       return null;
     }
   } catch (refreshError) {
     if (signal?.aborted) {
-      console.log('Token refresh cancelled due to abort');
+      console.warn('Token refresh cancelled due to abort');
       return null;
     }
-    console.log('Token refresh failed:', refreshError);
+    console.warn('Token refresh failed:', refreshError);
     return null;
   }
 };
@@ -434,19 +434,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         const error = refreshResult.error;
 
         if (error.statusCode === 401 || error.statusCode === 403) {
-          console.log('Authentication failed during refresh, logging out');
+          console.error('Authentication failed during refresh, logging out');
           await logout();
           throw new Error('Authentication expired');
         }
 
-        console.log('Token refresh failed due to transient error:', error);
+        console.error('Token refresh failed due to transient error:', error);
         throw new Error('Token refresh failed - please check your connection');
       }
 
       const refreshResponse = refreshResult.value;
 
       if (!refreshResponse.success) {
-        console.log('Token refresh failed due to API response:', refreshResponse.message);
+        console.error('Token refresh failed due to API response:', refreshResponse.message);
         throw new Error(refreshResponse.message || 'Token refresh failed');
       }
 
@@ -485,11 +485,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           throw error;
         }
 
-        console.log('Token refresh failed:', error);
+        console.error('Token refresh failed:', error);
         throw error;
       }
 
-      console.log('Token refresh failed due to unknown error:', error);
+      console.error('Token refresh failed due to unknown error:', error);
       throw new Error('Token refresh failed');
     }
   };
@@ -508,28 +508,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 };
 
 // Hook to use auth context
-// Returns a safe fallback when used outside AuthProvider to prevent crashes
 export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    // Return a safe fallback instead of throwing
-    // This allows components to gracefully handle missing provider
-    console.warn('useAuth called outside AuthProvider - returning fallback auth state');
-    return {
-      user: null,
-      tenant: null,
-      isAuthenticated: false,
-      isLoading: false,
-      login: async () => {
-        console.warn('login called outside AuthProvider');
-      },
-      logout: async () => {
-        console.warn('logout called outside AuthProvider');
-      },
-      refreshToken: async () => {
-        console.warn('refreshToken called outside AuthProvider');
-      },
-    };
+    throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
 };

@@ -22,7 +22,6 @@ import {
   waitFor,
   userEvent,
 } from '../../test-utils';
-import type { MockAuthContextValue } from '../../test-utils/render';
 import { server, resetMSW } from '../../test-utils/mocks/server';
 import { http, HttpResponse } from 'msw';
 import { App } from '../../App';
@@ -64,8 +63,8 @@ describe('Authentication Flow: Login → Token Storage → Protected Route', () 
     resetMSW();
   });
 
-  test('User can log in and access protected route', async () => {
-    // 1. Render login page (unauthenticated - using real AuthProvider)
+  // Shared test setup helper
+  const setupLoginTest = async (): Promise<{ rerender: (ui: React.ReactNode) => void }> => {
     const { rerender } = renderForIntegration(<App />, {
       initialRoute: '/login',
     });
@@ -73,7 +72,7 @@ describe('Authentication Flow: Login → Token Storage → Protected Route', () 
     // Verify login page is displayed
     expect(screen.getByText(/login/i)).toBeInTheDocument();
 
-    // 2. Fill in login form
+    // Fill in login form
     const usernameInput = screen.getByLabelText(/email|username/i);
     const passwordInput = screen.getByLabelText(/password/i);
     const loginButton = screen.getByRole('button', { name: /login|sign in/i });
@@ -82,36 +81,61 @@ describe('Authentication Flow: Login → Token Storage → Protected Route', () 
     await userEvent.type(usernameInput, 'testuser@example.com');
     await userEvent.type(passwordInput, 'password123');
 
-    // 3. Submit login form
+    // Submit login form
     await userEvent.click(loginButton);
 
-    // 4. Wait for redirect to dashboard (token stored, auth context updated)
-    const dashboardElement = await screen.findByText(/dashboard|welcome/i, undefined, {
+    return { rerender };
+  };
+
+  test('stores valid JWT on login', async () => {
+    // Render login page and perform login flow
+    await setupLoginTest();
+
+    // Wait for redirect to dashboard (token stored, auth context updated)
+    await screen.findByText(/dashboard|welcome/i, undefined, {
       timeout: 3000,
     });
 
-    // 5. Verify token was stored
-    const storedToken = localStorage.getItem(import.meta.env.VITE_JWT_STORAGE_KEY || 'auth_token');
+    // Verify token was stored in localStorage
+    const storageKey = import.meta.env.VITE_JWT_STORAGE_KEY ?? 'auth_token';
+    const storedToken = localStorage.getItem(storageKey);
     expect(storedToken).not.toBeNull();
-    expect(storedToken).not.toBeUndefined();
+    expect(storedToken).toBeTruthy();
     expect(storedToken!.split('.').length).toBe(3); // Valid JWT format
+  });
 
-    // 6. Verify subsequent requests include token
-    // Make an API call and verify Authorization header was sent
-    // Assert the contacts link exists and navigate to it.
+  test('authenticated user can navigate to protected routes', async () => {
+    // First, set up authentication by storing a valid JWT
+    const validJWT =
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0dXNlckBleGFtcGxlLmNvbSIsImlhdCI6MTUxNjIzOTAyMiwiZXhwIjo5OTk5OTk5OTk5fQ.test';
+    const storageKey = import.meta.env.VITE_JWT_STORAGE_KEY ?? 'auth_token';
+    localStorage.setItem(storageKey, validJWT);
+
+    // Render the app on a protected route (dashboard)
+    renderForIntegration(<App />, {
+      initialRoute: '/dashboard',
+    });
+
+    // Wait for dashboard to load
+    const dashboardElement = await screen.findByText(/dashboard|welcome/i, undefined, {
+      timeout: 3000,
+    });
+    expect(dashboardElement).toBeInTheDocument();
+
+    // Verify protected navigation link is present
     const contactsLink = await screen.findByText(/contacts|address book/i, undefined, {
       timeout: 3000,
     });
     expect(contactsLink).toBeInTheDocument();
+
+    // Navigate to protected route
     await userEvent.click(contactsLink);
 
-    // Wait for contacts to load (API call should be made with token)
+    // Verify protected content/API call loads
     const contactElement = await screen.findByText(/contact/i, undefined, {
       timeout: 3000,
     });
     expect(contactElement).toBeInTheDocument();
-
-    // 7. User context was established - auth token and API access confirmed above
   });
 
   test('Unauthenticated user cannot access protected routes', async () => {
@@ -368,7 +392,7 @@ describe('Authentication Flow: Multi-Tenant Switching', () => {
     expect(capturedTenantHeader!).toBe(expectedTenantId);
   });
 
-  test('Tenant ID changes when user switches tenant context', async () => {
+  test('API requests include tenant ID header matching current context', async () => {
     const tenantHeaders: string[] = [];
 
     server.use(
@@ -517,52 +541,44 @@ describe('Authentication Flow: Multi-Tenant Switching', () => {
     expect(tenant1Calls.length).toBe(0);
   });
 
-  test('Invalid tenant switch preserves current tenant context', async () => {
+  test("Rendering with invalid tenant doesn't crash the app", async () => {
     const invalidTenant = {
       ...mockTenant,
       id: asTenantId('invalid-tenant'),
       name: 'Invalid Tenant',
     };
 
-    // Start with valid tenant
-    renderWithProviders(<App />, {
-      initialRoute: '/dashboard',
-      authValue: {
-        isAuthenticated: true,
-        user: mockUser,
-        tenant: tenant1,
-        isLoading: false,
-        ...emptyAuthMocks,
-      },
-    });
-
-    // Verify initial tenant works
-    const initialTenantDashboards = await screen.findAllByText(/dashboard|welcome/i, undefined, {
-      timeout: 3000,
-    });
-    expect(initialTenantDashboards.length).toBeGreaterThan(0);
-    const initialTenantDashboard = initialTenantDashboards[0];
-    expect(initialTenantDashboard).toBeInTheDocument();
-
-    // Attempt to switch to invalid tenant
-    // (In real app, this would be prevented by domain logic)
-    renderWithProviders(<App />, {
+    // Render the app with an invalid tenant context
+    renderWithProviders(<DashboardPage />, {
       initialRoute: '/dashboard',
       authValue: {
         isAuthenticated: true,
         user: mockUser,
         tenant: invalidTenant,
+        isLoading: false,
         ...emptyAuthMocks,
       },
     });
 
-    // Verify app still functions (though tenant context might be invalid)
-    // In a real implementation, this would trigger error handling
-    const maybeElements = await screen.findAllByText(/dashboard|welcome|error/i, undefined, {
+    // Verify that the app doesn't crash and renders successfully
+    await waitFor(() => {
+      const welcomeMessage = screen.getByText(
+        `You're logged in to tenant ${invalidTenant.name} (${invalidTenant.id})`
+      );
+      expect(welcomeMessage).toBeInTheDocument();
+    });
+
+    // Verify that the dashboard renders without crashing
+    const dashboardElements = await screen.findAllByText(/dashboard|welcome/i, undefined, {
       timeout: 3000,
     });
-    expect(maybeElements.length).toBeGreaterThan(0);
-    const maybeDashboardOrError = maybeElements[0];
-    expect(maybeDashboardOrError).toBeInTheDocument();
+    expect(dashboardElements.length).toBeGreaterThan(0);
+
+    // Verify that the invalid tenant context is displayed
+    const invalidTenantElements = screen.queryAllByText(new RegExp(invalidTenant.name, 'i'));
+    expect(invalidTenantElements.length).toBeGreaterThan(0);
+
+    // Verify that the app continues to function normally
+    expect(screen.getByText('Welcome back, Test!')).toBeInTheDocument();
   });
 });

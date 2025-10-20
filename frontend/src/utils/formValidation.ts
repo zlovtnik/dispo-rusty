@@ -316,7 +316,7 @@ export const validatePassword = (password: string): Result<Password, FormValidat
   if (password.length < PASSWORD_MIN_LENGTH) {
     return err(
       FormValidationErrors.invalidPassword(
-        `Password must be at least ${String(PASSWORD_MIN_LENGTH)} characters long`
+        `Password must be at least ${PASSWORD_MIN_LENGTH} characters long`
       )
     );
   }
@@ -324,7 +324,7 @@ export const validatePassword = (password: string): Result<Password, FormValidat
   if (password.length > PASSWORD_MAX_LENGTH) {
     return err(
       FormValidationErrors.invalidPassword(
-        `Password must be at most ${String(PASSWORD_MAX_LENGTH)} characters long`
+        `Password must be at most ${PASSWORD_MAX_LENGTH} characters long`
       )
     );
   }
@@ -341,9 +341,6 @@ export const validatePassword = (password: string): Result<Password, FormValidat
   if (!hasNumber) missingRequirements.push('one number');
 
   // Special char is recommended but not required for basic validation
-  const _strengthScore = [hasUpperCase, hasLowerCase, hasNumber, hasSpecialChar].filter(
-    Boolean
-  ).length;
 
   if (missingRequirements.length > 0) {
     return err(
@@ -389,11 +386,11 @@ export const validateAge = (
   }
 
   if (age < min) {
-    return err(FormValidationErrors.invalidAge(age, `Age must be at least ${String(min)}`));
+    return err(FormValidationErrors.invalidAge(age, `Age must be at least ${min}`));
   }
 
   if (age > max) {
-    return err(FormValidationErrors.invalidAge(age, `Age must be at most ${String(max)}`));
+    return err(FormValidationErrors.invalidAge(age, `Age must be at most ${max}`));
   }
 
   return ok(age as Age);
@@ -576,9 +573,9 @@ export const formatFormValidationError = (error: FormValidationError): string =>
     case 'REQUIRED_FIELD':
       return `${error.fieldName} is required`;
     case 'STRING_TOO_SHORT':
-      return `${error.fieldName} must be at least ${String(error.min)} characters (got ${String(error.actual)})`;
+      return `${error.fieldName} must be at least ${error.min} characters (got ${error.actual})`;
     case 'STRING_TOO_LONG':
-      return `${error.fieldName} must be at most ${String(error.max)} characters (got ${String(error.actual)})`;
+      return `${error.fieldName} must be at most ${error.max} characters (got ${error.actual})`;
     case 'PATTERN_MISMATCH':
       return `${error.fieldName} format is invalid`;
     case 'CUSTOM_VALIDATION':

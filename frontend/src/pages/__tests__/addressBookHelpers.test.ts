@@ -102,6 +102,31 @@ describe('AddressBook helper functions', () => {
       expect(resolveContactGender(person)).toBe(Gender.other);
     });
 
+    it('resolves explicit "other" to Gender.other', () => {
+      const person = createPerson({ gender: 'other' });
+      expect(resolveContactGender(person)).toBe(Gender.other);
+    });
+
+    it('resolves spaced "non binary" to Gender.other', () => {
+      const person = createPerson({ gender: 'non binary' });
+      expect(resolveContactGender(person)).toBe(Gender.other);
+    });
+
+    it('resolves capitalized "Non-Binary" to Gender.other', () => {
+      const person = createPerson({ gender: 'Non-Binary' });
+      expect(resolveContactGender(person)).toBe(Gender.other);
+    });
+
+    it('resolves "genderqueer" to Gender.other', () => {
+      const person = createPerson({ gender: 'genderqueer' });
+      expect(resolveContactGender(person)).toBe(Gender.other);
+    });
+
+    it('resolves capitalized "OTHER" to Gender.other', () => {
+      const person = createPerson({ gender: 'OTHER' });
+      expect(resolveContactGender(person)).toBe(Gender.other);
+    });
+
     it('handles undefined gender gracefully', () => {
       const person = createPerson({ gender: undefined });
       expect(resolveContactGender(person)).toBe(undefined);

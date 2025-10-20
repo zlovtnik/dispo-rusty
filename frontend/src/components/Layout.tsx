@@ -156,6 +156,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           <Button
             type="text"
             icon={<MenuOutlined />}
+            aria-label="Toggle menu"
             onClick={() => {
               setCollapsed(!collapsed);
             }}

@@ -4,13 +4,13 @@
 
 ✅ **180 tests passing** (improved from 161)
 ❌ **9 tests failing** (improved from 19) - 53% reduction
-⚠️ **1 environment error remaining** (improved from 2)  
-📊 **189 total tests** across 11 test files
+⚠️ **1 environment error remaining** (improved from 2) - separate from test failures
+📊 **189 total tests** across 11 test files (environment error not counted in test totals)
 
 ### Progress Metrics
 - **Tests Fixed**: 10 of 19 original failures
 - **Errors Reduced**: 2 → 1
-- **Pass Rate**: 95.2% (180/189)
+- **Pass Rate**: 95.2% (180/189) - calculated from test results only, excluding environment error
 
 ---
 

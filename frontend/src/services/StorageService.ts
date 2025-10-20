@@ -105,7 +105,7 @@ export class StorageService {
    * @param to - Target version
    */
   private migrate(from: number, to: number): void {
-    console.log(`Migrating storage from version ${String(from)} to ${String(to)}`);
+    console.log(`Migrating storage from version ${from} to ${to}`);
 
     // TODO: Implement migration logic when STORAGE_VERSION is incremented
     //

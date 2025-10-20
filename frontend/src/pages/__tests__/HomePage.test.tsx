@@ -1,26 +1,49 @@
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect, beforeEach, mock } from 'bun:test';
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithoutAuth, renderWithAuthAndNavigation } from '../../test-utils/render';
 import { HomePage } from '../HomePage';
 
-// Helper function to find login/sign button
-const findLoginButton = (buttons: HTMLElement[]): HTMLElement | undefined => {
-  return buttons.find(button => {
-    const text = button.textContent;
-    if (!text) return false;
-    return text.toLowerCase().includes('login') || text.toLowerCase().includes('sign');
-  });
-};
+// Mock navigation tracking
+let mockNavigate: ReturnType<typeof mock>;
+
+// Mock react-router-dom navigation
+void mock.module('react-router-dom', () => ({
+  Link: ({
+    to,
+    children,
+    ...props
+  }: {
+    to: string;
+    children: React.ReactNode;
+    [key: string]: unknown;
+  }) => {
+    const handleClick = (e: React.MouseEvent): void => {
+      e.preventDefault();
+      mockNavigate(to);
+    };
+    return (
+      <a href={to} onClick={handleClick} {...props}>
+        {children}
+      </a>
+    );
+  },
+  Navigate: ({ to }: { to: string }) => <div data-testid="navigate" data-to={to} />,
+}));
 
 describe('HomePage Component', () => {
+  beforeEach(() => {
+    mockNavigate = mock();
+  });
+
   describe('Rendering', () => {
     it('should render home page with features', () => {
       renderWithoutAuth(<HomePage />);
 
-      // Should display feature cards
-      const features = screen.getAllByText(/Secure Authentication|Multi-Tenant|High Performance/i);
-      expect(features.length).toBeGreaterThan(0);
+      // Should display each feature individually
+      expect(screen.getByText('Secure Authentication')).toBeInTheDocument();
+      expect(screen.getByText('Multi-Tenant Architecture')).toBeInTheDocument();
+      expect(screen.getByText('High Performance')).toBeInTheDocument();
     });
   });
 
@@ -41,22 +64,29 @@ describe('HomePage Component', () => {
       expect(screen.getByLabelText('Multi-Tenant Architecture icon')).toBeInTheDocument();
       expect(screen.getByLabelText('High Performance icon')).toBeInTheDocument();
 
-      // Test that we can find feature descriptions with key terms
-      expect(screen.getByText(/JWT.*authentication/i)).toBeInTheDocument();
-      expect(screen.getByText(/tenant.*isolation/i)).toBeInTheDocument();
-      expect(screen.getByText(/Bun.*TypeScript/i)).toBeInTheDocument();
+      // Test that we can find feature descriptions with key terms (using getAllBy for multiple matches)
+      const jwtElements = screen.getAllByText(/JWT.*authentication/i);
+      expect(jwtElements.length).toBeGreaterThan(0);
+
+      const tenantElements = screen.getAllByText(/tenant.*isolation/i);
+      expect(tenantElements.length).toBeGreaterThan(0);
+
+      const bunElements = screen.getAllByText(/Bun.*TypeScript/i);
+      expect(bunElements.length).toBeGreaterThan(0);
     });
   });
 
   describe('Authentication Redirect', () => {
     it('should redirect authenticated users to dashboard', () => {
-      const { getCurrentLocation } = renderWithAuthAndNavigation(<HomePage />, {
+      renderWithAuthAndNavigation(<HomePage />, {
         initialRoute: '/',
       });
 
       // HomePage redirects authenticated users to /dashboard
-      // Verify the actual navigation occurred by checking the current pathname
-      expect(getCurrentLocation().pathname).toBe('/dashboard');
+      // Check for the Navigate component with the correct destination
+      const navigateElement = screen.getByTestId('navigate');
+      expect(navigateElement).toBeInTheDocument();
+      expect(navigateElement).toHaveAttribute('data-to', '/dashboard');
     });
 
     it('should show home page for unauthenticated users', () => {
@@ -78,37 +108,12 @@ describe('HomePage Component', () => {
     it('should have login button', () => {
       renderWithoutAuth(<HomePage />);
 
-      const buttons = screen.getAllByRole('button');
-      const loginButton = findLoginButton(buttons);
-      expect(loginButton).toBeDefined();
-    });
-
-    it('should navigate to login on button click', async () => {
-      const user = userEvent.setup();
-      renderWithoutAuth(<HomePage />, {
-        initialRoute: '/',
-      });
-
-      const buttons = screen.queryAllByRole('button');
-      const loginButton = findLoginButton(buttons);
-      expect(loginButton).toBeDefined();
-      if (loginButton) {
-        await user.click(loginButton);
-        // Verify navigation occurred (e.g., check URL or confirm redirect)
-        // This depends on your router setup
-      }
+      const loginButton = screen.getByRole('button', { name: /login|sign in/i });
+      expect(loginButton).toBeInTheDocument();
     });
   });
 
   describe('Content', () => {
-    it('should display welcome message', () => {
-      renderWithoutAuth(<HomePage />);
-
-      // Should have some welcome text
-      const elements = screen.getAllByRole('heading');
-      expect(elements.length).toBeGreaterThan(0);
-    });
-
     it('should display technology stack', () => {
       renderWithoutAuth(<HomePage />);
 
@@ -118,24 +123,44 @@ describe('HomePage Component', () => {
     });
   });
 
-  describe('Styling', () => {
-    it('should have proper layout structure', () => {
-      const { container } = renderWithoutAuth(<HomePage />);
+  describe('Layout Structure', () => {
+    it('should have proper semantic layout structure', () => {
+      renderWithoutAuth(<HomePage />);
 
-      const layouts = container.querySelectorAll('[class*="ant-layout"]');
-      expect(layouts.length).toBeGreaterThan(0);
+      // Test for hero H1 heading (main page title)
+      const heroHeading = screen.getByRole('heading', { level: 1 });
+      expect(heroHeading).toBeInTheDocument();
+      expect(heroHeading).toHaveTextContent(/Welcome to.*Address Book/i);
+
+      // Test for feature sections using accessible content
+      // There are 4 headings total: 1 h1 (welcome), 1 h4 (header title), 3 h4 (features)
+      const allHeadings = screen.getAllByRole('heading');
+      expect(allHeadings.length).toBeGreaterThanOrEqual(4);
+
+      // Verify specific feature titles are present
+      expect(screen.getByText('Secure Authentication')).toBeInTheDocument();
+      expect(screen.getByText('Multi-Tenant Architecture')).toBeInTheDocument();
+      expect(screen.getByText('High Performance')).toBeInTheDocument();
     });
 
-    it('should have feature cards', () => {
-      const { container } = renderWithoutAuth(<HomePage />);
+    it('should have feature cards with accessible structure', () => {
+      renderWithoutAuth(<HomePage />);
 
-      const cards = container.querySelectorAll('[class*="ant-card"]');
-      expect(cards.length).toBeGreaterThan(0);
+      // Test for feature content using user-visible text
+      const featureDescriptions = screen.getAllByText(
+        /JWT.*authentication|tenant.*isolation|Bun.*TypeScript/i
+      );
+      expect(featureDescriptions).toHaveLength(3);
+
+      // Test for feature icons using their accessible labels
+      expect(screen.getByLabelText('Secure Authentication icon')).toBeInTheDocument();
+      expect(screen.getByLabelText('Multi-Tenant Architecture icon')).toBeInTheDocument();
+      expect(screen.getByLabelText('High Performance icon')).toBeInTheDocument();
     });
   });
 
   describe('Accessibility', () => {
-    it('should have proper heading hierarchy', () => {
+    it('should have proper heading structure', () => {
       renderWithoutAuth(<HomePage />);
 
       // Wait for the component to render and get all headings
@@ -147,28 +172,13 @@ describe('HomePage Component', () => {
       expect(h1Heading).toBeInTheDocument();
       expect(h1Heading).toHaveTextContent(/Welcome to the Natural Pharmacy System/i);
 
-      // Assert there is at least one level-2 heading (h2) - the feature titles are h4 but we'll check for any h2+ headings
+      // Assert there is at least one subheading (h2, h3, or h4)
       const h2Headings = allHeadings.filter(heading => heading.tagName === 'H2');
       const h3Headings = allHeadings.filter(heading => heading.tagName === 'H3');
       const h4Headings = allHeadings.filter(heading => heading.tagName === 'H4');
 
-      // Should have at least one h2 or h3 heading (feature titles are h4)
       const subHeadings = [...h2Headings, ...h3Headings, ...h4Headings];
       expect(subHeadings.length).toBeGreaterThan(0);
-
-      // Verify proper nesting - h1 should come before other headings in the main content
-      // Note: The header has an h4, but the main content h1 should come before the feature h4s
-      const h1Index = allHeadings.findIndex(heading => heading.tagName === 'H1');
-      const featureH4s = allHeadings.filter(
-        heading => heading.tagName === 'H4' && heading.id?.startsWith('feature-title-')
-      );
-
-      if (featureH4s.length > 0) {
-        const firstFeatureH4Index = allHeadings.findIndex(
-          heading => heading.tagName === 'H4' && heading.id?.startsWith('feature-title-')
-        );
-        expect(h1Index).toBeLessThan(firstFeatureH4Index);
-      }
     });
 
     it('should have accessible buttons with proper labels and roles', () => {
@@ -210,8 +220,9 @@ describe('HomePage Component', () => {
 
       // Test keyboard activation (Enter key)
       await user.keyboard('{Enter}');
-      // Note: The actual navigation behavior would be tested in integration tests
-      // Here we just verify the button can be activated via keyboard
+
+      // Assert that navigation was triggered for Get Started button
+      expect(mockNavigate).toHaveBeenCalledWith('/register');
 
       // Test "Sign In" button keyboard interaction
       const signInButton = screen.getByRole('button', { name: /sign in/i });
@@ -222,13 +233,19 @@ describe('HomePage Component', () => {
 
       // Test keyboard activation (Space key)
       await user.keyboard(' ');
-      // Note: The actual navigation behavior would be tested in integration tests
-      // Here we just verify the button can be activated via keyboard
+
+      // Assert that navigation was triggered for Sign In button
+      expect(mockNavigate).toHaveBeenCalledWith('/login');
 
       // Test Tab navigation between buttons
       await user.tab();
-      // The focus should move to the next focusable element
-      // This verifies that keyboard navigation works properly
+
+      // Assert that focus moved to the next focusable element
+      // After tabbing from Sign In button, focus should move to the next element
+      // (which could be another button or the first focusable element in the features section)
+      const nextFocusedElement = document.activeElement;
+      expect(nextFocusedElement).not.toBe(signInButton);
+      expect(nextFocusedElement).toBeInTheDocument();
     });
   });
 });

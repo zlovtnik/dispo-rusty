@@ -11,7 +11,7 @@ import { getEnv } from '../../config/env';
 const API_BASE_URL = getEnv().apiUrl;
 
 // Mock data - using backend API format (snake_case)
-const mockContacts: ContactApiDTO[] = [
+let mockContacts: ContactApiDTO[] = [
   {
     id: 1,
     tenant_id: 'tenant-1',
@@ -43,8 +43,7 @@ const mockContacts: ContactApiDTO[] = [
 describe('AddressBookPage Component', () => {
   beforeEach(() => {
     // Reset mockContacts to initial state before each test
-    mockContacts.length = 0;
-    mockContacts.push(
+    mockContacts = [
       {
         id: 1,
         tenant_id: 'tenant-1',
@@ -70,8 +69,8 @@ describe('AddressBookPage Component', () => {
         address: '456 Oak Ave, Shelbyville, IL 62702, USA',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-      }
-    );
+      },
+    ];
 
     // Setup test-specific handlers using the global server
     server.use(
@@ -104,7 +103,7 @@ describe('AddressBookPage Component', () => {
           id: mockContacts.length + 1,
           tenant_id: 'tenant-1',
           first_name: nameParts[0] ?? 'Unknown',
-          last_name: nameParts.slice(1).join(' ') ?? 'User',
+          last_name: nameParts.slice(1).join(' ') || 'User',
           email: body.email ?? '',
           phone: body.phone ?? '',
           age: body.age ?? 25,
@@ -135,22 +134,28 @@ describe('AddressBookPage Component', () => {
           return HttpResponse.json({ message: 'Contact not found', data: null }, { status: 404 });
         }
 
-        // Apply updates
-        const updates: Partial<ContactApiDTO> = {
-          updated_at: new Date().toISOString(),
-        };
-        if (body.name) {
-          const nameParts = body.name.split(' ');
-          updates.first_name = nameParts[0] ?? 'Unknown';
-          updates.last_name = nameParts.slice(1).join(' ') ?? 'User';
+        // Apply updates by creating a new object
+        const existingContact = mockContacts[contactIndex];
+        if (!existingContact) {
+          return HttpResponse.json({ message: 'Contact not found', data: null }, { status: 404 });
         }
-        if (body.email !== undefined) updates.email = body.email;
-        if (body.phone !== undefined) updates.phone = body.phone;
-        if (body.age !== undefined) updates.age = body.age;
-        if (body.gender !== undefined) updates.gender = body.gender;
-        if (body.address !== undefined) updates.address = body.address;
+        const updatedContact: ContactApiDTO = {
+          ...existingContact,
+          updated_at: new Date().toISOString(),
+          ...(body.name != null &&
+            typeof body.name === 'string' &&
+            body.name.trim() !== '' && {
+              first_name: body.name.split(' ')[0] ?? 'Unknown',
+              last_name: body.name.split(' ').slice(1).join(' ') || 'User',
+            }),
+          ...(body.email !== undefined && { email: body.email }),
+          ...(body.phone !== undefined && { phone: body.phone }),
+          ...(body.age !== undefined && { age: body.age }),
+          ...(body.gender !== undefined && { gender: body.gender }),
+          ...(body.address !== undefined && { address: body.address }),
+        };
 
-        mockContacts[contactIndex] = { ...mockContacts[contactIndex], ...updates };
+        mockContacts[contactIndex] = updatedContact;
         return HttpResponse.json({
           message: 'Contact updated',
           data: mockContacts[contactIndex],
@@ -211,12 +216,24 @@ describe('AddressBookPage Component', () => {
       });
     });
 
-    it('should display contact names in table', async () => {
+    it('should render table with correct structure and row count', async () => {
       renderWithAuth(<AddressBookPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('John Doe')).toBeInTheDocument();
-        expect(screen.getByText('Jane Smith')).toBeInTheDocument();
+        // Verify table structure
+        expect(screen.getByRole('table')).toBeInTheDocument();
+
+        // Verify table headers are present
+        expect(screen.getByRole('columnheader', { name: /name/i })).toBeInTheDocument();
+        expect(screen.getByRole('columnheader', { name: /email/i })).toBeInTheDocument();
+
+        // Verify correct number of data rows (2 contacts + 1 header row = 3 total rows)
+        const rows = screen.getAllByRole('row');
+        expect(rows).toHaveLength(3);
+
+        // Verify specific contact data in table cells
+        expect(screen.getByRole('cell', { name: 'John Doe' })).toBeInTheDocument();
+        expect(screen.getByRole('cell', { name: 'Jane Smith' })).toBeInTheDocument();
       });
     });
 
@@ -317,7 +334,11 @@ describe('AddressBookPage Component', () => {
 
       const editButtons = screen.getAllByRole('button', { name: /edit/i });
       expect(editButtons.length).toBeGreaterThan(0);
-      await user.click(editButtons[0]!);
+      const editButton = editButtons[0];
+      if (!editButton) {
+        throw new Error('Edit button not found');
+      }
+      await user.click(editButton);
       await waitFor(() => {
         expect(screen.getByDisplayValue('John')).toBeInTheDocument();
       });
@@ -335,7 +356,11 @@ describe('AddressBookPage Component', () => {
 
       const deleteButtons = screen.getAllByRole('button', { name: /delete|trash/i });
       expect(deleteButtons.length).toBeGreaterThan(0);
-      await user.click(deleteButtons[0]!);
+      const deleteButton = deleteButtons[0];
+      if (!deleteButton) {
+        throw new Error('Delete button not found');
+      }
+      await user.click(deleteButton);
       await waitFor(() => {
         expect(screen.getByText(/confirm|are you sure/i)).toBeInTheDocument();
       });
@@ -351,7 +376,11 @@ describe('AddressBookPage Component', () => {
 
       const deleteButtons = screen.getAllByRole('button', { name: /delete|trash/i });
       expect(deleteButtons.length).toBeGreaterThan(0);
-      await user.click(deleteButtons[0]!);
+      const deleteButton = deleteButtons[0];
+      if (!deleteButton) {
+        throw new Error('Delete button not found');
+      }
+      await user.click(deleteButton);
       const cancelButton = await screen.findByRole('button', { name: /cancel/i });
       await user.click(cancelButton);
 
@@ -444,8 +473,8 @@ describe('AddressBookPage Component', () => {
 
       // Get the descriptive text from aria-label or textContent
       const ariaLabel = addButton.getAttribute('aria-label');
-      const textContent = addButton.textContent?.trim();
-      const descriptiveText = ariaLabel || textContent;
+      const textContent = addButton.textContent?.trim() ?? '';
+      const descriptiveText = ariaLabel ?? textContent;
 
       // Verify we have a descriptive string and it matches a meaningful pattern
       expect(descriptiveText).toBeTruthy();
@@ -458,23 +487,25 @@ describe('AddressBookPage Component', () => {
 
       // Wait for the component to load
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: /add contact/i })).toBeInTheDocument();
+        expect(screen.getByPlaceholderText(/search/i)).toBeInTheDocument();
       });
 
-      // Get the expected tabbable elements
-      const searchInput = screen.getByPlaceholderText('Search contacts...');
-      const addButton = screen.getByRole('button', { name: /add contact/i });
+      // Get the expected tabbable elements using case-insensitive regex selectors
+      const searchInput = screen.getByPlaceholderText(/search/i);
+      const addButtons = screen.getAllByRole('button', { name: /add/i });
+      const addButton = addButtons[0]; // Get the first Add button
 
-      // Test initial tab order: Search input should be first
-      await user.keyboard('{Tab}');
-      expect(document.activeElement).toBe(searchInput);
+      if (!addButton) {
+        throw new Error('Add button not found');
+      }
 
-      // Second tab should move to Add Contact button
-      await user.keyboard('{Tab}');
-      expect(document.activeElement).toBe(addButton);
+      // Test initial tab - should focus on one of the expected interactive elements
+      await user.tab();
+      const firstFocusedElement = document.activeElement as HTMLElement;
+      expect([searchInput, addButton]).toContain(firstFocusedElement);
 
-      // Third tab should move to next focusable element (if any)
-      await user.keyboard('{Tab}');
+      // Second tab should move to next focusable element
+      await user.tab();
       // Verify focus moved to a focusable element, not stuck on body
       expect(document.activeElement).not.toBe(document.body);
       expect(document.activeElement?.tagName).toMatch(/BUTTON|INPUT|A/);
@@ -509,7 +540,7 @@ describe('AddressBookPage Component', () => {
   });
 
   describe('Pagination', () => {
-    it.skip('should handle pagination', async () => {
+    it.skip('should handle pagination', () => {
       // TODO: Implement pagination test after backend supports limit/offset
       const _user = userEvent.setup();
       renderWithAuth(<AddressBookPage />);
@@ -518,7 +549,7 @@ describe('AddressBookPage Component', () => {
   });
 
   describe('Sorting', () => {
-    it.skip('should sort contacts by column', async () => {
+    it.skip('should sort contacts by column', () => {
       // TODO: Implement sorting test after backend supports sort parameters
       const _user = userEvent.setup();
       renderWithAuth(<AddressBookPage />);

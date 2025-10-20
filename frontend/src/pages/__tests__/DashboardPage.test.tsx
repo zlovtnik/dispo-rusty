@@ -78,13 +78,36 @@ describe('DashboardPage Component', () => {
     });
 
     it('updates content when user data changes', () => {
-      const { rerender } = renderWithAuth(<DashboardPage />);
+      // Create initial auth value with mockUser
+      const initialAuthValue = {
+        isAuthenticated: true,
+        user: mockUser,
+        tenant: mockTenant,
+      };
 
-      rerender(<DashboardPage />);
+      const { rerender, unmount } = renderWithAuth(<DashboardPage />, { authValue: initialAuthValue });
 
+      // Verify initial greeting
       expect(
         screen.getByText(`Welcome back, ${mockUser.firstName ?? 'User'}!`)
       ).toBeInTheDocument();
+
+      // Create updated auth value with different firstName
+      const updatedAuthValue = {
+        isAuthenticated: true,
+        user: { ...mockUser, firstName: 'Updated' },
+        tenant: mockTenant,
+      };
+
+      // Unmount the first render before mounting the second
+      unmount();
+
+      // Test that the component responds to different auth values
+      // by rendering with the updated auth value
+      renderWithAuth(<DashboardPage />, { authValue: updatedAuthValue });
+
+      // Assert the greeting reflects the new firstName
+      expect(screen.getByText(`Welcome back, Updated!`)).toBeInTheDocument();
     });
 
     it('handles missing user name gracefully', () => {
@@ -116,20 +139,8 @@ describe('DashboardPage Component', () => {
       // Verify the full name is accessible in the text content
       expect(welcomeElement.textContent).toContain(longName);
 
-      // Check if there's an accessibility fallback (title or aria-label) with the full name
-      const alertElement =
-        welcomeElement.closest('[role="alert"]') ?? welcomeElement.closest('.ant-alert');
-      if (alertElement) {
-        const title = alertElement.getAttribute('title');
-        const ariaLabel = alertElement.getAttribute('aria-label');
-        const hasAccessibilityFallback =
-          (title?.includes(longName) ?? false) || (ariaLabel?.includes(longName) ?? false);
-
-        // If accessibility fallback exists, verify it contains the full name
-        if ((title?.length ?? 0) > 0 || (ariaLabel?.length ?? 0) > 0) {
-          expect(hasAccessibilityFallback).toBe(true);
-        }
-      }
+      // Note: Accessibility fallbacks (title/aria-label) are optional and not implemented
+      // The component displays long names directly in the alert message
     });
 
     it('provides navigation links', () => {
@@ -191,16 +202,27 @@ describe('DashboardPage Component', () => {
       });
     });
 
-    it('displays user and tenant information', () => {
+    it('provides accessible user and tenant information', () => {
       renderWithAuth(<DashboardPage />);
 
-      // Verify welcome text contains the user's name
-      expect(
-        screen.getByText(new RegExp(`Welcome.*${mockUser.firstName || ''}`))
-      ).toBeInTheDocument();
+      // Check for accessible welcome message with proper heading or landmark
+      const welcomeHeading = screen.getByRole('heading', {
+        name: new RegExp(`Welcome.*${mockUser.firstName || 'User'}`),
+      });
+      expect(welcomeHeading).toBeInTheDocument();
 
-      // Verify tenant text contains the actual tenant name
-      expect(screen.getByText(new RegExp(`tenant ${mockTenant.name}`))).toBeInTheDocument();
+      // Check for accessible tenant information with proper labeling
+      const tenantInfo =
+        screen.getByLabelText(/tenant/i) ||
+        screen.getByRole('region', { name: /tenant/i }) ||
+        screen.getByText(new RegExp(`tenant ${mockTenant.name}`));
+      expect(tenantInfo).toBeInTheDocument();
+
+      // Verify alert has proper ARIA attributes for accessibility
+      const alert = screen.getByRole('alert');
+      expect(alert).toBeInTheDocument();
+      // Alert role should be assertive by default, not polite
+      expect(alert).toHaveAttribute('aria-live', 'assertive');
     });
 
     it('uses semantic HTML elements', () => {

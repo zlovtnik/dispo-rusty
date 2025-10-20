@@ -1,13 +1,13 @@
 import { err, errAsync, ok, okAsync } from 'neverthrow';
 import type { AsyncResult, Result } from '../types/fp';
 import { createValidationError } from '../types/errors';
-import type { ValidationError } from '../types/errors';
+import type { TypedValidationError } from '../types/errors';
 import type { ZodType } from 'zod';
 
 export const validateAndDecode = <T>(
   schema: ZodType<T>,
   data: unknown
-): Result<T, ValidationError> => {
+): Result<T, TypedValidationError> => {
   const parsed = schema.safeParse(data);
   if (!parsed.success) {
     return err(

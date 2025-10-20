@@ -303,6 +303,17 @@ function validateContactData(data: ContactCreateData): Result<ContactCreateData,
     }
   }
 
+  // Mobile validation
+  if (isNonEmptyString(data.mobile)) {
+    const mobileValidation = validatePhoneFormat(data.mobile);
+    if (mobileValidation.isErr()) {
+      errors.mobile =
+        'reason' in mobileValidation.error
+          ? mobileValidation.error.reason
+          : 'Invalid mobile format';
+    }
+  }
+
   // Date of birth validation
   if (data.dateOfBirth) {
     const age = calculateAge(data.dateOfBirth);
