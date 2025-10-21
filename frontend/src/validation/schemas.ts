@@ -228,6 +228,11 @@ export const loginRequestSchema = z.object({
 const isValidPostgresConnectionString = (value: string): boolean => {
   const input = value.trim();
   
+  // Reject empty or whitespace-only strings
+  if (input.length === 0) {
+    return false;
+  }
+  
   // Try parsing as a PostgreSQL URL first
   try {
     const url = new URL(input);

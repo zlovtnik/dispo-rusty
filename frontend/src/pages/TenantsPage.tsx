@@ -57,27 +57,6 @@ export const TenantsPage: React.FC = () => {
     total: 0,
   });
 
-  // Add empty state handling
-  if (loading) {
-    return <Spin tip="Loading tenants..." />;
-  }
-
-  if (tenants.length === 0 && !loading) {
-    return (
-      <Card>
-        <div style={{ textAlign: 'center', padding: 48 }}>
-          <Typography.Title level={4}>No Tenants Found</Typography.Title>
-          <Typography.Text type="secondary">
-            Create your first tenant to get started.
-          </Typography.Text>
-          <Button type="primary" onClick={handleNewTenant} style={{ marginTop: 16 }}>
-            Create Tenant
-          </Button>
-        </div>
-      </Card>
-    );
-  }
-
   // Load tenants from API with pagination
   const loadTenants = async (params?: { offset?: number; limit?: number }) => {
     try {
@@ -518,25 +497,43 @@ export const TenantsPage: React.FC = () => {
 
   return (
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <Typography.Title level={2} style={{ margin: 0 }}>
-            Tenants
-          </Typography.Title>
-          <Typography.Text type="secondary">
-            Manage tenant configurations and database connections
-          </Typography.Text>
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: '48px' }}>
+          <Spin tip="Loading tenants..." />
         </div>
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleNewTenant}>
-          Add Tenant
-        </Button>
-      </div>
+      ) : tenants.length === 0 ? (
+        <Card>
+          <div style={{ textAlign: 'center', padding: 48 }}>
+            <Typography.Title level={4}>No Tenants Found</Typography.Title>
+            <Typography.Text type="secondary">
+              Create your first tenant to get started.
+            </Typography.Text>
+            <Button type="primary" onClick={handleNewTenant} style={{ marginTop: 16 }}>
+              Create Tenant
+            </Button>
+          </div>
+        </Card>
+      ) : (
+        <>
+          {/* Header */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <Typography.Title level={2} style={{ margin: 0 }}>
+                Tenants
+              </Typography.Title>
+              <Typography.Text type="secondary">
+                Manage tenant configurations and database connections
+              </Typography.Text>
+            </div>
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleNewTenant}>
+              Add Tenant
+            </Button>
+          </div>
 
-      <Divider />
+          <Divider />
 
-      {/* Search Filters */}
-      <Card
+          {/* Search Filters */}
+          <Card
         title="Search Filters"
         size="small"
         style={{ borderRadius: '8px', marginTop: '16px' }}
@@ -599,12 +596,13 @@ export const TenantsPage: React.FC = () => {
                   allowClear
                   value={isoToDayjs(filter.value)}
                   onChange={(date, dateString) => {
-                    if (dateString && !dayjs(dateString).isValid()) {
+                    const dateStringValue = typeof dateString === 'string' ? dateString : '';
+                    if (dateStringValue && !dayjs(dateStringValue).isValid()) {
                       // Show error
                       message.error('Invalid date format');
                       return;
                     }
-                    updateFilter(index, 'value', dateString || '');
+                    updateFilter(index, 'value', dateStringValue || '');
                   }}
                   data-testid={`filter-value-date-${index}`}
                 />
@@ -706,6 +704,8 @@ export const TenantsPage: React.FC = () => {
           }}
         />
       </Card>
+        </>
+      )}
 
       {/* Tenant Form Modal */}
       <Modal
@@ -756,3 +756,17 @@ export const TenantsPage: React.FC = () => {
                     : Promise.reject(new Error('Invalid PostgreSQL connection string'));
                 }
               }
+            ]}
+          >
+            <Input placeholder="postgres://localhost:5432/mydb or key=value format" />
+          </Form.Item>
+          <Form.Item>
+            <Button type="primary" htmlType="submit" loading={isSubmitting}>
+              {editingTenant ? 'Update' : 'Add'} Tenant
+            </Button>
+          </Form.Item>
+        </Form>
+      </Modal>
+    </Space>
+  );
+};

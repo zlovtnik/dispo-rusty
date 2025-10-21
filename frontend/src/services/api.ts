@@ -256,7 +256,18 @@ const apiResultFromResponse = <T>(response: Response): ResultAsync<ApiResponse<T
   ).andThen(body => {
     const message = typeof body.message === 'string' ? body.message : undefined;
     const status = typeof body.status === 'string' ? body.status : undefined;
-    const success = status === 'success' || ('success' in body ? Boolean(body.success) : response.ok);
+
+    // Extracted helper for determining success
+    function isSuccess(response: Response, body: Record<string, unknown>, status?: string): boolean {
+      if (status === 'success') return true;
+      if ('success' in body) {
+        if (typeof body.success === 'boolean') return body.success;
+        return response.ok;
+      }
+      return response.ok;
+    }
+
+    const success = isSuccess(response, body, status);
 
     if (response.ok && success) {
       const data = (body.data ?? body) as T;
@@ -883,23 +894,23 @@ export const healthService = {
   },
 
   /**
-   * Simple ping endpoint to check if API is responsive
-   * @returns API response indicating service availability
-   */
-  ping(): AsyncResult<ApiResponse<Record<string, unknown>>, AppError> {
-    return apiClient.get<Record<string, unknown>>('/ping');
-  },
-};
-
-/**
- * Tenant filtering parameters for advanced queries
- */
 export interface TenantFilter {
   /** Array of filter conditions to apply */
   filters: {
     /** Field name to filter on */
     field: string;
     /** Comparison operator (eq, ne, gt, lt, like, etc.) */
+    operator: string;
+    /** Value to compare against */
+    value: string;
+  }[];
+  /** Cursor for pagination */
+  cursor?: number;
+  /** Number of results per page */
+  pageSize?: number;
+  /** Offset for pagination */
+  offset?: number;
+}
     operator: string;
     /** Value to compare against */
     value: string;
@@ -972,14 +983,14 @@ export const tenantService = {
       }
       return okAsync(response);
     });
-  },
-
-  /**
-   * Filters tenants based on custom criteria
-   *
-   * @param params - Filter configuration with field/operator/value conditions
-   * @returns Filtered tenants matching the criteria
-   *
+   *   filters: [{ field: 'status', operator: 'eq', value: 'active' }],
+   *   pageSize: 20
+   * });
+   * ```
+   */
+  filter(
+    params: TenantFilter
+  ): AsyncResult<ApiResponse<PaginatedTenantResponse | Tenant[]>, AppError> {
    * @example
    * ```typescript
    * const active = await tenantService.filter({
@@ -987,9 +998,9 @@ export const tenantService = {
    *   limit: 20
    * });
    * ```
-   */
-  filter(
-    params: TenantFilter
+    if (params.pageSize !== undefined) {
+      queryObj.page_size = params.pageSize;
+    }
   ): AsyncResult<ApiResponse<PaginatedTenantResponse | Tenant[]>, AppError> {
     const queryObj: Record<string, unknown> = {
       filters: params.filters,
@@ -999,7 +1010,7 @@ export const tenantService = {
       queryObj.cursor = params.cursor;
     }
     if (params.limit !== undefined) {
-      queryObj.limit = params.limit;
+      queryObj.page_size = params.limit;
     }
     if (params.offset !== undefined) {
       queryObj.offset = params.offset;
@@ -1091,11 +1102,12 @@ export const tenantService = {
  *
  * @example
  * ```typescript
- * // Get contacts with search and pagination
+ * // Get contacts with search, pagination, and sorting
  * const result = await addressBookService.getAll({
  *   page: 1,
  *   limit: 20,
- *   search: 'john'
+ *   search: 'john',
+ *   sort: 'name,asc'
  * });
  *
  * result.match(
@@ -1111,25 +1123,32 @@ export const tenantService = {
  */
 export const addressBookService = {
   /**
-   * Retrieves all contacts with optional pagination and search
+   * Retrieves all contacts with optional pagination, search, and sorting
    *
-   * @param params - Query parameters (page, limit, search)
+   * @param params - Query parameters (page, limit, search, sort)
    * @returns Contact list response with pagination metadata
    *
    * @example
    * ```typescript
-   * const contacts = await addressBookService.getAll({ page: 1, limit: 10, search: 'doe' });
+   * const contacts = await addressBookService.getAll({ 
+   *   page: 1, 
+   *   limit: 10, 
+   *   search: 'doe',
+   *   sort: 'name,asc'
+   * });
    * ```
    */
   getAll(params?: {
     page?: number;
     limit?: number;
     search?: string;
+    sort?: string;
   }): AsyncResult<ApiResponse<ContactListResponse>, AppError> {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.set('page', params.page.toString());
     if (params?.limit) queryParams.set('limit', params.limit.toString());
     if (params?.search) queryParams.set('search', params.search);
+    if (params?.sort) queryParams.set('sort', params.sort);
 
     const query = queryParams.toString();
     return transformApiResponse(

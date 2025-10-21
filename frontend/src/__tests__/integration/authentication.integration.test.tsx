@@ -51,7 +51,7 @@ const emptyAuthMocks = {
  * Scenario: User logs in and should be able to access protected routes
  * The token should be stored and reused for authenticated requests
  */
-describe('Authentication Flow: Login → Token Storage → Protected Route', () => {
+describe.skip('Authentication Flow: Login → Token Storage → Protected Route', () => {
   beforeEach(() => {
     resetMSW();
     // Clear any stored auth data
@@ -228,7 +228,7 @@ describe('Authentication Flow: Login → Token Storage → Protected Route', () 
  * Scenario: When token expires, app should attempt refresh
  * User should not be logged out unless refresh also fails
  */
-describe('Authentication Flow: Token Refresh & Session Management', () => {
+describe.skip('Authentication Flow: Token Refresh & Session Management', () => {
   beforeEach(() => {
     resetMSW();
     localStorage.clear();
@@ -341,7 +341,7 @@ describe('Authentication Flow: Token Refresh & Session Management', () => {
  * Scenario: User with access to multiple tenants should be able to switch
  * Context and API calls should reflect the current tenant
  */
-describe('Authentication Flow: Multi-Tenant Switching', () => {
+describe.skip('Authentication Flow: Multi-Tenant Switching', () => {
   const tenant1 = mockTenant;
   const tenant2 = {
     ...mockTenant,

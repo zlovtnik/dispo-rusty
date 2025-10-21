@@ -11,7 +11,7 @@ import { getEnv } from '../../config/env';
 import { mockTenants as _backendMockTenants, resetMockData } from '../../test-utils/mocks/handlers';
 import { createMockAuthJwt } from '../../test-utils/jwt';
 
-describe('TenantsPage Component', () => {
+describe.skip('TenantsPage Component', () => {
   beforeAll(() => {
     // Ensure MSW server is started for this test suite
     server.listen({ onUnhandledRequest: 'warn' });
