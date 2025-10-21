@@ -6,7 +6,7 @@
  */
 
 import { http, HttpResponse } from 'msw';
-import type { _LoginCredentials, _AuthResponse } from '../../types/auth';
+import type { LoginCredentials, AuthResponse } from '../../types/auth';
 import { mockUser, mockTenant } from '../render';
 import type { Tenant as BackendTenant } from '../../types/tenant';
 import type { ContactApiDTO } from '../../transformers/dto';
@@ -57,8 +57,8 @@ function getApiBaseUrl(): string {
   // In tests, prioritize process.env which Bun loads from .env files
   // Fall back to import.meta.env for browser/build time
   const apiUrl =
-    (typeof process !== 'undefined' && process.env ? process.env.VITE_API_URL : undefined) || 
-    import.meta.env?.VITE_API_URL || 
+    (typeof process !== 'undefined' && process.env ? process.env.VITE_API_URL : undefined) ||
+    import.meta.env?.VITE_API_URL ||
     'http://localhost:8000/api';
 
   return apiUrl;
@@ -85,8 +85,7 @@ interface ParsedFilter {
 /**
  * Allowed filter operators
  */
-type Operator = 'eq' | 'ne' | 'like' | 'gt' | 'lt';
-
+type Operator = 'eq' | 'ne' | 'like' | 'gt' | 'lt' | 'gte' | 'lte';
 
 /**
  * Type guard to validate if a filter group can be converted to a ParsedFilter
@@ -104,6 +103,11 @@ function isValidFilterGroup(group: FilterGroup): group is FilterGroup & {
  * This is the single source of truth for valid tenant fields
  */
 const BACKEND_TENANT_FIELDS = ['id', 'name', 'db_url', 'created_at', 'updated_at'] as const;
+
+/**
+ * Export the tenant fields as VALID_TENANT_FIELDS for use in tests
+ */
+export const VALID_TENANT_FIELDS = BACKEND_TENANT_FIELDS;
 type TenantFilterField = (typeof BACKEND_TENANT_FIELDS)[number];
 
 /**
@@ -122,6 +126,47 @@ function isValidOperator(operator: string): operator is Operator {
 }
 
 /**
+ * Translate frontend filter operators to backend operators
+ * Frontend uses user-friendly names like 'contains', 'equals'
+ * Backend expects 'like', 'eq', etc.
+ */
+function translateOperator(frontendOp: string): Operator {
+  const operatorMap: Record<string, Operator> = {
+    contains: 'like',
+    equals: 'eq',
+    'greater than': 'gt',
+    'greater or equal': 'gte',
+    'less than': 'lt',
+    'less or equal': 'lte',
+    // Direct backend operators (already in correct format)
+    like: 'like',
+    eq: 'eq',
+    ne: 'ne',
+    gt: 'gt',
+    lt: 'lt',
+  };
+
+  const translated = operatorMap[frontendOp.toLowerCase()];
+  if (!translated) {
+    testLogger.warn(`Unknown operator "${frontendOp}", defaulting to 'like'`);
+    return 'like';
+  }
+  return translated;
+}
+
+/**
+ * Convert value to number or timestamp for comparison
+ * Handles both numeric values and date strings
+ */
+function toNumberOrTime(value: unknown): number {
+  if (typeof value === 'number') return value;
+  const n = Number(value);
+  if (!Number.isNaN(n)) return n;
+  const t = Date.parse(String(value));
+  return Number.isNaN(t) ? NaN : t;
+}
+
+/**
  * Parse and validate a filter group into a ParsedFilter
  * Returns null if the filter is invalid
  */
@@ -135,14 +180,12 @@ function parseFilterGroup(group: FilterGroup): ParsedFilter | null {
     return null;
   }
 
-  if (!isValidOperator(group.operator)) {
-    testLogger.warn(`Invalid filter operator: "${group.operator}"`);
-    return null;
-  }
+  // Translate frontend operator to backend operator
+  const translatedOp = translateOperator(group.operator);
 
   return {
     field: group.field,
-    operator: group.operator,
+    operator: translatedOp,
     value: group.value,
   };
 }
@@ -401,7 +444,7 @@ export function getHandlers() {
       try {
         const url = new URL(request.url);
         const cursor = parseInt(url.searchParams.get('cursor') || '0');
-        const pageSize = parseInt(url.searchParams.get('page_size') || '10');
+        const pageSize = parseInt(url.searchParams.get('limit') || '10');
 
         // Parse filters from query parameters (qs.stringify with arrayFormat: 'indices')
         const filters: ParsedFilter[] = [];
@@ -454,14 +497,18 @@ export function getHandlers() {
                     tenantValue.toLowerCase().includes(value.toLowerCase())
                   );
                 case 'gt':
-                  return typeof tenantValue === 'number' && tenantValue > Number(value);
+                  return toNumberOrTime(tenantValue) > toNumberOrTime(value);
                 case 'lt':
-                  return typeof tenantValue === 'number' && tenantValue < Number(value);
+                  return toNumberOrTime(tenantValue) < toNumberOrTime(value);
+                case 'gte':
+                  return toNumberOrTime(tenantValue) >= toNumberOrTime(value);
+                case 'lte':
+                  return toNumberOrTime(tenantValue) <= toNumberOrTime(value);
                 default:
                   // This should never happen due to type guards, but keeping for safety
                   throw new Error(
                     `Invalid filter operator in mock handler: "${operator}" for field "${field}" with value "${value}". ` +
-                      `Supported operators: eq, ne, like, gt, lt`
+                      `Supported operators: eq, ne, like, gt, lt, gte, lte`
                   );
               }
             });
@@ -738,7 +785,7 @@ export function getHandlers() {
       const name = body.name?.trim() ?? '';
       const parts = name.split(/\s+/).filter(part => part.length > 0);
       const first_name = parts[0] ?? 'Unknown';
-      const last_name = parts.slice(1).join(' ') ?? 'User';
+      const last_name = parts.slice(1).join(' ') || 'User';
 
       const newContact = {
         id: Math.max(0, ...mockContacts.map(c => Number(c.id)).filter(id => !isNaN(id))) + 1,
@@ -789,7 +836,7 @@ export function getHandlers() {
         const name = body.name.trim() ?? '';
         const parts = name.split(/\s+/).filter(part => part.length > 0);
         updates.first_name = parts[0] ?? 'Unknown';
-        updates.last_name = parts.slice(1).join(' ') ?? 'User';
+        updates.last_name = parts.slice(1).join(' ') || 'User';
       }
       if (body.email !== undefined) updates.email = body.email;
       if (body.phone !== undefined) updates.phone = body.phone;
@@ -891,4 +938,3 @@ export function resetMockData(): void {
   mockContacts = createMockContacts();
   mockTenants = createMockTenants();
 }
-

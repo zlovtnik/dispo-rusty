@@ -86,7 +86,7 @@ export const LoginPage: React.FC = () => {
               fontWeight: 700,
             }}
           >
-            Welcome Back
+            Login
           </Typography.Title>
         }
         styles={{

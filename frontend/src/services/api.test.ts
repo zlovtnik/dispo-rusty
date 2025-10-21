@@ -129,8 +129,8 @@ describe('authService', () => {
       // Use MSW delay helper for fast, deterministic timeout testing
       server.use(
         http.post(`${API_BASE_URL}/auth/login`, async () => {
-          // Delay longer than client timeout (50ms) for deterministic test
-          await delay(100);
+          // Delay longer than client timeout (25ms) for deterministic test
+          await delay(50);
           return HttpResponse.json({ success: true });
         })
       );
@@ -224,7 +224,14 @@ describe('authService', () => {
 
       server.use(
         http.post(`${API_BASE_URL}/auth/logout`, () => {
-          return HttpResponse.json({ message: 'Internal server error' }, { status: 500 });
+          return HttpResponse.json(
+            { 
+              success: false, 
+              message: 'Server error during logout',
+              error: { code: 'INTERNAL_SERVER_ERROR' }
+            }, 
+            { status: 500 }
+          );
         })
       );
 
@@ -531,7 +538,7 @@ describe('tenantService', () => {
     test('should filter tenants by criteria', async () => {
       const result = await tenantService.filter({
         filters: [{ field: 'name', operator: 'like', value: 'Test' }],
-        page_size: 20,
+        limit: 20,
       });
 
       expect(result.isOk()).toBe(true);
@@ -544,7 +551,7 @@ describe('tenantService', () => {
           { field: 'status', operator: 'eq', value: 'active' },
         ],
         cursor: 0,
-        page_size: 10,
+        limit: 10,
       });
 
       expect(result.isOk()).toBe(true);

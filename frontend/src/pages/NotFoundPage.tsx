@@ -10,11 +10,15 @@ export const NotFoundPage: React.FC = () => {
   };
 
   const handleGoBack = () => {
-    navigate(-1);
+    if (window.history.state?.idx > 0) {
+      navigate(-1);
+    } else {
+      navigate('/');
+    }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-natural-light">
+    <div className="min-h-screen flex items-center justify-center bg-neutral-50">
       <Result
         status="404"
         title="404"

@@ -9,6 +9,7 @@ interface ConfirmationModalProps {
   cancelText?: string;
   onConfirm: () => void;
   onCancel: () => void;
+  allowMaskClose?: boolean;
 }
 
 export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
@@ -19,18 +20,21 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   cancelText = 'Cancel',
   onConfirm,
   onCancel,
+  allowMaskClose = false,
 }) => {
   return (
-    <Modal
-      open={isOpen}
-      title={title}
-      onOk={onConfirm}
-      onCancel={onCancel}
-      okText={confirmText}
-      cancelText={cancelText}
-      centered
-    >
-      {message}
-    </Modal>
+          <Modal
+        open={isOpen}
+        title={title}
+        onOk={onConfirm}
+        onCancel={onCancel}
+        okText={confirmText}
+        cancelText={cancelText}
+        centered
+        maskClosable={allowMaskClose}
+        aria-describedby="modal-description"
+      >
+        <div id="modal-description">{message}</div>
+      </Modal>
   );
 };

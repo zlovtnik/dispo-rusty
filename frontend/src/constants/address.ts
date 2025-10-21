@@ -1,6 +1,6 @@
 /**
  * Address parsing constants
- * 
+ *
  * Curated lists of country and state names for address parsing and validation.
  * These constants are used to improve address parsing accuracy and reduce false positives.
  */
@@ -43,6 +43,12 @@ export const COUNTRY_NAMES = [
   'MALAYSIA',
   'SINGAPORE',
 ] as const;
+
+/**
+ * Set of country names (uppercase with normalized spacing) for O(1) country name lookups
+ * Improves performance and type safety for address parsing country detection
+ */
+export const COUNTRY_NAMES_SET: Set<string> = new Set(COUNTRY_NAMES);
 
 /**
  * Curated list of US state names for address parsing (normalized without spaces)
@@ -106,16 +112,96 @@ export const STATE_NAMES = [
  * Used to avoid false positives from generic 2-letter patterns
  */
 export const STATE_CODES = new Set([
-  'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA', 'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD',
-  'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ', 'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC',
-  'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY', 'DC'
+  'AL',
+  'AK',
+  'AZ',
+  'AR',
+  'CA',
+  'CO',
+  'CT',
+  'DE',
+  'FL',
+  'GA',
+  'HI',
+  'ID',
+  'IL',
+  'IN',
+  'IA',
+  'KS',
+  'KY',
+  'LA',
+  'ME',
+  'MD',
+  'MA',
+  'MI',
+  'MN',
+  'MS',
+  'MO',
+  'MT',
+  'NE',
+  'NV',
+  'NH',
+  'NJ',
+  'NM',
+  'NY',
+  'NC',
+  'ND',
+  'OH',
+  'OK',
+  'OR',
+  'PA',
+  'RI',
+  'SC',
+  'SD',
+  'TN',
+  'TX',
+  'UT',
+  'VT',
+  'VA',
+  'WA',
+  'WV',
+  'WI',
+  'WY',
+  'DC',
 ]);
+
+/**
+ * Set of US state names (uppercase, no spaces) for O(1) state name lookups
+ * Improves performance and type safety for address parsing state detection
+ */
+export const STATE_NAMES_SET: Set<string> = new Set(STATE_NAMES);
 
 /**
  * ISO country codes for country detection
  * Used to avoid false positives from generic 2-3 letter patterns
  */
 export const COUNTRY_CODES = new Set([
-  'US', 'CA', 'MX', 'GB', 'FR', 'DE', 'IT', 'ES', 'PT', 'AU', 'NZ', 'JP', 'CN', 'IN', 'BR', 'AR', 'CL', 'CO', 'PE', 'RU',
-  'KR', 'KP', 'TH', 'VN', 'PH', 'ID', 'MY', 'SG'
+  'US',
+  'CA',
+  'MX',
+  'GB',
+  'FR',
+  'DE',
+  'IT',
+  'ES',
+  'PT',
+  'AU',
+  'NZ',
+  'JP',
+  'CN',
+  'IN',
+  'BR',
+  'AR',
+  'CL',
+  'CO',
+  'PE',
+  'RU',
+  'KR',
+  'KP',
+  'TH',
+  'VN',
+  'PH',
+  'ID',
+  'MY',
+  'SG',
 ]);

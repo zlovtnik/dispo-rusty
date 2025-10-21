@@ -43,10 +43,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       padding: token.paddingMD,
       textAlign: 'center' as const,
       color: token.colorTextLightSolid,
-      background: `linear-gradient(135deg, #1a3037 0%, #203b45 100%)`,
+      background: `linear-gradient(135deg, ${token.colorPrimary} 0%, ${token.colorPrimaryHover} 100%)`,
     },
     sider: {
-      background: `linear-gradient(135deg, #203b45 0%, #15262a 100%)`,
+      background: `linear-gradient(135deg, ${token.colorPrimaryHover} 0%, ${token.colorPrimaryActive} 100%)`,
     },
     header: {
       background: token.colorBgContainer,
@@ -156,27 +156,20 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           <Button
             type="text"
             icon={<MenuOutlined />}
-            aria-label="Toggle menu"
-            onClick={() => {
-              setCollapsed(!collapsed);
-            }}
+            aria-label="Toggle sidebar menu"
+            onClick={() => setCollapsed(prev => !prev)}
             style={{ fontSize: token.fontSizeLG, color: token.colorTextSecondary }}
           />
-          <Breadcrumb items={generateBreadcrumbs(location.pathname)} />
-          <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
-            <div style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+          <Breadcrumb items={generateBreadcrumbs(location.pathname)} aria-label="Current page navigation" />
+          <Dropdown menu={{ items: userMenuItems }} placement="bottomRight" trigger={['click']}>
+            <Button type="text" aria-label="User menu" style={{ display: 'flex', alignItems: 'center' }}>
               <Avatar style={{ backgroundColor: token.colorPrimary }}>
                 {(user?.firstName || user?.username || 'U').charAt(0).toUpperCase()}
               </Avatar>
-              <span
-                style={{
-                  marginLeft: 8,
-                  display: screens.md ? 'inline' : 'none',
-                }}
-              >
+              <span style={{ marginLeft: 8, display: screens.md ? 'inline' : 'none' }}>
                 {user?.firstName || user?.username}
               </span>
-            </div>
+            </Button>
           </Dropdown>
         </AntLayout.Header>
 

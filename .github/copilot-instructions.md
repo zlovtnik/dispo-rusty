@@ -173,7 +173,12 @@ Backend uses iterator-based pagination with `Pagination` struct in `src/paginati
 - Each resource defines its own paginated response type in `src/types/` (e.g., `PaginatedTenantResponse` in `src/types/tenant.ts`, `ContactListResponse` in `src/types/contact.ts`)
 - **Tenant pagination pattern**: `PaginatedTenantResponse` contains `data[]`, `total`, `offset?`, `limit?` 
 - **Contact pagination pattern**: `ContactListResponse` contains `contacts[]`, `total`, `page`, `limit`, `totalPages`, `hasNext`, `hasPrev`
-- **Developer guidance**: When adding pagination to a new resource, follow the tenant pattern for offset-based pagination or the contact pattern for page-based pagination depending on backend API design
+- **Developer guidance**: Choose pagination pattern based on UI requirements:
+  - **Offset-based** (tenant pattern): Use for infinite-scroll/cursor-like APIs and large result sets where clients request ranges. Include `data[]`, `total`, `offset`, `limit`, and optionally `nextOffset`/`prevOffset` or cursor fields
+  - **Page-based** (contact pattern): Use for traditional numbered-page UIs and APIs that return page numbers. Include resource-named array (e.g., `contacts[]`), `total`, `page`, `limit`, `totalPages`, `hasNext`, `hasPrev`
+- **Field naming convention**: Prefer resource-agnostic `data[]` array for consistency across all new endpoints. Resource-named arrays (e.g., `contacts[]`) are allowed only if needed with clear mapping documentation
+- **Migration policy**: Both patterns may coexist, but prefer standardizing new endpoints to `data`+`offset`/`limit` unless UI requires page numbers. Create follow-up plans to migrate legacy endpoints to consistent patterns
+- **Metadata inclusion**: Include `total`, `totalPages`, `hasNext`, `hasPrev` for page-based UIs or when backend computes them. For offset-based, include `total` when available and provide `nextOffset`/`prevOffset` or cursor fields
 - Validation schemas in `src/validation/schemas.ts` ensure proper response structure
 
 **Frontend Usage:**

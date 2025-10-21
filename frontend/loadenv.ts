@@ -41,11 +41,16 @@ const criticalVars = ['VITE_API_URL', 'VITE_JWT_STORAGE_KEY'];
 // Ensure critical env vars are available - log warnings for mismatches
 if (typeof process !== 'undefined') {
   criticalVars.forEach(varName => {
-    const processValue = process.env[varName];
+    // Access process.env directly (not via getEnvVar()) so we can independently compare
+    // both sources to detect mismatches. This intentional direct access allows us to verify
+    // that both process.env and import.meta.env have consistent values.
+    const processValue = typeof process !== 'undefined' && process.env && varName in process.env 
+      ? process.env[varName] 
+      : undefined;
+    
     let metaEnvValue: string | undefined;
-
     try {
-      if (typeof import.meta !== 'undefined') {
+      if (typeof import.meta !== 'undefined' && import.meta.env && varName in import.meta.env) {
         metaEnvValue = import.meta.env[varName];
       }
     } catch {
@@ -54,7 +59,7 @@ if (typeof process !== 'undefined') {
 
     if (processValue !== undefined && metaEnvValue !== undefined && processValue !== metaEnvValue) {
       console.warn(
-        `${varName} mismatch: process.env="${processValue}" vs import.meta.env="${metaEnvValue}". Using import.meta.env value.`
+        `${varName} mismatch: process.env="${processValue}" vs import.meta.env="${metaEnvValue}". Using getEnvVar() value (import.meta.env takes precedence).`
       );
     }
   });

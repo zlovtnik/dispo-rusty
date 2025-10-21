@@ -12,13 +12,13 @@ This directory contains presentational and layout components that compose the UI
 
 ## Key Components
 
-| Component | Responsibility |
-| --- | --- |
-| `Layout.tsx` | Shell layout with navigation, sidebar, and responsive breakpoints. |
-| `ErrorBoundary.tsx` | Captures runtime errors and renders resilient fallbacks. |
-| `ConfirmationModal.tsx` | Generic confirmation dialog with typed callbacks. |
-| `EnvironmentErrorUI.tsx` | Displays environment variable misconfiguration guidance. |
-| `PrivateRoute.tsx` | Guards routes using the Result-based auth helpers. |
+| Component                | Responsibility                                                     |
+| ------------------------ | ------------------------------------------------------------------ |
+| `Layout.tsx`             | Shell layout with navigation, sidebar, and responsive breakpoints. |
+| `ErrorBoundary.tsx`      | Captures runtime errors and renders resilient fallbacks.           |
+| `ConfirmationModal.tsx`  | Generic confirmation dialog with typed callbacks.                  |
+| `EnvironmentErrorUI.tsx` | Displays environment variable misconfiguration guidance.           |
+| `PrivateRoute.tsx`       | Guards routes using the Result-based auth helpers.                 |
 
 ## Adding Components
 

@@ -208,7 +208,15 @@ export class ErrorBoundary extends Component<Props, State> {
         // but if it does, we want to display the error
         const _exhaustive: never = error;
         const unknownError = _exhaustive as AppError;
-        return <Alert message="Error" description={unknownError.message} type="error" showIcon />;
+        return (
+          <Alert
+            message="Error"
+            description={unknownError.message}
+            type="error"
+            showIcon
+            data-testid="unknown-error"
+          />
+        );
       }
     }
   };

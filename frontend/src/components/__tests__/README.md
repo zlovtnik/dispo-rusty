@@ -9,9 +9,11 @@ Comprehensive unit test suite for all React components in the Actix Web REST API
 ### Layout Components
 
 #### `components/__tests__/Layout.test.tsx` (34 tests)
+
 Tests for the main Layout component with navigation, responsive behavior, and user menu.
 
 **Coverage:**
+
 - ✅ Rendering (7 tests)
 - ✅ Navigation (3 tests)
 - ✅ User Menu (3 tests)
@@ -23,6 +25,7 @@ Tests for the main Layout component with navigation, responsive behavior, and us
 - ✅ Responsive Layout (2 tests)
 
 **Key Features Tested:**
+
 - Navigation menu rendering and interactions
 - User profile dropdown
 - Responsive sidebar behavior
@@ -34,9 +37,11 @@ Tests for the main Layout component with navigation, responsive behavior, and us
 ---
 
 #### `components/__tests__/PrivateRoute.test.tsx` (27 tests)
+
 Tests for the PrivateRoute authentication guard component.
 
 **Coverage:**
+
 - ✅ Authentication Guards (3 tests)
 - ✅ Authenticated Access (3 tests)
 - ✅ Unauthenticated Access (3 tests)
@@ -49,6 +54,7 @@ Tests for the PrivateRoute authentication guard component.
 - ✅ Edge Cases (3 tests)
 
 **Key Features Tested:**
+
 - Protected route access
 - Unauthenticated user redirects
 - Loading state display
@@ -59,9 +65,11 @@ Tests for the PrivateRoute authentication guard component.
 ---
 
 #### `components/__tests__/ErrorBoundary.test.tsx` (29 tests)
+
 Tests for the ErrorBoundary component with error catching and recovery.
 
 **Coverage:**
+
 - ✅ Error Catching (5 tests)
 - ✅ Error Display (3 tests)
 - ✅ Error Handling (3 tests)
@@ -74,6 +82,7 @@ Tests for the ErrorBoundary component with error catching and recovery.
 - ✅ Edge Cases (3 tests)
 
 **Key Features Tested:**
+
 - Render error catching
 - Error display and fallback UI
 - onError callback
@@ -86,9 +95,11 @@ Tests for the ErrorBoundary component with error catching and recovery.
 ---
 
 #### `components/__tests__/ConfirmationModal.test.tsx` (32 tests)
+
 Tests for the ConfirmationModal component with callbacks and interactions.
 
 **Coverage:**
+
 - ✅ Rendering (6 tests)
 - ✅ Buttons (6 tests)
 - ✅ Callbacks (5 tests)
@@ -99,6 +110,7 @@ Tests for the ConfirmationModal component with callbacks and interactions.
 - ✅ Edge Cases (3 tests)
 
 **Key Features Tested:**
+
 - Modal visibility control
 - Custom and default titles
 - Confirm/Cancel buttons
@@ -115,9 +127,11 @@ Tests for the ConfirmationModal component with callbacks and interactions.
 ### Page Components
 
 #### `pages/__tests__/LoginPage.test.tsx` (29 tests)
+
 Tests for the LoginPage component with form validation and authentication.
 
 **Coverage:**
+
 - ✅ Rendering (7 tests)
 - ✅ Form Validation (5 tests)
 - ✅ Form Submission (6 tests)
@@ -131,6 +145,7 @@ Tests for the LoginPage component with form validation and authentication.
 - ✅ Integration (2 tests)
 
 **Key Features Tested:**
+
 - Form rendering
 - Input validation
 - Submission handling
@@ -145,9 +160,11 @@ Tests for the LoginPage component with form validation and authentication.
 ---
 
 #### `pages/__tests__/HomePage.test.tsx` (17 tests)
+
 Tests for the HomePage with feature display and authentication redirect.
 
 **Coverage:**
+
 - ✅ Rendering (6 tests)
 - ✅ Feature Sections (3 tests)
 - ✅ Authentication Redirect (2 tests)
@@ -157,6 +174,7 @@ Tests for the HomePage with feature display and authentication redirect.
 - ✅ Accessibility (2 tests)
 
 **Key Features Tested:**
+
 - Feature card rendering
 - Feature descriptions
 - Authenticated user redirect
@@ -168,9 +186,11 @@ Tests for the HomePage with feature display and authentication redirect.
 ---
 
 #### `pages/__tests__/DashboardPage.test.tsx` (35 tests)
+
 Tests for the DashboardPage with data rendering and loading states.
 
 **Coverage:**
+
 - ✅ Rendering (4 tests)
 - ✅ Content Sections (4 tests)
 - ✅ User Information (3 tests)
@@ -184,6 +204,7 @@ Tests for the DashboardPage with data rendering and loading states.
 - ✅ Links and Navigation (2 tests)
 
 **Key Features Tested:**
+
 - Welcome message display
 - User information rendering
 - Tenant context display
@@ -198,9 +219,11 @@ Tests for the DashboardPage with data rendering and loading states.
 ---
 
 #### `pages/__tests__/AddressBookPage.test.tsx` (25 tests)
+
 Tests for the AddressBookPage with CRUD operations, search, and filtering.
 
 **Coverage:**
+
 - ✅ Rendering (5 tests)
 - ✅ CRUD Operations (7 tests)
 - ✅ Search and Filtering (4 tests)
@@ -216,6 +239,7 @@ Tests for the AddressBookPage with CRUD operations, search, and filtering.
 - ✅ Edge Cases (4 tests)
 
 **Key Features Tested:**
+
 - Table rendering
 - Create/Edit/Delete operations
 - Search functionality
@@ -232,9 +256,11 @@ Tests for the AddressBookPage with CRUD operations, search, and filtering.
 ---
 
 #### `pages/__tests__/TenantsPage.test.tsx` (23 tests)
+
 Tests for the TenantsPage with tenant management operations.
 
 **Coverage:**
+
 - ✅ Rendering (4 tests)
 - ✅ CRUD Operations (7 tests)
 - ✅ Search and Filtering (4 tests)
@@ -252,6 +278,7 @@ Tests for the TenantsPage with tenant management operations.
 - ✅ Message Display (4 tests)
 
 **Key Features Tested:**
+
 - Tenant CRUD operations
 - Advanced power filters
 - Multiple filter criteria
@@ -267,9 +294,11 @@ Tests for the TenantsPage with tenant management operations.
 ---
 
 #### `pages/__tests__/ContactManagementFlow.test.tsx` (1 test)
+
 Integration test for the complete contact management flow across authentication, CRUD operations, and multi-tenant switching.
 
 **Coverage:**
+
 - ✅ Authentication Flow (login, token refresh, session management)
 - ✅ Contact CRUD Operations (create, read, update, delete)
 - ✅ Multi-Tenant Switching (switching between tenant-1 and tenant-2)
@@ -277,6 +306,7 @@ Integration test for the complete contact management flow across authentication,
 - ✅ Integration Scenarios (full end-to-end workflows)
 
 **Key Features Tested:**
+
 - Complete login flow with JWT token generation
 - Contact list retrieval per tenant
 - Contact creation with validation errors
@@ -291,16 +321,18 @@ Integration test for the complete contact management flow across authentication,
 ## Test Utilities
 
 ### renderWithProviders
+
 Renders components with all required providers (Router, AuthContext, Ant Design).
 
 ```typescript
 renderWithProviders(ui, {
   initialRoute: '/dashboard',
-  authValue: { isAuthenticated: true }
-})
+  authValue: { isAuthenticated: true },
+});
 ```
 
 ### renderWithAuth
+
 Renders components with authenticated user context.
 
 ```typescript
@@ -308,6 +340,7 @@ renderWithAuth(<Component />, options)
 ```
 
 ### renderWithoutAuth
+
 Renders components without authentication.
 
 ```typescript
@@ -315,6 +348,7 @@ renderWithoutAuth(<Component />, options)
 ```
 
 ### Mock Data
+
 Pre-configured mock user and tenant objects for testing.
 
 ```typescript
@@ -327,26 +361,31 @@ mockTenant: // Tenant context
 ## Running Tests
 
 ### Run All Tests
+
 ```bash
 bun test
 ```
 
 ### Run Tests in Watch Mode
+
 ```bash
 bun test:watch
 ```
 
 ### Generate Coverage Report
+
 ```bash
 bun test:coverage
 ```
 
 ### Run Specific Test File
+
 ```bash
 bun test LoginPage.test.tsx
 ```
 
 ### Run Tests Matching Pattern
+
 ```bash
 bun test --test-name-pattern="Form Validation"
 ```
@@ -357,49 +396,54 @@ bun test --test-name-pattern="Form Validation"
 
 ### Component Coverage
 
-| Component | Test Count | Coverage | Status |
-|-----------|-----------|----------|--------|
-| Layout | 34 | 90%+ | ✅ |
-| PrivateRoute | 27 | 90%+ | ✅ |
-| ErrorBoundary | 29 | 90%+ | ✅ |
-| ConfirmationModal | 32 | 90%+ | ✅ |
-| LoginPage | 29 | 90%+ | ✅ |
-| HomePage | 17 | 90%+ | ✅ |
-| DashboardPage | 35 | 90%+ | ✅ |
-| AddressBookPage | 25 | 90%+ | ✅ |
-| TenantsPage | 23 | 90%+ | ✅ |
-| ContactManagementFlow | 1 | 100% | ✅ |
-| **Total** | **252** | **90%+** | **✅** |
+| Component             | Test Count | Coverage | Status |
+| --------------------- | ---------- | -------- | ------ |
+| Layout                | 34         | 90%+     | ✅     |
+| PrivateRoute          | 27         | 90%+     | ✅     |
+| ErrorBoundary         | 29         | 90%+     | ✅     |
+| ConfirmationModal     | 32         | 90%+     | ✅     |
+| LoginPage             | 29         | 90%+     | ✅     |
+| HomePage              | 17         | 90%+     | ✅     |
+| DashboardPage         | 35         | 90%+     | ✅     |
+| AddressBookPage       | 25         | 90%+     | ✅     |
+| TenantsPage           | 23         | 90%+     | ✅     |
+| ContactManagementFlow | 1          | 100%     | ✅     |
+| **Total**             | **252**    | **90%+** | **✅** |
 
 ---
 
 ## Test Categories
 
 ### Rendering Tests
+
 - Component visibility
 - Content display
 - Child rendering
 - Conditional rendering
 
 ### User Interaction Tests
+
 - Button clicks
 - Form inputs
 - Keyboard navigation
 - Event handling
 
 ### State Management Tests
+
 - Loading states
 - Error states
 - Auth context integration
 - Props updates
 
 ### Error Handling Tests
+
 - Error boundaries
 - Validation errors
 - API errors
 - Edge cases
 
 ### Accessibility Tests
+
 - ARIA labels
 - Keyboard navigation
 - Screen reader support
@@ -407,6 +451,7 @@ bun test --test-name-pattern="Form Validation"
 - Color contrast
 
 ### Responsive Design Tests
+
 - Desktop layout
 - Mobile layout
 - Tablet layout
@@ -417,27 +462,32 @@ bun test --test-name-pattern="Form Validation"
 ## Best Practices Applied
 
 ### ✅ Test Organization
+
 - Clear describe blocks
 - Logical test grouping
 - Descriptive test names
 
 ### ✅ User-Centric Testing
+
 - User event simulation
 - Role-based queries
 - Screen reader perspective
 
 ### ✅ Async Handling
+
 - Proper waitFor usage
 - Promise handling
 - Loading state verification
 
 ### ✅ Accessibility First
+
 - ARIA attributes testing
 - Keyboard navigation
 - Screen reader support
 - Color contrast checks
 
 ### ✅ Edge Case Coverage
+
 - Empty states
 - Long content
 - Special characters
@@ -449,6 +499,7 @@ bun test --test-name-pattern="Form Validation"
 ## Mock Service Workers (MSW)
 
 All API calls are mocked using MSW for:
+
 - Isolated component testing
 - Deterministic results
 - Fast test execution
@@ -484,13 +535,13 @@ it('should handle form submission with validation', async () => {
   const user = userEvent.setup();
   const mockSubmit = vi.fn();
   renderWithAuth(<FormComponent onSubmit={mockSubmit} />);
-  
+
   const input = screen.getByRole('textbox', { name: /email/i });
   await user.type(input, 'test@example.com');
-  
+
   const button = screen.getByRole('button', { name: /submit/i });
   await user.click(button);
-  
+
   // Verify submission occurred
   await waitFor(() => {
     expect(mockSubmit).toHaveBeenCalledWith(expect.objectContaining({
@@ -507,10 +558,10 @@ it('should handle form submission with validation', async () => {
 ```typescript
 it('should handle loading state and display content', async () => {
   renderWithAuth(<Component />);
-  
+
   // Should show loading initially
   expect(screen.queryByText(/loading/i)).toBeInTheDocument();
-  
+
   // Wait for content to load (MSW will mock the API response)
   await waitFor(() => {
     expect(screen.getByText(/success/i)).toBeInTheDocument();
@@ -535,7 +586,7 @@ it('should display error message and recovery option', async () => {
       <DataComponent />
     </ErrorBoundary>
   );
-  
+
   // Verify error is displayed
   await waitFor(() => {
     expect(screen.getByText(/error|failed/i)).toBeInTheDocument();
@@ -553,10 +604,10 @@ it('should display error message and recovery option', async () => {
 ✅ **User interaction testing** (clicks, form inputs)  
 ✅ **Loading and error states** tested  
 ✅ **Accessibility checks** included (ARIA, keyboard nav)  
-✅ **2,640+ test cases** written  
+✅ **252 tests** written across 10 test suites  
 ✅ **All component types** covered (layout, page, modal)  
 ✅ **Edge cases** handled  
-✅ **Best practices** applied  
+✅ **Best practices** applied
 
 ---
 

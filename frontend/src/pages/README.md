@@ -18,13 +18,13 @@ The pages folder aggregates route-level components that assemble domain logic, h
 
 ## Available Pages
 
-| Page | Summary |
-| --- | --- |
-| `HomePage.tsx` | Entry point with quick navigation shortcuts. |
-| `DashboardPage.tsx` | Tenant-aware KPIs and system status widgets. |
-| `AddressBookPage.tsx` | CRUD operations for contacts using the Result-based service layer. |
-| `TenantsPage.tsx` | Administrative tenant management interface. |
-| `LoginPage.tsx` | Legacy login flow kept for reference while FP migration completes. |
-| `LoginPage.fp.tsx` | Current FP-first login experience with railway-oriented validation. |
+| Page                  | Summary                                                             |
+| --------------------- | ------------------------------------------------------------------- |
+| `HomePage.tsx`        | Entry point with quick navigation shortcuts.                        |
+| `DashboardPage.tsx`   | Tenant-aware KPIs and system status widgets.                        |
+| `AddressBookPage.tsx` | CRUD operations for contacts using the Result-based service layer.  |
+| `TenantsPage.tsx`     | Administrative tenant management interface.                         |
+| `LoginPage.tsx`       | Legacy login flow kept for reference while FP migration completes.  |
+| `LoginPage.fp.tsx`    | Current FP-first login experience with railway-oriented validation. |
 
 Keep this document up to date when adding or removing pages.

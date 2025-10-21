@@ -28,7 +28,7 @@ describe('Option utilities', () => {
 
   describe('none', () => {
     it('should create a None option', () => {
-      const option = none();
+      const option = none<number>();
       expect(isNone(option)).toBe(true);
     });
   });
@@ -70,7 +70,7 @@ describe('Option utilities', () => {
     });
 
     it('should return None when mapping over None', () => {
-      const option = none();
+      const option = none<number>();
       const result = mapOption(option, x => x * 2);
       expect(isNone(result)).toBe(true);
     });

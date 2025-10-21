@@ -569,6 +569,8 @@ describe('Form Validation with Backend Errors', () => {
     // Verify error message is shown - check for the specific error message displayed by the app
     const alert = await screen.findByRole('alert');
     expect(alert).toBeInTheDocument();
-    expect(alert).toHaveTextContent(/Network error: Unable to reach the server|Error Loading Contacts/i);
+    expect(alert).toHaveTextContent(
+      /Network error: Unable to reach the server|Error Loading Contacts/i
+    );
   });
 });

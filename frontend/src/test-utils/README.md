@@ -101,7 +101,7 @@ describe('MyComponent', () => {
 
   test('should render component', () => {
     renderWithProviders(<MyComponent />);
-    
+
     expect(screen.getByText('Hello')).toBeInTheDocument();
   });
 });
@@ -145,23 +145,23 @@ import { userEvent } from '../test-utils';
 
 test('should handle button click', async () => {
   const user = userEvent.setup();
-  
+
   renderWithProviders(<MyComponent />);
-  
+
   const button = screen.getByRole('button', { name: 'Submit' });
   await user.click(button);
-  
+
   expect(screen.getByText('Submitted')).toBeInTheDocument();
 });
 
 test('should handle form input', async () => {
   const user = userEvent.setup();
-  
+
   renderWithProviders(<LoginForm />);
-  
+
   const emailInput = screen.getByLabelText('Email');
   await user.type(emailInput, 'test@example.com');
-  
+
   expect(emailInput).toHaveValue('test@example.com');
 });
 ```
@@ -192,12 +192,12 @@ import { waitFor } from '../test-utils';
 
 test('should load data', async () => {
   renderWithProviders(<DataTable />);
-  
+
   // Wait for loading to finish
   await waitFor(() => {
     expect(screen.queryByText('Loading...')).not.toBeInTheDocument();
   });
-  
+
   // Check data rendered
   expect(screen.getByText('John Doe')).toBeInTheDocument();
 });
@@ -212,9 +212,9 @@ test('should show error message', async () => {
       );
     })
   );
-  
+
   renderWithProviders(<DataTable />);
-  
+
   // Wait for error to appear
   await waitFor(() => {
     expect(screen.getByText(/Server error/i)).toBeInTheDocument();
@@ -246,11 +246,11 @@ describe('authService', () => {
     const result = await authService.login({
       usernameOrEmail: 'test@example.com',
       password: 'password123',
-      tenantId: asTenantId('tenant-1')
+      tenantId: asTenantId('tenant-1'),
     });
-    
+
     expect(result.isOk()).toBe(true);
-    
+
     if (result.isOk()) {
       expect(result.value.data.token).toBeDefined();
       expect(result.value.data.user.email).toBe('test@example.com');
@@ -261,9 +261,9 @@ describe('authService', () => {
     const result = await authService.login({
       usernameOrEmail: '',
       password: '',
-      tenantId: asTenantId('tenant-1')
+      tenantId: asTenantId('tenant-1'),
     });
-    
+
     expect(result.isErr()).toBe(true);
   });
 });
@@ -282,6 +282,7 @@ Located in `src/test-utils/render.tsx`:
 Renders component with Router, AuthContext, and Ant Design providers.
 
 **Options:**
+
 - `initialRoute`: Initial route for MemoryRouter
 - `initialRoutes`: Array of routes for navigation history
 - `useBrowserRouter`: Use BrowserRouter instead of MemoryRouter
@@ -356,11 +357,13 @@ beforeEach(() => {
 Located in `src/test-utils/mocks/handlers.ts`:
 
 **Authentication:**
+
 - `POST /auth/login` - Login with credentials
 - `POST /auth/logout` - Logout user
 - `POST /auth/refresh` - Refresh JWT token
 
 **Tenants:**
+
 - `GET /tenants` - Get all tenants
 - `GET /tenants/:id` - Get tenant by ID
 - `POST /tenants` - Create tenant
@@ -368,6 +371,7 @@ Located in `src/test-utils/mocks/handlers.ts`:
 - `DELETE /tenants/:id` - Delete tenant
 
 **Contacts:**
+
 - `GET /people` - Get all contacts
 - `GET /people/:id` - Get contact by ID
 - `POST /people` - Create contact
@@ -375,6 +379,7 @@ Located in `src/test-utils/mocks/handlers.ts`:
 - `DELETE /people/:id` - Delete contact
 
 **Health:**
+
 - `GET /ping` - Health check
 
 ### Customizing Responses
@@ -386,13 +391,10 @@ test('should handle specific error', async () => {
   // Override handler for this test
   server.use(
     http.get('/api/contacts', () => {
-      return HttpResponse.json(
-        { message: 'Not found', data: null },
-        { status: 404 }
-      );
+      return HttpResponse.json({ message: 'Not found', data: null }, { status: 404 });
     })
   );
-  
+
   // Test with custom response
   const result = await addressBookService.getAll();
   expect(result.isErr()).toBe(true);
@@ -445,11 +447,11 @@ beforeEach(() => {
 test('should update state on click', () => {
   const { result } = renderHook(() => useState(0));
   const [count, setCount] = result.current;
-  
+
   act(() => {
     setCount(1);
   });
-  
+
   expect(result.current[0]).toBe(1); // Testing internal state
 });
 ```
@@ -459,12 +461,12 @@ test('should update state on click', () => {
 ```typescript
 test('should increment counter on button click', async () => {
   const user = userEvent.setup();
-  
+
   renderWithProviders(<Counter />);
-  
+
   const button = screen.getByRole('button', { name: 'Increment' });
   await user.click(button);
-  
+
   expect(screen.getByText('Count: 1')).toBeInTheDocument(); // Testing UI output
 });
 ```
@@ -568,9 +570,9 @@ import { screen } from '../test-utils';
 
 test('should render element', () => {
   renderWithProviders(<MyComponent />);
-  
+
   screen.debug(); // Prints HTML to console
-  
+
   expect(screen.getByText('Hello')).toBeInTheDocument();
 });
 ```
@@ -578,6 +580,7 @@ test('should render element', () => {
 #### Tests Are Slow
 
 **Solutions**:
+
 1. Use `renderWithoutAuth()` if auth not needed
 2. Set `withAntApp: false` if Ant Design context not needed
 3. Mock heavy components with `React.lazy()`

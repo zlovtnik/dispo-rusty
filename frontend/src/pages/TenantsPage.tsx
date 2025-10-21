@@ -18,6 +18,7 @@ import {
   Select,
   App,
   DatePicker,
+  Spin,
 } from 'antd';
 import {
   PlusOutlined,
@@ -55,6 +56,27 @@ export const TenantsPage: React.FC = () => {
     pageSize: 12,
     total: 0,
   });
+
+  // Add empty state handling
+  if (loading) {
+    return <Spin tip="Loading tenants..." />;
+  }
+
+  if (tenants.length === 0 && !loading) {
+    return (
+      <Card>
+        <div style={{ textAlign: 'center', padding: 48 }}>
+          <Typography.Title level={4}>No Tenants Found</Typography.Title>
+          <Typography.Text type="secondary">
+            Create your first tenant to get started.
+          </Typography.Text>
+          <Button type="primary" onClick={handleNewTenant} style={{ marginTop: 16 }}>
+            Create Tenant
+          </Button>
+        </div>
+      </Card>
+    );
+  }
 
   // Load tenants from API with pagination
   const loadTenants = async (params?: { offset?: number; limit?: number }) => {
@@ -245,9 +267,9 @@ export const TenantsPage: React.FC = () => {
 
   // Helper function to get valid operators for a field type
   const getOperatorsForField = (field: string): string[] => {
-    if (TEXT_FIELDS.includes(field as any)) {
+    if ((TEXT_FIELDS as readonly string[]).includes(field)) {
       return ['contains', 'equals'];
-    } else if (DATE_FIELDS.includes(field as any)) {
+    } else if ((DATE_FIELDS as readonly string[]).includes(field)) {
       return ['equals', 'gt', 'gte', 'lt', 'lte'];
     }
 
@@ -256,7 +278,8 @@ export const TenantsPage: React.FC = () => {
   };
 
   // Helper function to check if a field is a date field
-  const isDateField = (field: string): boolean => DATE_FIELDS.includes(field as any);
+  const isDateField = (field: string): boolean =>
+    (DATE_FIELDS as readonly string[]).includes(field);
 
   // Helper function to convert ISO string to dayjs object
   const isoToDayjs = (isoString: string): Dayjs | null => {
@@ -266,7 +289,9 @@ export const TenantsPage: React.FC = () => {
   };
 
   // Helper function to convert dayjs object to ISO string
-  const dayjsToIso = (dayjsObj: any): string => {
+  // Type guarantee: dayjsObj is Dayjs | null; null case returns empty string,
+  // so the remaining path guarantees dayjsObj is a valid Dayjs instance.
+  const dayjsToIso = (dayjsObj: Dayjs | null): string => {
     if (!dayjsObj) return '';
     return dayjsObj.toISOString();
   };
@@ -301,7 +326,7 @@ export const TenantsPage: React.FC = () => {
           value: shouldClearValue ? '' : currentFilter.value,
         });
       } else {
-        updated[index] = Object.assign({}, currentFilter, { 
+        updated[index] = Object.assign({}, currentFilter, {
           [key]: value,
           value: shouldClearValue ? '' : currentFilter.value,
         });
@@ -342,7 +367,7 @@ export const TenantsPage: React.FC = () => {
 
       const response = await tenantService.filter({
         filters: validatedFilters,
-        page_size: pagination.pageSize, // Use current page size for filtered results
+        limit: pagination.pageSize, // Use current page size for filtered results
       });
 
       if (response.isErr()) {
@@ -367,7 +392,7 @@ export const TenantsPage: React.FC = () => {
         setPagination(prev => ({
           ...prev,
           current: 1,
-          total: paginated.total ?? paginated.data.length ?? 0,
+          total: paginated.total,
         }));
       }
     } catch (error) {
@@ -488,6 +513,9 @@ export const TenantsPage: React.FC = () => {
     },
   ];
 
+  // For filter validation, add error state for invalid dates
+  // Filter errors handled in applyFilters
+
   return (
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
       {/* Header */}
@@ -508,12 +536,18 @@ export const TenantsPage: React.FC = () => {
       <Divider />
 
       {/* Search Filters */}
-      <Card title="Search Filters" size="small" style={{ borderRadius: '8px', marginTop: '16px' }}>
+      <Card
+        title="Search Filters"
+        size="small"
+        style={{ borderRadius: '8px', marginTop: '16px' }}
+        data-testid="search-filters-card"
+      >
         <Space direction="vertical" size="middle" style={{ width: '100%' }}>
           {powerFilters.map((filter, index) => (
             <div
               key={index}
               style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}
+              data-testid={`filter-row-${index}`}
             >
               <Select
                 style={{ width: 150 }}
@@ -522,6 +556,7 @@ export const TenantsPage: React.FC = () => {
                   updateFilter(index, 'field', value);
                 }}
                 placeholder="Field"
+                data-testid={`filter-field-select-${index}`}
               >
                 <Select.Option value="id">ID</Select.Option>
                 <Select.Option value="name">Name</Select.Option>
@@ -537,6 +572,7 @@ export const TenantsPage: React.FC = () => {
                   updateFilter(index, 'operator', value);
                 }}
                 placeholder="Operator"
+                data-testid={`filter-operator-select-${index}`}
               >
                 {getOperatorsForField(filter.field).map(operator => {
                   const operatorLabels: Record<string, string> = {
@@ -562,9 +598,15 @@ export const TenantsPage: React.FC = () => {
                   showTime
                   allowClear
                   value={isoToDayjs(filter.value)}
-                  onChange={date => {
-                    updateFilter(index, 'value', dayjsToIso(date));
+                  onChange={(date, dateString) => {
+                    if (dateString && !dayjs(dateString).isValid()) {
+                      // Show error
+                      message.error('Invalid date format');
+                      return;
+                    }
+                    updateFilter(index, 'value', dateString || '');
                   }}
+                  data-testid={`filter-value-date-${index}`}
                 />
               ) : (
                 <Input
@@ -574,6 +616,7 @@ export const TenantsPage: React.FC = () => {
                   onChange={e => {
                     updateFilter(index, 'value', e.target.value);
                   }}
+                  data-testid={`filter-value-input-${index}`}
                 />
               )}
 
@@ -585,12 +628,18 @@ export const TenantsPage: React.FC = () => {
                   removeFilter(index);
                 }}
                 disabled={powerFilters.length <= 1}
+                data-testid={`remove-filter-${index}`}
               >
                 Remove
               </Button>
 
               {index === powerFilters.length - 1 && (
-                <Button type="text" icon={<PlusCircleOutlined />} onClick={addFilter}>
+                <Button
+                  type="text"
+                  icon={<PlusCircleOutlined />}
+                  onClick={addFilter}
+                  data-testid="add-filter-button"
+                >
                   Add Filter
                 </Button>
               )}
@@ -600,14 +649,22 @@ export const TenantsPage: React.FC = () => {
           <Divider style={{ margin: '8px 0' }} />
 
           <Space>
-            <Button type="primary" onClick={applyFilters} disabled={loading}>
+            <Button
+              type="primary"
+              onClick={applyFilters}
+              disabled={loading}
+              data-testid="apply-filters-button"
+            >
               Apply Filters
             </Button>
-            <Button onClick={clearFilters} disabled={loading}>Clear All</Button>
+            <Button onClick={clearFilters} disabled={loading} data-testid="clear-filters-button">
+              Clear All
+            </Button>
           </Space>
 
           <div style={{ fontSize: '14px', color: '#666' }}>
-            <Typography.Text strong>Note:</Typography.Text> Pick a date/time; it's sent as ISO-8601 (UTC). Empty values are ignored.
+            <Typography.Text strong>Note:</Typography.Text> Pick a date/time; it's sent as ISO-8601
+            (UTC). Empty values are ignored.
           </div>
         </Space>
       </Card>
@@ -624,6 +681,7 @@ export const TenantsPage: React.FC = () => {
           loading={loading}
           rowClassName={(record, index) => (index % 2 === 0 ? 'stripe-row' : '')}
           pagination={tablePagination}
+          data-testid="tenants-table"
           locale={{
             emptyText:
               tenants.length === 0 ? (
@@ -682,55 +740,19 @@ export const TenantsPage: React.FC = () => {
               {
                 validator: (_rule, value) => {
                   if (!value) return Promise.reject(new Error('Please enter database URL'));
-                  // Libpq connection string regex (simplified, supports key=value pairs)
-                  const libpqRegex = /^[^&=]+=[^&]*(&[^&=]+=[^&]*)*$/;
-                  // PostgreSQL URL regex (enhanced for multi-host, encoded, unix sockets, etc.)
-                  const urlRegex =
-                    /^postgres(?:ql)?:\/\/(?:[A-Za-z0-9._%+-]+(?::[A-Za-z0-9._%+-]+)?@)?(?:\[[^\]]+\]|[A-Za-z0-9.-]+(?:,[A-Za-z0-9.-]+)*(?::\d{1,5})*|\/[^/]+)?\/[A-Za-z0-9_\-]+(?:\?.*)?$/;
-                  if (libpqRegex.test(value) || urlRegex.test(value)) {
-                    return Promise.resolve();
-                  }
-                  return Promise.reject(
-                    new Error('Please enter a valid PostgreSQL URL or connection string')
-                  );
-                },
-              },
-            ]}
-          >
-            <Input placeholder="postgresql://user:password@host:port/database or host=localhost port=5432 dbname=mydb" />
-          </Form.Item>
-
-          <Form.Item>
-            <Space>
-              <Button
-                type="primary"
-                htmlType="submit"
-                loading={isSubmitting}
-                data-testid="modal-submit-button"
-              >
-                {editingTenant ? 'Update Tenant' : 'Add Tenant'}
-              </Button>
-              <Button
-                onClick={() => {
-                  setIsFormOpen(false);
-                }}
-              >
-                Cancel
-              </Button>
-            </Space>
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      {/* Confirmation Modal */}
-      <ConfirmationModal
-        isOpen={deleteTenantId !== null}
-        title="Delete Tenant"
-        message="Are you sure you want to delete this tenant? This action cannot be undone and may affect users and data associated with this tenant."
-        confirmText="Delete"
-        onConfirm={confirmDelete}
-        onCancel={cancelDelete}
-      />
-    </Space>
-  );
-};
+                  // Accept libpq key=value style or postgres/postgresql URL
+                  const isValid = (() => {
+                    // Rough libpq: key=value pairs separated by spaces
+                    if (/\b\w+=\S+/.test(value)) return true;
+                    try {
+                      const u = new URL(value);
+                      return u.protocol === 'postgres:' || u.protocol === 'postgresql:';
+                    } catch {
+                      return false;
+                    }
+                  })();
+                  return isValid
+                    ? Promise.resolve()
+                    : Promise.reject(new Error('Invalid PostgreSQL connection string'));
+                }
+              }

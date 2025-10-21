@@ -29,6 +29,7 @@ void mock.module('react-router-dom', () => ({
     );
   },
   Navigate: ({ to }: { to: string }) => <div data-testid="navigate" data-to={to} />,
+  useNavigate: () => mockNavigate,
 }));
 
 describe('HomePage Component', () => {
@@ -130,8 +131,7 @@ describe('HomePage Component', () => {
       // Test for hero H1 heading (main page title)
       const heroHeading = screen.getByRole('heading', { level: 1 });
       expect(heroHeading).toBeInTheDocument();
-      expect(heroHeading).toHaveTextContent(/Welcome to.*Address Book/i);
-
+      expect(heroHeading).toHaveTextContent(/Welcome to.*Natural Pharmacy System/i);
       // Test for feature sections using accessible content
       // There are 4 headings total: 1 h1 (welcome), 1 h4 (header title), 3 h4 (features)
       const allHeadings = screen.getAllByRole('heading');
@@ -240,12 +240,12 @@ describe('HomePage Component', () => {
       // Test Tab navigation between buttons
       await user.tab();
 
-      // Assert that focus moved to the next focusable element
-      // After tabbing from Sign In button, focus should move to the next element
-      // (which could be another button or the first focusable element in the features section)
       const nextFocusedElement = document.activeElement;
       expect(nextFocusedElement).not.toBe(signInButton);
-      expect(nextFocusedElement).toBeInTheDocument();
+
+      // Verify the focused element is interactive (button, link, or input)
+      expect(nextFocusedElement?.tagName).toBeDefined();
+      expect(['BUTTON', 'A', 'INPUT']).toContain(nextFocusedElement?.tagName!);
     });
   });
 });

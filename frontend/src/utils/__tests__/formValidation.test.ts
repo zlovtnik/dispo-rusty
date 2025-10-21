@@ -14,9 +14,9 @@ import {
   validateAll,
   validateOptional,
   validateAllOrCollectErrors,
-  type _Email,
-  type _Phone,
-  type _Password,
+  type Email,
+  type Phone,
+  type Password,
 } from '@/utils/formValidation';
 
 describe('formValidation', () => {

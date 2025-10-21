@@ -9,11 +9,14 @@ import type { User, Tenant as AuthTenant } from '../types/auth';
 import type { Tenant as TenantRecord } from '../types/tenant';
 import { asContactId, asTenantId, asUserId } from '../types/ids';
 import {
-  booleanToGender,
-  genderToBoolean,
-  genderEnumToBoolean,
-  parseOptionalGender,
-} from './gender';
+  COUNTRY_NAMES,
+  COUNTRY_NAMES_SET,
+  STATE_NAMES,
+  STATE_NAMES_SET,
+  STATE_CODES,
+  COUNTRY_CODES,
+} from '../constants/address';
+import { booleanToGender, genderEnumToBoolean, parseOptionalGender } from './gender';
 import { parseDate, parseOptionalDate, toIsoString } from './date';
 import { addressParsingLogger } from '../utils/logger';
 
@@ -36,8 +39,6 @@ const createTransformerError = (
       cause,
     }
   );
-
-import { COUNTRY_NAMES, STATE_NAMES, STATE_CODES, COUNTRY_CODES } from '../constants/address';
 
 const wrapTransformation =
   <Value, Output>(
@@ -162,8 +163,8 @@ const looksLikeState = (segment: string): boolean => {
   // US state abbreviations (exactly 2 letters) - use USPS codes to avoid false positives
   if (/^[A-Z]{2}$/.test(trimmed) && STATE_CODES.has(trimmed)) return true;
 
-  // Common full state names (exact match only, not substring)
-  return STATE_NAMES.includes(normalized);
+  // Common full state names (exact match only, not substring) - O(1) lookup with Set
+  return STATE_NAMES_SET.has(normalized);
 };
 
 /**
@@ -178,8 +179,8 @@ const looksLikeCountry = (segment: string): boolean => {
   // ISO country codes (2-3 letters) - use whitelist to avoid false positives
   if (/^[A-Z]{2,3}$/.test(trimmed) && COUNTRY_CODES.has(trimmed)) return true;
 
-  // Curated list of common country names (exact match only)
-  return COUNTRY_NAMES.includes(normalized);
+  // Curated list of common country names (exact match only) - O(1) lookup with Set
+  return COUNTRY_NAMES_SET.has(normalized);
 };
 
 /**
@@ -263,7 +264,7 @@ const parseAddressSegmentsWithHeuristics = (
        * - ADJACENT_ZIP_BOOST (2): State adjacent to ZIP code
        * - NEAR_ZIP_BOOST (1): State within 2 positions of ZIP
        * - EARLY_POSITION_BOOST (1): State in early position (more likely actual state)
-       * 
+       *
        * Higher confidence indicates more reliable state detection
        */
       let confidence = BASE_STATE_CONFIDENCE; // Base confidence
@@ -775,7 +776,9 @@ export const contactListFromApiResponse = (
     ? source.contacts
     : Array.isArray(source.data)
       ? source.data
-      : null;
+      : Array.isArray((source.data as any)?.contacts)
+        ? (source.data as any).contacts
+        : null;
 
   if (!collection) {
     return err(

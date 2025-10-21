@@ -11,25 +11,40 @@ import { expect } from 'bun:test';
 // Ensure environment variables are available in import.meta.env
 // Bun loads .env automatically, but we need to explicitly set import.meta.env for tests
 if (!import.meta.env.VITE_API_URL) {
-  const apiUrl = (typeof process !== 'undefined' && process.env ? process.env.VITE_API_URL : undefined) || 'http://localhost:8000/api';
+  const apiUrl =
+    (typeof process !== 'undefined' && process.env ? process.env.VITE_API_URL : undefined) ||
+    'http://localhost:8000/api';
   (import.meta.env as Record<string, string>).VITE_API_URL = apiUrl;
 }
 if (!import.meta.env.MODE) {
-  (import.meta.env as Record<string, string>).MODE = (typeof process !== 'undefined' && process.env ? process.env.NODE_ENV : undefined) || 'test';
+  (import.meta.env as Record<string, string>).MODE =
+    (typeof process !== 'undefined' && process.env ? process.env.NODE_ENV : undefined) || 'test';
 }
 if (!import.meta.env.DEV) {
   (import.meta.env as Record<string, boolean>).DEV =
-    ((typeof process !== 'undefined' && process.env ? process.env.NODE_ENV : undefined) || 'test') !== 'production';
+    ((typeof process !== 'undefined' && process.env ? process.env.NODE_ENV : undefined) ||
+      'test') !== 'production';
 }
 if (!import.meta.env.PROD) {
   (import.meta.env as Record<string, boolean>).PROD =
-    ((typeof process !== 'undefined' && process.env ? process.env.NODE_ENV : undefined) || 'test') === 'production';
+    ((typeof process !== 'undefined' && process.env ? process.env.NODE_ENV : undefined) ||
+      'test') === 'production';
 }
 import * as matchers from '@testing-library/jest-dom/matchers';
 import { cleanup } from '@testing-library/react';
 
 // Extend Bun's expect with jest-dom matchers
 expect.extend(matchers);
+
+// Mock missing Jest utilities that jest-dom expects
+if (typeof globalThis !== 'undefined') {
+  // Mock RECEIVED_COLOR and other Jest utilities
+  (globalThis as any).RECEIVED_COLOR = (text: string) => text;
+  (globalThis as any).EXPECTED_COLOR = (text: string) => text;
+  (globalThis as any).INVERTED_COLOR = (text: string) => text;
+  (globalThis as any).BOLD_WEIGHT = (text: string) => text;
+  (globalThis as any).DIM_COLOR = (text: string) => text;
+}
 import { afterEach, beforeAll, afterAll } from 'bun:test';
 import { setupMSW, teardownMSW, resetMSW } from './mocks/server';
 

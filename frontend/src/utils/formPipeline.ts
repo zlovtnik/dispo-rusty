@@ -372,7 +372,7 @@ export const formatPipelineError = <E = FormValidationError>(
     case 'TRANSFORMATION_ERROR':
       return `Data transformation error: ${error.reason}`;
     case 'SUBMISSION_ERROR':
-      return error.statusCode
+      return error.statusCode != null
         ? `Submission failed (${error.statusCode}): ${error.message}`
         : `Submission failed: ${error.message}`;
   }

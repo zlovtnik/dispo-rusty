@@ -145,6 +145,11 @@ class Logger {
       localStorage.removeItem('app_logs');
     }
   }
+
+  // Public static getter for environment detection (used by module-level utilities)
+  static isProduction(): boolean {
+    return import.meta.env.PROD;
+  }
 }
 
 // Global error handler - with reentrancy guard to prevent infinite loops
@@ -196,46 +201,43 @@ if (typeof window !== 'undefined') {
 
 export const logger = new Logger();
 
+// Environment configuration for address parsing logger
+const debugEnabled = import.meta.env.VITE_DEBUG_ADDRESS_PARSING === 'true';
+
+/**
+ * Determines if logging should occur based on environment settings
+ * @returns true if logging should occur (not production OR debug enabled)
+ */
+const shouldLog = (): boolean => !Logger.isProduction() || debugEnabled;
+
 // Specialized logger for address parsing that respects VITE_DEBUG_ADDRESS_PARSING env var
 export const addressParsingLogger = {
   // Debug: For detailed tracing of address parsing steps and intermediate values
   debug(message: string, data?: any) {
-    const isProduction = import.meta.env.PROD;
-    const debugEnabled = import.meta.env.VITE_DEBUG_ADDRESS_PARSING === 'true';
-
-    if (!isProduction || debugEnabled) {
+    if (shouldLog()) {
       logger.info(`[DEBUG] ${message}`, data);
     }
   },
 
   // Info: For general information about address parsing operations and successful outcomes
   info(message: string, data?: any) {
-    const isProduction = import.meta.env.PROD;
-    const debugEnabled = import.meta.env.VITE_DEBUG_ADDRESS_PARSING === 'true';
-
-    if (!isProduction || debugEnabled) {
+    if (shouldLog()) {
       logger.info(message, data);
     }
   },
 
   // Warn: For non-critical issues during address parsing that don't prevent completion
   warn(message: string, data?: any) {
-    const isProduction = import.meta.env.PROD;
-    const debugEnabled = import.meta.env.VITE_DEBUG_ADDRESS_PARSING === 'true';
-
-    if (!isProduction || debugEnabled) {
+    if (shouldLog()) {
       logger.warn(message, data);
     }
   },
 
   // Error: For critical failures in address parsing that prevent successful completion
   error(message: string, data?: any) {
-    const isProduction = import.meta.env.PROD;
-    const debugEnabled = import.meta.env.VITE_DEBUG_ADDRESS_PARSING === 'true';
-
-    if (!isProduction || debugEnabled) {
-      logger.error(message, data);
-    }
+    // Always emit critical errors in production
+    logger.error(message, data);
+    // TODO: add extra debug output here for non-production debugging
   },
 };
 

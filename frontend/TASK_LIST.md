@@ -1318,6 +1318,28 @@ bun test --test-name-pattern="Form Validation"
 - [ ] **Prerequisite for TI-004**: All tests must be passing and CI green
 - [ ] **TI-004 Integration Tests**: Can only proceed after test fixes complete
 
+**Risk & Contingency:**
+
+**Sprint Structure:** Two-week sprints aligned with team cadence (Sprint 1: Weeks 1-2, Sprint 2: Weeks 3-4). See sprint planning kickoff doc for detailed execution rules.
+
+- [ ] **Sprint 1 Extension Triggers** (if progress <50% by midpoint):
+  - **Metric:** If <50% progress by midpoint (calculated as: (fixed_tests / total_failing_tests) * 100) → activate contingency
+  - **Procedure:** Sequence components by priority (ErrorBoundary → AddressBookPage → TenantsPage) and form dedicated two-developer pairs per high-risk component for focused bug triage. Reduce Sprint 2 scope to critical path components only (ErrorBoundary, AddressBookPage, TenantsPage).
+- [ ] **TI-004 Parallel Start Criteria**:
+  - [ ] **Required:** ErrorBoundary tests must be green (100% pass rate)
+  - [ ] **Required:** AddressBookPage tests must be green (100% pass rate) 
+  - [ ] **Required:** TenantsPage tests must be green (100% pass rate)
+  - [ ] **Required:** CI pipeline must be stable (no flaky tests)
+  - [ ] **Recommended:** All other component tests passing (can proceed with partial green status if required criteria met)
+- [ ] **Engineering Capacity Requirements**:
+  - [ ] Full-team allocation for Sprint 1 — subject to team availability; confirm in sprint planning
+  - [ ] Sprint 2 baseline: 2-3 developers; re-evaluate and increase allocation if >15 failing tests remain after Sprint 1
+  - [ ] Escalate to tech lead if capacity constraints or blocking dependencies identified
+- [ ] **Escalation Decision Tree**:
+  - [ ] **Day 7 (Week 1.5):** Developer → Tech Lead (review progress against 50% metric; if below threshold, activate contingency procedure)
+  - [ ] **Day 10 (Week 2):** Tech Lead → Engineering Manager (form focused pairs for any high-risk components still <80% pass rate; run parallel squads if needed)
+  - [ ] **Day 14 (Sprint boundary):** Engineering Manager → Director (if critical path blocked or >20 tests still failing)
+
 
 ---
 
