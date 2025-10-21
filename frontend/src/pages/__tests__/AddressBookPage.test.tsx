@@ -1183,8 +1183,8 @@ describe.skip('AddressBookPage Component', () => {
       expect(modal).toBeInTheDocument();
 
       // Use within to scope the query to the modal
-      const { getByText } = within(modal);
-      expect(getByText('Delete Contact')).toBeInTheDocument();
+      const queries = within(modal);
+      expect(queries.getByText('Delete Contact')).toBeInTheDocument();
 
       const confirmButtons = screen.getAllByRole('button', { name: /delete/i });
       const confirmButton = confirmButtons.find(
@@ -1202,6 +1202,7 @@ describe.skip('AddressBookPage Component', () => {
     it('should handle network timeout', async () => {
       server.use(
         http.get(`${API_BASE_URL}/address-book`, () => {
+          // eslint-disable-next-line @typescript-eslint/no-empty-function
           return new Promise(() => {}); // Never resolves
         })
       );

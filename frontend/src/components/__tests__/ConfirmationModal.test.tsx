@@ -190,6 +190,7 @@ describe('ConfirmationModal Component', () => {
   describe('Callbacks', () => {
     it('should call onConfirm when confirm button is clicked', async () => {
       const user = userEvent.setup();
+      // eslint-disable-next-line @typescript-eslint/no-empty-function
       const onConfirm = mock(() => {});
 
       renderWithProviders(
@@ -210,6 +211,7 @@ describe('ConfirmationModal Component', () => {
 
     it('should call onCancel when cancel button is clicked', async () => {
       const user = userEvent.setup();
+      // eslint-disable-next-line @typescript-eslint/no-empty-function
       const onCancel = mock(() => {});
 
       renderWithProviders(

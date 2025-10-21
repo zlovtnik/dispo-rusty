@@ -73,7 +73,8 @@ export const sanitizeUrlForLogging = (urlStr: string): string => {
     });
 
     // Preserve fragments (URL hash)
-    const hash = urlStr.includes('#') ? '#' + urlStr.split('#')[1] : '';
+    const hashParts = urlStr.split('#');
+    const hash = hashParts.length > 1 ? '#' + (hashParts[1] ?? '') : '';
 
     // Return only pathname + remaining safe query params to avoid leaking origin/protocol
     return parsed.pathname + (parsed.search ? parsed.search : '') + hash;
