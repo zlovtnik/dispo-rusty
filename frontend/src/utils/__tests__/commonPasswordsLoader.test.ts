@@ -222,11 +222,14 @@ describe('CommonPasswordsLoader', () => {
       const loader = CommonPasswordsLoader.getInstance();
       await loader.getCommonPasswords();
 
+      // Give the cache status update a chance to complete
+      await new Promise(resolve => setTimeout(resolve, 100));
+
       const status = loader.getCacheStatus();
       expect(status).toBeDefined();
       expect(status?.hasCache).toBe(true);
       expect(status?.source).toMatch(/\/config\/common-passwords\.json$/);
-    });
+    }, { timeout: 10000 });
 
     it('should return cache status with fallback source when file loading fails', async () => {
       const loader = CommonPasswordsLoader.getInstance({

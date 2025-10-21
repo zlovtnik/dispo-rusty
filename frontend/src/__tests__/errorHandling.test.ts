@@ -500,6 +500,9 @@ describe('Network Error Handling', () => {
         })
       );
 
+      // Give the MSW handler a chance to register
+      await new Promise(resolve => setTimeout(resolve, 50));
+
       const result = await tenantService.getById('nonexistent');
 
       expect(result.isErr()).toBe(true);

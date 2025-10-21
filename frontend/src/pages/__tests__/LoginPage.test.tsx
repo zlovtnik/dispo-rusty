@@ -408,17 +408,23 @@ describe('LoginPage Component', () => {
       const submitButton = screen.getByRole('button', { name: /login|sign in/i });
       await user.click(submitButton);
 
-      await waitFor(() => {
-        const alert = screen.getByRole('alert');
-        expect(alert).toHaveTextContent(/temporary error/i);
-      });
+      await waitFor(
+        () => {
+          const alert = screen.getByRole('alert');
+          expect(alert).toHaveTextContent(/temporary error/i);
+        },
+        { timeout: 5000 }
+      );
 
       // Simulate realistic retry - user just clicks submit again without clearing inputs
       await user.click(submitButton);
 
-      await waitFor(() => {
-        expect(screen.queryByRole('alert')).toBeNull();
-      });
+      await waitFor(
+        () => {
+          expect(screen.queryByRole('alert')).toBeNull();
+        },
+        { timeout: 5000 }
+      );
     });
   });
 

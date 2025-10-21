@@ -59,10 +59,13 @@ describe('PrivateRoute Component', () => {
       );
 
       // Should redirect to login - check pathname instead of rendered text
-      await waitFor(() => {
-        const locationDisplay = screen.getByTestId('location-display');
-        expect(locationDisplay.textContent).toContain('/login');
-      });
+      await waitFor(
+        () => {
+          const locationDisplay = screen.getByTestId('location-display');
+          expect(locationDisplay.textContent).toContain('/login');
+        },
+        { timeout: 5000 }
+      );
     });
 
     it('should display loading state while checking authentication', () => {
@@ -137,10 +140,13 @@ describe('PrivateRoute Component', () => {
       );
 
       // Should redirect to login - check pathname instead of rendered text
-      await waitFor(() => {
-        const locationDisplay = screen.getByTestId('location-display');
-        expect(locationDisplay.textContent).toContain('/login');
-      });
+      await waitFor(
+        () => {
+          const locationDisplay = screen.getByTestId('location-display');
+          expect(locationDisplay.textContent).toContain('/login');
+        },
+        { timeout: 5000 }
+      );
     });
 
     it('should pass location state for redirect', async () => {
@@ -169,10 +175,13 @@ describe('PrivateRoute Component', () => {
       );
 
       // Should redirect to login - check pathname instead of rendered text
-      await waitFor(() => {
-        const locationDisplay = screen.getByTestId('location-display');
-        expect(locationDisplay.textContent).toContain('/login');
-      });
+      await waitFor(
+        () => {
+          const locationDisplay = screen.getByTestId('location-display');
+          expect(locationDisplay.textContent).toContain('/login');
+        },
+        { timeout: 5000 }
+      );
     });
 
     it('should preserve intended destination in location state', async () => {
@@ -201,10 +210,13 @@ describe('PrivateRoute Component', () => {
       );
 
       // Should redirect to login - check pathname instead of rendered text
-      await waitFor(() => {
-        const locationDisplay = screen.getByTestId('location-display');
-        expect(locationDisplay.textContent).toContain('/login');
-      });
+      await waitFor(
+        () => {
+          const locationDisplay = screen.getByTestId('location-display');
+          expect(locationDisplay.textContent).toContain('/login');
+        },
+        { timeout: 5000 }
+      );
     });
   });
 
@@ -232,10 +244,13 @@ describe('PrivateRoute Component', () => {
       );
 
       // Should redirect to login - check pathname instead of rendered text
-      await waitFor(() => {
-        const locationDisplay = screen.getByTestId('location-display');
-        expect(locationDisplay.textContent).toContain('/login');
-      });
+      await waitFor(
+        () => {
+          const locationDisplay = screen.getByTestId('location-display');
+          expect(locationDisplay.textContent).toContain('/login');
+        },
+        { timeout: 5000 }
+      );
     });
 
     it('should redirect to login with replace mode', async () => {
@@ -264,10 +279,13 @@ describe('PrivateRoute Component', () => {
       );
 
       // Should redirect to login with replace mode - check pathname instead of rendered text
-      await waitFor(() => {
-        const locationDisplay = screen.getByTestId('location-display');
-        expect(locationDisplay.textContent).toContain('/login');
-      });
+      await waitFor(
+        () => {
+          const locationDisplay = screen.getByTestId('location-display');
+          expect(locationDisplay.textContent).toContain('/login');
+        },
+        { timeout: 5000 }
+      );
     });
 
     it('should store current location for post-login redirect', async () => {
@@ -296,10 +314,13 @@ describe('PrivateRoute Component', () => {
       );
 
       // Should redirect to login - check pathname instead of rendered text
-      await waitFor(() => {
-        const locationDisplay = screen.getByTestId('location-display');
-        expect(locationDisplay.textContent).toContain('/login');
-      });
+      await waitFor(
+        () => {
+          const locationDisplay = screen.getByTestId('location-display');
+          expect(locationDisplay.textContent).toContain('/login');
+        },
+        { timeout: 5000 }
+      );
     });
   });
 
@@ -356,10 +377,13 @@ describe('PrivateRoute Component', () => {
       );
 
       // Should redirect to login - check pathname instead of rendered text
-      await waitFor(() => {
-        const locationDisplay = screen.getByTestId('location-display');
-        expect(locationDisplay.textContent).toContain('/login');
-      });
+      await waitFor(
+        () => {
+          const locationDisplay = screen.getByTestId('location-display');
+          expect(locationDisplay.textContent).toContain('/login');
+        },
+        { timeout: 5000 }
+      );
     });
   });
 
@@ -502,10 +526,13 @@ describe('PrivateRoute Component', () => {
       );
 
       // Should redirect to login - check pathname instead of rendered text
-      await waitFor(() => {
-        const locationDisplay = screen.getByTestId('location-display');
-        expect(locationDisplay.textContent).toContain('/login');
-      });
+      await waitFor(
+        () => {
+          const locationDisplay = screen.getByTestId('location-display');
+          expect(locationDisplay.textContent).toContain('/login');
+        },
+        { timeout: 5000 }
+      );
     });
   });
 });

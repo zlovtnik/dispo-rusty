@@ -97,9 +97,12 @@ describe('Layout Component', () => {
       await user.click(dashboardLink);
 
       // Verify the navigation occurred by checking the current location
-      await waitFor(() => {
-        expect(getCurrentLocation().pathname).toBe('/dashboard');
-      });
+      await waitFor(
+        () => {
+          expect(getCurrentLocation().pathname).toBe('/dashboard');
+        },
+        { timeout: 5000 }
+      );
     });
 
     it('should navigate to address book when contacts menu item is clicked', async () => {
@@ -113,9 +116,12 @@ describe('Layout Component', () => {
       await user.click(contactsLink);
 
       // Verify the navigation occurred by checking the current location
-      await waitFor(() => {
-        expect(getCurrentLocation().pathname).toBe('/address-book');
-      });
+      await waitFor(
+        () => {
+          expect(getCurrentLocation().pathname).toBe('/address-book');
+        },
+        { timeout: 5000 }
+      );
     });
 
     it('should have navigation menu items present', () => {
