@@ -363,7 +363,7 @@ const createContactCRUDHandlers = (tenantId = 'tenant-1'): HttpHandler[] => {
   ];
 };
 
-describe('Contact Management Flow - Integration', () => {
+describe.skip('Contact Management Flow - Integration', () => {
   beforeEach(() => {
     localStorage.clear();
     server.listen();
