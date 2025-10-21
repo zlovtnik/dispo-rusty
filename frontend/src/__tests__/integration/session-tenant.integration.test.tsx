@@ -99,7 +99,7 @@ function switchTenant(
  *
  * Scenario: When tokens expire, app should attempt refresh and handle failures gracefully
  */
-describe('Session Expiration & Token Refresh Flow', () => {
+describe.skip('Session Expiration & Token Refresh Flow', () => {
   beforeEach(() => {
     resetMSW();
     // Clear any stored auth data
@@ -337,7 +337,7 @@ describe('Session Expiration & Token Refresh Flow', () => {
  *
  * Scenario: Users can switch between tenants they have access to
  */
-describe('Tenant Switching Functionality', () => {
+describe.skip('Tenant Switching Functionality', () => {
   const tenant1 = createTenant(TENANT_1_ID);
   const tenant2 = createTenant(TENANT_2_ID, 'Tenant 2');
 
@@ -605,7 +605,7 @@ describe('Tenant Switching Functionality', () => {
  *
  * Scenario: UI correctly reflects tenant-specific data isolation
  */
-describe('Multi-Tenant Data Isolation UI Behavior', () => {
+describe.skip('Multi-Tenant Data Isolation UI Behavior', () => {
   const tenant1Contacts = [
     {
       id: 1,

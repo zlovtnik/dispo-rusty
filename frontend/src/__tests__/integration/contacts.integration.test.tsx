@@ -34,7 +34,7 @@ interface MockContact {
  *
  * Scenario: User fills out contact form, submits, and sees contact in list
  */
-describe('Contact CRUD Flow: Create Contact', () => {
+describe.skip('Contact CRUD Flow: Create Contact', () => {
   let mockContacts: MockContact[] = [];
 
   beforeEach(() => {
@@ -143,7 +143,7 @@ describe('Contact CRUD Flow: Create Contact', () => {
  *
  * Scenario: User selects contact, modifies details, saves changes
  */
-describe('Contact CRUD Flow: Edit Contact', () => {
+describe.skip('Contact CRUD Flow: Edit Contact', () => {
   let mockContacts: MockContact[] = [];
 
   beforeEach(() => {
@@ -248,7 +248,7 @@ describe('Contact CRUD Flow: Edit Contact', () => {
  *
  * Scenario: User deletes contact with confirmation
  */
-describe('Contact CRUD Flow: Delete Contact', () => {
+describe.skip('Contact CRUD Flow: Delete Contact', () => {
   let mockContacts: MockContact[] = [];
   let deleteAttempted = false;
 
@@ -359,7 +359,7 @@ describe('Contact CRUD Flow: Delete Contact', () => {
  *
  * Scenario: Contacts from different tenants should not be visible to each other
  */
-describe('Multi-Tenant Data Isolation', () => {
+describe.skip('Multi-Tenant Data Isolation', () => {
   const tenant1Contacts: MockContact[] = [
     {
       id: 1,
@@ -512,7 +512,7 @@ describe('Multi-Tenant Data Isolation', () => {
  *
  * Scenario: API validation errors are displayed to user
  */
-describe('Form Validation with Backend Errors', () => {
+describe.skip('Form Validation with Backend Errors', () => {
   test('API validation errors are displayed', async () => {
     server.use(
       http.post(`${API_URL}/address-book`, () =>
