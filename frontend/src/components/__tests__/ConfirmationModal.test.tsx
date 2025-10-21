@@ -198,7 +198,7 @@ describe('ConfirmationModal Component', () => {
           message="Confirm?"
           confirmText="Yes"
           onConfirm={onConfirm}
-          onCancel={() => {}}
+          onCancel={() => undefined}
         />
       );
 
@@ -217,7 +217,9 @@ describe('ConfirmationModal Component', () => {
           isOpen={true}
           message="Confirm?"
           cancelText="No"
-          onConfirm={() => {}}
+          onConfirm={() => {
+            // Unused confirm handler
+          }}
           onCancel={onCancel}
         />
       );

@@ -48,7 +48,7 @@ export const COUNTRY_NAMES = [
  * Set of country names (uppercase with normalized spacing) for O(1) country name lookups
  * Improves performance and type safety for address parsing country detection
  */
-export const COUNTRY_NAMES_SET: Set<string> = new Set(COUNTRY_NAMES);
+export const COUNTRY_NAMES_SET = new Set<string>(COUNTRY_NAMES);
 
 /**
  * Curated list of US state names for address parsing (normalized without spaces)
@@ -169,7 +169,7 @@ export const STATE_CODES = new Set([
  * Set of US state names (uppercase, no spaces) for O(1) state name lookups
  * Improves performance and type safety for address parsing state detection
  */
-export const STATE_NAMES_SET: Set<string> = new Set(STATE_NAMES);
+export const STATE_NAMES_SET = new Set<string>(STATE_NAMES);
 
 /**
  * ISO country codes for country detection

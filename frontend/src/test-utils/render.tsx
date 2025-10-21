@@ -245,7 +245,7 @@ export function renderWithAuth(ui: ReactElement, options?: CustomRenderOptions) 
     // Use the existing renderResult.rerender to update the same tree
     // Only wrap with the new AuthProvider, not a new Router
     renderResult.rerender(<AuthWrapper>{newUi}</AuthWrapper>);
-    
+
     return renderResult;
   };
 

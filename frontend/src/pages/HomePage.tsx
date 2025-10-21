@@ -96,7 +96,7 @@ export const HomePage: React.FC = () => {
               type="primary"
               size="large"
               onClick={handleGetStarted}
-              onKeyDown={(e) => {
+              onKeyDown={e => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
                   handleGetStarted();
@@ -106,10 +106,10 @@ export const HomePage: React.FC = () => {
             >
               Get Started
             </Button>
-            <Button 
+            <Button
               size="large"
               onClick={handleSignIn}
-              onKeyDown={(e) => {
+              onKeyDown={e => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
                   handleSignIn();

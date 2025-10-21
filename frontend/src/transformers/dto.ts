@@ -772,7 +772,7 @@ export const contactListFromApiResponse = (
 
   const sourceRecord = input as Record<string, unknown>;
   const source = sourceRecord as ContactListApiDTO;
-  const collection = Array.isArray(source.contacts)
+  const collection: unknown[] | null = Array.isArray(source.contacts)
     ? source.contacts
     : Array.isArray(source.data)
       ? source.data
@@ -791,10 +791,10 @@ export const contactListFromApiResponse = (
   }
 
   const contactsResult = collection.reduce<Result<Contact[], AppError>>(
-    (accumulator, item, index) =>
-      accumulator.andThen(contacts =>
+    (accumulator: Result<Contact[], AppError>, item: unknown, index: number) =>
+      accumulator.andThen((contacts: Contact[]) =>
         contactFromApi(item)
-          .map(contact => [...contacts, contact])
+          .map((contact: Contact) => [...contacts, contact])
           .mapErr(error =>
             createTransformerError(
               { entity: 'ContactList', direction: 'fromApi' },

@@ -79,7 +79,7 @@ describe('CommonPasswordsLoader', () => {
       // Mock client environment
       const originalWindow = global.window;
       (global as any).window = {};
-      
+
       try {
         const loader = CommonPasswordsLoader.getInstance({ isSSR: false });
         expect(loader).toBeDefined();
@@ -96,7 +96,7 @@ describe('CommonPasswordsLoader', () => {
       // Mock client environment
       const originalWindow = global.window;
       (global as any).window = {};
-      
+
       try {
         expect(() => {
           CommonPasswordsLoader.getInstance({ isSSR: true });
@@ -119,11 +119,11 @@ describe('CommonPasswordsLoader', () => {
 
       // Verify the loader is functional by calling getCommonPasswords()
       const passwords = await loader.getCommonPasswords();
-      
+
       // Assert it returns an array with valid data
       expect(Array.isArray(passwords)).toBe(true);
       expect(passwords.length).toBeGreaterThan(0);
-      
+
       // Verify it contains the expected type of data (strings)
       expect(typeof passwords[0]).toBe('string');
     });
@@ -218,18 +218,28 @@ describe('CommonPasswordsLoader', () => {
       expect(status).toBeNull();
     });
 
-    it('should return cache status after loading', async () => {
+    it('should return cache status with config file source when loading succeeds', async () => {
       const loader = CommonPasswordsLoader.getInstance();
       await loader.getCommonPasswords();
 
       const status = loader.getCacheStatus();
-      expect(status).not.toBeNull();
+      expect(status).toBeDefined();
       expect(status?.hasCache).toBe(true);
-      // NOTE: In test environment with fetch mocking, the loader may fall back to the built-in list
-      // which sets source to 'fallback'. This is expected behavior - we just verify the cache has a source.
-      expect(status?.source).toBeDefined();
-      const validSources = ['fallback', '/config/common-passwords.json', 'http://localhost:5173/config/common-passwords.json'];
-      expect(validSources).toContain(status?.source as string);
+      expect(status?.source).toMatch(/\/config\/common-passwords\.json$/);
+    });
+
+    it('should return cache status with fallback source when file loading fails', async () => {
+      const loader = CommonPasswordsLoader.getInstance({
+        filePath: '/non-existent-test-file.json',
+        enabled: true,
+      });
+      const passwords = await loader.getCommonPasswords();
+      const status = loader.getCacheStatus();
+      expect(status).not.toBeNull();
+      expect(status?.source).toBe('fallback');
+      expect(status?.hasCache).toBe(true);
+      expect(Array.isArray(passwords)).toBe(true);
+      expect(passwords.length).toBeGreaterThan(0);
     });
   });
 });

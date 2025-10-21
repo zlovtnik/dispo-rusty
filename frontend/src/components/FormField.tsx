@@ -157,60 +157,44 @@ const areEqual = (prevProps: FormFieldProps, nextProps: FormFieldProps): boolean
     prevProps.type === 'password' ||
     prevProps.type === 'textarea'
   ) {
-    if (
-      (prevProps as TextFormFieldProps).showCount !==
-      (nextProps as TextFormFieldProps).showCount
-    ) {
+    if (prevProps.showCount !== (nextProps as TextFormFieldProps).showCount) {
       return false;
     }
-    if (
-      (prevProps as TextFormFieldProps).maxLength !==
-      (nextProps as TextFormFieldProps).maxLength
-    ) {
+    if (prevProps.maxLength !== (nextProps as TextFormFieldProps).maxLength) {
       return false;
     }
-    if ((prevProps as TextFormFieldProps).rows !== (nextProps as TextFormFieldProps).rows) {
+    if (prevProps.rows !== (nextProps as TextFormFieldProps).rows) {
       return false;
     }
   }
 
   // Number field specific props
   if (prevProps.type === 'number') {
-    if (
-      (prevProps as NumberFormFieldProps).min !==
-      (nextProps as NumberFormFieldProps).min
-    ) {
+    if (prevProps.min !== (nextProps as NumberFormFieldProps).min) {
+      return false;
+    }
+    if (prevProps.max !== (nextProps as NumberFormFieldProps).max) {
+      return false;
+    }
+    if (prevProps.step !== (nextProps as NumberFormFieldProps).step) {
+      return false;
+    }
+    if (prevProps.precision !== (nextProps as NumberFormFieldProps).precision) {
       return false;
     }
     if (
-      (prevProps as NumberFormFieldProps).max !==
-      (nextProps as NumberFormFieldProps).max
+      !shallowEqual(
+        prevProps.inputNumberProps,
+        (nextProps as NumberFormFieldProps).inputNumberProps
+      )
     ) {
-      return false;
-    }
-    if (
-      (prevProps as NumberFormFieldProps).step !==
-      (nextProps as NumberFormFieldProps).step
-    ) {
-      return false;
-    }
-    if (
-      (prevProps as NumberFormFieldProps).precision !==
-      (nextProps as NumberFormFieldProps).precision
-    ) {
-      return false;
-    }
-    if (!shallowEqual(
-      (prevProps as NumberFormFieldProps).inputNumberProps,
-      (nextProps as NumberFormFieldProps).inputNumberProps
-    )) {
       return false;
     }
   }
 
   // Select field specific props
   if (prevProps.type === 'select') {
-    const prev = prevProps as SelectFormFieldProps;
+    const prev = prevProps;
     const next = nextProps as SelectFormFieldProps;
     // options is required, just compare references
     if (prev.options !== next.options) {
@@ -223,10 +207,7 @@ const areEqual = (prevProps: FormFieldProps, nextProps: FormFieldProps): boolean
 
   // Checkbox field specific props
   if (prevProps.type === 'checkbox') {
-    if (
-      (prevProps as CheckboxFormFieldProps).children !==
-      (nextProps as CheckboxFormFieldProps).children
-    ) {
+    if (prevProps.children !== (nextProps as CheckboxFormFieldProps).children) {
       return false;
     }
   }

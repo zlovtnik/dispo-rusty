@@ -258,7 +258,11 @@ const apiResultFromResponse = <T>(response: Response): ResultAsync<ApiResponse<T
     const status = typeof body.status === 'string' ? body.status : undefined;
 
     // Extracted helper for determining success
-    function isSuccess(response: Response, body: Record<string, unknown>, status?: string): boolean {
+    function isSuccess(
+      response: Response,
+      body: Record<string, unknown>,
+      status?: string
+    ): boolean {
       if (status === 'success') return true;
       if ('success' in body) {
         if (typeof body.success === 'boolean') return body.success;
@@ -311,16 +315,13 @@ const retryWithBackoff = <T>(
 /**
  * Validates tenant API responses using Zod schemas
  */
-const validateTenantResponse = <T>(
-  data: unknown,
-  schema: ZodType<T>
-): ResultAsync<T, AppError> => {
+const validateTenantResponse = <T>(data: unknown, schema: ZodType<T>): ResultAsync<T, AppError> => {
   const validation = schema.safeParse(data);
-  
+
   if (validation.success) {
     return okAsync(validation.data);
   }
-  
+
   return errAsync(
     createBusinessLogicError(
       'Invalid tenant response format',
@@ -469,7 +470,10 @@ const _toBusinessError = (error: AppError): BusinessLogicError => {
 };
 
 const emptyObjectSchema = z.object({}).strict();
-//// HTTP Client class with timeout, retry, and circuit breaker support
+
+/**
+ * HTTP Client class with timeout, retry, and circuit breaker support
+ */
 class HttpClient implements IHttpClient {
   private readonly baseURL: string;
   private readonly config: HttpClientConfig;
@@ -894,23 +898,25 @@ export const healthService = {
   },
 
   /**
+   * Performs a simple ping to verify API availability
+   * @returns API response with ping status
+   */
+  ping(): AsyncResult<ApiResponse<Record<string, unknown>>, AppError> {
+    return apiClient.get<Record<string, unknown>>('/ping');
+  },
+};
+
+/**
+ * Tenant Filter Interface
+ *
+ * Defines filtering parameters for tenant queries with pagination and cursor support
+ */
 export interface TenantFilter {
   /** Array of filter conditions to apply */
   filters: {
     /** Field name to filter on */
     field: string;
     /** Comparison operator (eq, ne, gt, lt, like, etc.) */
-    operator: string;
-    /** Value to compare against */
-    value: string;
-  }[];
-  /** Cursor for pagination */
-  cursor?: number;
-  /** Number of results per page */
-  pageSize?: number;
-  /** Offset for pagination */
-  offset?: number;
-}
     operator: string;
     /** Value to compare against */
     value: string;
@@ -974,23 +980,24 @@ export const tenantService = {
     if (params?.limit !== undefined) queryParams.set('limit', params.limit.toString());
 
     const query = queryParams.toString();
-    return apiClient.get<PaginatedTenantResponse>(
-      query ? `/admin/tenants?${query}` : '/admin/tenants'
-    ).andThen(response => {
-      if (response.status === 'success') {
-        return validateTenantResponse(response.data, paginatedTenantResponseSchema)
-          .map(validatedData => createSuccessResponse(validatedData));
-      }
-      return okAsync(response);
-    });
-   *   filters: [{ field: 'status', operator: 'eq', value: 'active' }],
-   *   pageSize: 20
-   * });
-   * ```
-   */
-  filter(
-    params: TenantFilter
-  ): AsyncResult<ApiResponse<PaginatedTenantResponse | Tenant[]>, AppError> {
+    return apiClient
+      .get<PaginatedTenantResponse>(query ? `/admin/tenants?${query}` : '/admin/tenants')
+      .andThen(response => {
+        if (response.status === 'success') {
+          return validateTenantResponse(response.data, paginatedTenantResponseSchema).map(
+            validatedData => createSuccessResponse(validatedData)
+          );
+        }
+        return okAsync(response);
+      });
+  },
+
+  /**
+   * Filters tenants by specified criteria
+   *
+   * @param params - Filter parameters (filters array, pagination options)
+   * @returns Filtered tenant response with pagination metadata
+   *
    * @example
    * ```typescript
    * const active = await tenantService.filter({
@@ -998,9 +1005,9 @@ export const tenantService = {
    *   limit: 20
    * });
    * ```
-    if (params.pageSize !== undefined) {
-      queryObj.page_size = params.pageSize;
-    }
+   */
+  filter(
+    params: TenantFilter
   ): AsyncResult<ApiResponse<PaginatedTenantResponse | Tenant[]>, AppError> {
     const queryObj: Record<string, unknown> = {
       filters: params.filters,
@@ -1017,22 +1024,23 @@ export const tenantService = {
     }
 
     const queryString = qs.stringify(queryObj, { arrayFormat: 'indices' });
-    return apiClient.get<PaginatedTenantResponse | Tenant[]>(
-      `/admin/tenants/filter?${queryString}`
-    ).andThen(response => {
-      if (response.status === 'success') {
-        // For filter results, we need to check if it's a paginated response or array
-        if (Array.isArray(response.data)) {
-          // It's a Tenant[] array, return as-is
-          return okAsync(response);
-        } else {
-          // It's a PaginatedTenantResponse, validate it
-          return validateTenantResponse(response.data, paginatedTenantResponseSchema)
-            .map(validatedData => createSuccessResponse(validatedData));
+    return apiClient
+      .get<PaginatedTenantResponse | Tenant[]>(`/admin/tenants/filter?${queryString}`)
+      .andThen(response => {
+        if (response.status === 'success') {
+          // For filter results, we need to check if it's a paginated response or array
+          if (Array.isArray(response.data)) {
+            // It's a Tenant[] array, return as-is
+            return okAsync(response);
+          } else {
+            // It's a PaginatedTenantResponse, validate it
+            return validateTenantResponse(response.data, paginatedTenantResponseSchema).map(
+              validatedData => createSuccessResponse(validatedData)
+            );
+          }
         }
-      }
-      return okAsync(response);
-    });
+        return okAsync(response);
+      });
   },
 
   /**
@@ -1130,9 +1138,9 @@ export const addressBookService = {
    *
    * @example
    * ```typescript
-   * const contacts = await addressBookService.getAll({ 
-   *   page: 1, 
-   *   limit: 10, 
+   * const contacts = await addressBookService.getAll({
+   *   page: 1,
+   *   limit: 10,
    *   search: 'doe',
    *   sort: 'name,asc'
    * });

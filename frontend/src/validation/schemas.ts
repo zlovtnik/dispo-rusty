@@ -225,14 +225,14 @@ export const loginRequestSchema = z.object({
 });
 
 // Shared validation function for PostgreSQL connection strings
-const isValidPostgresConnectionString = (value: string): boolean => {
+export const isValidPostgresConnectionString = (value: string): boolean => {
   const input = value.trim();
-  
+
   // Reject empty or whitespace-only strings
   if (input.length === 0) {
     return false;
   }
-  
+
   // Try parsing as a PostgreSQL URL first
   try {
     const url = new URL(input);
@@ -247,7 +247,8 @@ const isValidPostgresConnectionString = (value: string): boolean => {
 
   // Parse as libpq-style connection string (key=value pairs with optional quoting)
   // Allow optional whitespace around '=', support escapes in quoted/unquoted values.
-  const pairRegex = /\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?:'((?:\\.|[^'])*)'|"((?:\\.|[^"])*)"|((?:\\.|[^\s])+))\s*/gy;
+  const pairRegex =
+    /\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?:'((?:\\.|[^'])*)'|"((?:\\.|[^"])*)"|((?:\\.|[^\s])+))\s*/gy;
   pairRegex.lastIndex = 0;
   let lastIndex = 0;
   while (pairRegex.lastIndex < input.length) {
@@ -260,7 +261,13 @@ const isValidPostgresConnectionString = (value: string): boolean => {
 
 export const createTenantSchema = z.object({
   name: z.string().min(1),
-  db_url: z.string().refine(isValidPostgresConnectionString, 'Please enter a valid PostgreSQL URL (postgres://...) or connection string (key=value pairs)'),
+  db_url: z
+    .string()
+    .min(1, 'Database URL is required')
+    .refine(
+      isValidPostgresConnectionString,
+      'Please enter a valid PostgreSQL URL (postgres://...) or connection string (key=value pairs)'
+    ),
 });
 
 export const updateTenantSchema = createTenantSchema.partial();
@@ -338,7 +345,10 @@ export const tenantFormSchema = z.object({
   db_url: z
     .string()
     .min(1, 'Database URL is required')
-    .refine(isValidPostgresConnectionString, 'Please enter a valid PostgreSQL URL (postgres://...) or connection string (key=value pairs)'),
+    .refine(
+      isValidPostgresConnectionString,
+      'Please enter a valid PostgreSQL URL (postgres://...) or connection string (key=value pairs)'
+    ),
 });
 
 export const searchFormSchema = z.object({

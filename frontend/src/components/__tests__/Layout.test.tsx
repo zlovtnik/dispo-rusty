@@ -72,11 +72,13 @@ describe('Layout Component', () => {
       // Verify the avatar is present in the same container with correct initial
       const avatar = profileContainer?.querySelector('.ant-avatar');
       expect(avatar).toBeDefined();
-      expect(avatar?.textContent ?? '').toContain((mockUser.firstName ?? '').charAt(0).toUpperCase());
+      expect(avatar?.textContent ?? '').toContain(
+        (mockUser.firstName ?? '').charAt(0).toUpperCase()
+      );
 
       // Verify the user name is visible
       expect(profileNameElement).toBeInTheDocument();
-      expect((profileNameElement.textContent ?? '')).toContain(mockUser.firstName ?? '');
+      expect(profileNameElement.textContent ?? '').toContain(mockUser.firstName ?? '');
 
       // Verify the container has proper button semantics
       expect(profileContainer?.getAttribute('role')).toBe('button');

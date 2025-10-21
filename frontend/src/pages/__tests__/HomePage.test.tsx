@@ -245,7 +245,9 @@ describe('HomePage Component', () => {
 
       // Verify the focused element is interactive (button, link, or input)
       expect(nextFocusedElement?.tagName).toBeDefined();
-      expect(['BUTTON', 'A', 'INPUT']).toContain(nextFocusedElement?.tagName!);
+      if (nextFocusedElement?.tagName) {
+        expect(['BUTTON', 'A', 'INPUT']).toContain(nextFocusedElement.tagName);
+      }
     });
   });
 });

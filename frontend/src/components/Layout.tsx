@@ -157,12 +157,21 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             type="text"
             icon={<MenuOutlined />}
             aria-label="Toggle sidebar menu"
-            onClick={() => setCollapsed(prev => !prev)}
+            onClick={() => {
+              setCollapsed(prev => !prev);
+            }}
             style={{ fontSize: token.fontSizeLG, color: token.colorTextSecondary }}
           />
-          <Breadcrumb items={generateBreadcrumbs(location.pathname)} aria-label="Current page navigation" />
+          <Breadcrumb
+            items={generateBreadcrumbs(location.pathname)}
+            aria-label="Current page navigation"
+          />
           <Dropdown menu={{ items: userMenuItems }} placement="bottomRight" trigger={['click']}>
-            <Button type="text" aria-label="User menu" style={{ display: 'flex', alignItems: 'center' }}>
+            <Button
+              type="text"
+              aria-label="User menu"
+              style={{ display: 'flex', alignItems: 'center' }}
+            >
               <Avatar style={{ backgroundColor: token.colorPrimary }}>
                 {(user?.firstName || user?.username || 'U').charAt(0).toUpperCase()}
               </Avatar>

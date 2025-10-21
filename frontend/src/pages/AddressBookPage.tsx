@@ -281,7 +281,7 @@ export const AddressBookPage: React.FC = () => {
       return;
     }
 
-    const data = apiResponse.data as ContactListResponse;
+    const data = apiResponse.data;
     const records = Array.isArray(data?.contacts) ? data.contacts : [];
     const transformedContacts = records.map(personToContact);
     setContacts(transformedContacts);
@@ -542,7 +542,7 @@ export const AddressBookPage: React.FC = () => {
       return;
     }
 
-    const data = apiResponse.data as ContactListResponse;
+    const data = apiResponse.data;
     const records = Array.isArray(data?.contacts) ? data.contacts : [];
     const transformedContacts = records.map(personToContact);
     setContacts(transformedContacts);
@@ -639,15 +639,15 @@ export const AddressBookPage: React.FC = () => {
             }}
             onChange={(pagination, filters, sorter) => {
               const sorterResult = Array.isArray(sorter) ? sorter[0] : sorter;
-              if (sorterResult && sorterResult.field && sorterResult.order) {
+              if (sorterResult?.field && sorterResult.order) {
                 const order = sorterResult.order === 'ascend' ? 'asc' : 'desc';
                 setSorting({ field: sorterResult.field as string, order });
                 // Reload with sorting
-                loadContactsWithParams({ 
-                  page: paginationState.current, 
+                loadContactsWithParams({
+                  page: paginationState.current,
                   limit: paginationState.pageSize,
                   sortField: sorterResult.field as string,
-                  sortOrder: order
+                  sortOrder: order,
                 });
               }
             }}
@@ -705,7 +705,9 @@ export const AddressBookPage: React.FC = () => {
               type="error"
               showIcon
               closable
-              onClose={() => setFormError(null)}
+              onClose={() => {
+                setFormError(null);
+              }}
               style={{ marginBottom: 16 }}
             />
           )}

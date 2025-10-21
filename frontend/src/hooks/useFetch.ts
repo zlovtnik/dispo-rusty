@@ -68,7 +68,9 @@ export const sanitizeUrlForLogging = (urlStr: string): string => {
         keysToDelete.push(key);
       }
     }
-    keysToDelete.forEach(key => parsed.searchParams.delete(key));
+    keysToDelete.forEach(key => {
+      parsed.searchParams.delete(key);
+    });
 
     // Preserve fragments (URL hash)
     const hash = urlStr.includes('#') ? '#' + urlStr.split('#')[1] : '';

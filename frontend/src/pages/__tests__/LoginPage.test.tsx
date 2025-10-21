@@ -297,7 +297,7 @@ describe('LoginPage Component', () => {
 
     it('should show loading state during submission', async () => {
       const user = userEvent.setup();
-      const deferred = createDeferred<void>();
+      const deferred = createDeferred<undefined>();
 
       renderWithoutAuth(<LoginPage />, {
         authValue: {
@@ -435,11 +435,11 @@ describe('LoginPage Component', () => {
       renderWithoutAuth(<LoginPage />);
 
       const checkbox = screen.getByRole('checkbox');
-      const initialState = checkbox.checked;
+      const initialState = (checkbox as HTMLInputElement).checked;
 
       await user.click(checkbox);
 
-      expect(checkbox.checked).toBe(!initialState);
+      expect((checkbox as HTMLInputElement).checked).toBe(!initialState);
     });
   });
 
@@ -451,7 +451,7 @@ describe('LoginPage Component', () => {
       const input = screen.getByPlaceholderText(/username|email/i);
       await user.type(input, 'testuser');
 
-      expect(input.value).toBe('testuser');
+      expect((input as HTMLInputElement).value).toBe('testuser');
     });
 
     it('should accept password input', async () => {
@@ -461,7 +461,7 @@ describe('LoginPage Component', () => {
       const input = screen.getByPlaceholderText(/password/i);
       await user.type(input, 'password123');
 
-      expect(input.value).toBe('password123');
+      expect((input as HTMLInputElement).value).toBe('password123');
     });
 
     it('should accept tenant input', async () => {
@@ -471,7 +471,7 @@ describe('LoginPage Component', () => {
       const input = screen.getByPlaceholderText(/tenant/i);
       await user.type(input, 'tenant1');
 
-      expect(input.value).toBe('tenant1');
+      expect((input as HTMLInputElement).value).toBe('tenant1');
     });
 
     it('should have form labels', () => {
@@ -533,7 +533,7 @@ describe('LoginPage Component', () => {
 
     it('should handle rapid form submissions', async () => {
       const user = userEvent.setup();
-      const deferred = createDeferred<void>();
+      const deferred = createDeferred<undefined>();
       let loginCallCount = 0;
 
       renderWithoutAuth(<LoginPage />, {
@@ -577,7 +577,7 @@ describe('LoginPage Component', () => {
       const longText = 'x'.repeat(300); // Type more than the 254 character limit
       await user.type(usernameInput, longText);
 
-      expect(usernameInput.value.length).toBe(254); // Should be truncated to the enforced maximum
+      expect((usernameInput as HTMLInputElement).value.length).toBe(254); // Should be truncated to the enforced maximum
     });
   });
 });

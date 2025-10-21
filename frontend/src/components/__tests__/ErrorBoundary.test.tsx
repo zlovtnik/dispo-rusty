@@ -19,7 +19,6 @@ const RenderErrorComponent: React.FC<{ errorMessage: string }> = ({ errorMessage
   throw new Error(errorMessage);
 };
 
-
 describe('ErrorBoundary Component', () => {
   // Suppress console.error during tests since ErrorBoundary logs errors
   const originalConsoleError = console.error;
@@ -374,8 +373,6 @@ describe('ErrorBoundary Component', () => {
     });
   });
 
-
-
   describe('Accessibility', () => {
     it('should have accessible error message', () => {
       renderWithProviders(
@@ -430,13 +427,25 @@ describe('ErrorBoundary Component', () => {
           return (
             <div>
               <div data-testid="network-error">Network Error</div>
-              <button onClick={() => setShowError(false)}>Retry</button>
+              <button
+                onClick={() => {
+                  setShowError(false);
+                }}
+              >
+                Retry
+              </button>
             </div>
           );
         }
 
         return (
-          <button onClick={() => setShowError(true)}>Trigger Network Error</button>
+          <button
+            onClick={() => {
+              setShowError(true);
+            }}
+          >
+            Trigger Network Error
+          </button>
         );
       };
 
@@ -523,10 +532,9 @@ describe('ErrorBoundary Component', () => {
         </ErrorBoundary>
       );
 
-      const businessError = createBusinessLogicError(
-        'Insufficient balance',
-        { availableBalance: 100 }
-      );
+      const businessError = createBusinessLogicError('Insufficient balance', {
+        availableBalance: 100,
+      });
       const result = err(businessError);
 
       if (boundaryRefLocal.current) {
@@ -583,9 +591,7 @@ describe('ErrorBoundary Component', () => {
     });
 
     it('should try next strategy if first fails', () => {
-      const failedStrategyRecover = mock(() =>
-        err(createNetworkError('Strategy failed'))
-      );
+      const failedStrategyRecover = mock(() => err(createNetworkError('Strategy failed')));
       const successStrategyRecover = mock(() => ok(<div>Recovery successful</div>));
 
       const strategies = [
@@ -686,10 +692,7 @@ describe('ErrorBoundary Component', () => {
       };
 
       renderWithProviders(
-        <ErrorBoundary
-          transformResultError={transformMock}
-          onError={onErrorMock}
-        >
+        <ErrorBoundary transformResultError={transformMock} onError={onErrorMock}>
           <TestComponent />
         </ErrorBoundary>
       );
@@ -717,9 +720,7 @@ describe('ErrorBoundary Component', () => {
 
     it('should use original error if transformation returns error', () => {
       const originalError = createNetworkError('Original error');
-      const transformMock = mock((error: AppError) =>
-        err(createNetworkError('Transform failed'))
-      );
+      const transformMock = mock((error: AppError) => err(createNetworkError('Transform failed')));
 
       const TestComponent: React.FC = () => {
         return <div>Transform error handling</div>;
@@ -753,9 +754,7 @@ describe('ErrorBoundary Component', () => {
     });
 
     it('should log warning if reporting fails', () => {
-      const reportMock = mock(() =>
-        err(createNetworkError('Report failed'))
-      );
+      const reportMock = mock(() => err(createNetworkError('Report failed')));
 
       const TestComponent: React.FC = () => {
         return <div>Report failure handling</div>;
@@ -945,12 +944,10 @@ describe('ErrorBoundary Component', () => {
 
   describe('withErrorBoundary HOC', () => {
     it('should wrap component with ErrorBoundary', () => {
-      const SimpleComponent: React.FC<{ message: string }> = ({ message }) => (
-        <div>{message}</div>
-      );
+      const SimpleComponent: React.FC<{ message: string }> = ({ message }) => <div>{message}</div>;
 
       const WrappedComponent = withErrorBoundary(SimpleComponent);
-      
+
       renderWithProviders(<WrappedComponent message="Test HOC" />);
 
       expect(screen.getByText('Test HOC')).toBeInTheDocument();
@@ -974,9 +971,7 @@ describe('ErrorBoundary Component', () => {
     });
 
     it('should pass props to wrapped component', () => {
-      const TestComponent: React.FC<{ value: string }> = ({ value }) => (
-        <div>{value}</div>
-      );
+      const TestComponent: React.FC<{ value: string }> = ({ value }) => <div>{value}</div>;
 
       const WrappedComponent = withErrorBoundary(TestComponent);
 
@@ -1025,9 +1020,7 @@ describe('ErrorBoundary Component', () => {
     });
 
     it('should work with functional components', () => {
-      const FunctionalComponent: React.FC<{ text: string }> = ({ text }) => (
-        <div>{text}</div>
-      );
+      const FunctionalComponent: React.FC<{ text: string }> = ({ text }) => <div>{text}</div>;
 
       const WrappedComponent = withErrorBoundary(FunctionalComponent);
 
@@ -1068,7 +1061,9 @@ describe('ErrorBoundary Component', () => {
         },
       ];
 
-      const WrappedComponent = withErrorBoundary(ErrorComponent, { recoveryStrategies: strategies });
+      const WrappedComponent = withErrorBoundary(ErrorComponent, {
+        recoveryStrategies: strategies,
+      });
 
       renderWithProviders(<WrappedComponent />);
 
@@ -1262,7 +1257,13 @@ describe('ErrorBoundary Component', () => {
         return (
           <div>
             <div>{state}</div>
-            <button onClick={() => setState('error')}>Trigger</button>
+            <button
+              onClick={() => {
+                setState('error');
+              }}
+            >
+              Trigger
+            </button>
           </div>
         );
       };
@@ -1281,7 +1282,7 @@ describe('ErrorBoundary Component', () => {
     it('should correctly handle network errors in renderResultError', () => {
       class TestErrorBoundary extends ErrorBoundary {
         testRenderError(error: AppError) {
-          return this['renderResultError'](error);
+          return this.renderResultError(error);
         }
       }
 
@@ -1299,7 +1300,7 @@ describe('ErrorBoundary Component', () => {
     it('should correctly handle auth errors in renderResultError', () => {
       class TestErrorBoundary extends ErrorBoundary {
         testRenderError(error: AppError) {
-          return this['renderResultError'](error);
+          return this.renderResultError(error);
         }
       }
 
@@ -1315,7 +1316,7 @@ describe('ErrorBoundary Component', () => {
     it('should correctly handle business errors in renderResultError', () => {
       class TestErrorBoundary extends ErrorBoundary {
         testRenderError(error: AppError) {
-          return this['renderResultError'](error);
+          return this.renderResultError(error);
         }
       }
 
@@ -1331,7 +1332,7 @@ describe('ErrorBoundary Component', () => {
     it('should correctly handle validation errors in renderResultError', () => {
       class TestErrorBoundary extends ErrorBoundary {
         testRenderError(error: AppError) {
-          return this['renderResultError'](error);
+          return this.renderResultError(error);
         }
       }
 
@@ -1623,9 +1624,7 @@ describe('ErrorBoundary Component', () => {
     });
 
     it('should call reportResultError and handle failure', () => {
-      const reportMock = mock((error: AppError) =>
-        err(createNetworkError('Report failed'))
-      );
+      const reportMock = mock((error: AppError) => err(createNetworkError('Report failed')));
 
       const TestComponent: React.FC = () => <div>Component</div>;
 
@@ -1926,9 +1925,7 @@ describe('ErrorBoundary Component', () => {
     });
 
     it('should keep original error when transformation returns error', () => {
-      const transformMock = mock((error: AppError) =>
-        err(createNetworkError('Transform error'))
-      );
+      const transformMock = mock((error: AppError) => err(createNetworkError('Transform error')));
 
       const TestComponent: React.FC = () => <div>Keep original</div>;
 
@@ -1968,9 +1965,7 @@ describe('ErrorBoundary Component', () => {
     });
 
     it('should handle reporting error failure gracefully', () => {
-      const reportMock = mock((error: AppError) =>
-        err(createNetworkError('Report failed'))
-      );
+      const reportMock = mock((error: AppError) => err(createNetworkError('Report failed')));
 
       const TestComponent: React.FC = () => <div>Report failure handling</div>;
 
@@ -2246,7 +2241,7 @@ describe('ErrorBoundary Component', () => {
       expect(screen.getByText('Props changing')).toBeInTheDocument();
 
       rerender(
-        <ErrorBoundary transformResultError={mock((e) => ok(e))}>
+        <ErrorBoundary transformResultError={mock(e => ok(e))}>
           <TestComponent />
         </ErrorBoundary>
       );
@@ -2255,9 +2250,7 @@ describe('ErrorBoundary Component', () => {
     });
 
     it('should maintain state across multiple rerenders', () => {
-      const TestComponent: React.FC<{ count: number }> = ({ count }) => (
-        <div>Count: {count}</div>
-      );
+      const TestComponent: React.FC<{ count: number }> = ({ count }) => <div>Count: {count}</div>;
 
       const { rerender } = renderWithProviders(
         <ErrorBoundary>
@@ -2465,9 +2458,7 @@ describe('ErrorBoundary Component', () => {
 
       if (boundaryRefLocal.current) {
         for (let i = 0; i < 3; i++) {
-          const result = err(
-            createNetworkError(`Error ${i}`, undefined, { retryable: true })
-          );
+          const result = err(createNetworkError(`Error ${i}`, undefined, { retryable: true }));
           boundaryRefLocal.current.handleResultError(result);
         }
       }
@@ -2502,9 +2493,7 @@ describe('ErrorBoundary Component', () => {
       );
 
       if (boundaryRefLocal.current) {
-        const result = err(
-          createNetworkError('Not retryable', undefined, { retryable: false })
-        );
+        const result = err(createNetworkError('Not retryable', undefined, { retryable: false }));
         boundaryRefLocal.current.handleResultError(result);
       }
     });

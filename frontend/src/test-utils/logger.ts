@@ -62,7 +62,7 @@ function shouldLog(level: LogLevel): boolean {
   // Check for DEBUG_TEST_LOGS environment variable
   const debugLogs = process?.env?.DEBUG_TEST_LOGS;
 
-  if (!debugLogs) {
+  if (!debugLogs || debugLogs.trim() === '') {
     return false;
   }
 
