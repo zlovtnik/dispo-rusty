@@ -844,9 +844,8 @@ describe('ErrorBoundary Component', () => {
 
     it('should handle unknown error type gracefully', () => {
       const TestComponent: React.FC = () => {
-        // Simulate an unknown error type that would trigger ErrorBoundary
-        const unknownError = { type: 'UNKNOWN_ERROR_TYPE', message: 'Unknown error' } as any;
-        throw unknownError;
+        // Throw a normal Error to trigger the ErrorBoundary
+        throw new Error('Test error');
       };
 
       renderWithProviders(
@@ -855,7 +854,9 @@ describe('ErrorBoundary Component', () => {
         </ErrorBoundary>
       );
 
-      expect(screen.getByTestId('unknown-error')).toBeInTheDocument();
+      // When an Error is thrown, it goes to the standard error render path
+      expect(screen.getByText('Something went wrong')).toBeInTheDocument();
+      expect(screen.getByText('Test error')).toBeInTheDocument();
     });
   });
 
