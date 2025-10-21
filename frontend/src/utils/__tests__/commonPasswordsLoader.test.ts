@@ -226,7 +226,7 @@ describe('CommonPasswordsLoader', () => {
       await new Promise(resolve => setTimeout(resolve, 100));
 
       const status = loader.getCacheStatus();
-      expect(status).toBeDefined();
+      expect(status).not.toBeNull();
       expect(status?.hasCache).toBe(true);
       expect(status?.source).toMatch(/\/config\/common-passwords\.json$/);
     }, { timeout: 10000 });

@@ -2450,7 +2450,7 @@ describe('ErrorBoundary Component', () => {
     it('should handle multiple sequential calls to handleResultError', () => {
       const boundaryRefLocal = React.createRef<ErrorBoundary>();
 
-      renderWithProviders(
+      const { container } = renderWithProviders(
         <ErrorBoundary ref={boundaryRefLocal}>
           <div>Sequential errors</div>
         </ErrorBoundary>
@@ -2462,6 +2462,10 @@ describe('ErrorBoundary Component', () => {
           boundaryRefLocal.current.handleResultError(result);
         }
       }
+
+      // Verify that error UI is rendered after handling errors
+      const errorAlert = container.querySelector('[class*="ant-alert"]');
+      expect(errorAlert).toBeInTheDocument();
     });
   });
 

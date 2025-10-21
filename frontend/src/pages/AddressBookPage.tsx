@@ -281,7 +281,7 @@ export const AddressBookPage: React.FC = () => {
       return;
     }
 
-    const data = apiResponse.data;
+    const data = apiResponse.data as ContactListResponse;
     const records = Array.isArray(data?.contacts) ? data.contacts : [];
     const transformedContacts = records.map(personToContact);
     setContacts(transformedContacts);
@@ -542,7 +542,7 @@ export const AddressBookPage: React.FC = () => {
       return;
     }
 
-    const data = apiResponse.data;
+    const data = apiResponse.data as ContactListResponse;
     const records = Array.isArray(data?.contacts) ? data.contacts : [];
     const transformedContacts = records.map(personToContact);
     setContacts(transformedContacts);

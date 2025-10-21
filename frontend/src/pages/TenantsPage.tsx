@@ -39,6 +39,15 @@ type TenantFormValues = Omit<CreateTenantDTO, 'id'>;
 const TEXT_FIELDS = ['id', 'name', 'db_url'] as const;
 const DATE_FIELDS = ['created_at', 'updated_at'] as const;
 
+const operatorLabels: Record<string, string> = {
+  contains: 'Contains',
+  equals: 'Equals',
+  gt: 'Greater Than',
+  gte: 'Greater or Equal',
+  lt: 'Less Than',
+  lte: 'Less or Equal',
+};
+
 export const TenantsPage: React.FC = () => {
   const [tenants, setTenants] = useState<TenantRecord[]>([]);
   const { message } = App.useApp();
@@ -572,21 +581,11 @@ export const TenantsPage: React.FC = () => {
                     placeholder="Operator"
                     data-testid={`filter-operator-select-${index}`}
                   >
-                    {getOperatorsForField(filter.field).map(operator => {
-                      const operatorLabels: Record<string, string> = {
-                        contains: 'Contains',
-                        equals: 'Equals',
-                        gt: 'Greater Than',
-                        gte: 'Greater or Equal',
-                        lt: 'Less Than',
-                        lte: 'Less or Equal',
-                      };
-                      return (
-                        <Select.Option key={operator} value={operator}>
-                          {operatorLabels[operator] ?? operator}
-                        </Select.Option>
-                      );
-                    })}
+                    {getOperatorsForField(filter.field).map(op => (
+                      <Select.Option key={op} value={op}>
+                        {operatorLabels[op] ?? op}
+                      </Select.Option>
+                    ))}
                   </Select>
 
                   {isDateField(filter.field) ? (

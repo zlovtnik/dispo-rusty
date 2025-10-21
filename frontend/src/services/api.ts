@@ -34,7 +34,7 @@ import { ResultAsync, err, errAsync, ok, okAsync } from 'neverthrow';
 import { z } from 'zod';
 import type { ZodType } from 'zod';
 import { getEnv } from '../config/env';
-import { paginatedTenantResponseSchema } from '../validation/schemas';
+import { paginatedTenantResponseSchema, tenantSchema } from '../validation/schemas';
 import type { AuthResponse, LoginCredentials, User, Tenant as AuthTenant } from '../types/auth';
 import type { ContactListResponse, Contact } from '../types/contact';
 import type { Gender as PersonGender } from '../types/person';
@@ -1030,8 +1030,15 @@ export const tenantService = {
         if (response.status === 'success') {
           // For filter results, we need to check if it's a paginated response or array
           if (Array.isArray(response.data)) {
-            // It's a Tenant[] array, return as-is
-            return okAsync(response);
+            // Validate Tenant[] array
+            const arrSchema = z.array(tenantSchema);
+            const parsed = arrSchema.safeParse(response.data);
+            if (parsed.success) {
+              return okAsync(createSuccessResponse(parsed.data));
+            }
+            return okAsync(createErrorResponse(
+              createBusinessLogicError('Invalid tenant array format', { errors: parsed.error.format() })
+            ));
           } else {
             // It's a PaginatedTenantResponse, validate it
             return validateTenantResponse(response.data, paginatedTenantResponseSchema).map(
