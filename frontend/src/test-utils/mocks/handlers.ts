@@ -85,7 +85,7 @@ interface ParsedFilter {
 /**
  * Allowed filter operators
  */
-type Operator = 'eq' | 'ne' | 'like' | 'gt' | 'lt';
+type Operator = 'eq' | 'ne' | 'like' | 'gt' | 'lt' | 'gte' | 'lte';
 
 /**
  * Type guard to validate if a filter group can be converted to a ParsedFilter
@@ -135,9 +135,9 @@ function translateOperator(frontendOp: string): Operator {
     contains: 'like',
     equals: 'eq',
     'greater than': 'gt',
-    'greater or equal': 'gte' as any, // Note: backend may need gte support
+    'greater or equal': 'gte',
     'less than': 'lt',
-    'less or equal': 'lte' as any, // Note: backend may need lte support
+    'less or equal': 'lte',
     // Direct backend operators (already in correct format)
     like: 'like',
     eq: 'eq',
@@ -152,6 +152,18 @@ function translateOperator(frontendOp: string): Operator {
     return 'like';
   }
   return translated;
+}
+
+/**
+ * Convert value to number or timestamp for comparison
+ * Handles both numeric values and date strings
+ */
+function toNumberOrTime(value: unknown): number {
+  if (typeof value === 'number') return value;
+  const n = Number(value);
+  if (!Number.isNaN(n)) return n;
+  const t = Date.parse(String(value));
+  return Number.isNaN(t) ? NaN : t;
 }
 
 /**
@@ -432,7 +444,7 @@ export function getHandlers() {
       try {
         const url = new URL(request.url);
         const cursor = parseInt(url.searchParams.get('cursor') || '0');
-        const pageSize = parseInt(url.searchParams.get('page_size') || '10');
+        const pageSize = parseInt(url.searchParams.get('limit') || '10');
 
         // Parse filters from query parameters (qs.stringify with arrayFormat: 'indices')
         const filters: ParsedFilter[] = [];
@@ -485,14 +497,18 @@ export function getHandlers() {
                     tenantValue.toLowerCase().includes(value.toLowerCase())
                   );
                 case 'gt':
-                  return typeof tenantValue === 'number' && tenantValue > Number(value);
+                  return toNumberOrTime(tenantValue) > toNumberOrTime(value);
                 case 'lt':
-                  return typeof tenantValue === 'number' && tenantValue < Number(value);
+                  return toNumberOrTime(tenantValue) < toNumberOrTime(value);
+                case 'gte':
+                  return toNumberOrTime(tenantValue) >= toNumberOrTime(value);
+                case 'lte':
+                  return toNumberOrTime(tenantValue) <= toNumberOrTime(value);
                 default:
                   // This should never happen due to type guards, but keeping for safety
                   throw new Error(
                     `Invalid filter operator in mock handler: "${operator}" for field "${field}" with value "${value}". ` +
-                      `Supported operators: eq, ne, like, gt, lt`
+                      `Supported operators: eq, ne, like, gt, lt, gte, lte`
                   );
               }
             });

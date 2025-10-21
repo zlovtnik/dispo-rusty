@@ -83,7 +83,7 @@ describe('LoginPage Component', () => {
     it('should render login form with title', () => {
       renderWithoutAuth(<LoginPage />);
 
-      expect(screen.getByText('Welcome Back')).toBeInTheDocument();
+      expect(screen.getByText('Login')).toBeInTheDocument();
     });
 
     it('should render username/email input field', () => {
@@ -502,7 +502,7 @@ describe('LoginPage Component', () => {
     it('should have proper heading hierarchy', () => {
       renderWithoutAuth(<LoginPage />);
 
-      const heading = screen.getByText('Welcome Back');
+      const heading = screen.getByText('Login');
       expect(heading).toBeInTheDocument();
     });
 

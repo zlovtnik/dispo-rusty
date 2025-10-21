@@ -112,8 +112,8 @@ describe('TenantsPage Component', () => {
     it('should display tenant database URLs', async () => {
       renderWithAuth(<TenantsPage />);
 
-      expect(await screen.findByText(/postgres:\/\/localhost:5432\/tenant1/)).toBeTruthy();
-      expect(await screen.findByText(/postgres:\/\/localhost:5432\/tenant2/)).toBeTruthy();
+      expect(await screen.findByText(/postgres:\/\/localhost:5432\/tenant-1/)).toBeTruthy();
+      expect(await screen.findByText(/postgres:\/\/localhost:5432\/tenant-2/)).toBeTruthy();
     });
   });
 
@@ -211,7 +211,7 @@ describe('TenantsPage Component', () => {
 
       await waitFor(() => {
         expect(screen.getByDisplayValue('Test Tenant 1')).toBeTruthy();
-        expect(screen.getByDisplayValue('postgres://localhost:5432/tenant1')).toBeTruthy();
+        expect(screen.getByDisplayValue('postgres://localhost:5432/tenant-1')).toBeTruthy();
       });
     });
   });
@@ -796,7 +796,7 @@ describe('TenantsPage Component', () => {
 
       // Mock filter endpoint to return only the early tenant
       server.use(
-        http.post(`${getEnv().apiUrl}/admin/tenants/filter`, () => {
+        http.get(`${getEnv().apiUrl}/admin/tenants/filter`, () => {
           return HttpResponse.json({
             status: 'success',
             message: 'Success',
@@ -873,7 +873,7 @@ describe('TenantsPage Component', () => {
 
       // Mock filter API to return error
       server.use(
-        http.post(`${getEnv().apiUrl}/admin/tenants/filter`, () => {
+        http.get(`${getEnv().apiUrl}/admin/tenants/filter`, () => {
           return HttpResponse.json({ error: 'Filter service unavailable' }, { status: 500 });
         })
       );

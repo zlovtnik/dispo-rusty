@@ -225,8 +225,8 @@ describe('CommonPasswordsLoader', () => {
       const status = loader.getCacheStatus();
       expect(status).not.toBeNull();
       expect(status?.hasCache).toBe(true);
-      expect(status?.source).toBe('fallback');
-      expect(status?.version).toBeUndefined();
+      expect(status?.source).toBe('/config/common-passwords.json');
+      expect(status?.version).toBe('1.0.0');
     });
   });
 });

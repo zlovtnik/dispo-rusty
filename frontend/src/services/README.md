@@ -40,9 +40,10 @@ Core HTTP client and all API services with comprehensive JSDoc documentation.
 - `tenantService` - Tenant CRUD operations
 - `addressBookService` - Contact management
 - `healthService` - API health checks
-- `HttpClient` - Low-level HTTP client class
 - `createHttpClient()` - Factory for custom client instances
-- `apiClient` - Default HTTP client instance
+- `resetApiClientCircuitBreaker()` - Reset circuit breaker state
+- `DEFAULT_CONFIG` - Default HTTP client configuration
+- `ApiConfig` - HTTP client configuration type
 
 ### `StorageService.ts`
 
@@ -158,7 +159,8 @@ const paginated = await tenantService.getAllWithPagination({
 // Filter tenants
 const active = await tenantService.filter({
   filters: [{ field: 'status', operator: 'eq', value: 'active' }],
-  page_size: 20,
+  limit: 20,
+  offset: 0,
 });
 
 // Get single tenant

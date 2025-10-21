@@ -168,9 +168,8 @@ describe('FormField', () => {
         required: true,
       });
 
-      const formItem = screen.getByText('Test Field').closest('.ant-form-item');
-      // Ant Design renders a required indicator (asterisk) with the class ant-form-item-required
-      expect(formItem).toHaveClass('ant-form-item-required');
+      const input = screen.getByRole('textbox', { name: /test field/i });
+      expect(input).toHaveAttribute('aria-required', 'true');
     });
 
     it('renders with help text', () => {

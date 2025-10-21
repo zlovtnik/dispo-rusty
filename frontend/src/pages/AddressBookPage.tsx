@@ -150,6 +150,8 @@ export const AddressBookPage: React.FC = () => {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [operationError, setOperationError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -158,8 +160,18 @@ export const AddressBookPage: React.FC = () => {
   const [form] = Form.useForm();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Add pagination state
-// Remove invalid paginationState - use Table's built-in  // Load contacts from API on component mount
+  // Pagination state
+  const [paginationState, setPaginationState] = useState({
+    current: 1,
+    pageSize: 10,
+    total: 0,
+  });
+
+  // Sorting state
+  const [sorting, setSorting] = useState<{
+    field: string;
+    order: 'asc' | 'desc';
+  } | null>(null);
   // Helper function to transform backend Person to frontend Contact
   const generateFallbackContactId = () => `contact-${Math.random().toString(36).slice(2, 10)}`;
 
@@ -252,7 +264,7 @@ export const AddressBookPage: React.FC = () => {
     const result = await addressBookService.getAll();
 
     if (result.isErr()) {
-      const errorMessage = result.error.message || 'Failed to load contacts';
+      const errorMessage = 'Failed to load contacts';
       setError(errorMessage);
       message.error(errorMessage);
       setLoading(false);
@@ -271,8 +283,8 @@ export const AddressBookPage: React.FC = () => {
 
     const data = apiResponse.data as ContactListResponse;
     const records = Array.isArray(data?.contacts) ? data.contacts : [];
-    const normalizedContacts = records.map(personToContact);
-    setContacts(normalizedContacts);
+    const transformedContacts = records.map(personToContact);
+    setContacts(transformedContacts);
     setPaginationState({
       current: data.page || 1,
       pageSize: data.limit || 10,
@@ -306,6 +318,7 @@ export const AddressBookPage: React.FC = () => {
   // Handle form submission
   const handleSubmit = async (values: AddressFormValues) => {
     setIsSubmitting(true);
+    setFormError(null);
     const dto = contactToPersonDTO(values);
 
     const isUpdating = Boolean(editingContact);
@@ -314,19 +327,24 @@ export const AddressBookPage: React.FC = () => {
       : await addressBookService.create(dto);
 
     if (result.isErr()) {
-      const errorMessage = result.error.message || 'An error occurred while saving the contact.';
+      const errorMessage = 'Operation Failed';
+      setFormError(errorMessage);
+      setOperationError(errorMessage);
       message.error(errorMessage);
       setIsSubmitting(false);
+      // Don't close modal on error - let user see the error and retry
       return;
     }
 
     const apiResponse = result.value;
 
     if (!isApiSuccess(apiResponse)) {
-      const errorMessage =
-        apiResponse.error.message || 'An error occurred while saving the contact.';
+      const errorMessage = 'Operation Failed';
+      setFormError(errorMessage);
+      setOperationError(errorMessage);
       message.error(errorMessage);
       setIsSubmitting(false);
+      // Don't close modal on error - let user see the error and retry
       return;
     }
 
@@ -341,11 +359,13 @@ export const AddressBookPage: React.FC = () => {
     setIsFormOpen(false);
     form.resetFields();
     setIsSubmitting(false);
+    setOperationError(null); // Clear operation error on success
   };
 
   // Handle edit
   const handleEdit = (contact: Contact) => {
     setEditingContact(contact);
+    setFormError(null);
     form.setFieldsValue({
       firstName: contact.firstName,
       lastName: contact.lastName,
@@ -374,7 +394,8 @@ export const AddressBookPage: React.FC = () => {
       const result = await addressBookService.delete(deleteContactId);
 
       if (result.isErr()) {
-        const errorMessage = result.error.message || 'Failed to delete contact';
+        const errorMessage = 'Operation Failed';
+        setOperationError(errorMessage);
         message.error(errorMessage);
         return;
       }
@@ -382,7 +403,8 @@ export const AddressBookPage: React.FC = () => {
       const apiResponse = result.value;
 
       if (!isApiSuccess(apiResponse)) {
-        const errorMessage = apiResponse.error.message || 'Failed to delete contact';
+        const errorMessage = 'Operation Failed';
+        setOperationError(errorMessage);
         message.error(errorMessage);
         return;
       }
@@ -390,6 +412,7 @@ export const AddressBookPage: React.FC = () => {
       setDeleteContactId(null);
       await loadContacts();
       message.success(apiResponse.message ?? 'Contact deleted successfully!');
+      setOperationError(null); // Clear operation error on success
     }
   };
 
@@ -401,6 +424,7 @@ export const AddressBookPage: React.FC = () => {
   // Open form for new contact
   const handleNewContact = () => {
     setEditingContact(null);
+    setFormError(null);
     form.resetFields();
     setIsFormOpen(true);
   };
@@ -501,7 +525,7 @@ export const AddressBookPage: React.FC = () => {
     const result = await addressBookService.getAll(fullParams);
 
     if (result.isErr()) {
-      const errorMessage = result.error.message || 'Failed to load contacts';
+      const errorMessage = 'Failed to load contacts';
       setError(errorMessage);
       message.error(errorMessage);
       setLoading(false);
@@ -511,7 +535,7 @@ export const AddressBookPage: React.FC = () => {
     const apiResponse = result.value;
 
     if (!isApiSuccess(apiResponse)) {
-      const errorMessage = apiResponse.error.message || 'Failed to load contacts';
+      const errorMessage = 'Failed to load contacts';
       setError(errorMessage);
       message.error(errorMessage);
       setLoading(false);
@@ -520,8 +544,8 @@ export const AddressBookPage: React.FC = () => {
 
     const data = apiResponse.data as ContactListResponse;
     const records = Array.isArray(data?.contacts) ? data.contacts : [];
-    const normalizedContacts = records.map(personToContact);
-    setContacts(normalizedContacts);
+    const transformedContacts = records.map(personToContact);
+    setContacts(transformedContacts);
     setPaginationState({
       current: data.page || 1,
       pageSize: data.limit || 10,
@@ -577,6 +601,20 @@ export const AddressBookPage: React.FC = () => {
         />
       )}
 
+      {/* Operation Error Alert */}
+      {operationError && (
+        <Alert
+          message="Operation Failed"
+          description={operationError}
+          type="error"
+          showIcon
+          closable
+          onClose={() => {
+            setOperationError(null);
+          }}
+        />
+      )}
+
       {/* Contacts Table */}
       <Card title={`Contacts (${filteredContacts.length})`}>
         {loading ? (
@@ -598,12 +636,19 @@ export const AddressBookPage: React.FC = () => {
                 // Reload with new params
                 loadContactsWithParams({ page, limit: pageSize });
               },
-              showSorterTooltip: false,
             }}
             onChange={(pagination, filters, sorter) => {
-              if (sorter.field && sorter.order) {
-                setSorting({ field: sorter.field as string, order: sorter.order });
+              const sorterResult = Array.isArray(sorter) ? sorter[0] : sorter;
+              if (sorterResult && sorterResult.field && sorterResult.order) {
+                const order = sorterResult.order === 'ascend' ? 'asc' : 'desc';
+                setSorting({ field: sorterResult.field as string, order });
                 // Reload with sorting
+                loadContactsWithParams({ 
+                  page: paginationState.current, 
+                  limit: paginationState.pageSize,
+                  sortField: sorterResult.field as string,
+                  sortOrder: order
+                });
               }
             }}
             locale={{
@@ -653,6 +698,17 @@ export const AddressBookPage: React.FC = () => {
             country: DEFAULT_COUNTRY,
           }}
         >
+          {formError && (
+            <Alert
+              message="Operation Failed"
+              description={formError}
+              type="error"
+              showIcon
+              closable
+              onClose={() => setFormError(null)}
+              style={{ marginBottom: 16 }}
+            />
+          )}
           <Form.Item
             name="firstName"
             label="First Name"
@@ -674,7 +730,16 @@ export const AddressBookPage: React.FC = () => {
           >
             <Input />
           </Form.Item>
-          <Form.Item name="phone" label="Phone">
+          <Form.Item
+            name="phone"
+            label="Phone"
+            rules={[
+              {
+                pattern: /^[\+]?[\d\s\-\(\)\.]+$/,
+                message: 'Please enter a valid phone number',
+              },
+            ]}
+          >
             <Input />
           </Form.Item>
 

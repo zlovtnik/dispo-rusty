@@ -35,16 +35,12 @@ function shallowEqual(obj1: unknown, obj2: unknown): boolean {
 
   // Handle objects (shallow comparison)
   if (typeof obj1 === 'object' && typeof obj2 === 'object') {
-    const keys1 = Object.keys(obj1);
-    const keys2 = Object.keys(obj2);
-
+    const o1 = obj1 as Record<PropertyKey, unknown>;
+    const o2 = obj2 as Record<PropertyKey, unknown>;
+    const keys1 = Reflect.ownKeys(o1);
+    const keys2 = Reflect.ownKeys(o2);
     if (keys1.length !== keys2.length) return false;
-
-    return keys1.every(
-      key =>
-        key in obj2 &&
-        (obj1 as Record<string, unknown>)[key] === (obj2 as Record<string, unknown>)[key]
-    );
+    return keys1.every(key => Object.prototype.hasOwnProperty.call(o2, key) && o1[key] === o2[key]);
   }
 
   return false;
@@ -204,10 +200,10 @@ const areEqual = (prevProps: FormFieldProps, nextProps: FormFieldProps): boolean
     ) {
       return false;
     }
-    if (
-      (prevProps as NumberFormFieldProps).inputNumberProps !==
+    if (!shallowEqual(
+      (prevProps as NumberFormFieldProps).inputNumberProps,
       (nextProps as NumberFormFieldProps).inputNumberProps
-    ) {
+    )) {
       return false;
     }
   }
@@ -220,7 +216,7 @@ const areEqual = (prevProps: FormFieldProps, nextProps: FormFieldProps): boolean
     if (prev.options !== next.options) {
       return false;
     }
-    if (prev.selectProps !== next.selectProps) {
+    if (!shallowEqual(prev.selectProps, next.selectProps)) {
       return false;
     }
   }
@@ -268,7 +264,7 @@ export const FormField = memo<FormFieldProps>(
       (fieldError && (isTouched || isSubmitted) ? 'error' : isFieldValid ? 'success' : undefined);
 
     const formItemProps: FormItemProps = {
-      label: required ? `${label} *` : label,
+      label,
       required,
       help: fieldError?.message ?? help,
       extra,
@@ -373,7 +369,7 @@ export const FormField = memo<FormFieldProps>(
               render={({ field: { onChange, value, ...field } }) => (
                 <InputNumber
                   {...field}
-                  value={value as number | null}
+                  value={(value ?? null) as number | null}
                   onChange={onChange}
                   placeholder={placeholder}
                   disabled={disabled}

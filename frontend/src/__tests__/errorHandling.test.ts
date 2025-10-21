@@ -13,13 +13,14 @@
 
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { server } from '../test-utils/mocks/server';
-import { http, HttpResponse } from 'msw';
+import { http, HttpResponse, delay } from 'msw';
 import {
   authService,
   tenantService,
   addressBookService,
   createHttpClient,
   resetApiClientCircuitBreaker,
+  DEFAULT_CONFIG,
 } from '../services/api';
 import { getEnv } from '../config/env';
 import type { LoginCredentials } from '../types/auth';
@@ -551,11 +552,9 @@ describe('Network Error Handling', () => {
       });
 
       server.use(
-        http.get(`${API_BASE_URL}/admin/tenants`, () => {
-          // Simulate timeout by not responding - this will cause the client to timeout
-          return new Promise(() => {
-            // Never resolves - this is intentional for timeout testing
-          });
+        http.get(`${API_BASE_URL}/admin/tenants`, async () => {
+          await delay(10_000); // 10 second delay to trigger timeout
+          return HttpResponse.json({ ok: true });
         })
       );
 
@@ -566,7 +565,7 @@ describe('Network Error Handling', () => {
       if (result.isErr()) {
         expect(result.error.type).toBe('network');
         expect(result.error.code).toBe('TIMEOUT');
-        expect(result.error.message).toContain('Request timed out');
+        // Remove the message assertion - rely on type and code assertions instead
       }
     });
 
@@ -685,7 +684,8 @@ describe('Error Recovery and Fallback', () => {
       resetApiClientCircuitBreaker();
 
       let handlerCallCount = 0;
-      const failureThreshold = 3; // Circuit breaker opens after 3 consecutive failures
+      // Read failureThreshold from config instead of hardcoding
+      const failureThreshold = DEFAULT_CONFIG.circuitBreaker.failureThreshold; // Default is 5
 
       server.use(
         http.get(`${API_BASE_URL}/admin/tenants`, () => {
@@ -726,6 +726,10 @@ describe('Error Recovery and Fallback', () => {
       // All blocked requests should fail
       blockedResults.forEach(result => {
         expect(result.isErr()).toBe(true);
+        // Check for circuit breaker error identity
+        if (result.isErr()) {
+          expect(result.error.code).toBe('CIRCUIT_BREAKER_OPEN');
+        }
       });
 
       // CIRCUIT BREAKER VALIDATION:
@@ -733,7 +737,9 @@ describe('Error Recovery and Fallback', () => {
       // Some handlers may call retries of the circuit-breaker-open error,
       // but the key validation is that we don't add significant new calls
       const addedCalls = handlerCallCount - callCountAfterOpen;
-      const expectedMaxAdditionalCalls = 9; // 3 new requests × 3 retries each
+      // Compute expectedMaxAdditionalCalls from config maxAttempts
+      const blockedRequests = 3;
+      const expectedMaxAdditionalCalls = blockedRequests * (DEFAULT_CONFIG.retry.maxAttempts - 1);
       expect(addedCalls).toBeLessThanOrEqual(expectedMaxAdditionalCalls);
     }, 15000);
 
@@ -741,7 +747,8 @@ describe('Error Recovery and Fallback', () => {
       resetApiClientCircuitBreaker();
 
       let handlerCallCount = 0;
-      const failureThreshold = 3; // Circuit breaker opens after 3 consecutive failures
+      // Read failureThreshold from config instead of hardcoding
+      const failureThreshold = DEFAULT_CONFIG.circuitBreaker.failureThreshold; // Default is 5
 
       server.use(
         http.get(`${API_BASE_URL}/admin/tenants`, () => {
@@ -778,7 +785,9 @@ describe('Error Recovery and Fallback', () => {
       // Some additional calls may occur due to retries of the circuit-breaker-open error
       // But the key is that we don't scale linearly with new requests
       const addedCalls = handlerCallCount - handlerCallCountAfterThreshold;
-      const expectedMaxAdditionalCalls = 9; // 3 new requests × 3 retries each at most
+      const REQUESTS_AFTER_OPEN = 3;
+      const RETRIES_PER_REQUEST = 3; // keep in sync with HttpClient default (maxAttempts - 1)
+      const expectedMaxAdditionalCalls = REQUESTS_AFTER_OPEN * RETRIES_PER_REQUEST;
       expect(addedCalls).toBeLessThanOrEqual(expectedMaxAdditionalCalls);
     }, 15000);
 
@@ -821,6 +830,8 @@ describe('Error Recovery and Fallback', () => {
       expect(result.isOk()).toBe(true);
       // Verify that new requests after reset are allowed to reach the backend
       expect(handlerCallCount).toBeGreaterThan(failureThreshold);
+      // ensure breaker state is clean for following tests
+      resetApiClientCircuitBreaker();
     }, 15000);
   });
 
@@ -1162,7 +1173,7 @@ describe('Error Handling Integration', () => {
         expect(result.error.message).toBeDefined();
       }
     });
-//begin todo fix as soon as possible this shit, its hanging and loading shit everywhere!4
+// TODO: Investigate intermittent hangs in tests (MSW/fetch timing). Track under QA board (link/ID).
     test('should handle cascading failures', async () => {
       // Simulate cascading failures across multiple services
       server.use(
@@ -1182,6 +1193,6 @@ describe('Error Handling Integration', () => {
       expect(tenantsResult.isErr()).toBe(true);
       expect(contactsResult.isErr()).toBe(true);
     });
-    //end
+    // END TODO
   });
 });

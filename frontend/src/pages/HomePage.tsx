@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link, Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Layout, Typography } from 'antd';
 import { Button, Space, Divider } from 'antd';
@@ -30,11 +30,20 @@ const styles = {
 
 export const HomePage: React.FC = () => {
   const { isAuthenticated } = useAuth();
+  const navigate = useNavigate();
 
   // If authenticated, redirect to dashboard
   if (isAuthenticated) {
     return <Navigate to="/dashboard" replace />;
   }
+
+  const handleGetStarted = () => {
+    navigate('/register');
+  };
+
+  const handleSignIn = () => {
+    navigate('/login');
+  };
 
   const features = [
     {
@@ -86,17 +95,30 @@ export const HomePage: React.FC = () => {
             <Button
               type="primary"
               size="large"
-              tabIndex={0}
+              onClick={handleGetStarted}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
-                  // Trigger click or navigate
+                  handleGetStarted();
                 }
               }}
+              aria-label="Get Started - Navigate to registration page"
             >
               Get Started
             </Button>
-            <Button size="large">Sign In</Button>
+            <Button 
+              size="large"
+              onClick={handleSignIn}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleSignIn();
+                }
+              }}
+              aria-label="Sign In - Navigate to login page"
+            >
+              Sign In
+            </Button>
           </Space>
         </div>
 

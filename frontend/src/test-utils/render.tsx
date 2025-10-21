@@ -237,7 +237,16 @@ export function renderWithAuth(ui: ReactElement, options?: CustomRenderOptions) 
       },
     };
 
-    return renderWithProviders(newUi, mergedOptions);
+    // Create a new AuthProvider wrapper that only updates the auth context
+    const AuthWrapper = ({ children }: { children: React.ReactNode }) => {
+      return <MockAuthProvider value={mergedOptions.authValue}>{children}</MockAuthProvider>;
+    };
+
+    // Use the existing renderResult.rerender to update the same tree
+    // Only wrap with the new AuthProvider, not a new Router
+    renderResult.rerender(<AuthWrapper>{newUi}</AuthWrapper>);
+    
+    return renderResult;
   };
 
   return {

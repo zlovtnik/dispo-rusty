@@ -43,10 +43,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       padding: token.paddingMD,
       textAlign: 'center' as const,
       color: token.colorTextLightSolid,
-      background: `linear-gradient(135deg, #1a3037 0%, #203b45 100%)`,
+      background: `linear-gradient(135deg, ${token.colorPrimary} 0%, ${token.colorPrimaryHover} 100%)`,
     },
     sider: {
-      background: `linear-gradient(135deg, #203b45 0%, #15262a 100%)`,
+      background: `linear-gradient(135deg, ${token.colorPrimaryHover} 0%, ${token.colorPrimaryActive} 100%)`,
     },
     header: {
       background: token.colorBgContainer,
@@ -81,19 +81,16 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       key: '/dashboard',
       icon: <DashboardOutlined />,
       label: 'Dashboard',
-      'aria-label': 'Navigate to Dashboard',
     },
     {
       key: '/address-book',
       icon: <ContactsOutlined />,
       label: 'Address Book',
-      'aria-label': 'Navigate to Address Book',
     },
     {
       key: '/tenants',
       icon: <DatabaseOutlined />,
       label: 'Tenants',
-      'aria-label': 'Navigate to Tenants Management',
     },
   ];
 
@@ -102,7 +99,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       key: 'profile',
       icon: <UserOutlined />,
       label: 'Profile',
-      'aria-label': 'View user profile',
       disabled: true,
     },
     {
@@ -112,7 +108,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       key: 'logout',
       icon: <LogoutOutlined />,
       label: 'Logout',
-      'aria-label': 'Log out of the application',
       onClick: handleLogout,
     },
   ];
@@ -162,26 +157,19 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             type="text"
             icon={<MenuOutlined />}
             aria-label="Toggle sidebar menu"
-            onClick={() => {
-              setCollapsed(!collapsed);
-            }}
+            onClick={() => setCollapsed(prev => !prev)}
             style={{ fontSize: token.fontSizeLG, color: token.colorTextSecondary }}
           />
           <Breadcrumb items={generateBreadcrumbs(location.pathname)} aria-label="Current page navigation" />
-          <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
-            <div style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-              <Avatar alt="User profile avatar" style={{ backgroundColor: token.colorPrimary }}>
+          <Dropdown menu={{ items: userMenuItems }} placement="bottomRight" trigger={['click']}>
+            <Button type="text" aria-label="User menu" style={{ display: 'flex', alignItems: 'center' }}>
+              <Avatar style={{ backgroundColor: token.colorPrimary }}>
                 {(user?.firstName || user?.username || 'U').charAt(0).toUpperCase()}
               </Avatar>
-              <span
-                style={{
-                  marginLeft: 8,
-                  display: screens.md ? 'inline' : 'none',
-                }}
-              >
+              <span style={{ marginLeft: 8, display: screens.md ? 'inline' : 'none' }}>
                 {user?.firstName || user?.username}
               </span>
-            </div>
+            </Button>
           </Dropdown>
         </AntLayout.Header>
 

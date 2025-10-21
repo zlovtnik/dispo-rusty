@@ -29,6 +29,7 @@ void mock.module('react-router-dom', () => ({
     );
   },
   Navigate: ({ to }: { to: string }) => <div data-testid="navigate" data-to={to} />,
+  useNavigate: () => mockNavigate,
 }));
 
 describe('HomePage Component', () => {

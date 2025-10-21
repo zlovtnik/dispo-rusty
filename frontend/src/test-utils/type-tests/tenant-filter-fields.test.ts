@@ -9,6 +9,7 @@
 
 import type { Tenant as BackendTenant } from '../../types/tenant';
 import { VALID_TENANT_FIELDS } from '../mocks/handlers';
+import { asTenantId } from '../../types/ids';
 
 // Type that represents all keys of BackendTenant
 type BackendTenantKeys = keyof BackendTenant;
@@ -30,7 +31,7 @@ const _typeAssertion: AssertValidFieldsMatchBackendTenant = true;
 function validateTenantFilterFields(): void {
   // Create a sample BackendTenant object and derive keys from it
   const sampleTenant: BackendTenant = {
-    id: 'sample-id',
+    id: asTenantId('sample-id'),
     name: 'sample-name',
     db_url: 'sample-db-url',
     created_at: 'sample-created-at',

@@ -367,7 +367,7 @@ export const TenantsPage: React.FC = () => {
 
       const response = await tenantService.filter({
         filters: validatedFilters,
-        page_size: pagination.pageSize, // Use current page size for filtered results
+        limit: pagination.pageSize, // Use current page size for filtered results
       });
 
       if (response.isErr()) {
@@ -392,7 +392,7 @@ export const TenantsPage: React.FC = () => {
         setPagination(prev => ({
           ...prev,
           current: 1,
-          total: paginated.total ?? paginated.data.length ?? 0,
+          total: paginated.total,
         }));
       }
     } catch (error) {
@@ -740,8 +740,19 @@ export const TenantsPage: React.FC = () => {
               {
                 validator: (_rule, value) => {
                   if (!value) return Promise.reject(new Error('Please enter database URL'));
-                  // Libpq connection string regex (simplified, supports key=value pairs)
-                  const libpqRegex = /^[^&=]+=[^&]*(&[^&=]+=[^&]*)*$/;
-                  // PostgreSQL URL regex (enhanced for multi-host, encoded, unix sockets, etc.)
-                  const urlRegex =
-                    /^postgres(?:ql)?:\/\/(?:[A-Za-z0-9._%+-]+(?::[A-Za-z0-9._%+-]+)?@)?(?:\[[^\]]+\]|[A-Za-z0-9.-]+(?:,[A-Za
+                  // Accept libpq key=value style or postgres/postgresql URL
+                  const isValid = (() => {
+                    // Rough libpq: key=value pairs separated by spaces
+                    if (/\b\w+=\S+/.test(value)) return true;
+                    try {
+                      const u = new URL(value);
+                      return u.protocol === 'postgres:' || u.protocol === 'postgresql:';
+                    } catch {
+                      return false;
+                    }
+                  })();
+                  return isValid
+                    ? Promise.resolve()
+                    : Promise.reject(new Error('Invalid PostgreSQL connection string'));
+                }
+              }

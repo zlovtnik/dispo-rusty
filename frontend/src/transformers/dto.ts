@@ -8,7 +8,14 @@ import type { Gender } from '../types/person';
 import type { User, Tenant as AuthTenant } from '../types/auth';
 import type { Tenant as TenantRecord } from '../types/tenant';
 import { asContactId, asTenantId, asUserId } from '../types/ids';
-import { COUNTRY_NAMES, COUNTRY_NAMES_SET, STATE_NAMES, STATE_NAMES_SET, STATE_CODES, COUNTRY_CODES } from '../constants/address';
+import {
+  COUNTRY_NAMES,
+  COUNTRY_NAMES_SET,
+  STATE_NAMES,
+  STATE_NAMES_SET,
+  STATE_CODES,
+  COUNTRY_CODES,
+} from '../constants/address';
 import { booleanToGender, genderEnumToBoolean, parseOptionalGender } from './gender';
 import { parseDate, parseOptionalDate, toIsoString } from './date';
 import { addressParsingLogger } from '../utils/logger';
@@ -769,7 +776,9 @@ export const contactListFromApiResponse = (
     ? source.contacts
     : Array.isArray(source.data)
       ? source.data
-      : null;
+      : Array.isArray((source.data as any)?.contacts)
+        ? (source.data as any).contacts
+        : null;
 
   if (!collection) {
     return err(

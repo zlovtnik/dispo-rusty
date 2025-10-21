@@ -19,30 +19,6 @@ const RenderErrorComponent: React.FC<{ errorMessage: string }> = ({ errorMessage
   throw new Error(errorMessage);
 };
 
-const ComponentUsingHandleResultError: React.FC<{
-  onRefReady?: (ref: React.RefObject<ErrorBoundary>) => void;
-}> = ({ onRefReady }) => {
-  const boundaryRefLocal = React.useRef<ErrorBoundary>(null);
-  React.useEffect(() => {
-    onRefReady?.(boundaryRefLocal);
-  }, [onRefReady]);
-
-  return (
-    <div>
-      <div>Using public method</div>
-      <button
-        onClick={() => {
-          if (boundaryRefLocal.current) {
-            const result = err(createNetworkError('Test network error'));
-            boundaryRefLocal.current.handleResultError(result);
-          }
-        }}
-      >
-        Trigger Error
-      </button>
-    </div>
-  );
-};
 
 describe('ErrorBoundary Component', () => {
   // Suppress console.error during tests since ErrorBoundary logs errors
@@ -868,7 +844,9 @@ describe('ErrorBoundary Component', () => {
 
     it('should handle unknown error type gracefully', () => {
       const TestComponent: React.FC = () => {
-        return <div data-testid="unknown-test">Unknown error test</div>;
+        // Simulate an unknown error type that would trigger ErrorBoundary
+        const unknownError = { type: 'UNKNOWN_ERROR_TYPE', message: 'Unknown error' } as any;
+        throw unknownError;
       };
 
       renderWithProviders(
@@ -877,7 +855,7 @@ describe('ErrorBoundary Component', () => {
         </ErrorBoundary>
       );
 
-      expect(screen.getByTestId('unknown-test')).toBeInTheDocument();
+      expect(screen.getByTestId('unknown-error')).toBeInTheDocument();
     });
   });
 

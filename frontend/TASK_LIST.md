@@ -1322,22 +1322,23 @@ bun test --test-name-pattern="Form Validation"
 
 **Sprint Structure:** Two-week sprints aligned with team cadence (Sprint 1: Weeks 1-2, Sprint 2: Weeks 3-4). See sprint planning kickoff doc for detailed execution rules.
 
-- [ ] **Sprint 1 Extension Triggers** (if progress <50% by day 7):
-  - **Metric:** Fewer than 42 of 83 failing tests fixed by end of week 1 → activate contingency
+- [ ] **Sprint 1 Extension Triggers** (if progress <50% by midpoint):
+  - **Metric:** If <50% progress by midpoint (calculated as: (fixed_tests / total_failing_tests) * 100) → activate contingency
   - **Procedure:** Sequence components by priority (ErrorBoundary → AddressBookPage → TenantsPage) and form dedicated two-developer pairs per high-risk component for focused bug triage. Reduce Sprint 2 scope to critical path components only (ErrorBoundary, AddressBookPage, TenantsPage).
 - [ ] **TI-004 Parallel Start Criteria**:
-  - [ ] ErrorBoundary tests must be green (100% pass rate)
-  - [ ] AddressBookPage tests must be green (100% pass rate) 
-  - [ ] TenantsPage tests must be green (100% pass rate)
-  - [ ] CI pipeline must be stable (no flaky tests)
+  - [ ] **Required:** ErrorBoundary tests must be green (100% pass rate)
+  - [ ] **Required:** AddressBookPage tests must be green (100% pass rate) 
+  - [ ] **Required:** TenantsPage tests must be green (100% pass rate)
+  - [ ] **Required:** CI pipeline must be stable (no flaky tests)
+  - [ ] **Recommended:** All other component tests passing (can proceed with partial green status if required criteria met)
 - [ ] **Engineering Capacity Requirements**:
-  - [ ] Full-team allocation for Sprint 1 (all developers)
+  - [ ] Full-team allocation for Sprint 1 — subject to team availability; confirm in sprint planning
   - [ ] Sprint 2 baseline: 2-3 developers; re-evaluate and increase allocation if >15 failing tests remain after Sprint 1
   - [ ] Escalate to tech lead if capacity constraints or blocking dependencies identified
-- [ ] **Escalation Steps**:
-  - [ ] **Day 7 (Week 1.5):** Review progress against 42-test metric; if below threshold, activate contingency procedure
-  - [ ] **Day 10 (Week 2):** Form focused pairs for any high-risk components still <80% pass rate; run parallel squads if needed
-  - [ ] **Day 14 (Sprint boundary):** Escalate to engineering manager if critical path blocked or >20 tests still failing
+- [ ] **Escalation Decision Tree**:
+  - [ ] **Day 7 (Week 1.5):** Developer → Tech Lead (review progress against 50% metric; if below threshold, activate contingency procedure)
+  - [ ] **Day 10 (Week 2):** Tech Lead → Engineering Manager (form focused pairs for any high-risk components still <80% pass rate; run parallel squads if needed)
+  - [ ] **Day 14 (Sprint boundary):** Engineering Manager → Director (if critical path blocked or >20 tests still failing)
 
 
 ---

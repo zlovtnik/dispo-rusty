@@ -34,6 +34,7 @@ import { ResultAsync, err, errAsync, ok, okAsync } from 'neverthrow';
 import { z } from 'zod';
 import type { ZodType } from 'zod';
 import { getEnv } from '../config/env';
+import { paginatedTenantResponseSchema } from '../validation/schemas';
 import type { AuthResponse, LoginCredentials, User, Tenant as AuthTenant } from '../types/auth';
 import type { ContactListResponse, Contact } from '../types/contact';
 import type { Gender as PersonGender } from '../types/person';
@@ -254,7 +255,8 @@ const apiResultFromResponse = <T>(response: Response): ResultAsync<ApiResponse<T
       )
   ).andThen(body => {
     const message = typeof body.message === 'string' ? body.message : undefined;
-    const success = 'success' in body ? Boolean(body.success) : response.ok;
+    const status = typeof body.status === 'string' ? body.status : undefined;
+    const success = status === 'success' || ('success' in body ? Boolean(body.success) : response.ok);
 
     if (response.ok && success) {
       const data = (body.data ?? body) as T;
@@ -293,6 +295,33 @@ const retryWithBackoff = <T>(
     );
 
   return attemptOperation(1);
+};
+
+/**
+ * Validates tenant API responses using Zod schemas
+ */
+const validateTenantResponse = <T>(
+  data: unknown,
+  schema: ZodType<T>
+): ResultAsync<T, AppError> => {
+  const validation = schema.safeParse(data);
+  
+  if (validation.success) {
+    return okAsync(validation.data);
+  }
+  
+  return errAsync(
+    createBusinessLogicError(
+      'Invalid tenant response format',
+      {
+        validationErrors: validation.error.format(),
+        receivedData: data,
+      },
+      {
+        code: 'VALIDATION_ERROR',
+      }
+    )
+  );
 };
 
 const handleSuccessResponse = <Raw, Parsed>(
@@ -878,7 +907,9 @@ export interface TenantFilter {
   /** Cursor for pagination */
   cursor?: number;
   /** Number of results per page */
-  page_size?: number;
+  limit?: number;
+  /** Offset for pagination */
+  offset?: number;
 }
 
 /**
@@ -934,7 +965,13 @@ export const tenantService = {
     const query = queryParams.toString();
     return apiClient.get<PaginatedTenantResponse>(
       query ? `/admin/tenants?${query}` : '/admin/tenants'
-    );
+    ).andThen(response => {
+      if (response.status === 'success') {
+        return validateTenantResponse(response.data, paginatedTenantResponseSchema)
+          .map(validatedData => createSuccessResponse(validatedData));
+      }
+      return okAsync(response);
+    });
   },
 
   /**
@@ -947,7 +984,7 @@ export const tenantService = {
    * ```typescript
    * const active = await tenantService.filter({
    *   filters: [{ field: 'status', operator: 'eq', value: 'active' }],
-   *   page_size: 20
+   *   limit: 20
    * });
    * ```
    */
@@ -961,14 +998,30 @@ export const tenantService = {
     if (params.cursor !== undefined) {
       queryObj.cursor = params.cursor;
     }
-    if (params.page_size !== undefined) {
-      queryObj.page_size = params.page_size;
+    if (params.limit !== undefined) {
+      queryObj.limit = params.limit;
+    }
+    if (params.offset !== undefined) {
+      queryObj.offset = params.offset;
     }
 
     const queryString = qs.stringify(queryObj, { arrayFormat: 'indices' });
     return apiClient.get<PaginatedTenantResponse | Tenant[]>(
       `/admin/tenants/filter?${queryString}`
-    );
+    ).andThen(response => {
+      if (response.status === 'success') {
+        // For filter results, we need to check if it's a paginated response or array
+        if (Array.isArray(response.data)) {
+          // It's a Tenant[] array, return as-is
+          return okAsync(response);
+        } else {
+          // It's a PaginatedTenantResponse, validate it
+          return validateTenantResponse(response.data, paginatedTenantResponseSchema)
+            .map(validatedData => createSuccessResponse(validatedData));
+        }
+      }
+      return okAsync(response);
+    });
   },
 
   /**
@@ -1015,7 +1068,7 @@ export const tenantService = {
    *
    * @param id - Tenant ID to delete
    * @returns Success confirmation
-]   *
+   *
    * @example
    * ```typescript
    * const result = await tenantService.delete('tenant-123');

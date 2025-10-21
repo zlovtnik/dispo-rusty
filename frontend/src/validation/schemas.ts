@@ -224,9 +224,38 @@ export const loginRequestSchema = z.object({
   rememberMe: z.boolean().optional(),
 });
 
+// Shared validation function for PostgreSQL connection strings
+const isValidPostgresConnectionString = (value: string): boolean => {
+  const input = value.trim();
+  
+  // Try parsing as a PostgreSQL URL first
+  try {
+    const url = new URL(input);
+    if (url.protocol === 'postgres:' || url.protocol === 'postgresql:') {
+      return true;
+    }
+    // Reject valid URLs with wrong protocol
+    return false;
+  } catch {
+    // Not a valid URL, try parsing as libpq connection string
+  }
+
+  // Parse as libpq-style connection string (key=value pairs with optional quoting)
+  // Allow optional whitespace around '=', support escapes in quoted/unquoted values.
+  const pairRegex = /\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?:'((?:\\.|[^'])*)'|"((?:\\.|[^"])*)"|((?:\\.|[^\s])+))\s*/gy;
+  pairRegex.lastIndex = 0;
+  let lastIndex = 0;
+  while (pairRegex.lastIndex < input.length) {
+    const m = pairRegex.exec(input);
+    if (!m) return false;
+    lastIndex = pairRegex.lastIndex;
+  }
+  return lastIndex === input.length;
+};
+
 export const createTenantSchema = z.object({
   name: z.string().min(1),
-  db_url: z.url(),
+  db_url: z.string().refine(isValidPostgresConnectionString, 'Please enter a valid PostgreSQL URL (postgres://...) or connection string (key=value pairs)'),
 });
 
 export const updateTenantSchema = createTenantSchema.partial();
@@ -300,57 +329,11 @@ export const tenantFormSchema = z.object({
     .string()
     .min(3, 'Tenant name must be at least 3 characters')
     .max(100, 'Tenant name must be less than 100 characters')
-    .regex(/^[a-zA-Z0-9\s\-_'.,()]+$/, 'Tenant name contains invalid characters'),
+    .regex(/^[\p{L}\p{N}\s\-_'.,()]+$/u, 'Tenant name contains invalid characters'),
   db_url: z
     .string()
     .min(1, 'Database URL is required')
-    .refine(value => {
-      // Try parsing as a PostgreSQL URL first
-      try {
-        const url = new URL(value);
-        if (url.protocol === 'postgres:' || url.protocol === 'postgresql:') {
-          return true;
-        }
-        // Reject valid URLs with wrong protocol
-        return false;
-      } catch {
-        // Not a valid URL, try parsing as libpq connection string
-      }
-
-      // Parse as libpq-style connection string (key=value pairs with optional quoting)
-      // Regex pattern matches: key=(value | 'value' | "value") with optional whitespace
-      // Groups: 1=key, 2=full value with quotes, 3=captured value (unquoted)
-      const input = value.trim();
-      
-      // Match key=value pairs where value can be:
-      // - Single-quoted: 'value with spaces'
-      // - Double-quoted: "value with spaces"
-      // - Unquoted: no_spaces
-      const pairRegex = /([A-Za-z_][A-Za-z0-9_]*)=(?:'([^']*)'|"([^"]*)"|([^\s]+))/g;
-      
-      const matches = [];
-      let match;
-      while ((match = pairRegex.exec(input)) !== null) {
-        matches.push(match);
-      }
-      
-      // Must have at least one match
-      if (matches.length === 0) {
-        return false;
-      }
-      
-      // Verify the entire input was consumed by concatenating all matched segments
-      // and comparing to input (normalized to single spaces between pairs)
-      const reconstructed = matches
-        .map(m => m[0]) // Get full matched string for each pair
-        .join(' ')
-        .replace(/\s+/g, ' '); // Normalize multiple spaces to single space
-      
-      const normalized = input.replace(/\s+/g, ' '); // Normalize input for comparison
-      
-      // Accept if we consumed the entire input (all key=value pairs matched)
-      return reconstructed === normalized;
-    }, 'Please enter a valid PostgreSQL URL (postgres://...) or connection string (key=value pairs)'),
+    .refine(isValidPostgresConnectionString, 'Please enter a valid PostgreSQL URL (postgres://...) or connection string (key=value pairs)'),
 });
 
 export const searchFormSchema = z.object({

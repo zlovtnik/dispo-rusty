@@ -35,6 +35,16 @@ import { cleanup } from '@testing-library/react';
 
 // Extend Bun's expect with jest-dom matchers
 expect.extend(matchers);
+
+// Mock missing Jest utilities that jest-dom expects
+if (typeof globalThis !== 'undefined') {
+  // Mock RECEIVED_COLOR and other Jest utilities
+  (globalThis as any).RECEIVED_COLOR = (text: string) => text;
+  (globalThis as any).EXPECTED_COLOR = (text: string) => text;
+  (globalThis as any).INVERTED_COLOR = (text: string) => text;
+  (globalThis as any).BOLD_WEIGHT = (text: string) => text;
+  (globalThis as any).DIM_COLOR = (text: string) => text;
+}
 import { afterEach, beforeAll, afterAll } from 'bun:test';
 import { setupMSW, teardownMSW, resetMSW } from './mocks/server';
 

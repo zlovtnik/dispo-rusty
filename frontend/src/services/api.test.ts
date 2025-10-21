@@ -538,7 +538,7 @@ describe('tenantService', () => {
     test('should filter tenants by criteria', async () => {
       const result = await tenantService.filter({
         filters: [{ field: 'name', operator: 'like', value: 'Test' }],
-        page_size: 20,
+        limit: 20,
       });
 
       expect(result.isOk()).toBe(true);
@@ -551,7 +551,7 @@ describe('tenantService', () => {
           { field: 'status', operator: 'eq', value: 'active' },
         ],
         cursor: 0,
-        page_size: 10,
+        limit: 10,
       });
 
       expect(result.isOk()).toBe(true);
