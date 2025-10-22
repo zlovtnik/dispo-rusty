@@ -134,10 +134,10 @@ export const TenantsPage: React.FC = () => {
 
     try {
       if (editingTenant) {
-        // Update existing tenant
+        // Update existing tenant - omit db_url if empty to keep it optional
         const updateResult = await tenantService.update(editingTenant.id, {
           name: values.name,
-          db_url: values.db_url,
+          ...(values.db_url && { db_url: values.db_url }),
         });
         if (updateResult.isErr()) {
           throw new Error(updateResult.error.message);

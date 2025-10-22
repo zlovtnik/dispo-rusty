@@ -639,7 +639,7 @@ export const AddressBookPage: React.FC = () => {
             }}
             onChange={(pagination, filters, sorter) => {
               const sorterResult = Array.isArray(sorter) ? sorter[0] : sorter;
-              if (sorterResult?.field && sorterResult.order) {
+              if (sorterResult?.field && sorterResult?.order) {
                 const order = sorterResult.order === 'ascend' ? 'asc' : 'desc';
                 setSorting({ field: sorterResult.field as string, order });
                 // Reload with sorting

@@ -56,10 +56,10 @@ test('case-insensitive sensitive keys are removed', () => {
   expect(sanitizedMixed).toBe('/api');
 });
 
-test('URLs with fragments preserve fragment and remove sensitive params', () => {
+test('URLs with fragments drop fragment to prevent token leakage and remove sensitive params', () => {
   const url = '/page?token=secret#section';
   const sanitized = sanitizeUrlForLogging(url);
-  expect(sanitized).toBe('/page#section');
+  expect(sanitized).toBe('/page');
   expect(sanitized).not.toContain('token=');
-  expect(sanitized).toContain('#section');
+  expect(sanitized).not.toContain('#section');
 });

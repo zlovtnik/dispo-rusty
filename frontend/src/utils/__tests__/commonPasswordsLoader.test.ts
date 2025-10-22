@@ -222,9 +222,6 @@ describe('CommonPasswordsLoader', () => {
       const loader = CommonPasswordsLoader.getInstance();
       await loader.getCommonPasswords();
 
-      // Give the cache status update a chance to complete
-      await new Promise(resolve => setTimeout(resolve, 100));
-
       const status = loader.getCacheStatus();
       expect(status).not.toBeNull();
       expect(status?.hasCache).toBe(true);

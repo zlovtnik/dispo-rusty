@@ -269,10 +269,10 @@ export function renderWithoutAuth(ui: ReactElement, options?: CustomRenderOption
 export function renderWithAuthAndNavigation(ui: ReactElement, options?: CustomRenderOptions) {
   let capturedLocation: { pathname: string } = { pathname: options?.initialRoute ?? '/' };
 
-  // Memoize the location change handler to prevent dependency issues in LocationTracker
-  const handleLocationChange = React.useCallback((location: { pathname: string }) => {
-    capturedLocation = location;
-  }, []);
+  // Plain function is sufficient in test util scope
+  const handleLocationChange = (location: { pathname: string }) => {
+    capturedLocation = { pathname: location.pathname };
+  };
 
   const LocationTracker: React.FC<{
     children: React.ReactNode;
@@ -280,7 +280,7 @@ export function renderWithAuthAndNavigation(ui: ReactElement, options?: CustomRe
     const location = useLocation();
     React.useEffect(() => {
       handleLocationChange(location);
-    }, [location, handleLocationChange]);
+    }, [location.pathname]);
     return <>{children}</>;
   };
 

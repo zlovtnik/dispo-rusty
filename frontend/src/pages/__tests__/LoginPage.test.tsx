@@ -377,7 +377,7 @@ describe('LoginPage Component', () => {
       await user.click(submitButton);
 
       // Use findByRole to properly wait for the alert to appear
-      const alert = await screen.findByRole('alert', undefined, { timeout: 3000 });
+      const alert = await screen.findByRole('alert', {}, { timeout: 3000 });
       expect(alert).toHaveTextContent(/server error/i);
     });
 
@@ -408,7 +408,7 @@ describe('LoginPage Component', () => {
       await user.click(submitButton);
 
       // Use findByRole to properly wait for the alert to appear
-      const alert = await screen.findByRole('alert', undefined, { timeout: 3000 });
+      const alert = await screen.findByRole('alert', {}, { timeout: 3000 });
       expect(alert).toHaveTextContent(/temporary error/i);
 
       // Simulate realistic retry - user just clicks submit again without clearing inputs
