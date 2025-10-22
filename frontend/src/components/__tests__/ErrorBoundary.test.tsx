@@ -2472,8 +2472,8 @@ describe('ErrorBoundary Component', () => {
         }
       }
 
-      // Verify that errors were handled (callback was invoked at least once)
-      expect(errorHandleCount).toBeGreaterThan(0);
+      // Verify that all 3 errors were handled
+      expect(errorHandleCount).toBe(3);
     });
   });
 

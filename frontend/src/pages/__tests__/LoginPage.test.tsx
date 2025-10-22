@@ -377,7 +377,7 @@ describe('LoginPage Component', () => {
       await user.click(submitButton);
 
       // Use findByRole to properly wait for the alert to appear
-      const alert = await screen.findByRole('alert', {}, { timeout: 3000 });
+      const alert = await screen.findByRole('alert', undefined, { timeout: 3000 });
       expect(alert).toHaveTextContent(/server error/i);
     });
 
@@ -563,15 +563,15 @@ describe('LoginPage Component', () => {
       await user.click(submitButton);
       await user.click(submitButton);
 
-      // Add a small delay to ensure all synchronous operations complete
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Wait for the login call count to reach 1 (deterministic wait instead of arbitrary delay)
+      await waitFor(() => expect(loginCallCount).toBe(1));
 
       // Verify that only one login was actually called (due to isSubmitting guard)
       expect(loginCallCount).toBe(1);
 
       deferred.resolve(undefined);
       await deferred.promise;
-    }, 10000);
+    }, 5000);
 
     it('should handle very long input', async () => {
       const user = userEvent.setup();
@@ -582,7 +582,7 @@ describe('LoginPage Component', () => {
       await user.type(usernameInput, longText);
 
       // HTML input with maxLength=254 should automatically truncate
-      expect((usernameInput as HTMLInputElement).value.length).toBeLessThanOrEqual(254);
+      expect((usernameInput as HTMLInputElement).value.length).toBe(254);
     }, 5000);
   });
 });

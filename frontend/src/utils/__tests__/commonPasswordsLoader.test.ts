@@ -2,47 +2,30 @@
  * Common Passwords Loader Tests
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { describe, it, expect, beforeEach } from 'bun:test';
 import { CommonPasswordsLoader } from '../commonPasswordsLoader';
 import { COMMON_PASSWORDS_FALLBACK } from '../../config/commonPasswords';
+import { http, HttpResponse } from 'msw';
+import { getServer } from '../../test-utils/mocks/server';
 
-// Mock fetch for testing
-const originalFetch = global.fetch;
-let mockFetch: any;
-
-beforeEach(() => {
-  // Create a proper mock that returns Response-like objects
-  mockFetch = async (url: string) => {
-    // Only mock the specific common-passwords.json URL
-    if (url.includes('/config/common-passwords.json')) {
-      return {
-        ok: true,
-        status: 200,
-        statusText: 'OK',
-        json: async () => ({
+describe('CommonPasswordsLoader', () => {
+  beforeEach(() => {
+    // Setup MSW handler for common-passwords.json endpoint
+    getServer().use(
+      http.get(/\/config\/common-passwords\.json$/, () => {
+        return HttpResponse.json({
           version: '1.0.0',
           description: 'Test passwords',
           lastUpdated: '2025-01-01',
           source: 'test',
           passwords: ['test1', 'test2', 'test3'],
-        }),
-      };
-    }
-    // For any other URLs, use the original fetch
-    return originalFetch(url);
-  };
-  global.fetch = mockFetch;
+        });
+      })
+    );
 
-  // Reset the singleton instance
-  CommonPasswordsLoader.__resetForTests();
-});
-
-afterEach(() => {
-  // Restore original fetch
-  global.fetch = originalFetch;
-});
-
-describe('CommonPasswordsLoader', () => {
+    // Reset the singleton instance
+    CommonPasswordsLoader.__resetForTests();
+  });
   describe('getInstance', () => {
     it('should return singleton instance', () => {
       const instance1 = CommonPasswordsLoader.getInstance();
@@ -165,10 +148,12 @@ describe('CommonPasswordsLoader', () => {
     });
 
     it('should fallback to built-in list when fetch fails', async () => {
-      mockFetch = async () => {
-        throw new Error('Network error');
-      };
-      global.fetch = mockFetch;
+      // Override MSW handler to throw an error
+      getServer().use(
+        http.get(/\/config\/common-passwords\.json$/, () => {
+          return HttpResponse.error();
+        })
+      );
 
       const loader = CommonPasswordsLoader.getInstance();
       const passwords = await loader.getCommonPasswords();
@@ -177,13 +162,12 @@ describe('CommonPasswordsLoader', () => {
     });
 
     it('should handle invalid JSON response', async () => {
-      mockFetch = async () => ({
-        ok: true,
-        status: 200,
-        statusText: 'OK',
-        json: async () => ({ invalid: 'response' }),
-      });
-      global.fetch = mockFetch;
+      // Override MSW handler to return invalid JSON structure
+      getServer().use(
+        http.get(/\/config\/common-passwords\.json$/, () => {
+          return HttpResponse.json({ invalid: 'response' });
+        })
+      );
 
       const loader = CommonPasswordsLoader.getInstance();
       const passwords = await loader.getCommonPasswords();
@@ -229,7 +213,7 @@ describe('CommonPasswordsLoader', () => {
       // (depends on environment - file may not be accessible during tests)
       expect(status?.source).toBeTruthy();
       expect(typeof status?.source).toBe('string');
-    }, { timeout: 10000 });
+    }, { timeout: 2000 });
 
     it('should return cache status with fallback source when file loading fails', async () => {
       const loader = CommonPasswordsLoader.getInstance({

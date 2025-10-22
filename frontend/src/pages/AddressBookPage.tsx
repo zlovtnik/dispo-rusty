@@ -520,7 +520,7 @@ export const AddressBookPage: React.FC = () => {
       page: params.page || 1,
       limit: params.limit || 10,
       search: searchTerm,
-      ...(params.sortField && { sort: `${params.sortField},${params.sortOrder}` }),
+      ...(params.sortField && params.sortOrder && { sort: `${params.sortField},${params.sortOrder}` }),
     };
     const result = await addressBookService.getAll(fullParams);
 
@@ -644,8 +644,8 @@ export const AddressBookPage: React.FC = () => {
                 setSorting({ field: sorterResult.field as string, order });
                 // Reload with sorting
                 loadContactsWithParams({
-                  page: paginationState.current,
-                  limit: paginationState.pageSize,
+                  page: pagination.current,
+                  limit: pagination.pageSize,
                   sortField: sorterResult.field as string,
                   sortOrder: order,
                 });

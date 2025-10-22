@@ -267,11 +267,19 @@ export function renderWithoutAuth(ui: ReactElement, options?: CustomRenderOption
  * @returns Render result with location tracking
  */
 export function renderWithAuthAndNavigation(ui: ReactElement, options?: CustomRenderOptions) {
-  let capturedLocation: { pathname: string } = { pathname: options?.initialRoute ?? '/' };
+  let capturedLocation: { pathname: string; search: string; hash: string } = {
+    pathname: options?.initialRoute ?? '/',
+    search: '',
+    hash: '',
+  };
 
   // Plain function is sufficient in test util scope
-  const handleLocationChange = (location: { pathname: string }) => {
-    capturedLocation = { pathname: location.pathname };
+  const handleLocationChange = (location: { pathname: string; search?: string; hash?: string }) => {
+    capturedLocation = {
+      pathname: location.pathname,
+      search: location.search ?? '',
+      hash: location.hash ?? '',
+    };
   };
 
   const LocationTracker: React.FC<{

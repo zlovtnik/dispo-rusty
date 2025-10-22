@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
 import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
 import { ConfirmationModal } from '@/components/ConfirmationModal';
@@ -399,7 +398,7 @@ export const TenantsPage: React.FC = () => {
 
   // Format date for display
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+    return new Date(dateString).toLocaleString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -440,20 +439,21 @@ export const TenantsPage: React.FC = () => {
       key: 'db_url',
       width: 250,
       ellipsis: true,
-      render: (dbUrl: string) => (
+      render: (dbUrl: string) => {
+        const masked = formatDbUrl(dbUrl);
+        return (
         <span
-          title={dbUrl}
+          title={masked}
           style={{
             fontSize: '12px',
             color: 'var(--tertiary-600)',
             fontFamily: 'monospace',
           }}
         >
-          {formatDbUrl(dbUrl).length > 30
-            ? formatDbUrl(dbUrl).substring(0, 27) + '...'
-            : formatDbUrl(dbUrl)}
+          {masked.length > 30 ? masked.substring(0, 27) + '...' : masked}
         </span>
-      ),
+        );
+      },
     },
     {
       title: 'Created',
@@ -596,8 +596,8 @@ export const TenantsPage: React.FC = () => {
                       allowClear
                       value={isoToDayjs(filter.value)}
                       onChange={date => {
-                        if (date && dayjs(date).isValid()) {
-                          const iso = date.toISOString();
+                        if (date && date.isValid()) {
+                          const iso = date.toDate().toISOString();
                           updateFilter(index, 'value', iso);
                         } else {
                           updateFilter(index, 'value', '');
