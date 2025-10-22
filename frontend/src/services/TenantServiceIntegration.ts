@@ -16,19 +16,53 @@ import { type useTenantNotifications } from '@/hooks/useTenantNotifications';
 
 /**
  * SECURITY: Default no-op notification functions to prevent null reference errors
+ * Must match the interface of useTenantNotifications hook
  */
-const DEFAULT_NOTIFIER = {
-  showSuccessNotification: (title: string, message?: string) => {
-    console.info(`✓ ${title}`, message || '');
+const DEFAULT_NOTIFIER: ReturnType<typeof useTenantNotifications> = {
+  showSuccessNotification: (content: string, description?: string) => {
+    console.info(`✓ ${content}`, description || '');
   },
-  showErrorNotification: (title: string, message?: string) => {
-    console.error(`✗ ${title}`, message || '');
+  showErrorNotification: (content: string, description?: string) => {
+    console.error(`✗ ${content}`, description || '');
   },
-  showInfoNotification: (title: string, message?: string) => {
-    console.info(`ℹ ${title}`, message || '');
+  showInfoNotification: (content: string, description?: string) => {
+    console.info(`ℹ ${content}`, description || '');
   },
-  showWarningNotification: (title: string, message?: string) => {
-    console.warn(`⚠ ${title}`, message || '');
+  showWarningNotification: (content: string, description?: string) => {
+    console.warn(`⚠ ${content}`, description || '');
+  },
+  notifyTenantCreated: () => {
+    console.info('✓ Tenant created (no-op)');
+  },
+  notifyTenantUpdated: () => {
+    console.info('✓ Tenant updated (no-op)');
+  },
+  notifyTenantDeleted: () => {
+    console.info('✓ Tenant deleted (no-op)');
+  },
+  notifyTenantError: () => {
+    console.error('✗ Tenant operation failed (no-op)');
+  },
+  notifyValidationError: () => {
+    console.error('✗ Validation failed (no-op)');
+  },
+  notifyDatabaseConnectionWarning: () => {
+    console.warn('⚠ Database connection warning (no-op)');
+  },
+  notifyTenantHealthCheck: () => {
+    console.info('ℹ Health check completed (no-op)');
+  },
+  notifyBulkOperation: () => {
+    console.info('ℹ Bulk operation completed (no-op)');
+  },
+  notifyTenantLimitReached: () => {
+    console.warn('⚠ Tenant limit reached (no-op)');
+  },
+  notifyTenantFeatureUnavailable: () => {
+    console.info('ℹ Feature unavailable (no-op)');
+  },
+  handleOperationResult: () => {
+    console.info('ℹ Operation result handled (no-op)');
   },
 };
 
@@ -37,7 +71,7 @@ const DEFAULT_NOTIFIER = {
  */
 export class TenantServiceIntegration {
   private static instance: TenantServiceIntegration;
-  private notificationService: typeof DEFAULT_NOTIFIER | null = null;
+  private notifications: ReturnType<typeof useTenantNotifications> | null = null;
 
   private constructor() {
     // Notifications will be initialized when needed
@@ -54,23 +88,27 @@ export class TenantServiceIntegration {
    * SECURITY: Get notifier with fallback to default no-op functions
    * Ensures notifications never throw errors even if not initialized
    */
-  private getNotifier() {
-    return this.notificationService || DEFAULT_NOTIFIER;
+  private getNotifier(): ReturnType<typeof useTenantNotifications> {
+    if (!this.notifications) {
+      console.warn('Notifications not initialized, using default no-op implementation');
+      return DEFAULT_NOTIFIER;
+    }
+    return this.notifications;
   }
 
   /**
    * Set notifications service (to be called from React components)
    * @param notifier The notification service from useTenantNotifications hook
    */
-  setNotifications(notifier: typeof DEFAULT_NOTIFIER): void {
-    this.notificationService = notifier;
+  setNotifications(notifier: ReturnType<typeof useTenantNotifications>): void {
+    this.notifications = notifier;
   }
 
   /**
    * Clear notifications (when component unmounts or context is lost)
    */
   clearNotifications(): void {
-    this.notificationService = null;
+    this.notifications = null;
   }
 
   /**
@@ -173,7 +211,9 @@ export class TenantServiceIntegration {
       const context = tenantContextService.getTenantContext();
       if (context?.tenant.id !== tenantId) {
         return err(
-          createBusinessLogicError('Tenant is not currently active', undefined, { code: 'TENANT_NOT_ACTIVE' })
+          createBusinessLogicError('Tenant is not currently active', undefined, {
+            code: 'TENANT_NOT_ACTIVE',
+          })
         );
       }
 
@@ -293,9 +333,11 @@ export class TenantServiceIntegration {
     const recent = history.slice(0, 5);
     const older = history.slice(5, 10);
 
-    const recentAvg = recent.reduce((sum, h) => sum + h.score, 0) / recent.length;
-    const olderAvg = older.reduce((sum, h) => sum + h.score, 0) / older.length;
-
+    const recentAvg = recent.reduce((sum: number, h: any) => sum + Number(h.score), 0) / recent.length;
+    const olderAvg =
+      older.length > 0
+        ? older.reduce((sum: number, h: any) => sum + Number(h.score), 0) / older.length
+        : recentAvg;
     const change = recentAvg - olderAvg;
     const trend = Math.abs(change) < 5 ? 'stable' : change > 0 ? 'improving' : 'declining';
 
@@ -356,6 +398,17 @@ export class TenantServiceIntegration {
         console.log('Attempting database recovery...');
       } else if (issue.includes('API')) {
         // Attempt API recovery
+        console.log('Attempting API recovery...');
+      } else if (issue.includes('storage')) {
+        // Attempt storage recovery
+        console.log('Attempting storage recovery...');
+      }
+    }
+  }
+}
+
+// Export singleton instance
+export const tenantServiceIntegration = TenantServiceIntegration.getInstance();
         console.log('Attempting API recovery...');
       } else if (issue.includes('storage')) {
         // Attempt storage recovery

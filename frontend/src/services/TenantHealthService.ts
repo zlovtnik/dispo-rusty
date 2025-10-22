@@ -467,6 +467,8 @@ export class TenantHealthService {
 
   /**
    * Get health check result for tenant
+   * @param tenantId - The ID of the tenant
+   * @returns Health check result for the tenant, or null if not found
    */
   getHealthCheckResult(tenantId: string): HealthCheckResult | null {
     return this.healthChecks.get(tenantId) || null;
@@ -481,6 +483,9 @@ export class TenantHealthService {
 
   /**
    * Get health check history
+   * @param tenantId - The ID of the tenant
+   * @param limit - The maximum number of history records to retrieve
+  * @returns Result containing the tenant's health check history or an AppError on failure
    */
   async getHealthCheckHistory(
     tenantId: string,
@@ -526,6 +531,7 @@ export class TenantHealthService {
 
   /**
    * Update monitoring configuration
+   * @param config - Partial monitoring configuration to update
    */
   updateMonitoringConfig(config: Partial<HealthMonitoringConfig>): void {
     this.monitoringConfig = { ...this.monitoringConfig, ...config };

@@ -289,10 +289,12 @@ CREATE POLICY tenant_contacts_tenant_isolation ON tenant_contacts
     USING (tenant_id IN (
         SELECT tenant_id FROM user_tenants 
         WHERE user_id = current_setting('app.current_user_id')::UUID
+          AND status = 'active'
     ))
     WITH CHECK (tenant_id IN (
         SELECT tenant_id FROM user_tenants 
         WHERE user_id = current_setting('app.current_user_id')::UUID
+          AND status = 'active'
     ));
 
 CREATE POLICY tenant_users_tenant_isolation ON tenant_users
@@ -426,7 +428,7 @@ BEGIN
         RETURN TRUE; -- No limit set
     END IF;
     
-    RETURN current_usage < limit_value;
+    RETURN COALESCE(current_usage, 0) < limit_value;
 END;
 $$ LANGUAGE plpgsql;
 

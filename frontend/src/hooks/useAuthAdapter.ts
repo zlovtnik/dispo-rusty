@@ -44,14 +44,17 @@ export interface UnifiedAuthOperations {
  *
  * @example
  * ```typescript
- * const { state, login, logout } = useAuthAdapter();
+ * const { state, operations } = useAuthAdapter();
  *
  * if (state.isLoading) return <Spinner />;
- * if (!state.isAuthenticated) return <LoginPage onLogin={login} />;
+ * if (!state.isAuthenticated) return <LoginPage onLogin={operations.login} />;
  * return <Dashboard user={state.user} />;
  * ```
  */
-export const useAuthAdapter = (): { state: UnifiedAuthState; operations: UnifiedAuthOperations } => {
+export const useAuthAdapter = (): {
+  state: UnifiedAuthState;
+  operations: UnifiedAuthOperations;
+} => {
   const useFPAuth = isFeatureEnabled('useFPAuth');
 
   if (useFPAuth) {
@@ -71,8 +74,8 @@ export const useAuthAdapter = (): { state: UnifiedAuthState; operations: Unified
       login: async (credentials: LoginCredentials) => {
         const result = await fpContext.login(credentials);
         return result.match(
-          (response) => response,
-          (error) => {
+          response => response,
+          error => {
             console.error('[useAuthAdapter] Login failed:', error.message);
             return undefined;
           }
@@ -82,7 +85,7 @@ export const useAuthAdapter = (): { state: UnifiedAuthState; operations: Unified
         const result = await fpContext.logout();
         return result.match(
           () => undefined,
-          (error) => {
+          error => {
             console.error('[useAuthAdapter] Logout failed:', error.message);
           }
         );
@@ -106,20 +109,16 @@ export const useAuthAdapter = (): { state: UnifiedAuthState; operations: Unified
     const unifiedOperations: UnifiedAuthOperations = {
       login: async (credentials: LoginCredentials) => {
         try {
-          await traditionalContext.login(credentials);
-          if (traditionalContext.user && traditionalContext.tenant) {
-            return {
-              success: true,
-              message: 'Login successful',
-              user: traditionalContext.user,
-              tenant: traditionalContext.tenant,
-              token: localStorage.getItem('auth_token') ? JSON.parse(localStorage.getItem('auth_token') as string).token : '',
-              refreshToken: localStorage.getItem('refresh_token') || '',
-              expiresIn: 3600,
-            };
+          const response = await traditionalContext.login(credentials);
+          if (response) {
+            return response;
           }
           return undefined;
         } catch (error) {
+          console.error('[useAuthAdapter] Login failed:', error);
+          return undefined;
+        }
+      },
           console.error('[useAuthAdapter] Login failed:', error);
           return undefined;
         }

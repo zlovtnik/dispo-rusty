@@ -3,7 +3,7 @@
  * Handles search input and advanced filtering for tenants
  */
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Card, Space, Button, Badge } from 'antd';
 import { SearchOutlined, FilterOutlined, SettingOutlined } from '@ant-design/icons';
 
@@ -36,6 +36,12 @@ export const TenantSearchCard: React.FC<TenantSearchCardProps> = React.memo(
     onToggleAdvancedFilters,
     onGetTenantSuggestions,
   }) => {
+// Before
+import React from 'react';
+...
+-    // Memoize tenant suggestions to avoid recomputation on every render
+    const suggestions = onGetTenantSuggestions();
+...
     return (
       <Card
         title={
@@ -76,7 +82,7 @@ export const TenantSearchCard: React.FC<TenantSearchCardProps> = React.memo(
             onSearch={onSearch}
             onClear={onClearFilters}
             loading={loading}
-            suggestions={onGetTenantSuggestions()}
+            suggestions={suggestions}
             style={{ maxWidth: '600px' }}
           />
 

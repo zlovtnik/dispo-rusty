@@ -24,6 +24,11 @@ export interface TenantOperationResult {
   warnings?: string[];
 }
 
+/**
+ * Hook for managing tenant-related notifications
+ * @param options - Configuration options for notifications
+ * @returns Object with notification methods
+ */
 export const useTenantNotifications = (options: TenantNotificationOptions = {}) => {
   const { notification } = App.useApp();
   const {

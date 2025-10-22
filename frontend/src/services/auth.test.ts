@@ -3,37 +3,59 @@
  * @description Comprehensive tests for authorization services
  */
 
-import { describe, expect, it, beforeEach, afterEach } from 'bun:test';
-import { hasTenantAccess, hasTenantPermission, getTenantAccess } from './auth';
+import { describe, expect, it, beforeEach } from 'bun:test';
+import { hasTenantAccess, hasTenantPermission, getTenantAccess, type AuthConfig } from './auth';
 import type { UserId, TenantId } from '../types/ids';
 import type { TokenMetadata } from '../types/auth';
 
-// Mock console methods to capture logs
-const originalConsoleWarn = console.warn;
-const originalConsoleDebug = console.debug;
+// Mock logger and metrics for testing
+class MockSecurityLogger {
+  public capturedLogs: string[] = [];
+
+  logAuthFailure(
+    userId: UserId,
+    tenantId: TenantId,
+    reason: string,
+    metadata?: Record<string, unknown>
+  ): void {
+    this.capturedLogs.push(`[AUTH_FAILURE] User ${userId} denied access to tenant ${tenantId}: ${reason}`);
+  }
+
+  reset(): void {
+    this.capturedLogs = [];
+  }
+}
+
+class MockMetricsCollector {
+  public failures: number = 0;
+  public successes: number = 0;
+
+  incrementAuthFailure(userId: UserId, tenantId: TenantId, reason: string): void {
+    this.failures++;
+  }
+
+  incrementAuthSuccess(userId: UserId, tenantId: TenantId): void {
+    this.successes++;
+  }
+
+  reset(): void {
+    this.failures = 0;
+    this.successes = 0;
+  }
+}
 
 describe('hasTenantAccess', () => {
-  let capturedLogs: string[] = [];
-  let capturedMetrics: string[] = [];
+  let mockLogger: MockSecurityLogger;
+  let mockMetrics: MockMetricsCollector;
+  let testConfig: AuthConfig;
 
   beforeEach(() => {
-    capturedLogs = [];
-    capturedMetrics = [];
-
-    // Mock console methods
-    console.warn = (...args: unknown[]) => {
-      capturedLogs.push(`[WARN] ${args.join(' ')}`);
+    mockLogger = new MockSecurityLogger();
+    mockMetrics = new MockMetricsCollector();
+    testConfig = {
+      logger: mockLogger,
+      metrics: mockMetrics,
     };
-
-    console.debug = (...args: unknown[]) => {
-      capturedMetrics.push(`[DEBUG] ${args.join(' ')}`);
-    };
-  });
-
-  afterEach(() => {
-    // Restore original console methods
-    console.warn = originalConsoleWarn;
-    console.debug = originalConsoleDebug;
   });
 
   const validUserId: UserId = 'user-123' as UserId;
@@ -47,7 +69,7 @@ describe('hasTenantAccess', () => {
         permissions: ['read', 'write', 'delete', 'admin'],
       };
 
-      const result = hasTenantAccess(validUserId, validTenantId, tokenMetadata);
+      const result = hasTenantAccess(validUserId, validTenantId, tokenMetadata, testConfig);
 
       expect(result.isOk()).toBe(true);
       expect(result.value).toBe(true);
@@ -60,7 +82,7 @@ describe('hasTenantAccess', () => {
         permissions: ['read', 'write'],
       };
 
-      const result = hasTenantAccess(validUserId, validTenantId, tokenMetadata);
+      const result = hasTenantAccess(validUserId, validTenantId, tokenMetadata, testConfig);
 
       expect(result.isOk()).toBe(true);
       expect(result.value).toBe(true);
@@ -73,7 +95,7 @@ describe('hasTenantAccess', () => {
         permissions: ['read'],
       };
 
-      const result = hasTenantAccess(validUserId, validTenantId, tokenMetadata);
+      const result = hasTenantAccess(validUserId, validTenantId, tokenMetadata, testConfig);
 
       expect(result.isOk()).toBe(true);
       expect(result.value).toBe(true);
@@ -89,11 +111,11 @@ describe('hasTenantAccess', () => {
         permissions: ['read', 'write'],
       };
 
-      const result = hasTenantAccess(validUserId, validTenantId, tokenMetadata);
+      const result = hasTenantAccess(validUserId, validTenantId, tokenMetadata, testConfig);
 
       expect(result.isErr()).toBe(true);
       expect(result.error.code).toBe('TOKEN_BLACKLISTED');
-      expect(capturedLogs.some(log => log.includes('AUTH_FAILURE'))).toBe(true);
+      expect(mockLogger.capturedLogs.some(log => log.includes('AUTH_FAILURE'))).toBe(true);
     });
 
     it('should fail for revoked token', () => {
@@ -104,24 +126,25 @@ describe('hasTenantAccess', () => {
         permissions: ['read', 'write'],
       };
 
-      const result = hasTenantAccess(validUserId, validTenantId, tokenMetadata);
+      const result = hasTenantAccess(validUserId, validTenantId, tokenMetadata, testConfig);
 
       expect(result.isErr()).toBe(true);
       expect(result.error.code).toBe('TOKEN_REVOKED');
     });
 
-    it('should fail for token issued before revocation', () => {
+    it('should allow token issued at revocation time (boundary case)', () => {
+      const revokeTime = Date.now() - 1000;
       const tokenMetadata: TokenMetadata = {
-        issuedAt: Date.now() - 2000, // Issued 2 seconds ago
-        lastRevokeAt: Date.now() - 1000, // Revoked 1 second ago
+        issuedAt: revokeTime, // Issued exactly at revocation time
+        lastRevokeAt: revokeTime, // Revoked at same time
         tenantRole: 'member',
         permissions: ['read', 'write'],
       };
 
-      const result = hasTenantAccess(validUserId, validTenantId, tokenMetadata);
+      const result = hasTenantAccess(validUserId, validTenantId, tokenMetadata, testConfig);
 
-      expect(result.isErr()).toBe(true);
-      expect(result.error.code).toBe('TOKEN_REVOKED');
+      expect(result.isOk()).toBe(true);
+      expect(result.value).toBe(true);
     });
 
     it('should fail for token that is too old', () => {
@@ -131,7 +154,7 @@ describe('hasTenantAccess', () => {
         permissions: ['read', 'write'],
       };
 
-      const result = hasTenantAccess(validUserId, validTenantId, tokenMetadata);
+      const result = hasTenantAccess(validUserId, validTenantId, tokenMetadata, testConfig);
 
       expect(result.isErr()).toBe(true);
       expect(result.error.code).toBe('TOKEN_TOO_OLD');
@@ -146,7 +169,7 @@ describe('hasTenantAccess', () => {
         // Missing tenantRole
       };
 
-      const result = hasTenantAccess(validUserId, validTenantId, tokenMetadata);
+      const result = hasTenantAccess(validUserId, validTenantId, tokenMetadata, testConfig);
 
       expect(result.isErr()).toBe(true);
       expect(result.error.code).toBe('NO_TENANT_ROLE');
@@ -159,7 +182,7 @@ describe('hasTenantAccess', () => {
         permissions: ['read'],
       };
 
-      const result = hasTenantAccess(validUserId, validTenantId, tokenMetadata);
+      const result = hasTenantAccess(validUserId, validTenantId, tokenMetadata, testConfig);
 
       expect(result.isErr()).toBe(true);
       expect(result.error.code).toBe('INSUFFICIENT_ROLE');
@@ -175,18 +198,18 @@ describe('hasTenantAccess', () => {
         permissions: ['read', 'write'],
       };
 
-      hasTenantAccess(validUserId, validTenantId, tokenMetadata);
+      hasTenantAccess(validUserId, validTenantId, tokenMetadata, testConfig);
 
       // Check that failure was logged
       expect(
-        capturedLogs.some(
+        mockLogger.capturedLogs.some(
           log =>
             log.includes('AUTH_FAILURE') && log.includes(validUserId) && log.includes(validTenantId)
         )
       ).toBe(true);
 
       // Check that metrics were incremented
-      expect(capturedMetrics.some(metric => metric.includes('auth_failure'))).toBe(true);
+      expect(mockMetrics.failures).toBe(1);
     });
 
     it('should increment success metrics on successful access', () => {
@@ -196,10 +219,10 @@ describe('hasTenantAccess', () => {
         permissions: ['read', 'write'],
       };
 
-      hasTenantAccess(validUserId, validTenantId, tokenMetadata);
+      hasTenantAccess(validUserId, validTenantId, tokenMetadata, testConfig);
 
       // Check that success metrics were incremented
-      expect(capturedMetrics.some(metric => metric.includes('auth_success'))).toBe(true);
+      expect(mockMetrics.successes).toBe(1);
     });
   });
 
@@ -211,7 +234,7 @@ describe('hasTenantAccess', () => {
         permissions: [],
       };
 
-      const result = hasTenantAccess(validUserId, validTenantId, tokenMetadata);
+      const result = hasTenantAccess(validUserId, validTenantId, tokenMetadata, testConfig);
 
       expect(result.isOk()).toBe(true);
       expect(result.value).toBe(true);
@@ -224,7 +247,7 @@ describe('hasTenantAccess', () => {
         // permissions is undefined
       };
 
-      const result = hasTenantAccess(validUserId, validTenantId, tokenMetadata);
+      const result = hasTenantAccess(validUserId, validTenantId, tokenMetadata, testConfig);
 
       expect(result.isOk()).toBe(true);
       expect(result.value).toBe(true);
@@ -317,6 +340,19 @@ describe('getTenantAccess', () => {
 });
 
 describe('integration scenarios', () => {
+  let mockLogger: MockSecurityLogger;
+  let mockMetrics: MockMetricsCollector;
+  let testConfig: AuthConfig;
+
+  beforeEach(() => {
+    mockLogger = new MockSecurityLogger();
+    mockMetrics = new MockMetricsCollector();
+    testConfig = {
+      logger: mockLogger,
+      metrics: mockMetrics,
+    };
+  });
+
   const validUserId: UserId = 'user-123' as UserId;
   const validTenantId: TenantId = 'tenant-456' as TenantId;
 
@@ -355,7 +391,7 @@ describe('integration scenarios', () => {
       permissions: ['read', 'write'],
     };
 
-    const result = hasTenantAccess(validUserId, validTenantId, tokenMetadata);
+    const result = hasTenantAccess(validUserId, validTenantId, tokenMetadata, testConfig);
 
     expect(result.isErr()).toBe(true);
     expect(result.error.code).toBe('TOKEN_TOO_OLD');
@@ -369,7 +405,7 @@ describe('integration scenarios', () => {
       permissions: ['read', 'write'],
     };
 
-    const result = hasTenantAccess(validUserId, validTenantId, tokenMetadata);
+    const result = hasTenantAccess(validUserId, validTenantId, tokenMetadata, testConfig);
 
     expect(result.isErr()).toBe(true);
     expect(result.error.code).toBe('TOKEN_REVOKED');

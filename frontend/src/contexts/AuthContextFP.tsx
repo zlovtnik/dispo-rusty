@@ -80,11 +80,12 @@ const extractAuthData = (
 
     if (jwtResult.isErr()) {
       const parseError = jwtResult.error;
-      const errorDetails = parseError.type === 'INVALID_JSON'
-        ? parseError.reason
-        : parseError.type === 'MISSING_JWT_FIELDS'
-          ? `Missing fields: ${parseError.fields.join(', ')}`
-          : 'Invalid JWT format';
+      const errorDetails =
+        parseError.type === 'INVALID_JSON'
+          ? parseError.reason
+          : parseError.type === 'MISSING_JWT_FIELDS'
+            ? `Missing fields: ${parseError.fields.join(', ')}`
+            : 'Invalid JWT format';
 
       return errAsync(
         createAuthError('Invalid JWT token', {
@@ -163,9 +164,7 @@ const loadAuthData = (): AsyncResult<{ user: User; tenant: Tenant; token: string
     const tenantData = localStorage.getItem('tenant');
 
     if (!tokenData || !userData || !tenantData) {
-      return errAsync(
-        createAuthError('No authentication data found in storage')
-      );
+      return errAsync(createAuthError('No authentication data found in storage'));
     }
 
     const token = (JSON.parse(tokenData) as Record<string, unknown>).token as string;
@@ -249,12 +248,12 @@ export const AuthProviderFP: React.FC<AuthProviderFPProps> = ({ children }) => {
             if (abortController.signal.aborted) return;
 
             refreshResult.match(
-              (authResponse) => {
+              authResponse => {
                 if (isMountedRef.current && !abortController.signal.aborted) {
                   extractAuthData(authResponse.token, authResponse).match(
                     ({ user: refreshedUser, tenant: refreshedTenant, token: newToken }) => {
                       if (isMountedRef.current && !abortController.signal.aborted) {
-                        storeAuthData(refreshedUser, refreshedTenant, newToken).mapErr((error) => {
+                        storeAuthData(refreshedUser, refreshedTenant, newToken).mapErr(error => {
                           console.error('Failed to store refreshed auth data:', error.message);
                         });
 
@@ -266,7 +265,7 @@ export const AuthProviderFP: React.FC<AuthProviderFPProps> = ({ children }) => {
                         });
                       }
                     },
-                    (error) => {
+                    error => {
                       if (isMountedRef.current && !abortController.signal.aborted) {
                         clearAuthStorage();
                         setState({ type: 'error', error });
@@ -275,7 +274,7 @@ export const AuthProviderFP: React.FC<AuthProviderFPProps> = ({ children }) => {
                   );
                 }
               },
-              (error) => {
+              error => {
                 if (isMountedRef.current && !abortController.signal.aborted) {
                   clearAuthStorage();
                   setState({ type: 'error', error });
@@ -294,7 +293,7 @@ export const AuthProviderFP: React.FC<AuthProviderFPProps> = ({ children }) => {
             }
           }
         },
-        (error) => {
+        error => {
           if (isMountedRef.current && !abortController.signal.aborted) {
             setState({ type: 'idle' });
           }
@@ -323,10 +322,42 @@ export const AuthProviderFP: React.FC<AuthProviderFPProps> = ({ children }) => {
       const modifiedCredentials = { ...credentials, tenantId };
 
       // Execute login
-      return authService.login(modifiedCredentials).andThen((authResponse) => {
-        if (!authResponse.success) {
-          const error = createAuthError(authResponse.message ?? 'Login failed');
+      return authService
+        .login(modifiedCredentials)
+        .andThen(authResponse => {
+          if (!authResponse.success) {
+            const error = createAuthError(authResponse.message ?? 'Login failed');
 
+            if (isMountedRef.current) {
+              setState({
+                type: 'error',
+                error,
+                previousState: { type: 'idle' },
+              });
+            }
+
+            return errAsync(error);
+          }
+
+          // Extract and store auth data
+          return extractAuthData(authResponse.token, authResponse).andThen(
+            ({ user, tenant, token }) => {
+              return storeAuthData(user, tenant, token).andThen(() => {
+                if (isMountedRef.current) {
+                  setState({
+                    type: 'authenticated',
+                    user,
+                    tenant,
+                    token,
+                  });
+                }
+
+                return okAsync(authResponse);
+              });
+            }
+          );
+        })
+        .mapErr(error => {
           if (isMountedRef.current) {
             setState({
               type: 'error',
@@ -334,28 +365,8 @@ export const AuthProviderFP: React.FC<AuthProviderFPProps> = ({ children }) => {
               previousState: { type: 'idle' },
             });
           }
-
-          return errAsync(error);
-        }
-
-        // Extract and store auth data
-        return extractAuthData(authResponse.token, authResponse).andThen(
-          ({ user, tenant, token }) => {
-            return storeAuthData(user, tenant, token).andThen(() => {
-              if (isMountedRef.current) {
-                setState({
-                  type: 'authenticated',
-                  user,
-                  tenant,
-                  token,
-                });
-              }
-
-              return okAsync(authResponse);
-            });
-          }
-        );
-      });
+          return error;
+        });
     },
     []
   );
@@ -374,19 +385,22 @@ export const AuthProviderFP: React.FC<AuthProviderFPProps> = ({ children }) => {
   /**
    * Switch tenant operation
    */
-  const switchTenant = useCallback((tenantId: string): AsyncResult<Tenant, AppError> => {
-    if (state.type !== 'authenticated') {
-      return errAsync(
-        createAuthError('Not authenticated', {
-          currentState: state.type,
-        })
-      );
-    }
+  const switchTenant = useCallback(
+    (tenantId: string): AsyncResult<Tenant, AppError> => {
+      if (state.type !== 'authenticated') {
+        return errAsync(
+          createAuthError('Not authenticated', {
+            currentState: state.type,
+          })
+        );
+      }
 
-    // For now, just return the current tenant
-    // In a real app, this would refresh context with new tenant
-    return okAsync(state.tenant);
-  }, [state]);
+      // For now, just return the current tenant
+      // In a real app, this would refresh context with new tenant
+      return okAsync(state.tenant);
+    },
+    [state]
+  );
 
   /**
    * Clear error state
@@ -436,6 +450,21 @@ export const AuthProviderFP: React.FC<AuthProviderFPProps> = ({ children }) => {
  *
  * @example
  * ```typescript
+ * const { state, login, logout } = useAuthFP();
+ *
+ * // Pattern match on state
+ * state.type === 'authenticated' && <Dashboard user={state.user} />
+ * ```
+ */
+export const useAuthFP = (): AuthContextTypeFP => {
+  const context = useContext(AuthContextFP);
+
+  if (context === undefined) {
+    throw new Error('useAuthFP must be used within AuthProviderFP');
+  }
+
+  return context;
+};
  * const { state, login, logout } = useAuthFP();
  *
  * // Pattern match on state

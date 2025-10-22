@@ -22,7 +22,6 @@ import { TenantFormModal } from '@/components/TenantFormModal';
 import {
   useSearchState,
   useDebouncedSearch,
-  useMultiAttributeSearch,
   useSearchPerformance,
 } from '@/hooks/useEnhancedSearch';
 import type { SearchFilter, SearchQuery } from '@/components/SearchComponents';
@@ -56,15 +55,6 @@ export const EnhancedTenantsPage: React.FC = () => {
     enableMetrics: true,
     logPerformance: true,
     performanceThreshold: 100,
-  });
-
-  // Multi-attribute search
-  const _multiSearch = useMultiAttributeSearch({
-    data: tenants,
-    searchFields: ['name', 'id', 'db_url'],
-    caseSensitive: false,
-    exactMatch: false,
-    highlightMatches: true,
   });
 
   // Debounced search
@@ -216,7 +206,9 @@ export const EnhancedTenantsPage: React.FC = () => {
           searchTime: performance.getMetrics().averageSearchTime,
         });
       } catch (error) {
-        console.error('Search failed:', error);
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Search failed:', error);
+        }
         message.error('Search failed. Please try again.');
       }
     },

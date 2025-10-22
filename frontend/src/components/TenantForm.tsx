@@ -177,11 +177,14 @@ export const TenantForm: React.FC<TenantFormProps> = ({
       }
 
       // Warnings
-      if (values.db_url && values.db_url.includes('localhost')) {
-        warnings.push('Using localhost database URL may not be accessible in production');
+      if (
+        values.db_url &&
+        /(?:localhost|127\.0\.0\.1|\[::1\])/i.test(values.db_url)
+      ) {
+        warnings.push('Using a localhost database URL (localhost, 127.0.0.1, or ::1) may not be accessible in production');
       }
 
-      if (values.name && values.name.toLowerCase().includes('test')) {
+      if (values.name?.toLowerCase().includes('test')) {
         warnings.push('Tenant name contains "test" - ensure this is intentional');
       }
 

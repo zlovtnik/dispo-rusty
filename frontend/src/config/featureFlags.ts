@@ -43,9 +43,15 @@ function loadFeatureFlags(): FeatureFlags {
   // Allow localStorage override for testing
   let storageFlags: Partial<FeatureFlags> = {};
   try {
+  try {
     const stored = localStorage.getItem('featureFlags');
     if (stored) {
-      storageFlags = JSON.parse(stored);
+      const parsed = JSON.parse(stored);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        storageFlags = parsed as Partial<FeatureFlags>;
+      } else {
+        console.warn('Ignoring invalid feature flags payload in localStorage', parsed);
+      }
     }
   } catch (error) {
     console.warn('Failed to load feature flags from localStorage', error);
@@ -89,26 +95,35 @@ export function updateFeatureFlags(updates: Partial<FeatureFlags>): void {
   const current = getFeatureFlags();
   const updated = { ...current, ...updates };
 
+export function updateFeatureFlags(updates: Partial<FeatureFlags>): void {
+  const current = getFeatureFlags();
+  const updated = { ...current, ...updates };
+
+  cachedFlags = updated;
+
   try {
     localStorage.setItem('featureFlags', JSON.stringify(updated));
-    cachedFlags = updated;
-
     console.info('[FP] Feature flags updated:', updated);
   } catch (error) {
     console.error('Failed to update feature flags', error);
   }
+}
 }
 
 /**
  * Reset feature flags to default/environment values
  */
 export function resetFeatureFlags(): void {
+  // Always clear the in-memory cache first
+  cachedFlags = null;
+
   try {
+    // Then attempt to clear persisted storage
     localStorage.removeItem('featureFlags');
-    cachedFlags = null;
   } catch (error) {
     console.error('Failed to reset feature flags', error);
   }
+}
 }
 
 /**

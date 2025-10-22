@@ -17,7 +17,7 @@ import { TenantDashboard } from '@/components/TenantDashboard';
 import { EnhancedTenantsPage } from './EnhancedTenantsPage';
 import { TenantForm } from '@/components/TenantForm';
 import { useTenantNotifications } from '@/hooks/useTenantNotifications';
-import type { Tenant } from '@/types/tenant';
+import type { Tenant, CreateTenantDTO, UpdateTenantDTO } from '@/types/tenant';
 import { tenantService } from '@/services/api';
 import { isApiSuccess } from '@/types/api';
 
@@ -118,14 +118,14 @@ export const TenantManagementPage: React.FC = () => {
 
   // Handle form submission
   const handleFormSubmit = useCallback(
-    async (values: any) => {
+    async (values: CreateTenantDTO | UpdateTenantDTO) => {
       try {
         let result;
 
         if (editingTenant) {
-          result = await tenantService.update(editingTenant.id, values);
+          result = await tenantService.update(editingTenant.id, values as UpdateTenantDTO);
         } else {
-          result = await tenantService.create(values);
+          result = await tenantService.create(values as CreateTenantDTO);
         }
 
         if (result.isErr()) {

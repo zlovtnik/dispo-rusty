@@ -13,11 +13,18 @@ interface LogEntry {
   url?: string;
 }
 
+/**
+ * Logger class for structured logging with production monitoring support
+ */
 class Logger {
   private isProduction = import.meta.env.PROD;
   private logs: LogEntry[] = [];
   private config: LoggerConfig;
 
+  /**
+   * Creates a new Logger instance
+   * @param config - Configuration options for the logger
+   */
   constructor(config: LoggerConfig = {}) {
     this.config = {
       captureUserAgent: false,
@@ -84,14 +91,29 @@ class Logger {
     }
   }
 
+  /**
+   * Log an info message
+   * @param message - The message to log
+   * @param data - Optional additional data to include
+   */
   info(message: string, data?: any) {
     this.log('info', message, data);
   }
 
+  /**
+   * Log a warning message
+   * @param message - The message to log
+   * @param data - Optional additional data to include
+   */
   warn(message: string, data?: any) {
     this.log('warn', message, data);
   }
 
+  /**
+   * Log an error message
+   * @param message - The message to log
+   * @param data - Optional additional data to include
+   */
   error(message: string, data?: any) {
     this.log('error', message, data);
   }
@@ -119,6 +141,33 @@ class Logger {
         headers: {
           'Content-Type': 'application/json',
         },
+      
+        /**
+         * @deprecated Use performanceMonitor.mark and performanceMonitor.measure instead.
+         * Starts a timing measurement (deprecated).
+         * @param name - Name of the timing
+         */
+        startTiming(name: string) {
+          console.warn(
+            '[DEPRECATED] performanceMonitor.startTiming is deprecated. Use performanceMonitor.mark and performanceMonitor.measure instead.'
+          );
+          this.mark(`start-${name}`);
+        },
+      
+        /**
+         * @deprecated Use performanceMonitor.mark and performanceMonitor.measure instead.
+         * Ends a timing measurement and logs the duration (deprecated).
+         * @param name - Name of the timing
+         */
+        endTiming(name: string) {
+          console.warn(
+            '[DEPRECATED] performanceMonitor.endTiming is deprecated. Use performanceMonitor.mark and performanceMonitor.measure instead.'
+          );
+          const startMark = `start-${name}`;
+          const endMark = `end-${name}`;
+          this.mark(endMark);
+          this.measure(name, startMark, endMark);
+        },
         body: JSON.stringify(entry),
       }).catch(error => {
         console.error('Failed to send log:', error);
@@ -129,7 +178,11 @@ class Logger {
     }
   }
 
-  // Get recent logs (for debugging)
+  /**
+   * Get recent logs for debugging (development only)
+   * @param limit - Maximum number of logs to return
+   * @returns Array of recent log entries
+   */
   getRecentLogs(limit = 50): LogEntry[] {
     if (this.isProduction) {
       // In production, we don't expose logs for security
@@ -138,7 +191,9 @@ class Logger {
     return this.logs.slice(-limit);
   }
 
-  // Clear logs
+  /**
+   * Clear stored logs
+   */
   clearLogs() {
     this.logs = [];
     if (this.isProduction) {
@@ -146,7 +201,10 @@ class Logger {
     }
   }
 
-  // Public static getter for environment detection (used by module-level utilities)
+  /**
+   * Check if running in production environment
+   * @returns true if in production
+   */
   static isProduction(): boolean {
     return import.meta.env.PROD;
   }
@@ -199,6 +257,9 @@ if (typeof window !== 'undefined') {
   });
 }
 
+/**
+ * Global logger instance for application-wide logging
+ */
 export const logger = new Logger();
 
 // Environment configuration for address parsing logger
@@ -210,30 +271,48 @@ const debugEnabled = import.meta.env.VITE_DEBUG_ADDRESS_PARSING === 'true';
  */
 const shouldLog = (): boolean => !Logger.isProduction() || debugEnabled;
 
-// Specialized logger for address parsing that respects VITE_DEBUG_ADDRESS_PARSING env var
+/**
+ * Specialized logger for address parsing operations that respects VITE_DEBUG_ADDRESS_PARSING environment variable
+ */
 export const addressParsingLogger = {
-  // Debug: For detailed tracing of address parsing steps and intermediate values
+  /**
+   * Log debug information for address parsing steps and intermediate values
+   * @param message - Debug message
+   * @param data - Optional additional data
+   */
   debug(message: string, data?: any) {
     if (shouldLog()) {
       logger.info(`[DEBUG] ${message}`, data);
     }
   },
 
-  // Info: For general information about address parsing operations and successful outcomes
+  /**
+   * Log general information about address parsing operations
+   * @param message - Info message
+   * @param data - Optional additional data
+   */
   info(message: string, data?: any) {
     if (shouldLog()) {
       logger.info(message, data);
     }
   },
 
-  // Warn: For non-critical issues during address parsing that don't prevent completion
+  /**
+   * Log warnings for non-critical issues during address parsing
+   * @param message - Warning message
+   * @param data - Optional additional data
+   */
   warn(message: string, data?: any) {
     if (shouldLog()) {
       logger.warn(message, data);
     }
   },
 
-  // Error: For critical failures in address parsing that prevent successful completion
+  /**
+   * Log critical errors in address parsing that prevent successful completion
+   * @param message - Error message
+   * @param data - Optional additional data
+   */
   error(message: string, data?: any) {
     // Always emit critical errors in production
     logger.error(message, data);
@@ -241,14 +320,26 @@ export const addressParsingLogger = {
   },
 };
 
-// Performance monitoring
+/**
+ * Performance monitoring utilities for measuring execution times
+ */
 export const performanceMonitor = {
+  /**
+   * Mark a performance point in time
+   * @param name - Name of the performance mark
+   */
   mark(name: string) {
     if (typeof window !== 'undefined' && 'performance' in window && performance.mark) {
       performance.mark(name);
     }
   },
 
+  /**
+   * Measure the duration between two performance marks
+   * @param name - Name for the measurement
+   * @param startMark - Starting performance mark
+   * @param endMark - Ending performance mark
+   */
   measure(name: string, startMark?: string, endMark?: string) {
     if (
       typeof window !== 'undefined' &&
@@ -270,14 +361,5 @@ export const performanceMonitor = {
         logger.warn(`Failed to measure performance: ${name}`, error);
       }
     }
-  },
-
-  startTiming(name: string) {
-    this.mark(`${name}-start`);
-  },
-
-  endTiming(name: string) {
-    this.mark(`${name}-end`);
-    this.measure(name, `${name}-start`, `${name}-end`);
   },
 };

@@ -45,7 +45,7 @@ interface SecurityLogger {
     reason: string,
     metadata?: Record<string, unknown>
   ) => void;
-  incrementMetric: (metricName: string, tags?: Record<string, string>) => void;
+  incrementMetric?: (metricName: string, tags?: Record<string, string>) => void;
 }
 
 /**

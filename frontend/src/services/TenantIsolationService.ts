@@ -102,7 +102,7 @@ function validateOrderDirection(direction: string): 'ASC' | 'DESC' {
   if (upper !== 'ASC' && upper !== 'DESC') {
     throw new Error('Order direction must be ASC or DESC');
   }
-  return upper as 'ASC' | 'DESC';
+  return upper;
 }
 
 /**
@@ -117,6 +117,10 @@ export class TenantIsolationService {
     // Private constructor for singleton pattern
   }
 
+  /**
+   * Get singleton instance of TenantIsolationService
+   * @returns The singleton instance
+   */
   static getInstance(): TenantIsolationService {
     if (!TenantIsolationService.instance) {
       TenantIsolationService.instance = new TenantIsolationService();
@@ -179,11 +183,13 @@ export class TenantIsolationService {
         // Mock query execution
         console.log(`Executing query for tenant ${config.tenantId}:`, sql, params);
       },
-      transaction: async <T>(callback: (conn: DatabaseConnection) => Promise<T>): Promise<T> => {
-        // Mock transaction
+      transaction: async function <T>(
+        this: DatabaseConnection,
+        callback: (conn: DatabaseConnection) => Promise<T>
+      ): Promise<T> {
+        // Mock transaction - pass the actual connection object to callback
         console.log(`Starting transaction for tenant ${config.tenantId}`);
-        const mockConn = this as unknown as DatabaseConnection;
-        const result = await callback(mockConn);
+        const result = await callback(this);
         console.log(`Committing transaction for tenant ${config.tenantId}`);
         return result;
       },
@@ -195,13 +201,15 @@ export class TenantIsolationService {
 
   /**
    * Register tenant database configuration
+   * @param config - The database configuration for the tenant
    */
   registerTenantDatabase(config: TenantDatabaseConfig): void {
     this.connectionConfigs.set(config.tenantId, config);
   }
 
   /**
-   * Remove tenant database configuration
+   * Remove tenant database configuration and close connection if exists
+   * @param tenantId - The tenant ID to unregister
    */
   unregisterTenantDatabase(tenantId: string): void {
     this.connectionConfigs.delete(tenantId);
@@ -222,7 +230,9 @@ export class TenantIsolationService {
       const context = tenantContextService.getTenantContext();
       if (!context) {
         return err(
-          createBusinessLogicError('No tenant context available', undefined, { code: 'NO_TENANT_CONTEXT' })
+          createBusinessLogicError('No tenant context available', undefined, {
+            code: 'NO_TENANT_CONTEXT',
+          })
         );
       }
 
@@ -237,7 +247,10 @@ export class TenantIsolationService {
       return ok(results);
     } catch (error) {
       return err(
-        createNetworkError('Failed to execute tenant query', undefined, { code: 'QUERY_FAILED', cause: error })
+        createNetworkError('Failed to execute tenant query', undefined, {
+          code: 'QUERY_FAILED',
+          cause: error,
+        })
       );
     }
   }
@@ -252,7 +265,9 @@ export class TenantIsolationService {
       const context = tenantContextService.getTenantContext();
       if (!context) {
         return err(
-          createBusinessLogicError('No tenant context available', undefined, { code: 'NO_TENANT_CONTEXT' })
+          createBusinessLogicError('No tenant context available', undefined, {
+            code: 'NO_TENANT_CONTEXT',
+          })
         );
       }
 
@@ -293,7 +308,9 @@ export class TenantIsolationService {
       const context = tenantContextService.getTenantContext();
       if (!context) {
         return err(
-          createBusinessLogicError('No tenant context available', undefined, { code: 'NO_TENANT_CONTEXT' })
+          createBusinessLogicError('No tenant context available', undefined, {
+            code: 'NO_TENANT_CONTEXT',
+          })
         );
       }
 
@@ -355,7 +372,9 @@ export class TenantIsolationService {
       const context = tenantContextService.getTenantContext();
       if (!context) {
         return err(
-          createBusinessLogicError('No tenant context available', undefined, { code: 'NO_TENANT_CONTEXT' })
+          createBusinessLogicError('No tenant context available', undefined, {
+            code: 'NO_TENANT_CONTEXT',
+          })
         );
       }
 
@@ -420,7 +439,9 @@ export class TenantIsolationService {
       const context = tenantContextService.getTenantContext();
       if (!context) {
         return err(
-          createBusinessLogicError('No tenant context available', undefined, { code: 'NO_TENANT_CONTEXT' })
+          createBusinessLogicError('No tenant context available', undefined, {
+            code: 'NO_TENANT_CONTEXT',
+          })
         );
       }
 
@@ -455,7 +476,9 @@ export class TenantIsolationService {
 
       if (result.value.length === 0) {
         return err(
-          createBusinessLogicError('Record not found or access denied', undefined, { code: 'NOT_FOUND' })
+          createBusinessLogicError('Record not found or access denied', undefined, {
+            code: 'NOT_FOUND',
+          })
         );
       }
 
@@ -488,7 +511,9 @@ export class TenantIsolationService {
       const context = tenantContextService.getTenantContext();
       if (!context) {
         return err(
-          createBusinessLogicError('No tenant context available', undefined, { code: 'NO_TENANT_CONTEXT' })
+          createBusinessLogicError('No tenant context available', undefined, {
+            code: 'NO_TENANT_CONTEXT',
+          })
         );
       }
 
@@ -523,7 +548,9 @@ export class TenantIsolationService {
       const context = tenantContextService.getTenantContext();
       if (!context) {
         return err(
-          createBusinessLogicError('No tenant context available', undefined, { code: 'NO_TENANT_CONTEXT' })
+          createBusinessLogicError('No tenant context available', undefined, {
+            code: 'NO_TENANT_CONTEXT',
+          })
         );
       }
 
@@ -558,7 +585,9 @@ export class TenantIsolationService {
       const context = tenantContextService.getTenantContext();
       if (!context) {
         return err(
-          createBusinessLogicError('No tenant context available', undefined, { code: 'NO_TENANT_CONTEXT' })
+          createBusinessLogicError('No tenant context available', undefined, {
+            code: 'NO_TENANT_CONTEXT',
+          })
         );
       }
 
@@ -587,7 +616,7 @@ export class TenantIsolationService {
   }
 
   /**
-   * Close all connections
+   * Close all database connections
    */
   async closeAllConnections(): Promise<void> {
     const promises = Array.from(this.connections.values()).map(conn => conn.close());

@@ -75,7 +75,12 @@ export const TenantSwitcher: React.FC<TenantSwitcherProps> = ({
     if (stored) {
       try {
         const recent = JSON.parse(stored);
-        setRecentTenants(recent);
+        // Convert date strings back to Date objects
+        const parsedRecent = recent.map((item: any) => ({
+          ...item,
+          lastAccessed: item.lastAccessed ? new Date(item.lastAccessed) : undefined,
+        })).filter((item: any) => item.tenant && item.lastAccessed instanceof Date);
+        setRecentTenants(parsedRecent);
       } catch (error) {
         console.error('Failed to load recent tenants:', error);
       }
@@ -85,7 +90,11 @@ export const TenantSwitcher: React.FC<TenantSwitcherProps> = ({
     if (storedFavorites) {
       try {
         const favorites = JSON.parse(storedFavorites);
-        setFavoriteTenants(favorites);
+        // Ensure favorites is an array of strings
+        const parsedFavorites = Array.isArray(favorites)
+          ? favorites.filter((id: any) => typeof id === 'string')
+          : [];
+        setFavoriteTenants(parsedFavorites);
       } catch (error) {
         console.error('Failed to load favorite tenants:', error);
       }
@@ -101,13 +110,12 @@ export const TenantSwitcher: React.FC<TenantSwitcherProps> = ({
       tenant =>
         tenant.name.toLowerCase().includes(term) ||
         tenant.id.toLowerCase().includes(term) ||
-        (tenant.db_url && tenant.db_url.toLowerCase().includes(term))
+        (tenant.db_url?.toLowerCase().includes(term) ?? false)
     );
   }, [tenants, searchTerm]);
 
   // Get tenant status
   const getTenantStatus = useCallback((tenant: Tenant) => {
-    if (!tenant.isActive) return { color: 'red', text: 'Inactive' };
     if (!tenant.db_url || tenant.db_url.trim() === '')
       return { color: 'orange', text: 'No Database' };
     return { color: 'green', text: 'Active' };
