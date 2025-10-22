@@ -459,7 +459,7 @@ export const TenantDashboard: React.FC<TenantDashboardProps> = ({
       <DatabaseManagementModal
         isOpen={isDatabaseModalOpen}
         onClose={handleCloseDatabaseManagement}
-        tenants={tenants as unknown}
+        tenants={tenants}
         onRefresh={onRefresh}
       />
     </div>

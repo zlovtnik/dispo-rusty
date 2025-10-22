@@ -232,7 +232,7 @@ export class TenantIsolationService {
 
       // Add filters
       for (const [key, value] of Object.entries(filters)) {
-        sql += ` AND ${key} = $${paramIndex}`;
+        sql += ` AND ${key} = $${paramIndex.toString()}`;
         params.push(value);
         paramIndex++;
       }
@@ -244,13 +244,13 @@ export class TenantIsolationService {
 
       // Add pagination
       if (options.limit) {
-        sql += ` LIMIT $${paramIndex}`;
+        sql += ` LIMIT $${paramIndex.toString()}`;
         params.push(options.limit);
         paramIndex++;
       }
 
       if (options.offset) {
-        sql += ` OFFSET $${paramIndex}`;
+        sql += ` OFFSET $${paramIndex.toString()}`;
         params.push(options.offset);
       }
 
@@ -291,7 +291,7 @@ export class TenantIsolationService {
       // Build insert query
       const columns = Object.keys(dataWithTenant);
       const values = Object.values(dataWithTenant);
-      const placeholders = values.map((_, index) => `$${index + 1}`).join(', ');
+      const placeholders = values.map((_, index) => `$${(index + 1).toString()}`).join(', ');
 
       const sql = `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${placeholders}) RETURNING *`;
 
@@ -336,9 +336,11 @@ export class TenantIsolationService {
       // Build update query
       const columns = Object.keys(dataWithUpdate);
       const values = Object.values(dataWithUpdate);
-      const setClause = columns.map((col, index) => `${col} = $${index + 1}`).join(', ');
+      const setClause = columns
+        .map((col, index) => `${col} = $${(index + 1).toString()}`)
+        .join(', ');
 
-      const sql = `UPDATE ${table} SET ${setClause} WHERE id = $${values.length + 1} AND tenant_id = $${values.length + 2} RETURNING *`;
+      const sql = `UPDATE ${table} SET ${setClause} WHERE id = $${(values.length + 1).toString()} AND tenant_id = $${(values.length + 2).toString()} RETURNING *`;
       const params = [...values, id, context.tenant.id];
 
       const result = await this.executeTenantQuery<T>(sql, params);

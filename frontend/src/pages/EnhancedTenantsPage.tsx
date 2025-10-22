@@ -79,7 +79,10 @@ export const EnhancedTenantsPage: React.FC = () => {
       performance.endTimer();
 
       if (result.isErr()) {
-        throw new Error(result.error.message ?? 'Search failed');
+        const error = result.error;
+        const message =
+          'message' in error ? error.message : 'reason' in error ? error.reason : 'Search failed';
+        throw new Error(message);
       }
 
       return result.value;
@@ -173,7 +176,7 @@ export const EnhancedTenantsPage: React.FC = () => {
 
   // Load tenants on mount
   useEffect(() => {
-    const loadTenantsAsync = async () => {
+    const loadTenantsAsync = async (): Promise<void> => {
       await loadTenants();
     };
     void loadTenantsAsync();

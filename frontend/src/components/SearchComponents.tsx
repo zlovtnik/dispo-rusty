@@ -256,7 +256,7 @@ export const SmartSearchInput: React.FC<SmartSearchInputProps> = ({
         >
           {suggestions.map((suggestion, index) => (
             <div
-              key={`suggestion-${index}`}
+              key={`suggestion-${index.toString()}`}
               role="option"
               aria-selected={index === highlightedIndex}
               style={{
@@ -699,7 +699,9 @@ export const SearchResults: React.FC<SearchResultsProps<unknown>> = ({
             }}
             showSizeChanger
             showQuickJumper
-            showTotal={(total, range) => `${range[0]}-${range[1]} of ${total} items`}
+            showTotal={(total, range) =>
+              `${range[0].toString()}-${range[1].toString()} of ${total.toString()} items`
+            }
           />
         </div>
       )}

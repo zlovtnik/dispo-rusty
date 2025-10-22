@@ -37,6 +37,7 @@ export type SearchServiceError =
 /**
  * Search operator implementations
  */
+// eslint-disable-next-line @typescript-eslint/no-extraneous-class
 export class SearchOperators {
   static contains(value: string, searchTerm: string, caseSensitive = false): boolean {
     if (value === null || value === undefined || searchTerm === null || searchTerm === undefined) {
@@ -89,7 +90,7 @@ export class SearchOperators {
     return value >= range[0] && value <= range[1];
   }
 
-  static in(value: string | number, searchTerms: (string | number | null)[]): boolean {
+  static isIn(value: string | number, searchTerms: (string | number | null)[]): boolean {
     return searchTerms.includes(value);
   }
 
@@ -345,7 +346,7 @@ export class GenericSearchService<T> {
             if (validValues.length === 0) {
               return false;
             }
-            return SearchOperators.in(value as string | number, validValues);
+            return SearchOperators.isIn(value as string | number, validValues);
           }
           return false;
         case 'notIn':
@@ -542,6 +543,7 @@ export class TenantSearchService extends GenericSearchService<Tenant> {
 /**
  * Search service factory
  */
+// eslint-disable-next-line @typescript-eslint/no-extraneous-class
 export class SearchServiceFactory {
   static createContactService(contacts: Contact[]): ContactSearchService {
     return new ContactSearchService(contacts);
@@ -559,6 +561,7 @@ export class SearchServiceFactory {
 /**
  * Search performance utilities
  */
+// eslint-disable-next-line @typescript-eslint/no-extraneous-class
 export class SearchPerformanceUtils {
   /**
    * Measure search performance
@@ -580,12 +583,13 @@ export class SearchPerformanceUtils {
 
     return { result, time, isSlow };
   }
+
   static batchSearch<T>(searches: (() => T)[], batchSize = 10): Promise<T[]> {
     return new Promise((resolve, reject) => {
       const results: T[] = [];
       let index = 0;
 
-      const processBatch = () => {
+      const processBatch = (): void => {
         try {
           const batch = searches.slice(index, index + batchSize);
           const batchResults = batch.map(search => search());

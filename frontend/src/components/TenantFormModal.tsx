@@ -7,7 +7,7 @@ import React from 'react';
 import { Modal, Form, Input, Button, Space } from 'antd';
 import type { FormInstance } from 'antd';
 
-import type { Tenant } from '@/types/auth';
+import type { Tenant } from '@/types/tenant';
 
 interface TenantFormModalProps {
   isOpen: boolean;

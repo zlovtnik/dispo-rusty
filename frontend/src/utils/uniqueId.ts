@@ -26,7 +26,7 @@ export const createUniqueIdGenerator = () => {
     const increment = ++counter;
 
     // Use a combination that's highly unlikely to collide
-    return `${timestamp}-${increment}-${Math.random().toString(36).substring(2, 15)}`;
+    return `${timestamp.toString()}-${increment.toString()}-${Math.random().toString(36).substring(2, 15)}`;
   };
 };
 
@@ -62,7 +62,7 @@ export const testUniqueIdGeneration = (count = 1000): string[] => {
   for (let i = 0; i < count; i++) {
     const id = generator();
     if (ids.has(id)) {
-      throw new Error(`Collision detected at iteration ${i}: ${id}`);
+      throw new Error(`Collision detected at iteration ${i.toString()}: ${id}`);
     }
     ids.add(id);
   }
