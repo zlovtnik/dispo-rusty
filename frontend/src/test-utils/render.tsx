@@ -283,25 +283,25 @@ export function renderWithoutAuth(ui: ReactElement, options?: CustomRenderOption
  * @returns Render result with location tracking
  */
 export function renderWithAuthAndNavigation(ui: ReactElement, options?: CustomRenderOptions) {
+  let capturedLocation: { pathname: string } = { pathname: options?.initialRoute ?? '/' };
+
+  // Memoize the location change handler to prevent dependency issues in LocationTracker
+  const handleLocationChange = React.useCallback((location: { pathname: string }) => {
+    capturedLocation = location;
+  }, []);
+
   const LocationTracker: React.FC<{
     children: React.ReactNode;
-    onLocationChange: (location: { pathname: string }) => void;
-  }> = ({ children, onLocationChange }) => {
+  }> = ({ children }) => {
     const location = useLocation();
     React.useEffect(() => {
-      onLocationChange(location);
-    }, [location, onLocationChange]);
+      handleLocationChange(location);
+    }, [location, handleLocationChange]);
     return <>{children}</>;
   };
 
-  let capturedLocation: { pathname: string } = { pathname: options?.initialRoute ?? '/' };
-
-  const handleLocationChange = (location: { pathname: string }) => {
-    capturedLocation = location;
-  };
-
   const renderResult = renderWithProviders(
-    <LocationTracker onLocationChange={handleLocationChange}>{ui}</LocationTracker>,
+    <LocationTracker>{ui}</LocationTracker>,
     {
       ...options,
       authValue: {

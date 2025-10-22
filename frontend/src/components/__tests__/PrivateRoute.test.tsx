@@ -64,9 +64,9 @@ describe('PrivateRoute Component', () => {
           const locationDisplay = screen.getByTestId('location-display');
           expect(locationDisplay.textContent).toContain('/login');
         },
-        { timeout: 5000 }
+        { timeout: 2000 }
       );
-    });
+    }, 10000);
 
     it('should display loading state while checking authentication', () => {
       const testContent = 'Protected Content';
@@ -145,9 +145,9 @@ describe('PrivateRoute Component', () => {
           const locationDisplay = screen.getByTestId('location-display');
           expect(locationDisplay.textContent).toContain('/login');
         },
-        { timeout: 5000 }
+        { timeout: 2000 }
       );
-    });
+    }, 10000);
 
     it('should pass location state for redirect', async () => {
       const { rerenderWithAuth } = renderWithAuth(
@@ -180,7 +180,7 @@ describe('PrivateRoute Component', () => {
           const locationDisplay = screen.getByTestId('location-display');
           expect(locationDisplay.textContent).toContain('/login');
         },
-        { timeout: 5000 }
+        { timeout: 2000 }
       );
     });
 
@@ -215,7 +215,7 @@ describe('PrivateRoute Component', () => {
           const locationDisplay = screen.getByTestId('location-display');
           expect(locationDisplay.textContent).toContain('/login');
         },
-        { timeout: 5000 }
+        { timeout: 2000 }
       );
     });
   });
@@ -249,7 +249,7 @@ describe('PrivateRoute Component', () => {
           const locationDisplay = screen.getByTestId('location-display');
           expect(locationDisplay.textContent).toContain('/login');
         },
-        { timeout: 5000 }
+        { timeout: 2000 }
       );
     });
 
@@ -284,7 +284,7 @@ describe('PrivateRoute Component', () => {
           const locationDisplay = screen.getByTestId('location-display');
           expect(locationDisplay.textContent).toContain('/login');
         },
-        { timeout: 5000 }
+        { timeout: 2000 }
       );
     });
 
@@ -319,7 +319,7 @@ describe('PrivateRoute Component', () => {
           const locationDisplay = screen.getByTestId('location-display');
           expect(locationDisplay.textContent).toContain('/login');
         },
-        { timeout: 5000 }
+        { timeout: 2000 }
       );
     });
   });
@@ -382,7 +382,7 @@ describe('PrivateRoute Component', () => {
           const locationDisplay = screen.getByTestId('location-display');
           expect(locationDisplay.textContent).toContain('/login');
         },
-        { timeout: 5000 }
+        { timeout: 2000 }
       );
     });
   });
@@ -531,7 +531,7 @@ describe('PrivateRoute Component', () => {
           const locationDisplay = screen.getByTestId('location-display');
           expect(locationDisplay.textContent).toContain('/login');
         },
-        { timeout: 5000 }
+        { timeout: 2000 }
       );
     });
   });
