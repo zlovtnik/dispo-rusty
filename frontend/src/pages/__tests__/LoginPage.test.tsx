@@ -564,7 +564,12 @@ describe('LoginPage Component', () => {
       await user.click(submitButton);
 
       // Wait for the login call count to reach 1 (deterministic wait instead of arbitrary delay)
-      await waitFor(() => expect(loginCallCount).toBe(1), { timeout: 1000 });
+      await waitFor(
+        () => {
+          expect(loginCallCount).toBe(1);
+        },
+        { timeout: 1000 }
+      );
 
       // Verify that only one login was actually called (due to isSubmitting guard)
       expect(loginCallCount).toBe(1);

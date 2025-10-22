@@ -223,10 +223,10 @@ export function renderWithAuth(ui: ReactElement, options?: CustomRenderOptions) 
     },
   });
 
-  // Enhanced rerender function that supports updating auth values
+  // Enhanced rerender function for updating rendered components
   // Note: This is limited in functionality since we can't rerender with a different Router
   // without violating React Router's single Router constraint
-  const rerenderWithAuth = (newUi: ReactElement, newOptions?: CustomRenderOptions) => {
+  const rerenderWithAuth = (newUi: ReactElement) => {
     // Just rerender the component without changing providers
     // This is mainly useful for testing prop changes, not auth state changes
     renderResult.rerender(newUi);
@@ -288,22 +288,19 @@ export function renderWithAuthAndNavigation(ui: ReactElement, options?: CustomRe
     const location = useLocation();
     React.useEffect(() => {
       handleLocationChange(location);
-    }, [location.pathname]);
+    }, [location]);
     return <>{children}</>;
   };
 
-  const renderResult = renderWithProviders(
-    <LocationTracker>{ui}</LocationTracker>,
-    {
-      ...options,
-      authValue: {
-        isAuthenticated: true,
-        user: mockUser,
-        tenant: mockTenant,
-        ...options?.authValue,
-      },
-    }
-  );
+  const renderResult = renderWithProviders(<LocationTracker>{ui}</LocationTracker>, {
+    ...options,
+    authValue: {
+      isAuthenticated: true,
+      user: mockUser,
+      tenant: mockTenant,
+      ...options?.authValue,
+    },
+  });
 
   return {
     ...renderResult,

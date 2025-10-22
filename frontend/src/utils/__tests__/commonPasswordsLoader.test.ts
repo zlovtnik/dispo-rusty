@@ -202,18 +202,17 @@ describe('CommonPasswordsLoader', () => {
       expect(status).toBeNull();
     });
 
-    it('should return cache status with config file source when loading succeeds', async () => {
+    it('should return cache status with loaded file source', async () => {
       const loader = CommonPasswordsLoader.getInstance();
       await loader.getCommonPasswords();
 
       const status = loader.getCacheStatus();
       expect(status).not.toBeNull();
       expect(status?.hasCache).toBe(true);
-      // Cache status source should either be the config file path or fallback
-      // (depends on environment - file may not be accessible during tests)
-      expect(status?.source).toBeTruthy();
-      expect(typeof status?.source).toBe('string');
-    }, { timeout: 2000 });
+      // Source should be the file path (not 'fallback')
+      expect(status?.source).toBe('/config/common-passwords.json');
+      expect(status?.version).toBeDefined();
+    });
 
     it('should return cache status with fallback source when file loading fails', async () => {
       const loader = CommonPasswordsLoader.getInstance({
