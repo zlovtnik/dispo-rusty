@@ -240,7 +240,9 @@ export const EnhancedAddressBookPage: React.FC = () => {
           searchTime: performance.getMetrics().averageSearchTime,
         });
       } catch (error) {
-        console.error('Search failed:', error);
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Search failed:', error);
+        }
         message.error('Search failed. Please try again.');
       }
     },

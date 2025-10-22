@@ -141,33 +141,6 @@ class Logger {
         headers: {
           'Content-Type': 'application/json',
         },
-      
-        /**
-         * @deprecated Use performanceMonitor.mark and performanceMonitor.measure instead.
-         * Starts a timing measurement (deprecated).
-         * @param name - Name of the timing
-         */
-        startTiming(name: string) {
-          console.warn(
-            '[DEPRECATED] performanceMonitor.startTiming is deprecated. Use performanceMonitor.mark and performanceMonitor.measure instead.'
-          );
-          this.mark(`start-${name}`);
-        },
-      
-        /**
-         * @deprecated Use performanceMonitor.mark and performanceMonitor.measure instead.
-         * Ends a timing measurement and logs the duration (deprecated).
-         * @param name - Name of the timing
-         */
-        endTiming(name: string) {
-          console.warn(
-            '[DEPRECATED] performanceMonitor.endTiming is deprecated. Use performanceMonitor.mark and performanceMonitor.measure instead.'
-          );
-          const startMark = `start-${name}`;
-          const endMark = `end-${name}`;
-          this.mark(endMark);
-          this.measure(name, startMark, endMark);
-        },
         body: JSON.stringify(entry),
       }).catch(error => {
         console.error('Failed to send log:', error);
