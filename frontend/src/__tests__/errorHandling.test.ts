@@ -494,14 +494,12 @@ describe('Network Error Handling', () => {
     });
 
     test('should handle 404 Not Found', async () => {
+      // Use a more specific handler that takes precedence (added last)
       server.use(
-        http.get(`${API_BASE_URL}/admin/tenants/nonexistent`, () => {
+        http.get('*/admin/tenants/nonexistent', () => {
           return HttpResponse.json({ message: 'Not Found' }, { status: 404 });
         })
       );
-
-      // Give the MSW handler a chance to register
-      await new Promise(resolve => setTimeout(resolve, 50));
 
       const result = await tenantService.getById('nonexistent');
 
