@@ -161,10 +161,11 @@ const looksLikeState = (segment: string): boolean => {
   const normalized = trimmed.replace(/\s+/g, '');
 
   // US state abbreviations (exactly 2 letters) - use USPS codes to avoid false positives
-  if (/^[A-Z]{2}$/.test(trimmed) && STATE_CODES.has(trimmed)) return true;
+  if (/^[A-Z]{2}$/.test(trimmed) && STATE_CODES.has(trimmed as any)) return true;
 
   // Common full state names (exact match only, not substring) - O(1) lookup with Set
-  return STATE_NAMES_SET.has(normalized);
+  // Cast is safe because we're checking existence against known state names
+  return STATE_NAMES_SET.has(normalized as any);
 };
 
 /**
@@ -177,10 +178,11 @@ const looksLikeCountry = (segment: string): boolean => {
   const normalized = trimmed.replace(/\s+/g, ' ');
 
   // ISO country codes (2-3 letters) - use whitelist to avoid false positives
-  if (/^[A-Z]{2,3}$/.test(trimmed) && COUNTRY_CODES.has(trimmed)) return true;
+  if (/^[A-Z]{2,3}$/.test(trimmed) && COUNTRY_CODES.has(trimmed as any)) return true;
 
   // Curated list of common country names (exact match only) - O(1) lookup with Set
-  return COUNTRY_NAMES_SET.has(normalized);
+  // Cast is safe because we're checking existence against known country names
+  return COUNTRY_NAMES_SET.has(normalized as any);
 };
 
 /**
