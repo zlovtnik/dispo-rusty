@@ -495,8 +495,9 @@ describe('Network Error Handling', () => {
 
     test('should handle 404 Not Found', async () => {
       // Use a more specific handler that takes precedence (added last)
+      // Important: Use the full API_BASE_URL pattern to ensure MSW matches correctly in all environments
       server.use(
-        http.get('*/admin/tenants/nonexistent', () => {
+        http.get(`${API_BASE_URL}/admin/tenants/nonexistent`, () => {
           return HttpResponse.json({ message: 'Not Found' }, { status: 404 });
         })
       );
