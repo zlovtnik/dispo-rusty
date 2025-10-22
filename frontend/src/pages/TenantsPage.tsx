@@ -442,16 +442,16 @@ export const TenantsPage: React.FC = () => {
       render: (dbUrl: string) => {
         const masked = formatDbUrl(dbUrl);
         return (
-        <span
-          title={masked}
-          style={{
-            fontSize: '12px',
-            color: 'var(--tertiary-600)',
-            fontFamily: 'monospace',
-          }}
-        >
-          {masked.length > 30 ? masked.substring(0, 27) + '...' : masked}
-        </span>
+          <span
+            title={masked}
+            style={{
+              fontSize: '12px',
+              color: 'var(--tertiary-600)',
+              fontFamily: 'monospace',
+            }}
+          >
+            {masked.length > 30 ? masked.substring(0, 27) + '...' : masked}
+          </span>
         );
       },
     },

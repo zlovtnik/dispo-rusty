@@ -281,7 +281,7 @@ export const AddressBookPage: React.FC = () => {
       return;
     }
 
-    const data = apiResponse.data as ContactListResponse;
+    const data = apiResponse.data;
     const records = Array.isArray(data?.contacts) ? data.contacts : [];
     const transformedContacts = records.map(personToContact);
     setContacts(transformedContacts);
@@ -520,7 +520,8 @@ export const AddressBookPage: React.FC = () => {
       page: params.page || 1,
       limit: params.limit || 10,
       search: searchTerm,
-      ...(params.sortField && params.sortOrder && { sort: `${params.sortField},${params.sortOrder}` }),
+      ...(params.sortField &&
+        params.sortOrder && { sort: `${params.sortField},${params.sortOrder}` }),
     };
     const result = await addressBookService.getAll(fullParams);
 
@@ -542,7 +543,7 @@ export const AddressBookPage: React.FC = () => {
       return;
     }
 
-    const data = apiResponse.data as ContactListResponse;
+    const data = apiResponse.data;
     const records = Array.isArray(data?.contacts) ? data.contacts : [];
     const transformedContacts = records.map(personToContact);
     setContacts(transformedContacts);
