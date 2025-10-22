@@ -29,7 +29,7 @@
  * ```
  */
 
-import { type Result, ResultAsync, err, ok } from 'neverthrow';
+import { type Result, ResultAsync, err, ok, okAsync, errAsync } from 'neverthrow';
 import type { UserId, TenantId } from '../types/ids';
 import type { TokenMetadata, TenantAccess } from '../types/auth';
 import type { AppError } from '../types/errors';
@@ -448,7 +448,8 @@ export function hasTenantAccessAsync(
   tokenMetadata: TokenMetadata,
   config: AuthConfig = {}
 ): ResultAsync<boolean, AppError> {
-  return ResultAsync.fromResult(hasTenantAccess(userId, tenantId, tokenMetadata, config));
+  const result = hasTenantAccess(userId, tenantId, tokenMetadata, config);
+  return result.isOk() ? okAsync(result.value) : errAsync(result.error);
 }
 
 /**
