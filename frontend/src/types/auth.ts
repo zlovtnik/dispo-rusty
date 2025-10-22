@@ -21,6 +21,10 @@ export interface Tenant {
   logo?: string;
   settings: TenantSettings;
   subscription: TenantSubscription;
+  isActive?: boolean;
+  db_url?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface TenantSettings {
@@ -106,6 +110,23 @@ export interface Permission {
   resource: string;
   actions: ('create' | 'read' | 'update' | 'delete')[];
   conditions?: Record<string, any>;
+}
+
+export interface TokenMetadata {
+  issuedAt: number;
+  lastRevokeAt?: number;
+  isBlacklisted?: boolean;
+  tenantRole?: string;
+  permissions?: string[];
+}
+
+export interface TenantAccess {
+  userId: UserId;
+  tenantId: TenantId;
+  role: 'owner' | 'member' | 'invited';
+  status: 'active' | 'inactive' | 'suspended';
+  acceptedAt?: string;
+  permissions: string[];
 }
 
 export interface AuthContextType extends Omit<AuthState, 'refreshToken'> {

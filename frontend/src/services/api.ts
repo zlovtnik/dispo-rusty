@@ -1166,8 +1166,8 @@ export const addressBookService = {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.set('page', params.page.toString());
     if (params?.limit) queryParams.set('limit', params.limit.toString());
-    if (params?.search) queryParams.set('search', params.search);
-    if (params?.sort) queryParams.set('sort', params.sort);
+    if (params?.search != null && params.search !== '') queryParams.set('search', params.search);
+    if (params?.sort != null && params.sort !== '') queryParams.set('sort', params.sort);
 
     const query = queryParams.toString();
     return transformApiResponse(
