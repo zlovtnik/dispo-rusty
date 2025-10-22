@@ -36,6 +36,76 @@ export interface TenantDatabaseConfig {
 }
 
 /**
+ * SECURITY: Whitelisted table names to prevent SQL injection
+ * Only add tables that should be accessible through this service
+ */
+const ALLOWED_TABLES = new Set([
+  'tenant_contacts',
+  'tenant_users',
+  'tenant_audit_log',
+  'tenant_activity_log',
+  'tenant_metrics',
+  'tenant_performance',
+  'tenant_settings',
+  'tenant_features',
+]);
+
+/**
+ * SECURITY: Whitelisted column names to prevent SQL injection
+ */
+const ALLOWED_COLUMNS = new Set([
+  'id',
+  'tenant_id',
+  'user_id',
+  'first_name',
+  'last_name',
+  'email',
+  'phone',
+  'company',
+  'job_title',
+  'created_at',
+  'updated_at',
+  'is_active',
+  'status',
+  'role',
+  'name',
+  'type',
+  'value',
+  'count',
+]);
+
+/**
+ * SECURITY: Validate and sanitize table name against whitelist
+ * @throws Error if table is not in whitelist
+ */
+function validateTableName(table: string): void {
+  if (!ALLOWED_TABLES.has(table)) {
+    throw new Error(`Invalid table name: ${table}. Table must be whitelisted.`);
+  }
+}
+
+/**
+ * SECURITY: Validate and sanitize column name against whitelist
+ * @throws Error if column is not in whitelist
+ */
+function validateColumnName(column: string): void {
+  if (!ALLOWED_COLUMNS.has(column)) {
+    throw new Error(`Invalid column name: ${column}. Column must be whitelisted.`);
+  }
+}
+
+/**
+ * SECURITY: Validate order direction to prevent injection
+ */
+function validateOrderDirection(direction: string): 'ASC' | 'DESC' {
+  const upper = direction.toUpperCase();
+  if (upper !== 'ASC' && upper !== 'DESC') {
+    throw new Error('Order direction must be ASC or DESC');
+  }
+  return upper as 'ASC' | 'DESC';
+}
+
+/**
  * Tenant isolation service class
  */
 export class TenantIsolationService {
@@ -112,7 +182,8 @@ export class TenantIsolationService {
       transaction: async <T>(callback: (conn: DatabaseConnection) => Promise<T>): Promise<T> => {
         // Mock transaction
         console.log(`Starting transaction for tenant ${config.tenantId}`);
-        const result = await callback(this);
+        const mockConn = this as unknown as DatabaseConnection;
+        const result = await callback(mockConn);
         console.log(`Committing transaction for tenant ${config.tenantId}`);
         return result;
       },
@@ -151,7 +222,7 @@ export class TenantIsolationService {
       const context = tenantContextService.getTenantContext();
       if (!context) {
         return err(
-          createBusinessLogicError('No tenant context available', { code: 'NO_TENANT_CONTEXT' })
+          createBusinessLogicError('No tenant context available', undefined, { code: 'NO_TENANT_CONTEXT' })
         );
       }
 
@@ -166,7 +237,7 @@ export class TenantIsolationService {
       return ok(results);
     } catch (error) {
       return err(
-        createNetworkError('Failed to execute tenant query', { code: 'QUERY_FAILED', cause: error })
+        createNetworkError('Failed to execute tenant query', undefined, { code: 'QUERY_FAILED', cause: error })
       );
     }
   }
@@ -181,7 +252,7 @@ export class TenantIsolationService {
       const context = tenantContextService.getTenantContext();
       if (!context) {
         return err(
-          createBusinessLogicError('No tenant context available', { code: 'NO_TENANT_CONTEXT' })
+          createBusinessLogicError('No tenant context available', undefined, { code: 'NO_TENANT_CONTEXT' })
         );
       }
 
@@ -196,7 +267,7 @@ export class TenantIsolationService {
       return ok(result);
     } catch (error) {
       return err(
-        createNetworkError('Failed to execute tenant transaction', {
+        createNetworkError('Failed to execute tenant transaction', undefined, {
           code: 'TRANSACTION_FAILED',
           cause: error,
         })
@@ -206,6 +277,7 @@ export class TenantIsolationService {
 
   /**
    * Get tenant-scoped data
+   * SECURITY: Table, column, and filter names are validated against whitelists
    */
   async getTenantData<T>(
     table: string,
@@ -221,25 +293,31 @@ export class TenantIsolationService {
       const context = tenantContextService.getTenantContext();
       if (!context) {
         return err(
-          createBusinessLogicError('No tenant context available', { code: 'NO_TENANT_CONTEXT' })
+          createBusinessLogicError('No tenant context available', undefined, { code: 'NO_TENANT_CONTEXT' })
         );
       }
+
+      // SECURITY: Validate table name
+      validateTableName(table);
 
       // Build query with tenant isolation
       let sql = `SELECT * FROM ${table} WHERE tenant_id = $1`;
       const params: any[] = [context.tenant.id];
       let paramIndex = 2;
 
-      // Add filters
+      // Add filters with column validation
       for (const [key, value] of Object.entries(filters)) {
+        validateColumnName(key);
         sql += ` AND ${key} = $${paramIndex.toString()}`;
         params.push(value);
         paramIndex++;
       }
 
-      // Add ordering
+      // Add ordering with validation
       if (options.orderBy) {
-        sql += ` ORDER BY ${options.orderBy} ${options.orderDirection || 'ASC'}`;
+        validateColumnName(options.orderBy);
+        const direction = validateOrderDirection(options.orderDirection || 'ASC');
+        sql += ` ORDER BY ${options.orderBy} ${direction}`;
       }
 
       // Add pagination
@@ -257,7 +335,7 @@ export class TenantIsolationService {
       return await this.executeTenantQuery<T>(sql, params);
     } catch (error) {
       return err(
-        createNetworkError('Failed to retrieve tenant data', {
+        createNetworkError('Failed to retrieve tenant data', undefined, {
           code: 'DATA_RETRIEVAL_FAILED',
           cause: error,
         })
@@ -267,6 +345,7 @@ export class TenantIsolationService {
 
   /**
    * Insert tenant-scoped data
+   * SECURITY: Table and column names are validated
    */
   async insertTenantData<T>(
     table: string,
@@ -276,9 +355,12 @@ export class TenantIsolationService {
       const context = tenantContextService.getTenantContext();
       if (!context) {
         return err(
-          createBusinessLogicError('No tenant context available', { code: 'NO_TENANT_CONTEXT' })
+          createBusinessLogicError('No tenant context available', undefined, { code: 'NO_TENANT_CONTEXT' })
         );
       }
+
+      // SECURITY: Validate table name
+      validateTableName(table);
 
       // Add tenant_id to data
       const dataWithTenant = {
@@ -287,6 +369,11 @@ export class TenantIsolationService {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
+
+      // Validate column names
+      for (const column of Object.keys(dataWithTenant)) {
+        validateColumnName(column);
+      }
 
       // Build insert query
       const columns = Object.keys(dataWithTenant);
@@ -300,10 +387,19 @@ export class TenantIsolationService {
         return err(result.error);
       }
 
-      return ok(result.value[0]);
+      const firstValue = result.value[0];
+      if (!firstValue) {
+        return err(
+          createNetworkError('No data returned from insert', undefined, {
+            code: 'NO_DATA_RETURNED',
+          })
+        );
+      }
+
+      return ok(firstValue);
     } catch (error) {
       return err(
-        createNetworkError('Failed to insert tenant data', {
+        createNetworkError('Failed to insert tenant data', undefined, {
           code: 'DATA_INSERTION_FAILED',
           cause: error,
         })
@@ -313,6 +409,7 @@ export class TenantIsolationService {
 
   /**
    * Update tenant-scoped data
+   * SECURITY: Table and column names are validated
    */
   async updateTenantData<T>(
     table: string,
@@ -323,15 +420,23 @@ export class TenantIsolationService {
       const context = tenantContextService.getTenantContext();
       if (!context) {
         return err(
-          createBusinessLogicError('No tenant context available', { code: 'NO_TENANT_CONTEXT' })
+          createBusinessLogicError('No tenant context available', undefined, { code: 'NO_TENANT_CONTEXT' })
         );
       }
+
+      // SECURITY: Validate table name
+      validateTableName(table);
 
       // Add updated_at to data
       const dataWithUpdate = {
         ...data,
         updated_at: new Date().toISOString(),
       };
+
+      // Validate column names
+      for (const column of Object.keys(dataWithUpdate)) {
+        validateColumnName(column);
+      }
 
       // Build update query
       const columns = Object.keys(dataWithUpdate);
@@ -350,14 +455,23 @@ export class TenantIsolationService {
 
       if (result.value.length === 0) {
         return err(
-          createBusinessLogicError('Record not found or access denied', { code: 'NOT_FOUND' })
+          createBusinessLogicError('Record not found or access denied', undefined, { code: 'NOT_FOUND' })
         );
       }
 
-      return ok(result.value[0]);
+      const firstValue = result.value[0];
+      if (!firstValue) {
+        return err(
+          createNetworkError('No data returned from update', undefined, {
+            code: 'NO_DATA_RETURNED',
+          })
+        );
+      }
+
+      return ok(firstValue);
     } catch (error) {
       return err(
-        createNetworkError('Failed to update tenant data', {
+        createNetworkError('Failed to update tenant data', undefined, {
           code: 'DATA_UPDATE_FAILED',
           cause: error,
         })
@@ -367,15 +481,19 @@ export class TenantIsolationService {
 
   /**
    * Delete tenant-scoped data
+   * SECURITY: Table name is validated
    */
   async deleteTenantData(table: string, id: string): Promise<Result<void, AppError>> {
     try {
       const context = tenantContextService.getTenantContext();
       if (!context) {
         return err(
-          createBusinessLogicError('No tenant context available', { code: 'NO_TENANT_CONTEXT' })
+          createBusinessLogicError('No tenant context available', undefined, { code: 'NO_TENANT_CONTEXT' })
         );
       }
+
+      // SECURITY: Validate table name
+      validateTableName(table);
 
       const sql = `DELETE FROM ${table} WHERE id = $1 AND tenant_id = $2`;
       const params = [id, context.tenant.id];
@@ -388,7 +506,7 @@ export class TenantIsolationService {
       return ok(undefined);
     } catch (error) {
       return err(
-        createNetworkError('Failed to delete tenant data', {
+        createNetworkError('Failed to delete tenant data', undefined, {
           code: 'DATA_DELETION_FAILED',
           cause: error,
         })
@@ -398,15 +516,19 @@ export class TenantIsolationService {
 
   /**
    * Check tenant data access
+   * SECURITY: Table name is validated
    */
   async checkTenantDataAccess(table: string, id: string): Promise<Result<boolean, AppError>> {
     try {
       const context = tenantContextService.getTenantContext();
       if (!context) {
         return err(
-          createBusinessLogicError('No tenant context available', { code: 'NO_TENANT_CONTEXT' })
+          createBusinessLogicError('No tenant context available', undefined, { code: 'NO_TENANT_CONTEXT' })
         );
       }
+
+      // SECURITY: Validate table name
+      validateTableName(table);
 
       const sql = `SELECT 1 FROM ${table} WHERE id = $1 AND tenant_id = $2 LIMIT 1`;
       const params = [id, context.tenant.id];
@@ -419,7 +541,7 @@ export class TenantIsolationService {
       return ok(result.value.length > 0);
     } catch (error) {
       return err(
-        createBusinessLogicError('Failed to check tenant data access', {
+        createBusinessLogicError('Failed to check tenant data access', undefined, {
           code: 'ACCESS_CHECK_FAILED',
           cause: error,
         })
@@ -429,17 +551,18 @@ export class TenantIsolationService {
 
   /**
    * Get tenant statistics
+   * SECURITY: Only whitelisted tables are queried
    */
   async getTenantStatistics(): Promise<Result<Record<string, number>, AppError>> {
     try {
       const context = tenantContextService.getTenantContext();
       if (!context) {
         return err(
-          createBusinessLogicError('No tenant context available', { code: 'NO_TENANT_CONTEXT' })
+          createBusinessLogicError('No tenant context available', undefined, { code: 'NO_TENANT_CONTEXT' })
         );
       }
 
-      // Get counts for various tables
+      // Get counts for various tables (all whitelisted)
       const tables = ['tenant_contacts', 'tenant_users', 'tenant_audit_log'];
       const stats: Record<string, number> = {};
 
@@ -447,7 +570,7 @@ export class TenantIsolationService {
         const sql = `SELECT COUNT(*) as count FROM ${table} WHERE tenant_id = $1`;
         const result = await this.executeTenantQuery<{ count: string }>(sql, [context.tenant.id]);
 
-        if (result.isOk()) {
+        if (result.isOk() && result.value.length > 0 && result.value[0]) {
           stats[table] = parseInt(result.value[0].count);
         }
       }
@@ -455,7 +578,7 @@ export class TenantIsolationService {
       return ok(stats);
     } catch (error) {
       return err(
-        createNetworkError('Failed to get tenant statistics', {
+        createNetworkError('Failed to get tenant statistics', undefined, {
           code: 'STATISTICS_FAILED',
           cause: error,
         })

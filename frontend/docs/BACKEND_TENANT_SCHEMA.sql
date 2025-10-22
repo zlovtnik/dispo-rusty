@@ -281,9 +281,16 @@ ALTER TABLE tenant_metrics ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tenant_performance ENABLE ROW LEVEL SECURITY;
 
 -- RLS policies for tenant isolation
+-- Each policy includes USING (for SELECT) and WITH CHECK (for INSERT/UPDATE/DELETE)
+-- to prevent users from accessing or modifying data outside their tenant scope
+
 CREATE POLICY tenant_contacts_tenant_isolation ON tenant_contacts
     FOR ALL TO authenticated
     USING (tenant_id IN (
+        SELECT tenant_id FROM user_tenants 
+        WHERE user_id = current_setting('app.current_user_id')::UUID
+    ))
+    WITH CHECK (tenant_id IN (
         SELECT tenant_id FROM user_tenants 
         WHERE user_id = current_setting('app.current_user_id')::UUID
     ));
@@ -293,11 +300,19 @@ CREATE POLICY tenant_users_tenant_isolation ON tenant_users
     USING (tenant_id IN (
         SELECT tenant_id FROM user_tenants 
         WHERE user_id = current_setting('app.current_user_id')::UUID
+    ))
+    WITH CHECK (tenant_id IN (
+        SELECT tenant_id FROM user_tenants 
+        WHERE user_id = current_setting('app.current_user_id')::UUID
     ));
 
 CREATE POLICY tenant_audit_log_tenant_isolation ON tenant_audit_log
     FOR ALL TO authenticated
     USING (tenant_id IN (
+        SELECT tenant_id FROM user_tenants 
+        WHERE user_id = current_setting('app.current_user_id')::UUID
+    ))
+    WITH CHECK (tenant_id IN (
         SELECT tenant_id FROM user_tenants 
         WHERE user_id = current_setting('app.current_user_id')::UUID
     ));
@@ -307,6 +322,10 @@ CREATE POLICY tenant_activity_log_tenant_isolation ON tenant_activity_log
     USING (tenant_id IN (
         SELECT tenant_id FROM user_tenants 
         WHERE user_id = current_setting('app.current_user_id')::UUID
+    ))
+    WITH CHECK (tenant_id IN (
+        SELECT tenant_id FROM user_tenants 
+        WHERE user_id = current_setting('app.current_user_id')::UUID
     ));
 
 CREATE POLICY tenant_metrics_tenant_isolation ON tenant_metrics
@@ -314,11 +333,19 @@ CREATE POLICY tenant_metrics_tenant_isolation ON tenant_metrics
     USING (tenant_id IN (
         SELECT tenant_id FROM user_tenants 
         WHERE user_id = current_setting('app.current_user_id')::UUID
+    ))
+    WITH CHECK (tenant_id IN (
+        SELECT tenant_id FROM user_tenants 
+        WHERE user_id = current_setting('app.current_user_id')::UUID
     ));
 
 CREATE POLICY tenant_performance_tenant_isolation ON tenant_performance
     FOR ALL TO authenticated
     USING (tenant_id IN (
+        SELECT tenant_id FROM user_tenants 
+        WHERE user_id = current_setting('app.current_user_id')::UUID
+    ))
+    WITH CHECK (tenant_id IN (
         SELECT tenant_id FROM user_tenants 
         WHERE user_id = current_setting('app.current_user_id')::UUID
     ));
@@ -370,29 +397,21 @@ GROUP BY t.id, t.name, t.plan;
 -- FUNCTIONS FOR TENANT OPERATIONS
 -- =============================================
 
--- Function to create tenant-specific database
-CREATE OR REPLACE FUNCTION create_tenant_database(tenant_id UUID, db_name TEXT)
-RETURNS BOOLEAN AS $$
-DECLARE
-    sql TEXT;
-BEGIN
-    -- Create database
-    sql := format('CREATE DATABASE %I', db_name);
-    EXECUTE sql;
-    
-    -- Log the creation
-    INSERT INTO tenant_audit_log (tenant_id, action, resource_type, new_values)
-    VALUES (tenant_id, 'database_created', 'database', jsonb_build_object('db_name', db_name));
-    
-    RETURN TRUE;
-EXCEPTION
-    WHEN OTHERS THEN
-        RETURN FALSE;
-END;
-$$ LANGUAGE plpgsql;
+-- NOTE: Database creation (CREATE DATABASE) is NOT allowed within PL/pgSQL functions
+-- due to PostgreSQL transaction context limitations. Database creation must be handled
+-- at the application level using a separate database connection outside of SQL transactions.
+--
+-- Implementation pattern:
+-- 1. Application code calls backend API to create tenant
+-- 2. Backend service connects to PostgreSQL with superuser credentials
+-- 3. Executes: CREATE DATABASE name OWNER tenant_owner;
+-- 4. Then inserts tenant record in main database
+-- 5. This ensures atomic operations and proper error handling
+--
+-- See backend documentation for TenantService.createTenant() implementation
 
 -- Function to check tenant limits
-CREATE OR REPLACE FUNCTION check_tenant_limit(tenant_id UUID, resource_type VARCHAR)
+CREATE OR REPLACE FUNCTION check_tenant_limit(p_tenant_id UUID, p_resource_type VARCHAR)
 RETURNS BOOLEAN AS $$
 DECLARE
     limit_value INTEGER;
@@ -401,7 +420,7 @@ BEGIN
     SELECT tl.limit_value, tl.current_usage
     INTO limit_value, current_usage
     FROM tenant_limits tl
-    WHERE tl.tenant_id = tenant_id AND tl.resource_type = resource_type;
+    WHERE tl.tenant_id = p_tenant_id AND tl.resource_type = p_resource_type;
     
     IF limit_value IS NULL THEN
         RETURN TRUE; -- No limit set
@@ -412,27 +431,29 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Function to increment tenant usage
-CREATE OR REPLACE FUNCTION increment_tenant_usage(tenant_id UUID, resource_type VARCHAR, amount INTEGER DEFAULT 1)
+-- SECURITY: Uses parameter qualification (p_tenant_id, p_resource_type) to prevent row confusion
+CREATE OR REPLACE FUNCTION increment_tenant_usage(p_tenant_id UUID, p_resource_type VARCHAR, p_amount INTEGER DEFAULT 1)
 RETURNS BOOLEAN AS $$
 BEGIN
     UPDATE tenant_limits 
-    SET current_usage = current_usage + amount,
+    SET current_usage = current_usage + p_amount,
         updated_at = NOW()
-    WHERE tenant_id = tenant_id AND resource_type = resource_type;
+    WHERE tenant_id = p_tenant_id AND resource_type = p_resource_type;
     
     RETURN FOUND;
 END;
 $$ LANGUAGE plpgsql;
 
 -- Function to reset tenant usage (for periodic resets)
-CREATE OR REPLACE FUNCTION reset_tenant_usage(tenant_id UUID, resource_type VARCHAR)
+-- SECURITY: Uses parameter qualification (p_tenant_id, p_resource_type) to prevent row confusion
+CREATE OR REPLACE FUNCTION reset_tenant_usage(p_tenant_id UUID, p_resource_type VARCHAR)
 RETURNS BOOLEAN AS $$
 BEGIN
     UPDATE tenant_limits 
     SET current_usage = 0,
         last_reset = NOW(),
         updated_at = NOW()
-    WHERE tenant_id = tenant_id AND resource_type = resource_type;
+    WHERE tenant_id = p_tenant_id AND resource_type = p_resource_type;
     
     RETURN FOUND;
 END;

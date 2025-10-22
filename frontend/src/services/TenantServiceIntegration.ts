@@ -15,11 +15,29 @@ import { tenantHealthService } from './TenantHealthService';
 import { type useTenantNotifications } from '@/hooks/useTenantNotifications';
 
 /**
+ * SECURITY: Default no-op notification functions to prevent null reference errors
+ */
+const DEFAULT_NOTIFIER = {
+  showSuccessNotification: (title: string, message?: string) => {
+    console.info(`✓ ${title}`, message || '');
+  },
+  showErrorNotification: (title: string, message?: string) => {
+    console.error(`✗ ${title}`, message || '');
+  },
+  showInfoNotification: (title: string, message?: string) => {
+    console.info(`ℹ ${title}`, message || '');
+  },
+  showWarningNotification: (title: string, message?: string) => {
+    console.warn(`⚠ ${title}`, message || '');
+  },
+};
+
+/**
  * Comprehensive tenant service integration
  */
 export class TenantServiceIntegration {
   private static instance: TenantServiceIntegration;
-  private notifications: ReturnType<typeof useTenantNotifications> | null = null;
+  private notificationService: typeof DEFAULT_NOTIFIER | null = null;
 
   private constructor() {
     // Notifications will be initialized when needed
@@ -33,14 +51,26 @@ export class TenantServiceIntegration {
   }
 
   /**
-   * Initialize notifications (to be called from React components)
+   * SECURITY: Get notifier with fallback to default no-op functions
+   * Ensures notifications never throw errors even if not initialized
    */
-  initializeNotifications(): void {
-    if (!this.notifications) {
-      // This should be called from a React component context
-      // For now, we'll handle this differently
-      console.warn('Notifications should be initialized from React component context');
-    }
+  private getNotifier() {
+    return this.notificationService || DEFAULT_NOTIFIER;
+  }
+
+  /**
+   * Set notifications service (to be called from React components)
+   * @param notifier The notification service from useTenantNotifications hook
+   */
+  setNotifications(notifier: typeof DEFAULT_NOTIFIER): void {
+    this.notificationService = notifier;
+  }
+
+  /**
+   * Clear notifications (when component unmounts or context is lost)
+   */
+  clearNotifications(): void {
+    this.notificationService = null;
   }
 
   /**
@@ -70,7 +100,7 @@ export class TenantServiceIntegration {
         console.warn('Initial health check failed:', healthResult.error);
       }
 
-      this.notifications.showSuccessNotification(
+      this.getNotifier().showSuccessNotification(
         'Tenant Initialized',
         `Tenant "${tenant.name}" has been successfully initialized`
       );
@@ -78,7 +108,7 @@ export class TenantServiceIntegration {
       return ok(undefined);
     } catch (error) {
       return err(
-        createBusinessLogicError('Failed to initialize tenant', {
+        createBusinessLogicError('Failed to initialize tenant', undefined, {
           code: 'TENANT_INITIALIZATION_FAILED',
           cause: error,
         })
@@ -109,7 +139,7 @@ export class TenantServiceIntegration {
         console.warn('Health check failed after tenant switch:', healthResult.error);
       }
 
-      this.notifications.showInfoNotification(
+      this.getNotifier().showInfoNotification(
         'Tenant Switched',
         `Switched to tenant "${tenant.name}"`
       );
@@ -117,7 +147,7 @@ export class TenantServiceIntegration {
       return ok(undefined);
     } catch (error) {
       return err(
-        createBusinessLogicError('Failed to switch tenant', {
+        createBusinessLogicError('Failed to switch tenant', undefined, {
           code: 'TENANT_SWITCH_FAILED',
           cause: error,
         })
@@ -143,7 +173,7 @@ export class TenantServiceIntegration {
       const context = tenantContextService.getTenantContext();
       if (context?.tenant.id !== tenantId) {
         return err(
-          createBusinessLogicError('Tenant is not currently active', { code: 'TENANT_NOT_ACTIVE' })
+          createBusinessLogicError('Tenant is not currently active', undefined, { code: 'TENANT_NOT_ACTIVE' })
         );
       }
 
@@ -188,7 +218,7 @@ export class TenantServiceIntegration {
       // 3. Unregister tenant database
       tenantIsolationService.unregisterTenantDatabase(tenantId);
 
-      this.notifications.showInfoNotification(
+      this.getNotifier().showInfoNotification(
         'Tenant Cleanup',
         'Tenant resources have been cleaned up'
       );
@@ -196,7 +226,7 @@ export class TenantServiceIntegration {
       return ok(undefined);
     } catch (error) {
       return err(
-        createBusinessLogicError('Failed to cleanup tenant resources', {
+        createBusinessLogicError('Failed to cleanup tenant resources', undefined, {
           code: 'TENANT_CLEANUP_FAILED',
           cause: error,
         })
@@ -298,7 +328,7 @@ export class TenantServiceIntegration {
         console.warn('Failed to update statistics:', statsResult.error);
       }
 
-      this.notifications.showInfoNotification(
+      this.getNotifier().showInfoNotification(
         'Maintenance Complete',
         'Tenant maintenance has been completed'
       );
@@ -306,7 +336,7 @@ export class TenantServiceIntegration {
       return ok(undefined);
     } catch (error) {
       return err(
-        createBusinessLogicError('Failed to perform tenant maintenance', {
+        createBusinessLogicError('Failed to perform tenant maintenance', undefined, {
           code: 'MAINTENANCE_FAILED',
           cause: error,
         })
