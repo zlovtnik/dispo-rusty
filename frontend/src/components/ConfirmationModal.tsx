@@ -23,18 +23,18 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   allowMaskClose = false,
 }) => {
   return (
-          <Modal
-        open={isOpen}
-        title={title}
-        onOk={onConfirm}
-        onCancel={onCancel}
-        okText={confirmText}
-        cancelText={cancelText}
-        centered
-        maskClosable={allowMaskClose}
-        aria-describedby="modal-description"
-      >
-        <div id="modal-description">{message}</div>
-      </Modal>
+    <Modal
+      open={isOpen}
+      title={title}
+      onOk={onConfirm}
+      onCancel={onCancel}
+      okText={confirmText}
+      cancelText={cancelText}
+      centered
+      maskClosable={allowMaskClose}
+      aria-describedby="modal-description"
+    >
+      <div id="modal-description">{message}</div>
+    </Modal>
   );
 };

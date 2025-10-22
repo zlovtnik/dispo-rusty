@@ -140,7 +140,6 @@ describe('authService', () => {
       // - On timeout, the AbortController aborts the fetch, triggering the error handler
       //
       // For complete timeout testing, use E2E tests or integration tests in actual browsers.
-      
       // Keeping original test code for documentation purposes (see git history for previous implementation).
     });
 
@@ -210,17 +209,17 @@ describe('authService', () => {
       // The retry logic is already tested in the HttpClient tests.
       // For this test to work, we'd need to use a non-retryable error (like 401)
       // or skip the retry logic entirely.
-      
+
       localStorage.setItem('auth_token', JSON.stringify({ token: 'mock-token' }));
 
       server.use(
         http.post(`${API_BASE_URL}/auth/logout`, () => {
           return HttpResponse.json(
-            { 
-              success: false, 
+            {
+              success: false,
               message: 'Server error during logout',
-              error: { code: 'INTERNAL_SERVER_ERROR' }
-            }, 
+              error: { code: 'INTERNAL_SERVER_ERROR' },
+            },
             { status: 500 }
           );
         })
@@ -1199,7 +1198,7 @@ describe('edge cases', () => {
     const results = await Promise.all(promises);
 
     // All should complete without errors
-    results.forEach(result => {
+    results.forEach((result: any) => {
       expect(result.isOk() || result.isErr()).toBe(true);
     });
   });

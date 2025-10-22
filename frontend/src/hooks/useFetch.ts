@@ -68,10 +68,12 @@ export const sanitizeUrlForLogging = (urlStr: string): string => {
         keysToDelete.push(key);
       }
     }
-    keysToDelete.forEach(key => parsed.searchParams.delete(key));
+    keysToDelete.forEach(key => {
+      parsed.searchParams.delete(key);
+    });
 
-    // Preserve fragments (URL hash)
-    const hash = urlStr.includes('#') ? '#' + urlStr.split('#')[1] : '';
+    // Deliberately drop URL fragment to avoid leaking tokens in logs
+    const hash = '';
 
     // Return only pathname + remaining safe query params to avoid leaking origin/protocol
     return parsed.pathname + (parsed.search ? parsed.search : '') + hash;

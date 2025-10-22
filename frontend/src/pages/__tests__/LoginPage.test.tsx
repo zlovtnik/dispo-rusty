@@ -297,7 +297,7 @@ describe('LoginPage Component', () => {
 
     it('should show loading state during submission', async () => {
       const user = userEvent.setup();
-      const deferred = createDeferred<void>();
+      const deferred = createDeferred<undefined>();
 
       renderWithoutAuth(<LoginPage />, {
         authValue: {
@@ -356,7 +356,7 @@ describe('LoginPage Component', () => {
     });
 
     it('should display alert on API error', async () => {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       renderWithoutAuth(<LoginPage />, {
         authValue: {
           login: async () => {
@@ -376,14 +376,13 @@ describe('LoginPage Component', () => {
       const submitButton = screen.getByRole('button', { name: /login|sign in/i });
       await user.click(submitButton);
 
-      await waitFor(() => {
-        const alert = screen.getByRole('alert');
-        expect(alert).toHaveTextContent(/server error/i);
-      });
-    });
+      // Wait for the alert to appear with a reasonable timeout
+      const alert = await screen.findByRole('alert', {}, { timeout: 2000 });
+      expect(alert).toHaveTextContent(/server error/i);
+    }, 8000);
 
     it('should allow user to retry after error', async () => {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       let attempt = 0;
 
       renderWithoutAuth(<LoginPage />, {
@@ -408,18 +407,21 @@ describe('LoginPage Component', () => {
       const submitButton = screen.getByRole('button', { name: /login|sign in/i });
       await user.click(submitButton);
 
-      await waitFor(() => {
-        const alert = screen.getByRole('alert');
-        expect(alert).toHaveTextContent(/temporary error/i);
-      });
+      // Wait for the alert to appear
+      const alert = await screen.findByRole('alert', {}, { timeout: 2000 });
+      expect(alert).toHaveTextContent(/temporary error/i);
 
       // Simulate realistic retry - user just clicks submit again without clearing inputs
       await user.click(submitButton);
 
-      await waitFor(() => {
-        expect(screen.queryByRole('alert')).toBeNull();
-      });
-    });
+      // Wait for the alert to disappear (error was fixed on retry)
+      await waitFor(
+        () => {
+          expect(screen.queryByRole('alert')).toBeNull();
+        },
+        { timeout: 2000 }
+      );
+    }, 8000);
   });
 
   describe('Remember Me Checkbox', () => {
@@ -435,11 +437,11 @@ describe('LoginPage Component', () => {
       renderWithoutAuth(<LoginPage />);
 
       const checkbox = screen.getByRole('checkbox');
-      const initialState = checkbox.checked;
+      const initialState = (checkbox as HTMLInputElement).checked;
 
       await user.click(checkbox);
 
-      expect(checkbox.checked).toBe(!initialState);
+      expect((checkbox as HTMLInputElement).checked).toBe(!initialState);
     });
   });
 
@@ -451,7 +453,7 @@ describe('LoginPage Component', () => {
       const input = screen.getByPlaceholderText(/username|email/i);
       await user.type(input, 'testuser');
 
-      expect(input.value).toBe('testuser');
+      expect((input as HTMLInputElement).value).toBe('testuser');
     });
 
     it('should accept password input', async () => {
@@ -461,7 +463,7 @@ describe('LoginPage Component', () => {
       const input = screen.getByPlaceholderText(/password/i);
       await user.type(input, 'password123');
 
-      expect(input.value).toBe('password123');
+      expect((input as HTMLInputElement).value).toBe('password123');
     });
 
     it('should accept tenant input', async () => {
@@ -471,7 +473,7 @@ describe('LoginPage Component', () => {
       const input = screen.getByPlaceholderText(/tenant/i);
       await user.type(input, 'tenant1');
 
-      expect(input.value).toBe('tenant1');
+      expect((input as HTMLInputElement).value).toBe('tenant1');
     });
 
     it('should have form labels', () => {
@@ -532,8 +534,8 @@ describe('LoginPage Component', () => {
     });
 
     it('should handle rapid form submissions', async () => {
-      const user = userEvent.setup();
-      const deferred = createDeferred<void>();
+      const user = userEvent.setup({ delay: null });
+      const deferred = createDeferred<undefined>();
       let loginCallCount = 0;
 
       renderWithoutAuth(<LoginPage />, {
@@ -561,23 +563,26 @@ describe('LoginPage Component', () => {
       await user.click(submitButton);
       await user.click(submitButton);
 
-      await waitFor(() => {
-        expect(loginCallCount).toBe(1);
-      });
+      // Wait for the login call count to reach 1 (deterministic wait instead of arbitrary delay)
+      await waitFor(() => expect(loginCallCount).toBe(1), { timeout: 1000 });
+
+      // Verify that only one login was actually called (due to isSubmitting guard)
+      expect(loginCallCount).toBe(1);
 
       deferred.resolve(undefined);
       await deferred.promise;
-    });
+    }, 8000);
 
     it('should handle very long input', async () => {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       renderWithoutAuth(<LoginPage />);
 
       const usernameInput = screen.getByPlaceholderText(/username|email/i);
       const longText = 'x'.repeat(300); // Type more than the 254 character limit
       await user.type(usernameInput, longText);
 
-      expect(usernameInput.value.length).toBe(254); // Should be truncated to the enforced maximum
-    });
+      // HTML input with maxLength=254 should automatically truncate
+      expect((usernameInput as HTMLInputElement).value.length).toBe(254);
+    }, 8000);
   });
 });

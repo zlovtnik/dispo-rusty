@@ -224,28 +224,12 @@ export function renderWithAuth(ui: ReactElement, options?: CustomRenderOptions) 
   });
 
   // Enhanced rerender function that supports updating auth values
+  // Note: This is limited in functionality since we can't rerender with a different Router
+  // without violating React Router's single Router constraint
   const rerenderWithAuth = (newUi: ReactElement, newOptions?: CustomRenderOptions) => {
-    const mergedOptions = {
-      ...options,
-      ...newOptions,
-      authValue: {
-        isAuthenticated: true,
-        user: mockUser,
-        tenant: mockTenant,
-        ...options?.authValue,
-        ...newOptions?.authValue,
-      },
-    };
-
-    // Create a new AuthProvider wrapper that only updates the auth context
-    const AuthWrapper = ({ children }: { children: React.ReactNode }) => {
-      return <MockAuthProvider value={mergedOptions.authValue}>{children}</MockAuthProvider>;
-    };
-
-    // Use the existing renderResult.rerender to update the same tree
-    // Only wrap with the new AuthProvider, not a new Router
-    renderResult.rerender(<AuthWrapper>{newUi}</AuthWrapper>);
-    
+    // Just rerender the component without changing providers
+    // This is mainly useful for testing prop changes, not auth state changes
+    renderResult.rerender(newUi);
     return renderResult;
   };
 
@@ -283,25 +267,33 @@ export function renderWithoutAuth(ui: ReactElement, options?: CustomRenderOption
  * @returns Render result with location tracking
  */
 export function renderWithAuthAndNavigation(ui: ReactElement, options?: CustomRenderOptions) {
+  let capturedLocation: { pathname: string; search: string; hash: string } = {
+    pathname: options?.initialRoute ?? '/',
+    search: '',
+    hash: '',
+  };
+
+  // Plain function is sufficient in test util scope
+  const handleLocationChange = (location: { pathname: string; search?: string; hash?: string }) => {
+    capturedLocation = {
+      pathname: location.pathname,
+      search: location.search ?? '',
+      hash: location.hash ?? '',
+    };
+  };
+
   const LocationTracker: React.FC<{
     children: React.ReactNode;
-    onLocationChange: (location: { pathname: string }) => void;
-  }> = ({ children, onLocationChange }) => {
+  }> = ({ children }) => {
     const location = useLocation();
     React.useEffect(() => {
-      onLocationChange(location);
-    }, [location, onLocationChange]);
+      handleLocationChange(location);
+    }, [location.pathname]);
     return <>{children}</>;
   };
 
-  let capturedLocation: { pathname: string } = { pathname: options?.initialRoute ?? '/' };
-
-  const handleLocationChange = (location: { pathname: string }) => {
-    capturedLocation = location;
-  };
-
   const renderResult = renderWithProviders(
-    <LocationTracker onLocationChange={handleLocationChange}>{ui}</LocationTracker>,
+    <LocationTracker>{ui}</LocationTracker>,
     {
       ...options,
       authValue: {

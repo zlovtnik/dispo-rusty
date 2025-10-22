@@ -34,8 +34,11 @@ export const PrivateRoute: React.FC<PrivateRouteProps> = React.memo(
       // Only redirect if not already on the login page to prevent infinite redirect loops
       if (location.pathname === '/login') {
         // In tests, allow login page to be rendered without throwing errors
-        const isTestEnvironment = import.meta.env.VITEST || import.meta.env.BUN_TEST || typeof process !== 'undefined' && process.env.NODE_ENV === 'test';
-        
+        const isTestEnvironment =
+          import.meta.env.VITEST ||
+          import.meta.env.BUN_TEST ||
+          (typeof process !== 'undefined' && process.env.NODE_ENV === 'test');
+
         if (import.meta.env.DEV && !isTestEnvironment) {
           const errorMessage =
             `PrivateRoute Configuration Error: The '/login' route must not be protected by PrivateRoute. ` +

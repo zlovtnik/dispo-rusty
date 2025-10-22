@@ -520,7 +520,7 @@ export const AddressBookPage: React.FC = () => {
       page: params.page || 1,
       limit: params.limit || 10,
       search: searchTerm,
-      ...(params.sortField && { sort: `${params.sortField},${params.sortOrder}` }),
+      ...(params.sortField && params.sortOrder && { sort: `${params.sortField},${params.sortOrder}` }),
     };
     const result = await addressBookService.getAll(fullParams);
 
@@ -639,15 +639,15 @@ export const AddressBookPage: React.FC = () => {
             }}
             onChange={(pagination, filters, sorter) => {
               const sorterResult = Array.isArray(sorter) ? sorter[0] : sorter;
-              if (sorterResult && sorterResult.field && sorterResult.order) {
+              if (sorterResult?.field && sorterResult?.order) {
                 const order = sorterResult.order === 'ascend' ? 'asc' : 'desc';
                 setSorting({ field: sorterResult.field as string, order });
                 // Reload with sorting
-                loadContactsWithParams({ 
-                  page: paginationState.current, 
-                  limit: paginationState.pageSize,
+                loadContactsWithParams({
+                  page: pagination.current,
+                  limit: pagination.pageSize,
                   sortField: sorterResult.field as string,
-                  sortOrder: order
+                  sortOrder: order,
                 });
               }
             }}
@@ -705,7 +705,9 @@ export const AddressBookPage: React.FC = () => {
               type="error"
               showIcon
               closable
-              onClose={() => setFormError(null)}
+              onClose={() => {
+                setFormError(null);
+              }}
               style={{ marginBottom: 16 }}
             />
           )}

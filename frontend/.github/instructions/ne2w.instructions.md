@@ -1,6 +1,8 @@
 # Copilot Instructions for TypeScript/React Frontend with Vite, Bun, and Ant Design
 
-**Last Validated**: October 20, 2025
+**Last Validated**: October 22, 2025
+
+> ⚠️ **CRITICAL REQUIREMENT**: All tests must pass with `bun run test` before committing ANY code changes. No exceptions. This instruction applies to every modification, regardless of size or scope.
 
 ## Project Overview
 
@@ -528,18 +530,54 @@ bun run format
 bun run validate
 ```
 
-### 2. Testing
+### 2. Testing (MANDATORY - REQUIRED BEFORE ANY COMMIT)
+
+**⚠️ CRITICAL REQUIREMENT: All tests must pass before committing changes to version control.**
 
 ```bash
-# Run all tests
+# Run all tests - ALWAYS required
 bun run test
 
 # Run with coverage
 bun run test:coverage
 
-# Watch mode
+# Watch mode (for development iteration)
 bun run test:watch
 ```
+
+#### Testing Requirements Checklist
+
+Before committing **ANY** code changes:
+
+- [ ] **Run full test suite**: `bun run test` must complete with **0 failures**
+- [ ] **Verify test count**: Confirm all expected tests are running (not skipped unexpectedly)
+- [ ] **Check coverage**: Maintain at least 85%+ code coverage where possible
+- [ ] **Review failures**: If any tests fail:
+  - [ ] Investigate root cause of failure
+  - [ ] Fix the code or test (don't skip tests to hide failures)
+  - [ ] Re-run full suite to verify fix
+  - [ ] Document why the fix was needed in commit message
+
+#### Test Failure Resolution Workflow
+
+1. **Understand the failure**: Read error message carefully
+2. **Identify the scope**: Determine if failure is from:
+   - New code changes you made
+   - Existing flaky tests (environment-dependent)
+   - Test infrastructure issues
+3. **Fix the issue**:
+   - If in new code: Fix the implementation
+   - If in test: Fix the test logic or make it environment-resilient
+   - Never skip tests unless explicitly documenting the reason
+4. **Verify the fix**: Run full test suite again (`bun run test`)
+5. **Document**: Add comment explaining why the test was skipped (if necessary)
+
+#### Types of Tests
+
+- **Unit tests**: Test individual functions, hooks, utilities (src/**/*.test.ts)
+- **Integration tests**: Test API services, multiple components working together
+- **Component tests**: Test React components with user interactions
+- **Type tests**: Verify TypeScript type safety and inference
 
 ### 3. Environment Setup
 

@@ -136,7 +136,7 @@ export class ErrorBoundary extends Component<Props, State> {
   /**
    * Render error UI based on Result error type
    */
-  private renderResultError = (error: AppError) => {
+  protected renderResultError = (error: AppError) => {
     const recoveryFallback = this.runRecoveryStrategies(error);
     if (recoveryFallback) {
       return recoveryFallback;

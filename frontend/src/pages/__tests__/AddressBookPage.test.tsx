@@ -55,14 +55,14 @@ describe('AddressBookPage Utility Functions', () => {
       const normalized = { id: 'contact-123' } as any;
       const fallback = (): ContactId => asContactId('fallback');
       const result = resolveContactId(normalized, fallback);
-      expect(result).toBe('contact-123');
+      expect(result).toBe(asContactId('contact-123'));
     });
 
     it('should return number ID as string when valid', () => {
       const normalized = { id: 123 } as any;
       const fallback = (): ContactId => asContactId('fallback');
       const result = resolveContactId(normalized, fallback);
-      expect(result).toBe('123');
+      expect(result).toBe(asContactId('123'));
     });
 
     it('should return fallback when ID is invalid', () => {
@@ -233,12 +233,27 @@ describe.skip('AddressBookPage Component', () => {
 
     // Setup test-specific handlers using the global server
     server.use(
-      http.get(`${API_BASE_URL}/address-book`, () => {
+      http.get(`${API_BASE_URL}/address-book`, ({ request }) => {
+        const url = new URL(request.url);
+        const sortParam = url.searchParams.get('sort');
+        const sortedContacts = [...mockContacts];
+
+        if (sortParam) {
+          const [field, order] = sortParam.split(',');
+          if (field === 'fullName') {
+            sortedContacts.sort((a, b) => {
+              const nameA = `${a.first_name} ${a.last_name}`;
+              const nameB = `${b.first_name} ${b.last_name}`;
+              return order === 'asc' ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
+            });
+          }
+        }
+
         return HttpResponse.json({
           status: 'success',
           message: 'Contacts retrieved',
           data: {
-            contacts: mockContacts,
+            contacts: sortedContacts,
             total: mockContacts.length,
             currentPage: 1,
             totalPages: 1,
@@ -249,7 +264,7 @@ describe.skip('AddressBookPage Component', () => {
         });
       }),
 
-            http.post(`${API_BASE_URL}/address-book`, async ({ request }) => {
+      http.post(`${API_BASE_URL}/address-book`, async ({ request }) => {
         const body = (await request.json()) as {
           name?: string;
           email?: string;
@@ -530,7 +545,7 @@ describe.skip('AddressBookPage Component', () => {
 
       const addButton = screen.getByRole('button', { name: /add contact/i });
       expect(addButton).toBeInTheDocument();
-      
+
       await act(async () => {
         await user.click(addButton);
       });
@@ -622,14 +637,14 @@ describe.skip('AddressBookPage Component', () => {
       await user.type(screen.getByLabelText('Last Name'), 'Contact');
       await user.type(screen.getByLabelText('Email'), 'new@example.com');
       await user.type(screen.getByLabelText('Phone'), '555-9999');
-      
+
       // Handle gender selection - click the select to open dropdown, then click Male
       await user.click(screen.getByLabelText('Gender'));
       await waitFor(() => {
         expect(screen.getByText('Male')).toBeInTheDocument();
       });
       await user.click(screen.getByText('Male'));
-      
+
       await user.clear(screen.getByLabelText('Age'));
       await user.type(screen.getByLabelText('Age'), '25');
       await user.type(screen.getByLabelText('Street Address'), '789 New St');
@@ -808,7 +823,9 @@ describe.skip('AddressBookPage Component', () => {
       });
 
       const confirmButtons = screen.getAllByRole('button', { name: /delete/i });
-      const confirmButton = confirmButtons.find(btn => btn.getAttribute('type') === 'button' && btn.textContent?.includes('Delete'));
+      const confirmButton = confirmButtons.find(
+        btn => btn.getAttribute('type') === 'button' && btn.textContent?.includes('Delete')
+      );
       expect(confirmButton).toBeInTheDocument();
       await user.click(confirmButton!);
 
@@ -1033,7 +1050,7 @@ describe.skip('AddressBookPage Component', () => {
       await user.type(screen.getByLabelText('Last Name'), 'Contact');
       await user.type(screen.getByLabelText('Email'), 'new@example.com');
       await user.type(screen.getByLabelText('Phone'), '555-9999');
-      
+
       // Handle gender selection
       await act(async () => {
         await user.click(screen.getByLabelText('Gender'));
@@ -1044,7 +1061,7 @@ describe.skip('AddressBookPage Component', () => {
       await act(async () => {
         await user.click(screen.getByText('Male'));
       });
-      
+
       await user.clear(screen.getByLabelText('Age'));
       await user.type(screen.getByLabelText('Age'), '25');
       await user.type(screen.getByLabelText('Street Address'), '789 New St');
@@ -1166,11 +1183,13 @@ describe.skip('AddressBookPage Component', () => {
       expect(modal).toBeInTheDocument();
 
       // Use within to scope the query to the modal
-      const { getByText } = within(modal);
-      expect(getByText('Delete Contact')).toBeInTheDocument();
+      const queries = within(modal);
+      expect(queries.getByText('Delete Contact')).toBeInTheDocument();
 
       const confirmButtons = screen.getAllByRole('button', { name: /delete/i });
-      const confirmButton = confirmButtons.find(btn => btn.getAttribute('type') === 'button' && btn.textContent?.includes('Delete'));
+      const confirmButton = confirmButtons.find(
+        btn => btn.getAttribute('type') === 'button' && btn.textContent?.includes('Delete')
+      );
       expect(confirmButton).toBeInTheDocument();
       await user.click(confirmButton!);
 
@@ -1183,6 +1202,7 @@ describe.skip('AddressBookPage Component', () => {
     it('should handle network timeout', async () => {
       server.use(
         http.get(`${API_BASE_URL}/address-book`, () => {
+          // eslint-disable-next-line @typescript-eslint/no-empty-function
           return new Promise(() => {}); // Never resolves
         })
       );

@@ -5,3 +5,5 @@ preload = ["./loadenv.ts", "./happydom.ts", "./src/test-utils/setup.ts"]
 
 # Code coverage configuration
 coverage = true
+
+

@@ -171,9 +171,9 @@ describe('FormField', () => {
       // Verify the label text is present and the input is rendered
       const label = screen.getByText('Test Field');
       expect(label).toBeInTheDocument();
-      const input = screen.getByDisplayValue('') as HTMLInputElement;
+      const input = screen.getByDisplayValue('');
       expect(input).toBeDefined();
-      expect(input.name).toBe('testField');
+      expect((input as HTMLInputElement).name).toBe('testField');
     });
 
     it('renders with help text', () => {

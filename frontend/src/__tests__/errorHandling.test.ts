@@ -494,8 +494,9 @@ describe('Network Error Handling', () => {
     });
 
     test('should handle 404 Not Found', async () => {
+      // Use a more specific handler that takes precedence (added last)
       server.use(
-        http.get(`${API_BASE_URL}/admin/tenants/nonexistent`, () => {
+        http.get('*/admin/tenants/nonexistent', () => {
           return HttpResponse.json({ message: 'Not Found' }, { status: 404 });
         })
       );
@@ -655,7 +656,7 @@ describe('Error Recovery and Fallback', () => {
       // requests are retried (multiple handler calls per request due to exponential backoff).
       // This test demonstrates that the HTTP client has retry capability configured.
       // Tracked in: https://github.com/zlovtnik/actix-web-rest-api-with-jwt/issues/FRONTEND-ISSUE-001
-      
+
       let attemptCount = 0;
 
       server.use(
@@ -663,7 +664,10 @@ describe('Error Recovery and Fallback', () => {
           attemptCount++;
           if (attemptCount === 1) {
             // First attempt fails
-            return HttpResponse.json({ status: 'error', error: 'Transient error' }, { status: 500 });
+            return HttpResponse.json(
+              { status: 'error', error: 'Transient error' },
+              { status: 500 }
+            );
           }
           // Subsequent attempts succeed
           return HttpResponse.json({
@@ -678,7 +682,7 @@ describe('Error Recovery and Fallback', () => {
 
       // The request should eventually succeed after retry
       expect(result.isOk()).toBe(true);
-      
+
       // Verify handler was called more than once (indicates retries occurred)
       expect(attemptCount).toBeGreaterThan(1);
     }, 15000);
@@ -690,7 +694,7 @@ describe('Error Recovery and Fallback', () => {
       // by proper error codes being set in the API layer.
       // Fix strategy: Refactor as unit test with mocked HTTP client instead of MSW integration
       // Tracked in: https://github.com/zlovtnik/actix-web-rest-api-with-jwt/issues/FRONTEND-ISSUE-002
-      
+
       resetApiClientCircuitBreaker();
 
       let handlerCallCount = 0;
@@ -760,7 +764,7 @@ describe('Error Recovery and Fallback', () => {
       // Integration testing of circuit breaker behavior with MSW requires additional infrastructure
       // improvements to handle timing properly.
       // Tracked in: https://github.com/zlovtnik/actix-web-rest-api-with-jwt/issues/FRONTEND-ISSUE-003
-      
+
       resetApiClientCircuitBreaker();
 
       let handlerCallCount = 0;
@@ -815,7 +819,7 @@ describe('Error Recovery and Fallback', () => {
       // integration scenarios. The automatic half-open timeout transition requires
       // additional infrastructure support for proper testing with MSW.
       // Tracked in: https://github.com/zlovtnik/actix-web-rest-api-with-jwt/issues/FRONTEND-ISSUE-004
-      
+
       // Manually reset circuit breaker to test recovery behavior
       // (does not test automatic half-open timeout transition)
       resetApiClientCircuitBreaker();

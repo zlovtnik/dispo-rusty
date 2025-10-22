@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
 import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
 import { ConfirmationModal } from '@/components/ConfirmationModal';
@@ -28,6 +27,7 @@ import {
   MinusCircleOutlined,
 } from '@ant-design/icons';
 import { tenantService } from '@/services/api';
+import { isValidPostgresConnectionString } from '@/validation/schemas';
 
 /**
  * Form values for tenant creation (excluding id which is auto-generated)
@@ -37,6 +37,15 @@ type TenantFormValues = Omit<CreateTenantDTO, 'id'>;
 // Field type constants to avoid duplication
 const TEXT_FIELDS = ['id', 'name', 'db_url'] as const;
 const DATE_FIELDS = ['created_at', 'updated_at'] as const;
+
+const operatorLabels: Record<string, string> = {
+  contains: 'Contains',
+  equals: 'Equals',
+  gt: 'Greater Than',
+  gte: 'Greater or Equal',
+  lt: 'Less Than',
+  lte: 'Less or Equal',
+};
 
 export const TenantsPage: React.FC = () => {
   const [tenants, setTenants] = useState<TenantRecord[]>([]);
@@ -124,10 +133,10 @@ export const TenantsPage: React.FC = () => {
 
     try {
       if (editingTenant) {
-        // Update existing tenant
+        // Update existing tenant - omit db_url if empty to keep it optional
         const updateResult = await tenantService.update(editingTenant.id, {
           name: values.name,
-          db_url: values.db_url,
+          ...(values.db_url && { db_url: values.db_url }),
         });
         if (updateResult.isErr()) {
           throw new Error(updateResult.error.message);
@@ -375,7 +384,7 @@ export const TenantsPage: React.FC = () => {
         }));
       }
     } catch (error) {
-      message.error('Failed to filter tenants');
+      message.error(error instanceof Error ? error.message : 'Failed to filter tenants');
     } finally {
       setLoading(false);
     }
@@ -389,7 +398,7 @@ export const TenantsPage: React.FC = () => {
 
   // Format date for display
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+    return new Date(dateString).toLocaleString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -430,20 +439,21 @@ export const TenantsPage: React.FC = () => {
       key: 'db_url',
       width: 250,
       ellipsis: true,
-      render: (dbUrl: string) => (
+      render: (dbUrl: string) => {
+        const masked = formatDbUrl(dbUrl);
+        return (
         <span
-          title={dbUrl}
+          title={masked}
           style={{
             fontSize: '12px',
             color: 'var(--tertiary-600)',
             fontFamily: 'monospace',
           }}
         >
-          {formatDbUrl(dbUrl).length > 30
-            ? formatDbUrl(dbUrl).substring(0, 27) + '...'
-            : formatDbUrl(dbUrl)}
+          {masked.length > 30 ? masked.substring(0, 27) + '...' : masked}
         </span>
-      ),
+        );
+      },
     },
     {
       title: 'Created',
@@ -534,176 +544,153 @@ export const TenantsPage: React.FC = () => {
 
           {/* Search Filters */}
           <Card
-        title="Search Filters"
-        size="small"
-        style={{ borderRadius: '8px', marginTop: '16px' }}
-        data-testid="search-filters-card"
-      >
-        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-          {powerFilters.map((filter, index) => (
-            <div
-              key={index}
-              style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}
-              data-testid={`filter-row-${index}`}
-            >
-              <Select
-                style={{ width: 150 }}
-                value={filter.field}
-                onChange={value => {
-                  updateFilter(index, 'field', value);
-                }}
-                placeholder="Field"
-                data-testid={`filter-field-select-${index}`}
-              >
-                <Select.Option value="id">ID</Select.Option>
-                <Select.Option value="name">Name</Select.Option>
-                <Select.Option value="db_url">Database URL</Select.Option>
-                <Select.Option value="created_at">Created At</Select.Option>
-                <Select.Option value="updated_at">Updated At</Select.Option>
-              </Select>
-
-              <Select
-                style={{ width: 120 }}
-                value={filter.operator}
-                onChange={value => {
-                  updateFilter(index, 'operator', value);
-                }}
-                placeholder="Operator"
-                data-testid={`filter-operator-select-${index}`}
-              >
-                {getOperatorsForField(filter.field).map(operator => {
-                  const operatorLabels: Record<string, string> = {
-                    contains: 'Contains',
-                    equals: 'Equals',
-                    gt: 'Greater Than',
-                    gte: 'Greater or Equal',
-                    lt: 'Less Than',
-                    lte: 'Less or Equal',
-                  };
-                  return (
-                    <Select.Option key={operator} value={operator}>
-                      {operatorLabels[operator] ?? operator}
-                    </Select.Option>
-                  );
-                })}
-              </Select>
-
-              {isDateField(filter.field) ? (
-                <DatePicker
-                  style={{ width: 200, flex: 1, minWidth: '150px' }}
-                  placeholder="Select date"
-                  showTime
-                  allowClear
-                  value={isoToDayjs(filter.value)}
-                  onChange={(date, dateString) => {
-                    const dateStringValue = typeof dateString === 'string' ? dateString : '';
-                    if (dateStringValue && !dayjs(dateStringValue).isValid()) {
-                      // Show error
-                      message.error('Invalid date format');
-                      return;
-                    }
-                    updateFilter(index, 'value', dateStringValue || '');
-                  }}
-                  data-testid={`filter-value-date-${index}`}
-                />
-              ) : (
-                <Input
-                  style={{ width: 200, flex: 1, minWidth: '150px' }}
-                  placeholder="Value"
-                  value={filter.value}
-                  onChange={e => {
-                    updateFilter(index, 'value', e.target.value);
-                  }}
-                  data-testid={`filter-value-input-${index}`}
-                />
-              )}
-
-              <Button
-                type="text"
-                danger
-                icon={<MinusCircleOutlined />}
-                onClick={() => {
-                  removeFilter(index);
-                }}
-                disabled={powerFilters.length <= 1}
-                data-testid={`remove-filter-${index}`}
-              >
-                Remove
-              </Button>
-
-              {index === powerFilters.length - 1 && (
-                <Button
-                  type="text"
-                  icon={<PlusCircleOutlined />}
-                  onClick={addFilter}
-                  data-testid="add-filter-button"
+            title="Search Filters"
+            size="small"
+            style={{ borderRadius: '8px', marginTop: '16px' }}
+            data-testid="search-filters-card"
+          >
+            <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+              {powerFilters.map((filter, index) => (
+                <div
+                  key={index}
+                  style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}
+                  data-testid={`filter-row-${index}`}
                 >
-                  Add Filter
-                </Button>
-              )}
-            </div>
-          ))}
+                  <Select
+                    style={{ width: 150 }}
+                    value={filter.field}
+                    onChange={value => {
+                      updateFilter(index, 'field', value);
+                    }}
+                    placeholder="Field"
+                    data-testid={`filter-field-select-${index}`}
+                  >
+                    <Select.Option value="id">ID</Select.Option>
+                    <Select.Option value="name">Name</Select.Option>
+                    <Select.Option value="db_url">Database URL</Select.Option>
+                    <Select.Option value="created_at">Created At</Select.Option>
+                    <Select.Option value="updated_at">Updated At</Select.Option>
+                  </Select>
 
-          <Divider style={{ margin: '8px 0' }} />
+                  <Select
+                    style={{ width: 120 }}
+                    value={filter.operator}
+                    onChange={value => {
+                      updateFilter(index, 'operator', value);
+                    }}
+                    placeholder="Operator"
+                    data-testid={`filter-operator-select-${index}`}
+                  >
+                    {getOperatorsForField(filter.field).map(op => (
+                      <Select.Option key={op} value={op}>
+                        {operatorLabels[op] ?? op}
+                      </Select.Option>
+                    ))}
+                  </Select>
 
-          <Space>
-            <Button
-              type="primary"
-              onClick={applyFilters}
-              disabled={loading}
-              data-testid="apply-filters-button"
-            >
-              Apply Filters
-            </Button>
-            <Button onClick={clearFilters} disabled={loading} data-testid="clear-filters-button">
-              Clear All
-            </Button>
-          </Space>
+                  {isDateField(filter.field) ? (
+                    <DatePicker
+                      style={{ width: 200, flex: 1, minWidth: '150px' }}
+                      placeholder="Select date"
+                      showTime
+                      allowClear
+                      value={isoToDayjs(filter.value)}
+                      onChange={date => {
+                        if (date && date.isValid()) {
+                          const iso = date.toDate().toISOString();
+                          updateFilter(index, 'value', iso);
+                        } else {
+                          updateFilter(index, 'value', '');
+                        }
+                      }}
+                      data-testid={`filter-value-date-${index}`}
+                    />
+                  ) : (
+                    <Input
+                      style={{ width: 200, flex: 1, minWidth: '150px' }}
+                      placeholder="Value"
+                      value={filter.value}
+                      onChange={e => {
+                        updateFilter(index, 'value', e.target.value);
+                      }}
+                      data-testid={`filter-value-input-${index}`}
+                    />
+                  )}
 
-          <div style={{ fontSize: '14px', color: '#666' }}>
-            <Typography.Text strong>Note:</Typography.Text> Pick a date/time; it's sent as ISO-8601
-            (UTC). Empty values are ignored.
-          </div>
-        </Space>
-      </Card>
-
-      {/* Tenants Table */}
-      <Card
-        title={`Tenants (${tenants.length})`}
-        style={{ borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}
-      >
-        <Table
-          columns={columns}
-          dataSource={tenants}
-          rowKey="id"
-          loading={loading}
-          rowClassName={(record, index) => (index % 2 === 0 ? 'stripe-row' : '')}
-          pagination={tablePagination}
-          data-testid="tenants-table"
-          locale={{
-            emptyText:
-              tenants.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '48px' }}>
-                  <Typography.Text style={{ fontSize: '16px', color: '#999' }}>
-                    No tenants yet. Add your first tenant!
-                  </Typography.Text>
-                  <br />
-                  <br />
-                  <Button type="primary" size="large" onClick={handleNewTenant}>
-                    Add Tenant
+                  <Button
+                    type="text"
+                    danger
+                    icon={<MinusCircleOutlined />}
+                    onClick={() => {
+                      removeFilter(index);
+                    }}
+                    disabled={powerFilters.length <= 1}
+                    data-testid={`remove-filter-${index}`}
+                  >
+                    Remove
                   </Button>
+
+                  {index === powerFilters.length - 1 && (
+                    <Button
+                      type="text"
+                      icon={<PlusCircleOutlined />}
+                      onClick={addFilter}
+                      data-testid="add-filter-button"
+                    >
+                      Add Filter
+                    </Button>
+                  )}
                 </div>
-              ) : (
-                'No tenants match your search.'
-              ),
-          }}
-          style={{
-            border: '1px solid #e8e8e8',
-            borderRadius: '8px',
-            overflow: 'hidden',
-          }}
-        />
-      </Card>
+              ))}
+
+              <Divider style={{ margin: '8px 0' }} />
+
+              <Space>
+                <Button
+                  type="primary"
+                  onClick={applyFilters}
+                  disabled={loading}
+                  data-testid="apply-filters-button"
+                >
+                  Apply Filters
+                </Button>
+                <Button
+                  onClick={clearFilters}
+                  disabled={loading}
+                  data-testid="clear-filters-button"
+                >
+                  Clear All
+                </Button>
+              </Space>
+
+              <div style={{ fontSize: '14px', color: '#666' }}>
+                <Typography.Text strong>Note:</Typography.Text> Pick a date/time; it's sent as
+                ISO-8601 (UTC). Empty values are ignored.
+              </div>
+            </Space>
+          </Card>
+
+          {/* Tenants Table */}
+          <Card
+            title={`Tenants (${tenants.length})`}
+            style={{ borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}
+          >
+            <Table
+              columns={columns}
+              dataSource={tenants}
+              rowKey="id"
+              loading={loading}
+              rowClassName={(record, index) => (index % 2 === 0 ? 'stripe-row' : '')}
+              pagination={tablePagination}
+              data-testid="tenants-table"
+              locale={{ emptyText: 'No tenants match your search.' }}
+              style={{
+                border: '1px solid #e8e8e8',
+                borderRadius: '8px',
+                overflow: 'hidden',
+              }}
+            />
+          </Card>
         </>
       )}
 
@@ -736,26 +723,17 @@ export const TenantsPage: React.FC = () => {
             name="db_url"
             label="Database URL"
             rules={[
-              { required: true, message: 'Please enter database URL' },
               {
                 validator: (_rule, value) => {
-                  if (!value) return Promise.reject(new Error('Please enter database URL'));
-                  // Accept libpq key=value style or postgres/postgresql URL
-                  const isValid = (() => {
-                    // Rough libpq: key=value pairs separated by spaces
-                    if (/\b\w+=\S+/.test(value)) return true;
-                    try {
-                      const u = new URL(value);
-                      return u.protocol === 'postgres:' || u.protocol === 'postgresql:';
-                    } catch {
-                      return false;
-                    }
-                  })();
-                  return isValid
+                  if (!value)
+                    return editingTenant
+                      ? Promise.resolve()
+                      : Promise.reject(new Error('Please enter database URL'));
+                  return isValidPostgresConnectionString(value)
                     ? Promise.resolve()
                     : Promise.reject(new Error('Invalid PostgreSQL connection string'));
-                }
-              }
+                },
+              },
             ]}
           >
             <Input placeholder="postgres://localhost:5432/mydb or key=value format" />
