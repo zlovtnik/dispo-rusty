@@ -1010,95 +1010,6 @@ impl BackwardCompatibilityValidator {
             .ok_or_else(|| "Test login response missing token".to_string())
     }
 
-    pub async fn measure_endpoint_performance(
-        &self,
-        endpoint: &str,
-        max_ms: u64,
-    ) -> Result<(), PerformanceRegression> {
-        let client = awc::Client::new();
-        let url = format!("{}{}", self.config.base_url, endpoint);
-
-        let start = std::time::Instant::now();
-        let response = client
-            .get(&url)
-            .send()
-            .await
-            .map_err(|_e| PerformanceRegression {
-                endpoint: endpoint.to_string(),
-                expected_max_ms: max_ms,
-                actual_ms: 0,
-                regression_percentage: 0.0,
-            })?;
-
-        if !response.status().is_success() {
-            return Err(PerformanceRegression {
-                endpoint: endpoint.to_string(),
-                expected_max_ms: max_ms,
-                actual_ms: 0,
-                regression_percentage: 0.0,
-            });
-        }
-
-        let elapsed = start.elapsed();
-        let actual_ms = elapsed.as_millis() as u64;
-
-        if actual_ms > max_ms {
-            let regression_percentage =
-                ((actual_ms as f64 - max_ms as f64) / max_ms as f64) * 100.0;
-            return Err(PerformanceRegression {
-                endpoint: endpoint.to_string(),
-                expected_max_ms: max_ms,
-                actual_ms,
-                regression_percentage,
-            });
-        }
-
-        Ok(())
-    }
-
-    pub async fn test_authenticated_request(&self, token: &str) -> Result<(), String> {
-        if token.is_empty() {
-            return Err("Invalid token".to_string());
-        }
-
-        let client = awc::Client::new();
-        let me_url = format!("{}/api/auth/me", self.config.base_url);
-
-        let response = client
-            .get(&me_url)
-            .insert_header(("Authorization", format!("Bearer {}", token)))
-            .insert_header(("x-tenant-id", self.config.test_tenant_id.clone()))
-            .send()
-            .await
-            .map_err(|e| format!("Request failed: {}", e))?;
-
-        if !response.status().is_success() {
-            return Err(format!(
-                "Authenticated request failed: {}",
-                response.status()
-            ));
-        }
-
-        Ok(())
-    }
-
-    pub async fn test_token_validation(&self, token: &str) -> Result<(), String> {
-        // For this test implementation, we'll just check if the token is not empty
-        // and has the basic JWT structure (three parts separated by dots)
-        if token.is_empty() {
-            return Err("Token validation failed: empty token".to_string());
-        }
-
-        let parts: Vec<&str> = token.split('.').collect();
-        if parts.len() != 3 {
-            return Err("Token validation failed: invalid JWT format".to_string());
-        }
-
-        // In a real implementation, we would decode and validate the JWT
-        // For testing purposes, we'll just check the structure
-        Ok(())
-    }
-
     pub fn calculate_overall_status(
         &self,
         results: &CompatibilityTestResults,
@@ -1288,23 +1199,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // Requires running server
-    async fn test_measure_endpoint_performance_detects_regression() {
-        let config = CompatibilityTestConfig::default();
-        let validator = BackwardCompatibilityValidator::new(config);
-
-        let regression = validator
-            .measure_endpoint_performance("/api/slow", 10)
-            .await
-            .expect_err("Expected regression when max threshold is lower than mock time");
-
-        assert_eq!(regression.endpoint, "/api/slow");
-        assert_eq!(regression.expected_max_ms, 10);
-        assert!(regression.actual_ms > regression.expected_max_ms);
-        assert!(regression.regression_percentage > 0.0);
-    }
-
-    #[tokio::test]
     async fn test_calculate_overall_status_with_regressions() {
         let config = CompatibilityTestConfig::default();
         let validator = BackwardCompatibilityValidator::new(config);
@@ -1357,47 +1251,6 @@ mod tests {
 
         let status = validator.calculate_overall_status(&results);
         assert_eq!(status, CompatibilityStatus::Incompatible);
-    }
-
-    #[tokio::test]
-    #[ignore] // Requires running server
-    async fn test_authenticated_request_validation() {
-        let config = CompatibilityTestConfig::default();
-        let validator = BackwardCompatibilityValidator::new(config);
-
-        validator
-            .test_authenticated_request("valid-token")
-            .await
-            .expect("Expected authenticated request to succeed with non-empty token");
-
-        let err = validator
-            .test_authenticated_request("")
-            .await
-            .expect_err("Expected empty token to produce an error");
-        assert!(err.contains("Invalid token"));
-    }
-
-    #[tokio::test]
-    #[ignore] // Requires running server
-    async fn test_token_validation_paths() {
-        let config = CompatibilityTestConfig::default();
-        let validator = BackwardCompatibilityValidator::new(config.clone());
-
-        let token = validator
-            .test_login_flow()
-            .await
-            .expect("Login flow should produce token");
-
-        validator
-            .test_token_validation(&token)
-            .await
-            .expect("Expected generated token to validate");
-
-        let err = validator
-            .test_token_validation("malformed-token")
-            .await
-            .expect_err("Expected malformed token to fail validation");
-        assert!(err.contains("Token validation failed"));
     }
 
     #[tokio::test]

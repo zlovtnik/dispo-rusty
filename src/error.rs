@@ -35,18 +35,6 @@ impl ErrorContext {
     }
 
     #[must_use]
-    pub fn with_correlation_id(mut self, id: impl Into<String>) -> Self {
-        self.correlation_id = Some(id.into());
-        self
-    }
-
-    #[must_use]
-    pub fn with_code(mut self, code: impl Into<String>) -> Self {
-        self.code_override = Some(code.into());
-        self
-    }
-
-    #[must_use]
     pub fn with_tag(mut self, tag: impl Into<String>) -> Self {
         self.tags.push(tag.into());
         self.dedup_tags();
@@ -54,36 +42,8 @@ impl ErrorContext {
     }
 
     #[must_use]
-    pub fn with_tags<I, S>(mut self, tags: I) -> Self
-    where
-        I: IntoIterator<Item = S>,
-        S: Into<String>,
-    {
-        self.tags.extend(tags.into_iter().map(Into::into));
-        self.dedup_tags();
-        self
-    }
-
-    #[must_use]
     pub fn with_metadata(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.metadata.insert(key.into(), value.into());
-        self
-    }
-
-    #[must_use]
-    pub fn merge(mut self, other: ErrorContext) -> Self {
-        if self.detail.is_none() {
-            self.detail = other.detail;
-        }
-        if self.correlation_id.is_none() {
-            self.correlation_id = other.correlation_id;
-        }
-        if self.code_override.is_none() {
-            self.code_override = other.code_override;
-        }
-        self.metadata.extend(other.metadata.into_iter());
-        self.tags.extend(other.tags.into_iter());
-        self.dedup_tags();
         self
     }
 
@@ -219,28 +179,12 @@ impl ServiceError {
         self.with_context(|ctx| ctx.with_detail(detail))
     }
 
-    pub fn with_correlation_id(self, id: impl Into<String>) -> Self {
-        self.with_context(|ctx| ctx.with_correlation_id(id))
-    }
-
-    pub fn with_code(self, code: impl Into<String>) -> Self {
-        self.with_context(|ctx| ctx.with_code(code))
-    }
-
     pub fn with_metadata(self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.with_context(|ctx| ctx.with_metadata(key, value))
     }
 
     pub fn with_tag(self, tag: impl Into<String>) -> Self {
         self.with_context(|ctx| ctx.with_tag(tag))
-    }
-
-    pub fn with_tags<I, S>(self, tags: I) -> Self
-    where
-        I: IntoIterator<Item = S>,
-        S: Into<String>,
-    {
-        self.with_context(|ctx| ctx.with_tags(tags))
     }
 
     pub fn context(&self) -> &ErrorContext {
@@ -320,30 +264,14 @@ pub trait ErrorTransformer<T, E> {
 pub trait ServiceResultExt<T> {
     fn map_service_error(self, mapper: impl Fn(ServiceError) -> ServiceError) -> ServiceResult<T>;
 
-    fn attach_context(self, builder: impl FnOnce(ErrorContext) -> ErrorContext)
-        -> ServiceResult<T>;
-
     fn log_on_error(self, level: Level) -> ServiceResult<T>;
 
     fn tap_error(self, tap: impl Fn(&ServiceError)) -> ServiceResult<T>;
-
-    fn ensure(
-        self,
-        predicate: impl FnOnce(&T) -> bool,
-        err: impl FnOnce() -> ServiceError,
-    ) -> ServiceResult<T>;
 }
 
 impl<T> ServiceResultExt<T> for Result<T, ServiceError> {
     fn map_service_error(self, mapper: impl Fn(ServiceError) -> ServiceError) -> ServiceResult<T> {
         self.map_err(mapper)
-    }
-
-    fn attach_context(
-        self,
-        builder: impl FnOnce(ErrorContext) -> ErrorContext,
-    ) -> ServiceResult<T> {
-        self.map_err(|err| err.with_context(builder))
     }
 
     fn log_on_error(self, level: Level) -> ServiceResult<T> {
@@ -359,20 +287,6 @@ impl<T> ServiceResultExt<T> for Result<T, ServiceError> {
         }
         self
     }
-
-    fn ensure(
-        self,
-        predicate: impl FnOnce(&T) -> bool,
-        err: impl FnOnce() -> ServiceError,
-    ) -> ServiceResult<T> {
-        self.and_then(|value| {
-            if predicate(&value) {
-                Ok(value)
-            } else {
-                Err(err())
-            }
-        })
-    }
 }
 
 pub mod monadic {
@@ -386,19 +300,6 @@ pub mod monadic {
         G: FnOnce() -> E,
     {
         option.map(f).ok_or_else(default_error)
-    }
-
-    pub fn flatten_option<T, E1, E2, G>(
-        result: Result<Option<T>, E1>,
-        error_mapper: impl Fn(E1) -> E2,
-        none_error: G,
-    ) -> Result<T, E2>
-    where
-        G: FnOnce() -> E2,
-    {
-        result
-            .map_err(error_mapper)
-            .and_then(|opt| opt.ok_or_else(none_error))
     }
 }
 
@@ -442,33 +343,6 @@ pub mod error_pipeline {
         }
     }
 
-    pub struct Pipeline<T> {
-        steps: Vec<Box<dyn Fn(ServiceResult<T>) -> ServiceResult<T> + Send + Sync>>,
-    }
-
-    impl<T> Default for Pipeline<T> {
-        fn default() -> Self {
-            Self { steps: Vec::new() }
-        }
-    }
-
-    impl<T> Pipeline<T> {
-        pub fn new() -> Self {
-            Self::default()
-        }
-
-        pub fn step(
-            mut self,
-            step: impl Fn(ServiceResult<T>) -> ServiceResult<T> + Send + Sync + 'static,
-        ) -> Self {
-            self.steps.push(Box::new(step));
-            self
-        }
-
-        pub fn execute(self, initial: ServiceResult<T>) -> ServiceResult<T> {
-            self.steps.into_iter().fold(initial, |acc, step| step(acc))
-        }
-    }
 }
 
 pub mod error_logging {

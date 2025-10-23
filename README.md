@@ -13,7 +13,7 @@ Built to solve real-world SaaS and managed platform pain points—compliance, sc
 ### What You Get Out of the Box
 
 - **🔒 Strong Data Isolation**: One PostgreSQL database per tenant (not per-schema) to minimize cross-tenant risk
-- **⚡ High Performance**: Rust backend designed for low-latency APIs; see benchmarks for your workload. [See benchmarks](https://github.com/zlovtnik/dispo-rusty/blob/main/docs/PERFORMANCE.md)
+- **⚡ High Performance**: Rust backend designed for low-latency APIs; see benchmarks for your workload.
 - **🛡️ Security First**: JWT authentication, CORS protection, input validation
 - **🎨 Modern Frontend**: React + TypeScript with Ant Design components
 - **🐳 Production Ready**: Docker containers, health checks, monitoring
@@ -77,10 +77,10 @@ Each tenant gets their own database. Tenant context is derived server-side from 
 
 ### 🔄 What's Next
 
-- **API Integration**: [ ] @frontend-team — Switch baseURL in frontend/.env to backend and remove mock data; verified by end-to-end login/profile flows passing
-- **Testing**: [ ] @qa-team — Add comprehensive test coverage for critical paths; verified by 85%+ code coverage and all integration tests passing
-- **Performance**: [ ] @devops-team — Implement bundle optimization and caching improvements; verified by Lighthouse scores >90 and <2s page load times
-- **Features**: [ ] @product-team — Add advanced search, data export, and internationalization; verified by user acceptance testing with 10+ beta users
+- **API Integration**: [Issue #1](https://github.com/zlovtnik/dispo-rusty/issues/1) @frontend-team — Switch baseURL in frontend/.env to backend and remove mock data; verified by end-to-end login/profile flows passing
+- **Testing**: [Issue #2](https://github.com/zlovtnik/dispo-rusty/issues/2) @qa-team — Add comprehensive test coverage for critical paths; verified by 85%+ code coverage and all integration tests passing
+- **Performance**: [Issue #3](https://github.com/zlovtnik/dispo-rusty/issues/3) @devops-team — Implement bundle optimization and caching improvements; verified by Lighthouse scores >90 and <2s page load times
+- **Features**: [Issue #4](https://github.com/zlovtnik/dispo-rusty/issues/4) @product-team — Add advanced search, data export, and internationalization; verified by user acceptance testing with 10+ beta users
 
 ## Quick Start
 
@@ -126,12 +126,15 @@ cp frontend/.env.example frontend/.env
 # Run migrations
 diesel migration run
 
-# Generate schema (required for Rust code to compile)
+# Schema is automatically generated during cargo build
+# To manually regenerate schema (if needed):
 diesel print-schema > src/schema.rs
 
 # Optional: Seed tenant data
 psql -d rust_rest_api_db -f scripts/seed_tenants.sql
 ```
+
+**Note**: Schema generation is now automated during the build process. You no longer need to manually run `diesel print-schema` in most cases.
 
 ### 3. Start the Backend
 
@@ -165,7 +168,7 @@ curl -X POST http://localhost:8080/api/auth/signup \
   -d '{
     "username": "admin",
     "email": "admin@tenant1.com",
-    "password": "securepass"
+    "password": "MyS3cur3P@ssw0rd!"
   }'
 
 # Login and capture JWT token (tenant context derived server-side)
@@ -173,10 +176,13 @@ TOKEN=$(curl -X POST http://localhost:8080/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{
     "username_or_email": "admin",
-    "password": "securepass"
+    "password": "MyS3cur3P@ssw0rd!"
   }' | jq -r '.token')
 
 # Use captured token in subsequent requests
+
+# Note: "MyS3cur3P@ssw0rd!" is only an example and should not be reused in production.
+# Always use strong, unique passwords for each account.
 curl -X GET http://localhost:8080/api/address-book \
   -H "Authorization: Bearer $TOKEN"
 ```
@@ -274,7 +280,18 @@ jobs:
           bun-version: ${{ matrix.bun }}
       - run: cargo test
       - run: cd frontend && bun test --coverage
-      - run: # Upload coverage reports to your preferred service
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./frontend/coverage/lcov.info
+          flags: frontend
+          name: frontend-coverage
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage/tarpaulin-report.xml
+          flags: backend
+          name: backend-coverage
 ```
 
 ### Database Migrations
@@ -298,6 +315,22 @@ diesel migration revert
 # Build and run with Docker Compose (dev profile)
 docker compose --profile dev up --build
 ```
+
+### Docker Compose Profiles
+
+The project uses Docker Compose profiles to separate different environments:
+
+- **dev**: For local development with hot-reload and developer tools
+  - Enables backend service with development configuration
+  - Mounts source code for live reloading
+  - Exposes debugging ports
+
+- **test**: For CI/test-only services
+  - Runs minimal services needed for testing
+  - Uses test-specific configurations
+  - Optimized for fast startup
+
+See `docker-compose.local.yml` and `docker-compose.prod.yml` for full details on services per profile.
 
 ### Environment Variables
 
