@@ -31,9 +31,9 @@ import {
 interface DashboardTenant {
   id: string;
   name: string;
-  db_url: string;
-  created_at: string;
-  updated_at: string;
+  db_url?: string;
+  created_at?: string;
+  updated_at?: string;
   isActive?: boolean;
 }
 
@@ -84,7 +84,9 @@ export const DatabaseManagementModal: React.FC<DatabaseManagementModalProps> = (
 
   // Check database connection status
   const checkDatabaseStatus = useCallback(
-    async (tenantId: string, dbUrl: string) => {
+    async (tenantId: string, dbUrl?: string) => {
+      if (!dbUrl) return; // Don't check if no database URL
+
       setCheckingStatus(prev => ({ ...prev, [tenantId]: true }));
 
       try {
@@ -206,6 +208,7 @@ export const DatabaseManagementModal: React.FC<DatabaseManagementModalProps> = (
                       size="small"
                       icon={<ReloadOutlined />}
                       loading={isChecking}
+                      disabled={!tenant.db_url}
                       onClick={() => checkDatabaseStatus(tenant.id, tenant.db_url)}
                     >
                       Check Status

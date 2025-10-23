@@ -26,8 +26,6 @@ import {
   BarChartOutlined,
   LineChartOutlined,
   PieChartOutlined,
-  TrendingUpOutlined,
-  TrendingDownOutlined,
   DatabaseOutlined,
   UserOutlined,
   ApiOutlined,
@@ -108,7 +106,7 @@ export const TenantAnalytics: React.FC<TenantAnalyticsProps> = ({
     };
 
     const mockUsage: UsageMetrics[] = Array.from({ length: 30 }, (_, i) => ({
-      date: new Date(Date.now() - (29 - i) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      date: new Date(Date.now() - (29 - i) * 24 * 60 * 60 * 1000).toISOString().split('T')[0]!,
       apiCalls: Math.floor(Math.random() * 1000) + 100,
       users: Math.floor(Math.random() * 50) + 10,
       storage: Math.floor(Math.random() * 100) + 50,

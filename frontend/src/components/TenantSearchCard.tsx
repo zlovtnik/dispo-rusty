@@ -36,12 +36,9 @@ export const TenantSearchCard: React.FC<TenantSearchCardProps> = React.memo(
     onToggleAdvancedFilters,
     onGetTenantSuggestions,
   }) => {
-// Before
-import React from 'react';
-...
--    // Memoize tenant suggestions to avoid recomputation on every render
-    const suggestions = onGetTenantSuggestions();
-...
+    // Memoize tenant suggestions to avoid recomputation on every render
+    const suggestions = useMemo(() => onGetTenantSuggestions(), [onGetTenantSuggestions]);
+
     return (
       <Card
         title={

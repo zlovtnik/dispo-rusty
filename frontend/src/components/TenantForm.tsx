@@ -28,7 +28,7 @@ import {
   LoadingOutlined,
 } from '@ant-design/icons';
 import type { Tenant } from '@/types/tenant';
-import { useTenantNotifications } from '@/hooks/useTenantNotifications';
+import { useTenantNotifications, type TenantOperationResult } from '@/hooks/useTenantNotifications';
 
 const { Title, Text } = Typography;
 
@@ -177,11 +177,10 @@ export const TenantForm: React.FC<TenantFormProps> = ({
       }
 
       // Warnings
-      if (
-        values.db_url &&
-        /(?:localhost|127\.0\.0\.1|\[::1\])/i.test(values.db_url)
-      ) {
-        warnings.push('Using a localhost database URL (localhost, 127.0.0.1, or ::1) may not be accessible in production');
+      if (values.db_url && /(?:localhost|127\.0\.0\.1|\[::1\])/i.test(values.db_url)) {
+        warnings.push(
+          'Using a localhost database URL (localhost, 127.0.0.1, or ::1) may not be accessible in production'
+        );
       }
 
       if (values.name?.toLowerCase().includes('test')) {
@@ -396,9 +395,9 @@ export const TenantForm: React.FC<TenantFormProps> = ({
               Examples:
             </Text>
             <div style={{ marginTop: '4px' }}>
-              <Tag size="small">postgresql://user:pass@localhost:5432/db</Tag>
-              <Tag size="small">mysql://user:pass@localhost:3306/db</Tag>
-              <Tag size="small">sqlite:///path/to/database.db</Tag>
+              <Tag>postgresql://user:pass@localhost:5432/db</Tag>
+              <Tag>mysql://user:pass@localhost:3306/db</Tag>
+              <Tag>sqlite:///path/to/database.db</Tag>
             </div>
           </div>
         </Card>

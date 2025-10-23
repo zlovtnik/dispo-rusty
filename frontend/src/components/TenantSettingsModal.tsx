@@ -19,7 +19,7 @@ import {
 } from 'antd';
 import {
   SettingOutlined,
-  PaletteOutlined,
+  BgColorsOutlined,
   GlobalOutlined,
   ClockCircleOutlined,
 } from '@ant-design/icons';
@@ -175,7 +175,7 @@ export const TenantSettingsModal: React.FC<TenantSettingsModalProps> = ({
         {/* Appearance Section */}
         <div>
           <Title level={4}>
-            <PaletteOutlined style={{ marginRight: 8 }} />
+            <BgColorsOutlined style={{ marginRight: 8 }} />
             Appearance
           </Title>
           <Form.Item name="theme" label="Theme" tooltip="Choose the visual theme for your tenant">

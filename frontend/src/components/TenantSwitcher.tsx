@@ -76,10 +76,12 @@ export const TenantSwitcher: React.FC<TenantSwitcherProps> = ({
       try {
         const recent = JSON.parse(stored);
         // Convert date strings back to Date objects
-        const parsedRecent = recent.map((item: any) => ({
-          ...item,
-          lastAccessed: item.lastAccessed ? new Date(item.lastAccessed) : undefined,
-        })).filter((item: any) => item.tenant && item.lastAccessed instanceof Date);
+        const parsedRecent = recent
+          .map((item: any) => ({
+            ...item,
+            lastAccessed: item.lastAccessed ? new Date(item.lastAccessed) : undefined,
+          }))
+          .filter((item: any) => item.tenant && item.lastAccessed instanceof Date);
         setRecentTenants(parsedRecent);
       } catch (error) {
         console.error('Failed to load recent tenants:', error);
