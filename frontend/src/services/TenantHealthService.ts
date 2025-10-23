@@ -485,7 +485,7 @@ export class TenantHealthService {
    * Get health check history
    * @param tenantId - The ID of the tenant
    * @param limit - The maximum number of history records to retrieve
-  * @returns Result containing the tenant's health check history or an AppError on failure
+   * @returns Result containing the tenant's health check history or an AppError on failure
    */
   async getHealthCheckHistory(
     tenantId: string,

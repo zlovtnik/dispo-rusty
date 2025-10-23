@@ -124,9 +124,9 @@ export interface CustomRenderOptions extends Omit<RenderOptions, 'wrapper'> {
   initialRoutes?: string[];
 
   /**
-   * Use BrowserRouter instead of MemoryRouter (default: false)
+   * Whether to use BrowserRouter instead of MemoryRouter (default: false)
    */
-  useBrowserRouter?: boolean;
+  isBrowserRouter?: boolean;
 
   /**
    * Custom auth context value
@@ -136,7 +136,7 @@ export interface CustomRenderOptions extends Omit<RenderOptions, 'wrapper'> {
   /**
    * Whether to wrap with Ant Design App component (default: true)
    */
-  withAntApp?: boolean;
+  hasAntApp?: boolean;
 }
 
 /**
@@ -176,15 +176,15 @@ export function renderWithProviders(
   {
     initialRoute = '/',
     initialRoutes = [initialRoute],
-    useBrowserRouter = false,
+    isBrowserRouter = false,
     authValue,
-    withAntApp = true,
+    hasAntApp = true,
     ...renderOptions
   }: CustomRenderOptions = {}
 ) {
   // Choose router type
-  const RouterComponent = useBrowserRouter ? BrowserRouter : MemoryRouter;
-  const routerProps = useBrowserRouter ? {} : { initialEntries: initialRoutes, initialIndex: 0 };
+  const RouterComponent = isBrowserRouter ? BrowserRouter : MemoryRouter;
+  const routerProps = isBrowserRouter ? {} : { initialEntries: initialRoutes, initialIndex: 0 };
 
   // Create a direct functional Wrapper component
   const Wrapper = ({ children }: { children: React.ReactNode }) => {
@@ -195,7 +195,7 @@ export function renderWithProviders(
     );
 
     // Optionally wrap with Ant Design App component for message, modal, notification
-    if (withAntApp) {
+    if (hasAntApp) {
       content = <AntApp>{content}</AntApp>;
     }
 
@@ -282,14 +282,16 @@ export function renderWithAuthAndNavigation(ui: ReactElement, options?: CustomRe
     };
   };
 
-  const LocationTracker: React.FC<{
-    children: React.ReactNode;
-  }> = ({ children }) => {
+  interface LocationTrackerProps {
+    children: ReactElement;
+  }
+
+  const LocationTracker = ({ children }: LocationTrackerProps) => {
     const location = useLocation();
     React.useEffect(() => {
       handleLocationChange(location);
     }, [location]);
-    return <>{children}</>;
+    return children;
   };
 
   const renderResult = renderWithProviders(<LocationTracker>{ui}</LocationTracker>, {
@@ -321,21 +323,21 @@ export function renderForIntegration(
   {
     initialRoute = '/',
     initialRoutes = [initialRoute],
-    useBrowserRouter = false,
-    withAntApp = true,
+    isBrowserRouter = false,
+    hasAntApp = true,
     ...renderOptions
   }: Omit<CustomRenderOptions, 'authValue'> = {}
 ) {
   // Choose router type
-  const RouterComponent = useBrowserRouter ? BrowserRouter : MemoryRouter;
-  const routerProps = useBrowserRouter ? {} : { initialEntries: initialRoutes, initialIndex: 0 };
+  const RouterComponent = isBrowserRouter ? BrowserRouter : MemoryRouter;
+  const routerProps = isBrowserRouter ? {} : { initialEntries: initialRoutes, initialIndex: 0 };
 
   // Create wrapper component without MockAuthProvider
   const Wrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     let content = <RouterComponent {...routerProps}>{children}</RouterComponent>;
 
     // Optionally wrap with Ant Design App component for message, modal, notification
-    if (withAntApp) {
+    if (hasAntApp) {
       content = <AntApp>{content}</AntApp>;
     }
 

@@ -29,7 +29,7 @@
  * ```
  */
 
-import { type Result, ResultAsync, err, ok, okAsync, errAsync } from 'neverthrow';
+import { type Result, type ResultAsync, err, ok, okAsync, errAsync } from 'neverthrow';
 import type { UserId, TenantId } from '../types/ids';
 import type { TokenMetadata, TenantAccess } from '../types/auth';
 import type { AppError } from '../types/errors';

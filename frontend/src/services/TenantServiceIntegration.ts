@@ -333,7 +333,8 @@ export class TenantServiceIntegration {
     const recent = history.slice(0, 5);
     const older = history.slice(5, 10);
 
-    const recentAvg = recent.reduce((sum: number, h: any) => sum + Number(h.score), 0) / recent.length;
+    const recentAvg =
+      recent.reduce((sum: number, h: any) => sum + Number(h.score), 0) / recent.length;
     const olderAvg =
       older.length > 0
         ? older.reduce((sum: number, h: any) => sum + Number(h.score), 0) / older.length
@@ -398,17 +399,6 @@ export class TenantServiceIntegration {
         console.log('Attempting database recovery...');
       } else if (issue.includes('API')) {
         // Attempt API recovery
-        console.log('Attempting API recovery...');
-      } else if (issue.includes('storage')) {
-        // Attempt storage recovery
-        console.log('Attempting storage recovery...');
-      }
-    }
-  }
-}
-
-// Export singleton instance
-export const tenantServiceIntegration = TenantServiceIntegration.getInstance();
         console.log('Attempting API recovery...');
       } else if (issue.includes('storage')) {
         // Attempt storage recovery

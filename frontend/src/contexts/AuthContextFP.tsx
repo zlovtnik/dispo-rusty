@@ -465,18 +465,3 @@ export const useAuthFP = (): AuthContextTypeFP => {
 
   return context;
 };
- * const { state, login, logout } = useAuthFP();
- *
- * // Pattern match on state
- * state.type === 'authenticated' && <Dashboard user={state.user} />
- * ```
- */
-export const useAuthFP = (): AuthContextTypeFP => {
-  const context = useContext(AuthContextFP);
-
-  if (context === undefined) {
-    throw new Error('useAuthFP must be used within AuthProviderFP');
-  }
-
-  return context;
-};

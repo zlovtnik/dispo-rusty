@@ -18,7 +18,9 @@ class MockSecurityLogger {
     reason: string,
     metadata?: Record<string, unknown>
   ): void {
-    this.capturedLogs.push(`[AUTH_FAILURE] User ${userId} denied access to tenant ${tenantId}: ${reason}`);
+    this.capturedLogs.push(
+      `[AUTH_FAILURE] User ${userId} denied access to tenant ${tenantId}: ${reason}`
+    );
   }
 
   reset(): void {
@@ -27,8 +29,8 @@ class MockSecurityLogger {
 }
 
 class MockMetricsCollector {
-  public failures: number = 0;
-  public successes: number = 0;
+  public failures = 0;
+  public successes = 0;
 
   incrementAuthFailure(userId: UserId, tenantId: TenantId, reason: string): void {
     this.failures++;
@@ -72,7 +74,7 @@ describe('hasTenantAccess', () => {
       const result = hasTenantAccess(validUserId, validTenantId, tokenMetadata, testConfig);
 
       expect(result.isOk()).toBe(true);
-      expect(result.value).toBe(true);
+      expect(result._unsafeUnwrap()).toBe(true);
     });
 
     it('should return true for valid member access', () => {
@@ -85,7 +87,7 @@ describe('hasTenantAccess', () => {
       const result = hasTenantAccess(validUserId, validTenantId, tokenMetadata, testConfig);
 
       expect(result.isOk()).toBe(true);
-      expect(result.value).toBe(true);
+      expect(result._unsafeUnwrap()).toBe(true);
     });
 
     it('should return true for valid invited access', () => {
@@ -98,7 +100,7 @@ describe('hasTenantAccess', () => {
       const result = hasTenantAccess(validUserId, validTenantId, tokenMetadata, testConfig);
 
       expect(result.isOk()).toBe(true);
-      expect(result.value).toBe(true);
+      expect(result._unsafeUnwrap()).toBe(true);
     });
   });
 
@@ -114,7 +116,7 @@ describe('hasTenantAccess', () => {
       const result = hasTenantAccess(validUserId, validTenantId, tokenMetadata, testConfig);
 
       expect(result.isErr()).toBe(true);
-      expect(result.error.code).toBe('TOKEN_BLACKLISTED');
+      expect(result._unsafeUnwrapErr().code).toBe('TOKEN_BLACKLISTED');
       expect(mockLogger.capturedLogs.some(log => log.includes('AUTH_FAILURE'))).toBe(true);
     });
 
@@ -129,7 +131,7 @@ describe('hasTenantAccess', () => {
       const result = hasTenantAccess(validUserId, validTenantId, tokenMetadata, testConfig);
 
       expect(result.isErr()).toBe(true);
-      expect(result.error.code).toBe('TOKEN_REVOKED');
+      expect(result._unsafeUnwrapErr().code).toBe('TOKEN_REVOKED');
     });
 
     it('should allow token issued at revocation time (boundary case)', () => {
@@ -144,7 +146,7 @@ describe('hasTenantAccess', () => {
       const result = hasTenantAccess(validUserId, validTenantId, tokenMetadata, testConfig);
 
       expect(result.isOk()).toBe(true);
-      expect(result.value).toBe(true);
+      expect(result._unsafeUnwrap()).toBe(true);
     });
 
     it('should fail for token that is too old', () => {
@@ -157,7 +159,7 @@ describe('hasTenantAccess', () => {
       const result = hasTenantAccess(validUserId, validTenantId, tokenMetadata, testConfig);
 
       expect(result.isErr()).toBe(true);
-      expect(result.error.code).toBe('TOKEN_TOO_OLD');
+      expect(result._unsafeUnwrapErr().code).toBe('TOKEN_TOO_OLD');
     });
   });
 
@@ -172,7 +174,7 @@ describe('hasTenantAccess', () => {
       const result = hasTenantAccess(validUserId, validTenantId, tokenMetadata, testConfig);
 
       expect(result.isErr()).toBe(true);
-      expect(result.error.code).toBe('NO_TENANT_ROLE');
+      expect(result._unsafeUnwrapErr().code).toBe('NO_TENANT_ROLE');
     });
 
     it('should fail for insufficient role level', () => {
@@ -185,7 +187,7 @@ describe('hasTenantAccess', () => {
       const result = hasTenantAccess(validUserId, validTenantId, tokenMetadata, testConfig);
 
       expect(result.isErr()).toBe(true);
-      expect(result.error.code).toBe('INSUFFICIENT_ROLE');
+      expect(result._unsafeUnwrapErr().code).toBe('INSUFFICIENT_ROLE');
     });
   });
 
@@ -237,7 +239,7 @@ describe('hasTenantAccess', () => {
       const result = hasTenantAccess(validUserId, validTenantId, tokenMetadata, testConfig);
 
       expect(result.isOk()).toBe(true);
-      expect(result.value).toBe(true);
+      expect(result._unsafeUnwrap()).toBe(true);
     });
 
     it('should handle undefined permissions', () => {
@@ -250,7 +252,7 @@ describe('hasTenantAccess', () => {
       const result = hasTenantAccess(validUserId, validTenantId, tokenMetadata, testConfig);
 
       expect(result.isOk()).toBe(true);
-      expect(result.value).toBe(true);
+      expect(result._unsafeUnwrap()).toBe(true);
     });
   });
 });
@@ -269,7 +271,7 @@ describe('hasTenantPermission', () => {
     const result = hasTenantPermission(validUserId, validTenantId, 'write', tokenMetadata);
 
     expect(result.isOk()).toBe(true);
-    expect(result.value).toBe(true);
+    expect(result._unsafeUnwrap()).toBe(true);
   });
 
   it('should return false for invalid permission', () => {
@@ -282,7 +284,7 @@ describe('hasTenantPermission', () => {
     const result = hasTenantPermission(validUserId, validTenantId, 'delete', tokenMetadata);
 
     expect(result.isOk()).toBe(true);
-    expect(result.value).toBe(false);
+    expect(result._unsafeUnwrap()).toBe(false);
   });
 
   it('should fail if basic tenant access fails', () => {
@@ -296,7 +298,7 @@ describe('hasTenantPermission', () => {
     const result = hasTenantPermission(validUserId, validTenantId, 'read', tokenMetadata);
 
     expect(result.isErr()).toBe(true);
-    expect(result.error.code).toBe('TOKEN_BLACKLISTED');
+    expect(result._unsafeUnwrapErr().code).toBe('TOKEN_BLACKLISTED');
   });
 });
 
@@ -314,7 +316,7 @@ describe('getTenantAccess', () => {
     const result = getTenantAccess(validUserId, validTenantId, tokenMetadata);
 
     expect(result.isOk()).toBe(true);
-    expect(result.value).toEqual({
+    expect(result._unsafeUnwrap()).toEqual({
       userId: validUserId,
       tenantId: validTenantId,
       role: 'member',
@@ -335,7 +337,7 @@ describe('getTenantAccess', () => {
     const result = getTenantAccess(validUserId, validTenantId, tokenMetadata);
 
     expect(result.isErr()).toBe(true);
-    expect(result.error.code).toBe('TOKEN_BLACKLISTED');
+    expect(result._unsafeUnwrapErr().code).toBe('TOKEN_BLACKLISTED');
   });
 });
 
@@ -366,22 +368,22 @@ describe('integration scenarios', () => {
     // Test basic access
     const accessResult = hasTenantAccess(validUserId, validTenantId, tokenMetadata);
     expect(accessResult.isOk()).toBe(true);
-    expect(accessResult.value).toBe(true);
+    expect(accessResult._unsafeUnwrap()).toBe(true);
 
     // Test specific permissions
     const readResult = hasTenantPermission(validUserId, validTenantId, 'read', tokenMetadata);
     expect(readResult.isOk()).toBe(true);
-    expect(readResult.value).toBe(true);
+    expect(readResult._unsafeUnwrap()).toBe(true);
 
     const adminResult = hasTenantPermission(validUserId, validTenantId, 'admin', tokenMetadata);
     expect(adminResult.isOk()).toBe(true);
-    expect(adminResult.value).toBe(true);
+    expect(adminResult._unsafeUnwrap()).toBe(true);
 
     // Test access details
     const detailsResult = getTenantAccess(validUserId, validTenantId, tokenMetadata);
     expect(detailsResult.isOk()).toBe(true);
-    expect(detailsResult.value.role).toBe('owner');
-    expect(detailsResult.value.permissions).toContain('admin');
+    expect(detailsResult._unsafeUnwrap().role).toBe('owner');
+    expect(detailsResult._unsafeUnwrap().permissions).toContain('admin');
   });
 
   it('should handle expired token scenario', () => {
@@ -394,7 +396,7 @@ describe('integration scenarios', () => {
     const result = hasTenantAccess(validUserId, validTenantId, tokenMetadata, testConfig);
 
     expect(result.isErr()).toBe(true);
-    expect(result.error.code).toBe('TOKEN_TOO_OLD');
+    expect(result._unsafeUnwrapErr().code).toBe('TOKEN_TOO_OLD');
   });
 
   it('should handle revoked token scenario', () => {
@@ -408,6 +410,6 @@ describe('integration scenarios', () => {
     const result = hasTenantAccess(validUserId, validTenantId, tokenMetadata, testConfig);
 
     expect(result.isErr()).toBe(true);
-    expect(result.error.code).toBe('TOKEN_REVOKED');
+    expect(result._unsafeUnwrapErr().code).toBe('TOKEN_REVOKED');
   });
 });

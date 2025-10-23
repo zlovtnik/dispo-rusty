@@ -4,6 +4,13 @@ export interface Tenant {
   id: TenantId;
   name: string;
   db_url: string;
+  isActive?: boolean;
+  settings?: {
+    theme?: string;
+    language?: string;
+    timezone?: string;
+    features?: string[];
+  };
   created_at: string;
   updated_at: string;
 }

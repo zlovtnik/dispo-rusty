@@ -83,7 +83,7 @@ export const useAuthAdapter = (): {
       },
       logout: async () => {
         const result = await fpContext.logout();
-        return result.match(
+        result.match(
           () => undefined,
           error => {
             console.error('[useAuthAdapter] Logout failed:', error.message);
@@ -115,10 +115,6 @@ export const useAuthAdapter = (): {
           }
           return undefined;
         } catch (error) {
-          console.error('[useAuthAdapter] Login failed:', error);
-          return undefined;
-        }
-      },
           console.error('[useAuthAdapter] Login failed:', error);
           return undefined;
         }

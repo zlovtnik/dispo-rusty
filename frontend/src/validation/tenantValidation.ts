@@ -3,7 +3,7 @@
  * Provides robust validation for tenant operations
  */
 
-import { z } from 'zod';
+import { z, type ZodIssue } from 'zod';
 import type { Tenant } from '@/types/tenant';
 
 /**
@@ -124,6 +124,20 @@ export interface ValidationResult {
   warnings: string[];
 }
 
+const issuesToErrors = (issues: ZodIssue[]): Record<string, string> => {
+  return issues.reduce<Record<string, string>>((acc, issue) => {
+    const path = issue.path.map(part => String(part)).join('.');
+    acc[path] = issue.message;
+    return acc;
+  }, {});
+};
+
+const invalidResultFromIssues = (issues: ZodIssue[]): ValidationResult => ({
+  isValid: false,
+  errors: issuesToErrors(issues),
+  warnings: [],
+});
+
 /**
  * Tenant validation functions
  */
@@ -131,80 +145,52 @@ export interface ValidationResult {
  * Validate tenant creation data
  */
 export function validateCreate(data: unknown): ValidationResult {
-  try {
-    tenantValidationSchemas.create.parse(data);
+  const result = tenantValidationSchemas.create.safeParse(data);
+
+  if (result.success) {
     return { isValid: true, errors: {}, warnings: [] };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      const errors: Record<string, string> = {};
-      error.issues.forEach((err: any) => {
-        const path = err.path.join('.');
-        errors[path] = err.message;
-      });
-      return { isValid: false, errors, warnings: [] };
-    }
-    return { isValid: false, errors: { general: 'Validation failed' }, warnings: [] };
   }
+
+  return invalidResultFromIssues(result.error.issues);
 }
 
 /**
  * Validate tenant update data
  */
 export function validateUpdate(data: unknown): ValidationResult {
-  try {
-    tenantValidationSchemas.update.parse(data);
+  const result = tenantValidationSchemas.update.safeParse(data);
+
+  if (result.success) {
     return { isValid: true, errors: {}, warnings: [] };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      const errors: Record<string, string> = {};
-      error.issues.forEach((err: any) => {
-        const path = err.path.join('.');
-        errors[path] = err.message;
-      });
-      return { isValid: false, errors, warnings: [] };
-    }
-    return { isValid: false, errors: { general: 'Validation failed' }, warnings: [] };
   }
+
+  return invalidResultFromIssues(result.error.issues);
 }
 
 /**
  * Validate tenant settings
  */
 export function validateSettings(data: unknown): ValidationResult {
-  try {
-    tenantValidationSchemas.settings.parse(data);
+  const result = tenantValidationSchemas.settings.safeParse(data);
+
+  if (result.success) {
     return { isValid: true, errors: {}, warnings: [] };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      const errors: Record<string, string> = {};
-      error.issues.forEach((err: any) => {
-        const path = err.path.join('.');
-        errors[path] = err.message;
-      });
-      return { isValid: false, errors, warnings: [] };
-    }
-    return { isValid: false, errors: { general: 'Validation failed' }, warnings: [] };
   }
+
+  return invalidResultFromIssues(result.error.issues);
 }
 
 /**
  * Validate tenant limits
  */
 export function validateLimits(data: unknown): ValidationResult {
-  try {
-    tenantValidationSchemas.limits.parse(data);
+  const result = tenantValidationSchemas.limits.safeParse(data);
+
+  if (result.success) {
     return { isValid: true, errors: {}, warnings: [] };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      const errors: Record<string, string> = {};
-      error.issues.forEach((err: any) => {
-        const path = err.path.join('.');
-        errors[path] = err.message;
-      });
-      return { isValid: false, errors, warnings: [] };
-    }
-    return { isValid: false, errors: { general: 'Validation failed' }, warnings: [] };
   }
+
+  return invalidResultFromIssues(result.error.issues);
 }
 
 /**
@@ -254,11 +240,11 @@ export function validateDatabaseUrl(url: string): ValidationResult {
 /**
  * Validate tenant name uniqueness (requires async check)
  */
-export async function validateNameUniqueness(
+export function validateNameUniqueness(
   name: string,
   existingTenants: Tenant[],
   excludeId?: string
-): Promise<ValidationResult> {
+): ValidationResult {
   const errors: Record<string, string> = {};
   const warnings: string[] = [];
 
@@ -290,37 +276,34 @@ export async function validateNameUniqueness(
 /**
  * Comprehensive tenant validation with all checks
  */
-export async function validateTenantComprehensive(
+export function validateTenantComprehensive(
   data: unknown,
   existingTenants: Tenant[],
   mode: 'create' | 'update' = 'create',
   excludeId?: string
-): Promise<ValidationResult> {
-  // Basic validation
-  const basicValidation = mode === 'create' ? validateCreate(data) : validateUpdate(data);
+): ValidationResult {
+  const schema =
+    mode === 'create' ? tenantValidationSchemas.create : tenantValidationSchemas.update;
+  const parseResult = schema.safeParse(data);
 
-  if (!basicValidation.isValid) {
-    return basicValidation;
+  if (!parseResult.success) {
+    return invalidResultFromIssues(parseResult.error.issues);
   }
 
-  const validatedData = data as any;
-  const errors: Record<string, string> = { ...basicValidation.errors };
-  const warnings: string[] = [...basicValidation.warnings];
+  const validatedData = parseResult.data;
+  const errors: Record<string, string> = {};
+  const warnings: string[] = [];
 
   // Database URL validation
-  if (validatedData.db_url) {
+  if ('db_url' in validatedData && typeof validatedData.db_url === 'string') {
     const dbValidation = validateDatabaseUrl(validatedData.db_url);
     Object.assign(errors, dbValidation.errors);
     warnings.push(...dbValidation.warnings);
   }
 
   // Name uniqueness validation
-  if (validatedData.name) {
-    const nameValidation = await validateNameUniqueness(
-      validatedData.name,
-      existingTenants,
-      excludeId
-    );
+  if ('name' in validatedData && typeof validatedData.name === 'string') {
+    const nameValidation = validateNameUniqueness(validatedData.name, existingTenants, excludeId);
     Object.assign(errors, nameValidation.errors);
     warnings.push(...nameValidation.warnings);
   }

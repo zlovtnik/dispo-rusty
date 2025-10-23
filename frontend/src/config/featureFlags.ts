@@ -43,7 +43,6 @@ function loadFeatureFlags(): FeatureFlags {
   // Allow localStorage override for testing
   let storageFlags: Partial<FeatureFlags> = {};
   try {
-  try {
     const stored = localStorage.getItem('featureFlags');
     if (stored) {
       const parsed = JSON.parse(stored);
@@ -95,10 +94,6 @@ export function updateFeatureFlags(updates: Partial<FeatureFlags>): void {
   const current = getFeatureFlags();
   const updated = { ...current, ...updates };
 
-export function updateFeatureFlags(updates: Partial<FeatureFlags>): void {
-  const current = getFeatureFlags();
-  const updated = { ...current, ...updates };
-
   cachedFlags = updated;
 
   try {
@@ -107,7 +102,6 @@ export function updateFeatureFlags(updates: Partial<FeatureFlags>): void {
   } catch (error) {
     console.error('Failed to update feature flags', error);
   }
-}
 }
 
 /**
@@ -123,7 +117,6 @@ export function resetFeatureFlags(): void {
   } catch (error) {
     console.error('Failed to reset feature flags', error);
   }
-}
 }
 
 /**
