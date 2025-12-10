@@ -76,7 +76,7 @@
     "react-hook-form": "^7.55.0",
     "react-router-dom": "^6.0.0",
     "ts-pattern": "^5.8.0",
-    "vite-plugin-pwa": "^1.0.3",
+    "vite-plugin-pwa": "^1.1.0",
     "workbox-recipes": "^7.3.0",
     "workbox-window": "^7.3.0",
     "zod": "^4.1.12"
