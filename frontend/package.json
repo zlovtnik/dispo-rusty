@@ -65,7 +65,7 @@
     "@ant-design/icons": "^6.1.0",
     "@hookform/resolvers": "^5.2.2",
     "@types/lodash": "^4.17.20",
-    "antd": "^5.27.4",
+    "antd": "^5.29.1",
     "dayjs": "^1.11.18",
     "fp-ts": "^2.16.11",
     "lodash": "^4.17.21",
