@@ -1,9 +1,10 @@
 [package]
 name = "rcs"
 version = "0.1.0"
-authors = ["Hai Phan <bahaimt@gmail.com>"]
+authors = ["Rafael Cardoso dos Santos <racasantos@icloud.com>"]
 edition = "2021"
 rust-version = "1.80"
+build = "build.rs"
 
 [lib]
 name = "rcs"

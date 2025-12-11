@@ -37,100 +37,6 @@ impl RouteBuilder {
     }
 }
 
-/// Functional logger for configuration operations
-pub struct FunctionalLogger;
-
-impl FunctionalLogger {
-    /// Create a new functional logger
-    pub fn new() -> Self {
-        Self
-    }
-
-    /// Execute configuration with logging
-    pub fn with_logging<F>(self, f: F) -> impl Fn(&mut web::ServiceConfig)
-    where
-        F: Fn(&mut web::ServiceConfig) + Clone + 'static,
-    {
-        move |cfg| {
-            log::info!("Starting functional configuration...");
-
-            // Wrap f(cfg) call in panic handler
-            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                f(cfg);
-            }));
-
-            match result {
-                Ok(_) => {
-                    log::info!("Functional configuration completed successfully");
-                }
-                Err(panic_info) => {
-                    log::error!("Functional configuration panicked: {:?}", panic_info);
-                    // Re-raise the panic so callers still observe the unwind
-                    std::panic::resume_unwind(panic_info);
-                }
-            }
-        }
-    }
-}
-
-impl Default for FunctionalLogger {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// Functional configuration result that uses Either for error handling
-pub type ConfigResult<T> = Either<ServiceError, T>;
-
-/// Configuration builder using functional patterns
-pub struct PoolConfig<T> {
-    config: T,
-}
-
-impl<T> PoolConfig<T> {
-    /// Create a new pool configuration
-    pub fn new(config: T) -> Self {
-        Self { config }
-    }
-
-    /// Apply a transformation to the configuration
-    pub fn transform<U, F>(self, f: F) -> PoolConfig<U>
-    where
-        F: FnOnce(T) -> U,
-    {
-        PoolConfig::new(f(self.config))
-    }
-
-    /// Extract the configuration value
-    pub fn into_inner(self) -> T {
-        self.config
-    }
-}
-
-/// URL masking utility for secure logging
-pub struct UrlMasker;
-
-impl UrlMasker {
-    /// Mask sensitive parts of URLs for logging using robust URL parsing
-    pub fn mask_url(url: &str) -> String {
-        match url::Url::parse(url) {
-            Ok(mut parsed_url) => {
-                // If the URL has a password, mask it
-                if parsed_url.password().is_some() {
-                    // Set password to masked value
-                    let _ = parsed_url.set_password(Some("***"));
-                }
-                parsed_url.to_string()
-            }
-            Err(_) => {
-                // If parsing fails, return the original URL unchanged
-                url.to_string()
-            }
-        }
-    }
-}
-
-#[allow(dead_code)]
 /// Configuration error handler using functional patterns
 pub struct ConfigErrorHandler(());
 
@@ -193,14 +99,6 @@ impl<T, E> EitherConvert<T, E> for Either<E, T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_url_masker() {
-        let url = "postgres://user:password@localhost:5432/db";
-        let masked = UrlMasker::mask_url(url);
-        assert!(masked.contains("user:***"));
-        assert!(!masked.contains("password"));
-    }
 
     #[test]
     fn test_route_builder() {

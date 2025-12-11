@@ -99,41 +99,6 @@ pub fn try_init_db_pool_functional(url: &str) -> Either<String, Pool> {
     }
 }
 
-/// Creates a database connection pool for the given database URL without panicking on failure.
-///
-/// The function attempts to build an r2d2 connection pool for the provided PostgreSQL URL. On
-/// success it returns the configured pool; on failure it returns `ServiceError::InternalServerError`
-/// with a descriptie message.
-///
-/// # Arguments
-///
-/// * `url` - The database connection URL (e.g., `postgres://user:pass@host/db`).
-///
-/// # Return
-//
-/// The configured `Pool` on success, or `ServiceError::InternalServerError` describing the failure.
-///
-/// # Examples
-///
-/// ```no_run
-/// # use crate::db::try_init_db_pool;
-/// let result = try_init_db_pool("postgres://user:pass@localhost/db");
-/// match result {
-///     Ok(pool) => println!("Created pool with max size: {}", pool.state().connections()),
-///     Err(err) => eprintln!("Failed to create pool: {:?}", err),
-/// }
-
-/// ```
-pub fn try_init_db_pool(url: &str) -> Result<Pool, ServiceError> {
-    use log::info;
-    info!("Migrating and configuring database...");
-    let manager = ConnectionManager::<Connection>::new(url);
-    r2d2::Pool::builder()
-        .max_size(20) // Maximum 20 connections per pool
-        .min_idle(Some(5)) // Minimum 5 idle connections
-        .build(manager)
-        .map_err(|e| ServiceError::internal_server_error(format!("Failed to create pool: {e}")))
-}
 
 /// Applies all embedded, pending database migrations to the provided PostgreSQL connection.
 ///
